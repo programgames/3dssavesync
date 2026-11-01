@@ -9,7 +9,7 @@ Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la 
 ```
         3DS (Luma3DS)                              Serveur personnel                         PC
  ┌──────────────────────────────┐          ┌───────────────────────────────┐         ┌──────────────────────────────┐
- │ homebrew (.cia / .3dsx)      │  HTTPS   │ server/server.py (Python)     │  HTTPS  │ pc/sync.ps1 (le Lanceur)     │
+ │ homebrew (.cia / .3dsx)      │  HTTPS   │ server/server.py (Python)     │  HTTPS  │ client/ : 3dssavesync (Go)   │
  │  lit les sauvegardes :       │ ───────► │  dans Docker, derrière un     │ ◄────── │  remplace l'émulateur        │
  │  · DS  (TWiLight, forwarders)│ ◄─────── │  reverse proxy HTTPS          │ ──────► │  · melonDS (DS)              │
  │  · GB  (TWiLight, mGBA)      │          │  data/ : chaque Version       │         │  · mGBA (GB, GBC, GBA)       │
@@ -22,7 +22,7 @@ Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la 
 
 **Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout. Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie.
 
-**Le Lanceur Windows** (`pc/sync.ps1`, PowerShell) : le frontend l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde.
+**Le Lanceur PC** (`client/`, Go, un seul exécutable sans dépendance) : le frontend ou un raccourci l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde. Guide : [docs/guide-client-pc.md](docs/guide-client-pc.md). L'ancien Lanceur PowerShell (`pc/sync.ps1`) reste disponible.
 
 ## Comment la synchronisation décide
 
@@ -50,6 +50,7 @@ Chaque jeu a une **Clé** lue dans la ROM, identique sur la 3DS et le PC ([ADR 0
 ```bash
 cd server && python -m unittest test_server.py
 NDSSYNC_URL=https://... NDSSYNC_TOKEN=... python -m unittest test_server.py   # même contrat, contre un serveur déployé
+cd client && go test ./...                         # Lanceur Go, contre le vrai serveur (Python requis)
 powershell -NoProfile -File pc/test_etat.ps1
 powershell -NoProfile -File pc/test_lanceur.ps1
 ```
@@ -63,7 +64,7 @@ cd 3ds && gcc -std=c99 -I source source/fichiers.c test/test_fichiers.c -o /tmp/
 cd 3ds && make cia      # makerom et bannertool dans le PATH
 ```
 
-GitHub Actions lance ces tests et compile le `.cia` / `.3dsx` ; un tag `v*` publie une release.
+GitHub Actions lance ces tests (Lanceur Go sur Windows, Linux et macOS) et compile le `.cia` / `.3dsx` ; un tag `v*` publie une release avec les exécutables PC.
 
 Documentation : [GLOSSARY](docs/GLOSSARY.md), [ADR](docs/adr/), recherches [v1](docs/research.md), [v2](docs/research-v2.md), [v3](docs/).
 

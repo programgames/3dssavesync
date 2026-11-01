@@ -1,0 +1,20 @@
+{
+  "url": "https://saves.example.com",
+  "jeton": "COLLE-ICI-LE-JETON",
+  "emulateurs": {
+    "melonds": {
+      "exe": "C:\\Emulateurs\\melonDS\\melonDS.exe",
+      "sauvegardes": { "DS": "C:\\Sauvegardes\\DS" },
+      "roms": { "DS": "C:\\Roms\\nds" }
+    },
+    "mgba": {
+      "exe": "C:\\Emulateurs\\mGBA\\mGBA.exe",
+      "sauvegardes": { "GB": "C:\\Sauvegardes\\GB", "GBA": "C:\\Sauvegardes\\GBA" },
+      "roms": { "GB": "C:\\Roms\\gb", "GBA": "C:\\Roms\\gba" }
+    },
+    "azahar": {
+      "exe": "C:\\Emulateurs\\Azahar\\azahar.exe",
+      "sauvegardes": { "3DS": "C:\\Users\\<utilisateur>\\AppData\\Roaming\\Azahar\\sdmc" }
+    }
+  }
+}
