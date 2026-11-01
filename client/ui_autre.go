@@ -115,6 +115,25 @@ func notifierSysteme(texte string) {
 	}
 }
 
+// L'assistant se lance dans un terminal : rien à ouvrir.
+func ouvrirConsole() {}
+
+const consolePropre = false
+
+// Saisie sans écho (jeton) par stty ; sans terminal, rien à faire.
+func sansEcho() func() {
+	c := exec.Command("stty", "-echo")
+	c.Stdin = os.Stdin
+	if c.Run() != nil {
+		return func() {}
+	}
+	return func() {
+		c := exec.Command("stty", "echo")
+		c.Stdin = os.Stdin
+		c.Run()
+	}
+}
+
 // Langue : variables de locale, puis la préférence de macOS (une application lancée par le Finder n'a pas LANG).
 func langueSysteme() string {
 	for _, v := range []string{"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"} {

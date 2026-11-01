@@ -1,6 +1,22 @@
 # Lanceur PC : `3dssavesync`
 
-Un seul exécutable, sans installation ni dépendance. Sous Windows, il n'ouvre pas de console. Il synchronise les Sauvegardes avant la partie, lance l'émulateur, attend sa fermeture, puis synchronise de nouveau.
+Un seul exécutable, sans dépendance. Sous Windows, il n'ouvre pas de console pendant les parties. Il synchronise les Sauvegardes avant la partie, lance l'émulateur, attend sa fermeture, puis synchronise de nouveau.
+
+## Installation : l'assistant
+
+Double-cliquez sur l'exécutable (Windows), ou lancez `3dssavesync setup` dans un terminal (Linux, macOS, Steam Deck en mode Bureau). L'assistant :
+
+1. demande l'adresse du serveur et le jeton (la saisie reste cachée), puis teste la connexion ;
+2. copie le programme à un emplacement fixe : `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS) ;
+3. cherche les émulateurs (PATH, dossiers usuels, Flatpak, AppImage d'EmuDeck, `/Applications`, émulateurs de LaunchBox) et demande une confirmation pour chacun ; on peut aussi en ajouter un à la main ;
+4. configure LaunchBox (Windows) et ES-DE, avec une copie datée de chaque fichier modifié ;
+5. crée un raccourci par émulateur (commande `launch`) et un raccourci « 3dssavesync réglages ».
+
+Avec une configuration existante, l'assistant affiche un menu : ajouter ou modifier un émulateur, **réparer** la configuration des frontends, changer le serveur ou le jeton, tout refaire. `config.json` est copié (date dans le nom) avant chaque modification.
+
+**Réparer** : après une mise à jour ou une réinitialisation d'un frontend (EmuDeck réécrit les fichiers d'ES-DE), ouvrez « 3dssavesync réglages » et choisissez « Réparer ». Ce qui est déjà en place ne change pas. Le frontend doit être fermé. Même chose en ligne de commande : `3dssavesync repair`.
+
+Frontends à configurer à la main (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode) : [guide-frontends.md](guide-frontends.md).
 
 ## Configuration
 
@@ -74,6 +90,8 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>
 3dssavesync launch <nom>
 3dssavesync migrate-v2 <dossier de sync.ps1>
+3dssavesync setup            (ou sans argument)
+3dssavesync repair
 ```
 
 - **`run <rom>`** : un jeu. Pour les frontends (LaunchBox, Playnite, ES-DE…). `--emulator` est obligatoire seulement si deux émulateurs gèrent le même Système.
@@ -85,12 +103,24 @@ Un frontend qui arrête le programme pendant la partie (signal d'arrêt sous Lin
 
 ## LaunchBox
 
-1. **Outils > Gérer les émulateurs** : ajoutez un émulateur `3dssavesync` par émulateur réel.
-2. **Chemin de l'application** : `3dssavesync.exe`.
-3. **Paramètres de ligne de commande** : `run --emulator melonds` (le nom de l'entrée dans `config.json`).
-4. Laissez décochés **Don't use quotes** et **Attempt to hide console window** (l'exécutable n'a pas de console).
-5. Décochez **Extract ROM archives before running** pour le DS, le GB et la GBA : le Lanceur lit les `.zip`. Pour Azahar, gardez l'extraction : le Lanceur ne lit pas les `.3ds` dans un `.zip`.
-6. **Plateformes associées** : celles de l'émulateur réel.
+L'assistant ajoute, pour chaque émulateur, un **nouvel** émulateur « <titre> (3dssavesync) » copié de l'émulateur d'origine :
+
+- chemin de l'application = le Lanceur ; paramètres par plateforme = `run --emulator <nom>` (LaunchBox ajoute la ROM à la fin) ;
+- « cacher la console » décoché ; extraction des archives décochée pour DS, GB et GBA (le Lanceur lit les `.zip`), gardée pour la 3DS ;
+- il devient l'émulateur par défaut de ses plateformes DS, GB, GBA et 3DS.
+
+L'émulateur d'origine reste intact : pour jouer sans synchronisation, choisissez-le dans LaunchBox. Pour revenir en arrière, remettez-le par défaut. LaunchBox et BigBox doivent être fermés (ils réécrivent `Emulators.xml` à la fermeture). Copie avant modification : `Data\Emulators.xml.avant-3dssavesync-<date>`.
+
+Un émulateur déjà modifié à la main pour passer par le Lanceur est reconnu : l'assistant ne crée pas de doublon.
+
+## ES-DE
+
+Dans `ES-DE/custom_systems` (le dossier d'ES-DE ou d'EmuDeck) :
+
+- `es_find_rules.xml` : émulateur `3DSSAVESYNC` = le Lanceur installé ;
+- `es_systems.xml` : une commande « 3dssavesync (<nom>) » en tête des systèmes `nds`, `gb`, `gbc`, `gba`, `n3ds` (la première commande est celle par défaut). Un système absent du fichier reçoit un bloc minimal avec seulement cette commande ; pour retrouver les autres émulateurs d'ES-DE, retirez ce bloc.
+
+ES-DE doit être fermé.
 
 ## Fenêtres
 
