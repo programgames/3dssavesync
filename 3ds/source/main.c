@@ -801,8 +801,8 @@ static void reglages(int premier)
         char *valeur;
         size_t n;
     } l[] = {
-        { "Serveur", "Server", "Adresse du serveur, par exemple\nhttps://saves.exemple.fr\nou le serveur local du PC :\nhttp://192.168.1.20:8443",
-          "Server address, for example\nhttps://saves.example.com\nor the PC local server:\nhttp://192.168.1.20:8443", cfg.url, sizeof cfg.url },
+        { "Serveur", "Server", "Adresse du serveur, par exemple\nhttps://saves.exemple.fr\nou le serveur local du PC :\nhttp://192.168.1.20:8765",
+          "Server address, for example\nhttps://saves.example.com\nor the PC local server:\nhttp://192.168.1.20:8765", cfg.url, sizeof cfg.url },
         { "Jeton", "Token", "Le jeton du serveur (le meme que\ndans la configuration du PC).", "The server token (the same as\nin the PC configuration).",
           cfg.jeton, sizeof cfg.jeton },
         { "ROM DS", "DS ROMs", "Dossier des ROM DS.\nTWiLight : sdmc:/roms/nds", "DS ROM folder.\nTWiLight: sdmc:/roms/nds", cfg.roms, sizeof cfg.roms },

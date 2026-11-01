@@ -1,0 +1,23 @@
+# Serveur 3dssavesync avec HTTPS automatique (Caddy), sans reverse proxy existant.
+# Prérequis : un nom de domaine qui pointe vers cette machine, ports 80 et 443 ouverts vers elle.
+# .env (chmod 600) :
+#   NDSSYNC_TOKEN=<jeton long et aléatoire>
+#   DOMAINE=saves.example.com
+# Lancement : docker compose -f docker-compose.caddy.yml up -d
+services:
+  3dssavesync:
+    image: ghcr.io/programgames/3dssavesync-server:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-data:/data

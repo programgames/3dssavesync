@@ -18,7 +18,7 @@ Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la 
  └──────────────────────────────┘          └───────────────────────────────┘         └──────────────────────────────┘
 ```
 
-**Le serveur** (`server/`) : un fichier Python sans dépendance, dans un conteneur Docker. Il garde chaque Version reçue (`data/<Clé>/<n°>-<date>-<client>-<hash>.sav`) et n'efface jamais rien. Il refuse un envoi si quelqu'un a envoyé entre-temps (`412`) : aucun écrasement silencieux. Accès par jeton (`Authorization: Bearer`).
+**Le serveur** : au choix, le **serveur local** inclus dans l'exe du PC (réseau local, rien à installer), ou un **serveur personnel** (`server/` : un fichier Python sans dépendance, dans un conteneur Docker, HTTPS, synchronisation partout). Guide : [docs/guide-serveur.md](docs/guide-serveur.md). Il garde chaque Version reçue (`data/<Clé>/<n°>-<date>-<client>-<hash>.sav`) et n'efface jamais rien. Il refuse un envoi si quelqu'un a envoyé entre-temps (`412`) : aucun écrasement silencieux. Accès par jeton (`Authorization: Bearer`).
 
 **Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout ; SELECT ouvre les réglages (serveur, jeton, dossiers DS / GB / GBA, jeux 3DS, test de connexion). Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie. Français ou anglais selon la langue de la console.
 

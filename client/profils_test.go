@@ -13,6 +13,11 @@ func maisonFactice(t *testing.T) string {
 	for _, v := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME"} {
 		t.Setenv(v, filepath.Join(m, v))
 	}
+	// Raccourcis et démarrage automatique : jamais sur le vrai bureau (Windows les place selon le registre, pas l'environnement).
+	r, a := creerRaccourci, autostart
+	t.Cleanup(func() { creerRaccourci, autostart = r, a })
+	creerRaccourci = func(nom, _ string, _ []string, _ bool) (string, error) { return "test:" + nom, nil }
+	autostart = func(nom, _ string, _ []string) (string, error) { return "test:" + nom, nil }
 	return m
 }
 

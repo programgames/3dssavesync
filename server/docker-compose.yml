@@ -1,9 +1,10 @@
 # Serveur 3dssavesync. .env (chmod 600) : NDSSYNC_TOKEN=<jeton long et aléatoire>. ./data doit appartenir à 1000:1000.
 # Le serveur parle HTTP sur le port 8080 : placez-le derrière un reverse proxy HTTPS (la 3DS exige HTTPS, TLS 1.2 ECDHE).
+# Sans reverse proxy : docker-compose.caddy.yml (HTTPS automatique).
 services:
   3dssavesync:
-    build: .
-    image: 3dssavesync:local
+    image: ghcr.io/programgames/3dssavesync-server:latest
+    build: .  # ou l'image construite ici : docker compose build
     restart: unless-stopped
     env_file: .env
     volumes:
