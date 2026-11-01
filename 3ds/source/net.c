@@ -77,7 +77,7 @@ static long requete(const char *url, const char *jeton, const char *condition,
     curl_easy_setopt(c, CURLOPT_WRITEDATA, recu);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, 60L);
-    curl_easy_setopt(c, CURLOPT_USERAGENT, "ndssync-3ds");
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds");
 
     r = curl_easy_perform(c);
     statut = -(long)r;

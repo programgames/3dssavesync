@@ -126,3 +126,17 @@ func TestProfils(t *testing.T) {
 	}
 	egal((&Emulateur{Exe: filepath.Join("Emu", "mGBA.EXE")}).processus(), "mGBA", "processus : nom de l'exe sans .exe")
 }
+
+func TestTitres3DS(t *testing.T) {
+	tmp = t.TempDir()
+	config := ecrireConfig(t, filepath.Join(tmp, "config.json"), Config{URL: "http://x", Jeton: "j",
+		Titres3DS: map[string]string{"00040000000ec300": "Jeu a moi"}})
+	t.Cleanup(func() { delete(titres3DS, "00040000000EC300") })
+	if _, err := nouvelleSession(config); err != nil {
+		t.Fatal(err)
+	}
+	_, cle, nom, _, err := lireRom(rom3DS(t, "Mon jeu", 0x00040000000EC300))
+	if err != nil || cle != "3DS-00040000000EC300" || nom != "Jeu a moi" {
+		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", cle, nom, err)
+	}
+}

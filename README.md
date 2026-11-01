@@ -20,7 +20,7 @@ Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la 
 
 **Le serveur** (`server/`) : un fichier Python sans dépendance, dans un conteneur Docker. Il garde chaque Version reçue (`data/<Clé>/<n°>-<date>-<client>-<hash>.sav`) et n'efface jamais rien. Il refuse un envoi si quelqu'un a envoyé entre-temps (`412`) : aucun écrasement silencieux. Accès par jeton (`Authorization: Bearer`).
 
-**Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout. Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie.
+**Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout ; SELECT ouvre les réglages (serveur, jeton, dossiers DS / GB / GBA, jeux 3DS, test de connexion). Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie. Français ou anglais selon la langue de la console.
 
 **Le Lanceur PC** (`client/`, Go, un seul exécutable sans dépendance) : le frontend ou un raccourci l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde. Profils intégrés : melonDS, mGBA, Azahar, RetroArch (cœurs melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, plus un profil personnalisé. Installation : un double-clic lance un assistant (serveur, émulateurs, LaunchBox, ES-DE, raccourcis) ; autres frontends : [guide-frontends.md](docs/guide-frontends.md). Guide : [docs/guide-client-pc.md](docs/guide-client-pc.md). L'ancien Lanceur PowerShell (`pc/sync.ps1`) reste disponible.
 
@@ -61,6 +61,7 @@ Tests C (gcc sur le PC) et homebrew (devkitPro) :
 cd 3ds && gcc -std=c99 -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
 cd 3ds && gcc -std=c99 -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
 cd 3ds && gcc -std=c99 -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && /tmp/f
+cd 3ds && gcc -std=c99 -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && /tmp/r
 cd 3ds && make cia      # makerom et bannertool dans le PATH
 ```
 

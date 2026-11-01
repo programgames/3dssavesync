@@ -1,6 +1,6 @@
 # Icônes HOME pour les Pokémon DS (forwarders)
 
-Un forwarder est un petit titre installé sur le menu HOME qui lance une ROM DS précise avec nds-bootstrap. Il sauvegarde **au même endroit que TWiLight** (`sd:/roms/nds/saves/<nom>.sav`), donc ndssync n'a rien à changer. Source : `docs/research-v2.md`, partie 2 §3.
+Un forwarder est un petit titre installé sur le menu HOME qui lance une ROM DS précise avec nds-bootstrap. Il sauvegarde **au même endroit que TWiLight** (`sd:/roms/nds/saves/<nom>.sav`), donc 3dssavesync n'a rien à changer. Source : `docs/research-v2.md`, partie 2 §3.
 
 Tout se fait sur la console, sans code.
 
@@ -13,4 +13,4 @@ Tout se fait sur la console, sans code.
 
 Limites : 40 forwarders au maximum ; `.nds` seulement (pas de GB ni de GBA). Les Pokémon 3DS ont déjà leur icône. Pour le GBA, open_agb_firm se lance par le menu de démarrage de Luma (START au démarrage), sans icône HOME possible de façon sûre.
 
-Ensuite : un jeu lancé par son icône se synchronise exactement comme avant, en ouvrant ndssync et en appuyant sur START.
+Ensuite : un jeu lancé par son icône se synchronise exactement comme avant, en ouvrant 3dssavesync et en appuyant sur START.
