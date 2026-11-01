@@ -34,10 +34,16 @@ type Config struct {
 }
 
 type Emulateur struct {
-	Profil      string            `json:"profil,omitempty"` // profil intégré ; défaut : le nom de l'entrée
+	Profil      string            `json:"profil,omitempty"` // profil intégré (profils.go) ; défaut : le nom de l'entrée
 	Exe         string            `json:"exe"`
-	Sauvegardes map[string]string `json:"sauvegardes"`    // Système -> dossier (3DS : sdmc d'Azahar)
-	Roms        map[string]string `json:"roms,omitempty"` // Système -> dossier des ROM (commande launch)
+	Sauvegardes map[string]string `json:"sauvegardes,omitempty"` // Système -> dossier (3DS : sdmc) ; défaut : réglage de l'émulateur
+	Roms        map[string]string `json:"roms,omitempty"`        // Système -> dossier des ROM (commande launch)
+	Coeurs      map[string]string `json:"coeurs,omitempty"`      // RetroArch : Système -> fichier du cœur
+	Processus   string            `json:"processus,omitempty"`   // défaut : nom de l'exécutable
+	// Profil personnalisé : arguments ({rom}, {sauvegardes}), extension (défaut .sav), nom du fichier interne d'une archive.
+	Args       []string `json:"args,omitempty"`
+	Extension  string   `json:"extension,omitempty"`
+	NomInterne bool     `json:"nom_interne,omitempty"`
 }
 
 func (c *Config) dossierCopies(dossierConfig string) string {
@@ -45,46 +51,6 @@ func (c *Config) dossierCopies(dossierConfig string) string {
 		return c.Copies
 	}
 	return filepath.Join(dossierConfig, "copies")
-}
-
-// Profil intégré d'un émulateur (la phase 2 en ajoute d'autres).
-type Profil struct {
-	Processus string                                 // nom du processus à surveiller
-	Args      func(rom, sauvegardes string) []string // rom vide : émulateur sans jeu (launch)
-}
-
-var profils = map[string]Profil{
-	"melonds": {"melonDS", func(rom, _ string) []string { return seul(rom) }},
-	"mgba": {"mGBA", func(rom, sauvegardes string) []string {
-		if sauvegardes == "" {
-			return seul(rom)
-		}
-		return append([]string{"-C", "savegamePath=" + sauvegardes}, seul(rom)...) // jamais --config (mGBA quitte)
-	}},
-	"azahar": {"azahar", func(rom, _ string) []string {
-		if rom == "" {
-			return nil
-		}
-		return []string{"-f", rom}
-	}},
-}
-
-func seul(rom string) []string {
-	if rom == "" {
-		return nil
-	}
-	return []string{rom}
-}
-
-func (e *Emulateur) profil(nom string) (Profil, error) {
-	p := e.Profil
-	if p == "" {
-		p = nom
-	}
-	if pr, ok := profils[p]; ok {
-		return pr, nil
-	}
-	return Profil{}, fmt.Errorf("profil d'émulateur inconnu : %s", p)
 }
 
 // Adaptateurs remplacés par les tests.
@@ -169,15 +135,23 @@ func nouvelleSession(chemin string) (*Session, error) {
 
 // Émulateur de la configuration qui gère ce Système : celui demandé, ou le seul possible.
 func (c *Config) emulateurPour(systeme, demande string) (string, error) {
+	gere := func(nom string) bool {
+		e := c.Emulateurs[nom]
+		if e == nil {
+			return false
+		}
+		p, err := e.profil(nom)
+		return err == nil && e.gere(p, systeme)
+	}
 	if demande != "" {
-		if e := c.Emulateurs[demande]; e == nil || e.Sauvegardes[systeme] == "" {
-			return "", fmt.Errorf("l'émulateur %s n'a pas de dossier de sauvegardes pour %s", demande, systeme)
+		if !gere(demande) {
+			return "", fmt.Errorf("l'émulateur %s ne gère pas le Système %s", demande, systeme)
 		}
 		return demande, nil
 	}
 	var noms []string
-	for nom, e := range c.Emulateurs {
-		if e.Sauvegardes[systeme] != "" {
+	for nom := range c.Emulateurs {
+		if gere(nom) {
 			noms = append(noms, nom)
 		}
 	}
@@ -205,7 +179,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	systeme, cle, nom, err := lireRom(rom)
+	systeme, cle, nom, interne, err := lireRom(rom)
 	s.journal(fmt.Sprintf("lancement %s %s : %s", systeme, cle, rom))
 	if err != nil {
 		return 1, err
@@ -221,19 +195,34 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if s.refus(p) {
+	if s.refus(e) {
 		return 1, nil
 	}
+	dossier := e.dossier(p, systeme, rom)
 	if commande == nil {
-		commande = append([]string{e.Exe}, p.Args(rom, e.Sauvegardes[systeme])...)
+		commande = append([]string{e.Exe}, p.Args(e, systeme, rom, dossier)...)
 	}
 	var jeux []*Jeu
-	if cle == "" { // homebrew, ou 3DS hors des 8 Pokémon
+	switch {
+	case cle == "": // homebrew, ou 3DS hors des 8 Pokémon
 		s.journal("sans synchronisation : Clé illisible ou jeu hors périmètre")
-	} else {
-		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(e.Sauvegardes[systeme], systeme, cle, nom)}}
+	case dossier == "":
+		return 1, fmt.Errorf("dossier des sauvegardes %s de %s introuvable : précise-le dans sauvegardes", systeme, s.profil)
+	default:
+		if p.NomInterne && interne != "" {
+			nom = interne
+		}
+		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext)}}
 	}
-	return s.jouer(jeux, commande)
+	return s.jouer(jeux, commande, conseil(e, p))
+}
+
+// Réglage qui recharge un état au lancement : il peut remplacer une Version récupérée par une partie plus ancienne.
+func conseil(e *Emulateur, p Profil) string {
+	if p.Autoload == nil {
+		return ""
+	}
+	return p.Autoload(e)
 }
 
 func commandeLaunch(config, nom string) (int, error) {
@@ -251,41 +240,44 @@ func commandeLaunch(config, nom string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if s.refus(p) {
+	if s.refus(e) {
 		return 1, nil
 	}
 	// mGBA sans jeu : un seul savegamePath possible, donc seulement si GB et GBA partagent le dossier.
 	var dossier string
-	for _, d := range e.Sauvegardes {
-		if dossier != "" && d != dossier {
+	for i, sys := range e.systemes(p) {
+		if d := e.dossier(p, sys, ""); i > 0 && d != dossier {
 			dossier = ""
 			break
+		} else {
+			dossier = d
 		}
-		dossier = d
 	}
-	return s.jouer(s.jeuxDe(e), append([]string{e.Exe}, p.Args("", dossier)...))
+	return s.jouer(s.jeuxDe(e, p), append([]string{e.Exe}, p.Args(e, "", "", dossier)...), conseil(e, p))
 }
 
 // L'émulateur tourne déjà : synchroniser maintenant écraserait ou enverrait une partie en cours.
-func (s *Session) refus(p Profil) bool {
-	if !emulateurActif(p.Processus) {
+func (s *Session) refus(e *Emulateur) bool {
+	nom := e.processus()
+	if !emulateurActif(nom) {
 		return false
 	}
-	s.journal("refus : " + p.Processus + " tourne déjà")
-	notifier(p.Processus + " tourne déjà. Ferme-le avant de lancer un jeu.")
+	s.journal("refus : " + nom + " tourne déjà")
+	notifier(nom + " tourne déjà. Ferme-le avant de lancer un jeu.")
 	return true
 }
 
 // Jeux d'un émulateur pour launch : les ROM de ses dossiers roms, et les Pokémon 3DS déjà vus par Azahar.
-func (s *Session) jeuxDe(e *Emulateur) []*Jeu {
+func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 	var jeux []*Jeu
 	vus := map[string]bool{}
-	for systeme, dossier := range e.Sauvegardes {
+	for _, systeme := range e.systemes(p) {
 		if systeme == "3DS" {
+			dossier := e.dossier(p, systeme, "")
 			for id, titre := range titres3DS {
 				cle := "3DS-" + id
-				j := &Jeu{systeme, cle, titre, fichierSauvegarde(dossier, systeme, cle, titre)}
-				if _, err := os.Stat(filepath.Dir(j.Fichier)); err == nil { // jamais lancé dans Azahar : ignoré
+				j := &Jeu{systeme, cle, titre, fichierSauvegarde(dossier, systeme, cle, titre, "")}
+				if dossier != "" && existe(filepath.Dir(j.Fichier)) { // jamais lancé dans Azahar : ignoré
 					jeux = append(jeux, j)
 				}
 			}
@@ -300,10 +292,13 @@ func (s *Session) jeuxDe(e *Emulateur) []*Jeu {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			sys, cle, nom, err := lireRom(chemin)
+			sys, cle, nom, interne, err := lireRom(chemin)
 			if err == nil && sys == systeme && cle != "" && !vus[cle] {
 				vus[cle] = true
-				jeux = append(jeux, &Jeu{sys, cle, nom, fichierSauvegarde(dossier, sys, cle, nom)})
+				if p.NomInterne && interne != "" {
+					nom = interne
+				}
+				jeux = append(jeux, &Jeu{sys, cle, nom, fichierSauvegarde(e.dossier(p, sys, chemin), sys, cle, nom, p.Ext)})
 			}
 			return nil
 		})
@@ -314,7 +309,7 @@ func (s *Session) jeuxDe(e *Emulateur) []*Jeu {
 
 // Synchronisation avant, partie, Synchronisation après.
 // ponytail: une requête GET /saves par Jeu et par passe ; une seule liste par passe si launch devient lent.
-func (s *Session) jouer(jeux []*Jeu, commande []string) (int, error) {
+func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, error) {
 	var echecs []string
 	for _, j := range jeux {
 		annule, err := s.syncJeu(j, false)
@@ -331,6 +326,18 @@ func (s *Session) jouer(jeux []*Jeu, commande []string) (int, error) {
 		if r == "Non" {
 			return 0, nil
 		}
+	}
+	if conseil != "" && s.recupere {
+		r := demander("Une Sauvegarde vient d'arriver du serveur.\n\n"+conseil+"\n\nSinon, une sauvegarde en jeu peut la remplacer par une partie plus ancienne.",
+			[]string{"Jouer quand même", "Ne pas jouer"})
+		if r == "Ne pas jouer" {
+			return 0, nil
+		}
+		if r == "" { // pas de fenêtre : la partie a lieu, l'avertissement reste visible
+			notifier(conseil)
+		}
+	} else if conseil != "" {
+		s.journal("avertissement : " + conseil)
 	}
 	if err := lancer(commande); err != nil {
 		return 1, fmt.Errorf("lancement de %s : %w", commande[0], err)

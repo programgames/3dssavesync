@@ -245,6 +245,7 @@ func (c *course) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func TestLanceur(t *testing.T) {
 	tmp = t.TempDir()
+	maisonFactice(t)
 	demarrerServeur(t)
 	verifications := 0
 	verifier := func(ok bool, message string) {
@@ -597,6 +598,41 @@ func TestLanceur(t *testing.T) {
 	verifier(strings.Join(commandeLancee, "|") == "melon.exe", "melonDS lancé sans ROM")
 	verifier(hachage(courante("ADAF")) == hachage(diamant2), "Diamant joué envoyé après la partie")
 	verifier(len(questions) == 0, "aucune question")
+
+	// --- Profils (phase 2) -------------------------------------------------------------------
+	t.Log("RetroArch : dossier lu dans retroarch.cfg, .srm dans le sous-dossier du cœur, -L <cœur>")
+	reinitialiser()
+	ra := filepath.Join(tmp, "retroarch")
+	ecrire(t, filepath.Join(ra, "retroarch.cfg"), []byte("savefile_directory = \""+filepath.ToSlash(filepath.Join(tmp, "ra-saves"))+"\"\n"))
+	cfgRA := ecrireConfig(t, filepath.Join(tmp, "cfg-ra", "config.json"), Config{URL: url, Jeton: "jeton-test",
+		Emulateurs: map[string]*Emulateur{"retroarch": {Exe: filepath.Join(ra, "retroarch.exe"), Coeurs: map[string]string{"GB": "gambatte_libretro.dll"}}}})
+	jaune := filepath.Join(tmp, "roms-ra", "Pokemon Jaune.gb")
+	ecrire(t, jaune, enteteGB("POKEMON YELLOW", 0x1234))
+	sj := aleatoire(32768, 50)
+	envoi3ds("GB-POKEMON_YELLOW-1234", sj, nil)
+	principal([]string{"run", "--config", cfgRA, jaune})
+	verifier(hachage(lire(filepath.Join(tmp, "ra-saves", "Gambatte", "Pokemon Jaune.srm"))) == hachage(sj), "Version récupérée dans ra-saves/Gambatte/Pokemon Jaune.srm")
+	verifier(strings.Join(commandeLancee, "|") == filepath.Join(ra, "retroarch.exe")+"|-L|gambatte_libretro.dll|"+jaune, "RetroArch lancé avec le cœur et la ROM")
+	verifier(len(questions) == 0, "aucune question (pas d'état rechargé)")
+
+	t.Log("mGBA autoload=1 : question après une Récupération, rien sinon")
+	reinitialiser()
+	mg := filepath.Join(tmp, "mgba-auto")
+	ecrire(t, filepath.Join(mg, "portable.ini"), nil)
+	ecrire(t, filepath.Join(mg, "config.ini"), []byte("[ports.qt]\nautoload=1\n"))
+	cfgA := ecrireConfig(t, filepath.Join(tmp, "cfg-auto", "config.json"), Config{URL: url, Jeton: "jeton-test",
+		Emulateurs: map[string]*Emulateur{"mgba": {Exe: filepath.Join(mg, "mGBA.exe"), Sauvegardes: map[string]string{"GBA": filepath.Join(tmp, "gba-auto")}}}})
+	saphir := filepath.Join(tmp, "roms-auto", "Pokemon Saphir.gba")
+	ecrire(t, saphir, enteteGBA("AXPF"))
+	envoi3ds("GBA-AXPF", aleatoire(131072, 51), nil)
+	reponses = []string{"Ne pas jouer"}
+	principal([]string{"run", "--config", cfgA, saphir})
+	verifier(len(questions) == 1 && strings.Contains(questions[0], "autoload=0"), "question qui explique autoload")
+	verifier(!joue, "« Ne pas jouer » : mGBA non lancé")
+	reinitialiser()
+	principal([]string{"run", "--config", cfgA, saphir})
+	verifier(joue && len(questions) == 0, "Sauvegarde à jour : pas de question, mGBA lancé")
+	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg-auto", "3dssavesync.log"))), "avertissement : mGBA"), "l'avertissement est écrit dans le journal")
 
 	t.Log("migrate-v2 : sync.config.json et base.json repris, rien n'est remplacé")
 	reinitialiser()

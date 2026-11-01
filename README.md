@@ -22,7 +22,7 @@ Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la 
 
 **Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout. Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie.
 
-**Le Lanceur PC** (`client/`, Go, un seul exécutable sans dépendance) : le frontend ou un raccourci l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde. Guide : [docs/guide-client-pc.md](docs/guide-client-pc.md). L'ancien Lanceur PowerShell (`pc/sync.ps1`) reste disponible.
+**Le Lanceur PC** (`client/`, Go, un seul exécutable sans dépendance) : le frontend ou un raccourci l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde. Profils intégrés : melonDS, mGBA, Azahar, RetroArch (cœurs melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, plus un profil personnalisé. Guide : [docs/guide-client-pc.md](docs/guide-client-pc.md). L'ancien Lanceur PowerShell (`pc/sync.ps1`) reste disponible.
 
 ## Comment la synchronisation décide
 
@@ -39,7 +39,7 @@ Chaque jeu a une **Clé** lue dans la ROM, identique sur la 3DS et le PC ([ADR 0
 
 ## Pièges connus
 
-- **Savestates** : charger un état remplace la sauvegarde par une ancienne. mGBA recharge un état au lancement par défaut (`autoload`) : à désactiver.
+- **Savestates** : charger un état remplace la sauvegarde par une ancienne. mGBA recharge un état au lancement par défaut (`autoload`) : à désactiver. Le Lanceur pose la question après une Récupération si ce réglage (ou celui de RetroArch, VBA-M) est actif.
 - **Sauvegarde vierge** (que des `0x00` ou `0xFF`) : comptée comme absente, jamais envoyée.
 - **Jeux 3DS dans Azahar** : un jeu jamais lancé dans Azahar n'a pas de dossier de sauvegarde ; le lancer une fois et sauvegarder en jeu.
 - **Horloge d'Or / Argent / Cristal** : chaque machine garde sa propre horloge ([ADR 0008](docs/adr/0008-gb-gba-par-fichiers-sram-seule.md)).
