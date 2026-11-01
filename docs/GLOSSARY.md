@@ -91,7 +91,7 @@ _Éviter_ : rollback, retour arrière
 ## Synchronisation
 
 **Client** :
-Une machine où l'on joue et qui synchronise ses Sauvegardes locales : la 3DS ou le PC.
+Une machine ou un émulateur où l'on joue, avec ses propres Sauvegardes locales et Bases : la 3DS, ou un émulateur du PC. Deux émulateurs du même Système sur un PC sont deux Clients.
 _Éviter_ : appareil, device, console, poste
 
 **Serveur** :
@@ -119,5 +119,5 @@ Le Client remplace sa Sauvegarde locale par la Version courante, après une Copi
 _Éviter_ : pull, download, téléchargement
 
 **Lanceur** :
-Le programme PC que LaunchBox appelle à la place de melonDS : Récupération, partie, puis Envoi.
+Le programme PC (`3dssavesync`, autrefois `pc/sync.ps1`) qu'un frontend ou un raccourci appelle à la place de l'émulateur : Synchronisation, partie, puis Synchronisation.
 _Éviter_ : wrapper, plugin, script de sync

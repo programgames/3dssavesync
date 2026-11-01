@@ -45,6 +45,26 @@ jobs:
           powershell -NoProfile -File pc/test_lanceur.ps1
           exit $LASTEXITCODE
 
+  client-go:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: client/go.mod
+          cache: false
+      - run: go vet ./...
+        working-directory: client
+      - run: go test -count=1 -v ./...
+        working-directory: client
+
   homebrew-3ds:
     runs-on: ubuntu-latest
     steps:
@@ -80,7 +100,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [serveur, tests-c, lanceur-windows, homebrew-3ds]
+    needs: [serveur, tests-c, lanceur-windows, client-go, homebrew-3ds]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -91,6 +111,18 @@ jobs:
         with:
           name: homebrew-3ds
           path: dist
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: client/go.mod
+          cache: false
+      - name: Binaires PC (sans console sous Windows)
+        working-directory: client
+        run: |
+          for cible in windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${cible%/*}; arch=${cible#*/}; ext=; drapeaux="-s -w"
+            if [ "$os" = windows ]; then ext=.exe; drapeaux="$drapeaux -H windowsgui"; fi
+            GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "$drapeaux" -o "../dist/3dssavesync-$os-$arch$ext" .
+          done
       - name: Release GitHub
         env:
           GH_TOKEN: ${{ github.token }}

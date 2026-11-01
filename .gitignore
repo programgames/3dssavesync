@@ -6,6 +6,9 @@ pc/sync.config.json
 # État local du Lanceur
 pc/base.json
 pc/ndssync.log
+client/config.json
+client/*.exe
+client/3dssavesync
 
 # Builds 3DS
 3ds/build/
