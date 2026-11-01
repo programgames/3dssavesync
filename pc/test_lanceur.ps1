@@ -1,6 +1,6 @@
 ﻿# Teste Invoke-Lanceur contre un vrai serveur local (server/server.py) et un dossier temporaire.
 # melonDS, les boîtes de dialogue et la détection de processus sont remplacés par des doublures.
-# Usage : powershell -NoProfile -File H:\Dev\nds-save-sync\pc\test_lanceur.ps1
+# Usage : powershell -NoProfile -File pc\test_lanceur.ps1
 . "$PSScriptRoot\sync.ps1"
 
 $script:echecs = 0

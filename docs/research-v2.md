@@ -82,7 +82,7 @@ Observations locales (lecture seule, aucun fichier modifié) :
 - Plusieurs horodatages Checkpoint commencent par `2030...` (exemple `20300924-224846`). L'horloge de la 3DS est donc fausse. Ne prenez pas ces noms comme une date fiable.
 - Azahar `title/00040000/001b5000/data/00000001.metadata` = `00 00 04 00 | 01 00 00 00 | 01 00 00 00 | 01 00 00 00` : total_size = 0x00040000, 1 répertoire, 1 fichier, duplicate_data = 1 (3 octets de bourrage).
 - Azahar contient aussi l'extdata `extdata/00000000/00001B50/` avec `icon`, `metadata`, `boss/`, `user/` (sous-dossiers `btvideo`, `dummy2`, `dummy3`, `finder_studio`, `reg`).
-- Le projet actuel construit un `.3dsx` et un `.cia`. Son `app.rsf` déclare seulement `CategoryFileSystemTool` et `DirectSdmc` dans `FileSystemAccess` (`H:\Dev\nds-save-sync\3ds\app.rsf`, lignes 35-43).
+- Le projet actuel construit un `.3dsx` et un `.cia`. Son `app.rsf` déclare seulement `CategoryFileSystemTool` et `DirectSdmc` dans `FileSystemAccess` (`3ds/app.rsf`, lignes 35-43).
 
 ---
 

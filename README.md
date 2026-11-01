@@ -1,72 +1,95 @@
 # 3dssavesync
 
-Jouer à la même partie sur une 3DS et sur un PC, sans copier de fichier à la main. Couvre la DS, le Game Boy / Game Boy Color, la GBA et des jeux 3DS natifs (par défaut : les 8 Pokémon, de X à Ultra-Lune).
+Play the same game on a modded 3DS and on a PC emulator, without copying save files by hand. Covers **DS**, **Game Boy / Game Boy Color**, **GBA** and native **3DS** games (by default the 8 Pokémon games, X to Ultra Moon).
 
-> **État** : version 3 en cours. Le code repris de la v2 fonctionne pour une installation précise (Windows + LaunchBox + melonDS / mGBA / Azahar). Le plan de la v3 (installation simple, émulateurs autonomes, Linux / macOS / Steam Deck, anglais) est dans [docs/v3-plan.md](docs/v3-plan.md).
+*[Version française](README.fr.md)*
 
-## Architecture
+- One small server keeps **every version** of every save and never deletes anything.
+- The 3DS app and the PC launcher compare fingerprints: when only one side changed, the save is copied; when both changed, you choose (**never** an automatic overwrite).
+- Before any save is replaced, a backup copy is made.
+
+## How it works
 
 ```
-        3DS (Luma3DS)                              Serveur personnel                         PC
- ┌──────────────────────────────┐          ┌───────────────────────────────┐         ┌──────────────────────────────┐
- │ homebrew (.cia / .3dsx)      │  HTTPS   │ server/server.py (Python)     │  HTTPS  │ client/ : 3dssavesync (Go)   │
- │  lit les sauvegardes :       │ ───────► │  dans Docker, derrière un     │ ◄────── │  remplace l'émulateur        │
- │  · DS  (TWiLight, forwarders)│ ◄─────── │  reverse proxy HTTPS          │ ──────► │  · melonDS (DS)              │
- │  · GB  (TWiLight, mGBA)      │          │  data/ : chaque Version       │         │  · mGBA (GB, GBC, GBA)       │
- │  · GBA (open_agb_firm, mGBA) │          │  gardée pour toujours         │         │  · Azahar (3DS)              │
- │  · 3DS (archives système)    │          │                               │         │                              │
- └──────────────────────────────┘          └───────────────────────────────┘         └──────────────────────────────┘
+       3DS (Luma3DS)                         Server                               PC
+ ┌──────────────────────────┐      ┌────────────────────────────┐      ┌───────────────────────────┐
+ │ 3dssavesync app (.cia)   │ ───► │ local server in the PC app │ ◄─── │ 3dssavesync (one program) │
+ │ · DS  (TWiLight Menu++)  │ ◄─── │ or personal server (Docker,│ ───► │ started by your frontend  │
+ │ · GB  (TWiLight, mGBA)   │      │ HTTPS)                     │      │ or a shortcut, instead of │
+ │ · GBA (open_agb_firm,    │      │ keeps every version        │      │ the emulator:             │
+ │        mGBA forwarders)  │      │ forever                    │      │ sync → play → sync        │
+ │ · 3DS (save archives)    │      └────────────────────────────┘      └───────────────────────────┘
+ └──────────────────────────┘
 ```
 
-**Le serveur** : au choix, le **serveur local** inclus dans l'exe du PC (réseau local, rien à installer), ou un **serveur personnel** (`server/` : un fichier Python sans dépendance, dans un conteneur Docker, HTTPS, synchronisation partout). Guide : [docs/guide-serveur.md](docs/guide-serveur.md). Il garde chaque Version reçue (`data/<Clé>/<n°>-<date>-<client>-<hash>.sav`) et n'efface jamais rien. Il refuse un envoi si quelqu'un a envoyé entre-temps (`412`) : aucun écrasement silencieux. Accès par jeton (`Authorization: Bearer`).
+On the PC, `3dssavesync` replaces the emulator in your frontend: it downloads the newest save, starts the game, waits for the emulator to close, then uploads the new save. On the 3DS, the app lists your games with their state (in sync, to upload, to download, conflict); START syncs everything.
 
-**Le homebrew 3DS** (`3ds/`, C + libctru, HTTPS avec curl + mbedTLS) : il liste les jeux avec leur État (à jour, à envoyer, à récupérer, Conflit) ; START synchronise tout ; SELECT ouvre les réglages (serveur, jeton, dossiers DS / GB / GBA, jeux 3DS, test de connexion). Il demande confirmation avant d'écraser une sauvegarde et en garde toujours une copie. Français ou anglais selon la langue de la console.
+## Install in 3 steps
 
-**Le Lanceur PC** (`client/`, Go, un seul exécutable sans dépendance) : le frontend ou un raccourci l'appelle à la place de l'émulateur. Il récupère la sauvegarde, lance le jeu, attend la fermeture de l'émulateur, puis envoie la nouvelle sauvegarde. Profils intégrés : melonDS, mGBA, Azahar, RetroArch (cœurs melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, plus un profil personnalisé. Installation : un double-clic ouvre une page de réglages dans le navigateur (serveur, émulateurs, LaunchBox, ES-DE, raccourcis) ; autres frontends : [guide-frontends.md](docs/guide-frontends.md). Guide : [docs/guide-client-pc.md](docs/guide-client-pc.md). L'ancien Lanceur PowerShell (`pc/sync.ps1`) reste disponible.
+### 1. The server
 
-## Comment la synchronisation décide
+Choose one ([server guide, in French](docs/guide-serveur.md)):
 
-Pas de dates (l'horloge de la 3DS n'est pas fiable) : chaque machine compare trois empreintes SHA-256, la sienne, celle du serveur et celle de la dernière synchronisation (la **Base**). Une seule machine a changé : on copie. Les deux : **Conflit**, on demande, jamais de choix automatique. Détails : [docs/design.md](docs/design.md), [ADR 0001](docs/adr/0001-sync-trois-points-par-hash.md).
+| | Local server on the PC | Personal server (Docker) |
+|---|---|---|
+| Setup | nothing more: step 3 sets it up | an always-on machine (NAS, Raspberry Pi, server), Docker, a domain name |
+| Sync | at home, PC on | anywhere (HTTPS) |
 
-Chaque jeu a une **Clé** lue dans la ROM, identique sur la 3DS et le PC ([ADR 0007](docs/adr/0007-cle-de-jeu-par-systeme.md)) :
+For a personal server: `server/docker-compose.yml` (behind your HTTPS reverse proxy) or `server/docker-compose.caddy.yml` (automatic HTTPS with Caddy). Image: `ghcr.io/programgames/3dssavesync-server`. The 3DS needs a **Let's Encrypt** certificate and TLS 1.2 with ECDHE.
 
-| Système | Clé |
+### 2. The 3DS
+
+Requirements: a 3DS with custom firmware (Luma3DS) and FBI.
+
+1. Download `3dssavesync.cia` from the [latest release](https://github.com/programgames/3dssavesync/releases/latest), copy it to the SD card, install it with FBI.
+2. Start **3dssavesync**: the settings screen opens. Enter the server address and token, check the ROM and save folders (TWiLight Menu++ defaults are filled in), then **Test the connection**.
+
+### 3. The PC
+
+1. Download the program for your system from the [latest release](https://github.com/programgames/3dssavesync/releases/latest): `3dssavesync-windows-amd64.exe`, `-linux-amd64`, `-darwin-arm64`…
+2. Double-click it (Linux: `chmod +x`, then run `./3dssavesync-linux-amd64 setup`; macOS: first `xattr -d com.apple.quarantine <file>`, the program is not signed).
+3. A settings page opens in your browser: server, emulators (found automatically), LaunchBox, ES-DE, shortcuts. Click **Save**.
+
+Other frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode): [frontend guide](docs/guide-frontends.md). Full PC guide: [docs/guide-client-pc.md](docs/guide-client-pc.md). The detailed guides are in French.
+
+## Supported
+
+| | |
 |---|---|
-| DS | `ADAF` (code jeu) |
-| GB / GBC | `GB-PM_CRYSTAL-F2E2` (titre + somme de contrôle) |
-| GBA | `GBA-BPEF` (code jeu) |
-| 3DS | `3DS-00040000001B5000` (title ID) |
+| **3DS apps** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), mGBA forwarders (GB/GBC/GBA), native 3DS games (any game whose save is a single `main` file; default: the 8 Pokémon) |
+| **PC emulators** | melonDS, mGBA, Azahar, RetroArch (cores melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, and any emulator with a custom command line (raw save files) |
+| **Set up automatically** | LaunchBox / BigBox, ES-DE, desktop shortcuts (`.lnk`, `.desktop`, `.app`) |
+| **Guides** | Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode |
+| **Systems** | Windows, Linux, macOS (amd64 and arm64) |
+| **Languages** | English, French (system language) |
 
-## Pièges connus
+**Tested on real hardware**: New 3DS XL (Luma3DS, TWiLight Menu++, open_agb_firm, mGBA forwarders), Windows 11 with LaunchBox, melonDS, mGBA and Azahar, personal Docker server.
+**Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, ES-DE, the 3DS talking to the local server. Reports are welcome.
 
-- **Savestates** : charger un état remplace la sauvegarde par une ancienne. mGBA recharge un état au lancement par défaut (`autoload`) : à désactiver. Le Lanceur pose la question après une Récupération si ce réglage (ou celui de RetroArch, VBA-M) est actif.
-- **Sauvegarde vierge** (que des `0x00` ou `0xFF`) : comptée comme absente, jamais envoyée.
-- **Jeux 3DS dans Azahar** : un jeu jamais lancé dans Azahar n'a pas de dossier de sauvegarde ; le lancer une fois et sauvegarder en jeu.
-- **Horloge d'Or / Argent / Cristal** : chaque machine garde sa propre horloge ([ADR 0008](docs/adr/0008-gb-gba-par-fichiers-sram-seule.md)).
-- **Forwarders mGBA** : leur sauvegarde (`sdmc:/mGBA/forwarders/`) prime ; touche **X** du homebrew pour revenir à TWiLight / open_agb_firm ([guide](docs/guide-forwarders-mgba.md)).
+## Known pitfalls
 
-## Développement
+- **Save states**: loading a state replaces the save with an older one. mGBA reloads a state at start by default (`autoload`); the launcher warns you after a download if this setting (or RetroArch's, VBA-M's) is on.
+- **Blank save** (only `0x00` or `0xFF`): counted as absent, never uploaded.
+- **3DS games in Azahar**: start the game once in Azahar and save, so its save folder exists.
+- **Gold / Silver / Crystal clock**: each machine keeps its own clock.
+- **Not supported yet**: DeSmuME (`.dsv`), NO$GBA, gpSP, Beetle GBA (formats to convert), GBA games with EEPROM saves, GB MBC2 games.
+
+## How sync decides
+
+No dates (the 3DS clock is not reliable): each machine compares three SHA-256 fingerprints, its own, the server's, and the one from the last sync (the *base*). One side changed: copy. Both changed: **conflict**, you choose. Every game has a **key** read from the ROM, the same on 3DS and PC: DS game code (`ADAF`), `GBA-BPEF`, `GB-PM_CRYSTAL-F2E2` (title + checksum), `3DS-00040000001B5000` (title ID). Details (French): [docs/design.md](docs/design.md), [ADRs](docs/adr/).
+
+## Development
 
 ```bash
-cd server && python -m unittest test_server.py
-NDSSYNC_URL=https://... NDSSYNC_TOKEN=... python -m unittest test_server.py   # même contrat, contre un serveur déployé
-cd client && go test ./...                         # Lanceur Go, contre le vrai serveur (Python requis)
-powershell -NoProfile -File pc/test_etat.ps1
-powershell -NoProfile -File pc/test_lanceur.ps1
+cd server && python -m unittest test_server.py      # HTTP contract (also: NDSSYNC_URL=https://... against a deployed server)
+cd client && go test ./...                           # PC launcher, against the real server (Python needed)
+cd 3ds && make cia                                   # devkitPro, makerom and bannertool in PATH
 ```
 
-Tests C (gcc sur le PC) et homebrew (devkitPro) :
+C tests (gcc on the PC): see `.github/workflows/ci.yml`. GitHub Actions runs every test (Go on Windows, Linux and macOS) and builds the `.cia` / `.3dsx`; a `v*` tag publishes a release with the PC programs and the server image.
 
-```bash
-cd 3ds && gcc -std=c99 -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
-cd 3ds && gcc -std=c99 -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
-cd 3ds && gcc -std=c99 -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && /tmp/f
-cd 3ds && gcc -std=c99 -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && /tmp/r
-cd 3ds && make cia      # makerom et bannertool dans le PATH
-```
+Code, comments and docs are written in French; the apps speak English and French.
 
-GitHub Actions lance ces tests (Lanceur Go sur Windows, Linux et macOS) et compile le `.cia` / `.3dsx` ; un tag `v*` publie une release avec les exécutables PC.
+## License
 
-Documentation : [GLOSSARY](docs/GLOSSARY.md), [ADR](docs/adr/), recherches [v1](docs/research.md), [v2](docs/research-v2.md), [v3](docs/).
-
-Licence : MIT.
+MIT.
