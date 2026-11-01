@@ -168,6 +168,7 @@ endif
 #   make cia MAKEROM=/chemin/makerom BANNERTOOL=/chemin/bannertool
 BANNERTOOL	?=	bannertool
 MAKEROM		?=	makerom
+.DEFAULT_GOAL	:=	all
 
 cia: all
 	@$(BANNERTOOL) makebanner -i meta/banner.png -a meta/banner.wav -o $(BUILD)/banner.bnr
