@@ -2,7 +2,7 @@
 
 Un forwarder mGBA est un `.cia` par jeu : mGBA et la ROM dans une seule icône du menu HOME. Source : `docs/research-v2.md`, partie 2 §3c.
 
-**Différence importante** : un forwarder sauvegarde dans `sdmc:/mGBA/forwarders/<nom de la ROM>.sav`, pas à côté de la ROM. ndssync prend ce fichier **dès qu'il existe** ; sinon il garde le `.sav` à côté de la ROM. La ROM reste dans `sd:/roms/gba` (ou `sd:/roms/gb`) : ndssync y lit la Clé.
+**Différence importante** : un forwarder sauvegarde dans `sdmc:/mGBA/forwarders/<nom de la ROM>.sav`, pas à côté de la ROM. 3dssavesync prend ce fichier **dès qu'il existe** ; sinon il garde le `.sav` à côté de la ROM. La ROM reste dans `sd:/roms/gba` (ou `sd:/roms/gb`) : 3dssavesync y lit la Clé.
 
 ⚠️ Pour un jeu qui a un forwarder, joue **seulement** avec le forwarder. open_agb_firm et TWiLight lisent toujours l'ancien `.sav` à côté de la ROM : la partie ne serait plus la même.
 
@@ -32,12 +32,12 @@ Pourquoi pas l'interface de mGBA (Tools → Create forwarder…) : elle ignore l
 
 ## 4. Sur la console : installer et reprendre la partie
 
-1. Avant tout, ouvre ndssync et appuie sur START : la partie actuelle doit être sur le serveur.
+1. Avant tout, ouvre 3dssavesync et appuie sur START : la partie actuelle doit être sur le serveur.
 2. Copie le `.cia` sur la SD (ftpd), puis installe-le avec **FBI**.
 3. Avant le premier lancement, copie le `.sav` actuel dans `sdmc:/mGBA/forwarders/` sous le même nom. L'original reste à côté de la ROM. Claude peut le faire par FTP.
 4. Lance le forwarder. Vérifie que ta partie se charge.
 5. Joue, sauvegarde en jeu, puis quitte par HOME.
-6. Ouvre ndssync. Dans le détail du jeu, la ligne « Fichier : forwarder mGBA » s'affiche. Appuie sur START.
+6. Ouvre 3dssavesync. Dans le détail du jeu, la ligne « Fichier : forwarder mGBA » s'affiche. Appuie sur START.
 
 ## Tous les Pokémon d'un coup (préparé le 2026-11-01)
 
@@ -54,9 +54,9 @@ Les 11 `.cia` (Rouge, Bleue, Jaune, Or, Argent, Cristal, Rubis, Saphir, Émeraud
 
 L'application mGBA (sans forwarder) utilise aussi `savegamePath=/mGBA/forwarders` : le forwarder l'écrit dans la configuration commune. Pour ces jeux, TWiLight et open_agb_firm lisent encore l'ancien `.sav` à côté de la ROM : ne plus les utiliser pour eux.
 
-## Changer de programme pour un jeu (touche X de ndssync)
+## Changer de programme pour un jeu (touche X de 3dssavesync)
 
-Dans ndssync, sur un jeu GB ou GBA, **X** fait passer la Sauvegarde d'un côté à l'autre, avec une Copie de sécurité du fichier remplacé :
+Dans 3dssavesync, sur un jeu GB ou GBA, **X** fait passer la Sauvegarde d'un côté à l'autre, avec une Copie de sécurité du fichier remplacé :
 - forwarder → ROM : le `.sav` du forwarder remplace celui à côté de la ROM, puis il est retiré de `mGBA/forwarders` (open_agb_firm ou TWiLight le lisent ensuite) ;
 - ROM → forwarder : le `.sav` à côté de la ROM est copié dans `mGBA/forwarders`.
 

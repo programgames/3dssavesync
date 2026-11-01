@@ -1,17 +1,8 @@
 /* Même ordre d'opérations que Checkpoint (io.cpp : écriture, commit, secure value), code écrit ici (ADR 0009). */
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "titres3ds.h"
-
-const titre3ds_t TITRES_3DS[NB_TITRES_3DS] = {
-    { 0x0004000000055D00ULL, "Pokemon X" },
-    { 0x0004000000055E00ULL, "Pokemon Y" },
-    { 0x000400000011C400ULL, "Pokemon Rubis Omega" },
-    { 0x000400000011C500ULL, "Pokemon Saphir Alpha" },
-    { 0x0004000000164800ULL, "Pokemon Soleil" },
-    { 0x0004000000175E00ULL, "Pokemon Lune" },
-    { 0x00040000001B5000ULL, "Pokemon Ultra-Soleil" },
-    { 0x00040000001B5100ULL, "Pokemon Ultra-Lune" },
-};
 
 /* Chemin binaire {media, low, high} de ARCHIVE_USER_SAVEDATA (3dbrew, FS:OpenArchive). */
 static Result ouvrir(u64 id, FS_MediaType media, FS_Archive *a)
@@ -76,4 +67,86 @@ int titre_ecrire(u64 id, FS_MediaType media, const void *octets, size_t taille)
     valeur = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
     FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &valeur, sizeof valeur, &existait, 1);
     return 0;
+}
+
+int titre_seul_main(u64 id)
+{
+    static const FS_MediaType supports[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
+    int i;
+    for (i = 0; i < 2; i++) {
+        FS_Archive a;
+        Handle d;
+        FS_DirectoryEntry e[2];
+        u32 lus = 0;
+        int seul;
+        if (R_FAILED(ouvrir(id, supports[i], &a))) continue;
+        if (R_FAILED(FSUSER_OpenDirectory(&d, a, fsMakePath(PATH_ASCII, "/")))) {
+            FSUSER_CloseArchive(a);
+            continue;
+        }
+        FSDIR_Read(d, &lus, 2, e);
+        FSDIR_Close(d);
+        FSUSER_CloseArchive(a);
+        seul = lus == 1 && !(e[0].attributes & FS_ATTRIBUTE_DIRECTORY) && e[0].name[0] == 'm' && e[0].name[1] == 'a' &&
+               e[0].name[2] == 'i' && e[0].name[3] == 'n' && e[0].name[4] == 0;
+        return seul;
+    }
+    return -1;
+}
+
+/* UTF-16 -> ASCII : lettres accentuées latines ramenées à leur base, le reste remplacé par '?'. */
+static void ascii(const u16 *src, size_t max, char *nom, size_t n)
+{
+    static const char *const LATIN1 = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty";
+    size_t i, j = 0;
+    for (i = 0; i < max && src[i] && j + 1 < n; i++) {
+        u16 c = src[i];
+        if (c == '\n') c = ' ';
+        nom[j++] = c < 0x80 ? (char)c : c >= 0xC0 && c <= 0xFF ? LATIN1[c - 0xC0] : c == 0x2019 ? '\'' : '?';
+    }
+    nom[j] = '\0';
+}
+
+int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n)
+{
+    /* ExeFS:/icon de ARCHIVE_SAVEDATA_AND_CONTENT (méthode de FBI). SMDH : 16 titres de 0x200 octets à 0x08,
+     * titre court (0x40 caractères UTF-16) en tête de chacun. */
+    static const u32 fichier[5] = { 0, 0, 2, 0x6E6F6369, 0 }; /* "icon" */
+    u32 archive[4] = { (u32)id, (u32)(id >> 32), media, 0 };
+    u16 *smdh = malloc(0x36C0);
+    Handle f;
+    u32 lu = 0;
+    int ok = 0;
+    if (!smdh) return -1;
+    if (R_SUCCEEDED(FSUSER_OpenFileDirectly(&f, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive },
+                                            (FS_Path){ PATH_BINARY, sizeof fichier, fichier }, FS_OPEN_READ, 0))) {
+        ok = R_SUCCEEDED(FSFILE_Read(f, &lu, 0, smdh, 0x36C0)) && lu == 0x36C0 && !memcmp(smdh, "SMDH", 4);
+        FSFILE_Close(f);
+    }
+    if (ok) {
+        const u16 *t = smdh + (8 + 0x200 * (langue & 0xF)) / 2;
+        if (!t[0]) t = smdh + (8 + 0x200 * 1) / 2; /* titre vide dans cette langue : anglais */
+        ascii(t, 0x40, nom, n);
+    }
+    free(smdh);
+    return ok ? 0 : -1;
+}
+
+int titres_installes(u64 *ids, FS_MediaType *medias, int max)
+{
+    static const FS_MediaType supports[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
+    int i, n = 0;
+    for (i = 0; i < 2; i++) {
+        u32 total = 0, lus = 0, k;
+        u64 *tous;
+        if (R_FAILED(AM_GetTitleCount(supports[i], &total)) || !total || !(tous = malloc(total * sizeof *tous))) continue;
+        if (R_SUCCEEDED(AM_GetTitleList(&lus, supports[i], total, tous)))
+            for (k = 0; k < lus && n < max; k++)
+                if ((tous[k] >> 32) == 0x00040000) { /* applications seulement (ni démos, ni mises à jour, ni DLC) */
+                    ids[n] = tous[k];
+                    medias[n++] = supports[i];
+                }
+        free(tous);
+    }
+    return n;
 }

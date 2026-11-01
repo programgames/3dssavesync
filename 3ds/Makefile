@@ -31,9 +31,9 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		:=	nds-save-sync
-APP_TITLE	:=	ndssync
-APP_DESCRIPTION	:=	Synchronisation des sauvegardes DS
+TARGET		:=	3dssavesync
+APP_TITLE	:=	3dssavesync
+APP_DESCRIPTION	:=	Synchronisation des sauvegardes DS, GB, GBA, 3DS
 APP_AUTHOR	:=	3dssavesync
 BUILD		:=	build
 SOURCES		:=	source

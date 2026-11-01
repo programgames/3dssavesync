@@ -33,8 +33,9 @@ type Config struct {
 	Jeton      string                `json:"jeton"`
 	Copies     string                `json:"copies,omitempty"` // défaut : <dossier de la configuration>/copies
 	Emulateurs map[string]*Emulateur `json:"emulateurs"`
-	Lanceur    string                `json:"lanceur,omitempty"`   // exe installé, vers lequel pointent les frontends
-	Frontends  map[string]string     `json:"frontends,omitempty"` // launchbox, esde -> dossier (réparation)
+	Lanceur    string                `json:"lanceur,omitempty"`    // exe installé, vers lequel pointent les frontends
+	Frontends  map[string]string     `json:"frontends,omitempty"`  // launchbox, esde -> dossier (réparation)
+	Titres3DS  map[string]string     `json:"titres_3ds,omitempty"` // jeux 3DS en plus des 8 Pokémon : title ID -> nom
 }
 
 type Emulateur struct {
@@ -136,6 +137,9 @@ func nouvelleSession(chemin string) (*Session, error) {
 	var cfg Config
 	if err := lireJSON(chemin, &cfg); err != nil {
 		return nil, err
+	}
+	for id, nom := range cfg.Titres3DS { // même liste que titres.ini de la 3DS (seulement des jeux à un seul fichier /main)
+		titres3DS[strings.ToUpper(id)] = nom
 	}
 	return &Session{cfg: &cfg, dossier: filepath.Dir(chemin), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
 }

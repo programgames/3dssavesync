@@ -32,6 +32,7 @@ Un autre emplacement : option `--config <fichier>`. Modèle : [`client/config.ex
 |---|---|
 | `url`, `jeton` | Le Serveur et son jeton. |
 | `copies` | Dossier des Copies de sécurité (facultatif ; défaut : `copies` à côté de `config.json`). |
+| `titres_3ds` | Facultatif : jeux 3DS en plus des 8 Pokémon, `{"<title ID>": "<nom>"}`. Même liste que l'écran « Jeux 3DS » de la 3DS ; seulement des jeux dont la sauvegarde est un seul fichier `main`. |
 | `emulateurs.<nom>.exe` | L'émulateur. |
 | `emulateurs.<nom>.profil` | Facultatif : le Profil (tableau suivant). Défaut : le nom de l'entrée. Sert pour deux installations du même émulateur. |
 | `emulateurs.<nom>.sauvegardes` | Facultatif : Système → dossier des Sauvegardes (`DS`, `GB`, `GBA` ; `3DS` : le dossier `sdmc`). Défaut : le réglage de l'émulateur. S'il est présent, l'émulateur ne gère que ces Systèmes. |

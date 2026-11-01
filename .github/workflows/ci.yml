@@ -30,6 +30,7 @@ jobs:
           gcc -std=c99 -Wall -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
           gcc -std=c99 -Wall -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
           gcc -std=c99 -Wall -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && (cd /tmp && /tmp/f)
+          gcc -std=c99 -Wall -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && (cd /tmp && /tmp/r)
 
   lanceur-windows:
     runs-on: windows-latest
@@ -90,7 +91,7 @@ jobs:
               -p "$(sed -n "s/^APP_AUTHOR[[:space:]]*:=[[:space:]]*//p" Makefile)" -i meta/icon.png -o build/icon.icn'
       - name: .cia
         working-directory: 3ds
-        run: ./makerom -f cia -o nds-save-sync.cia -elf nds-save-sync.elf -rsf app.rsf -icon build/icon.icn -banner build/banner.bnr -exefslogo -target t
+        run: ./makerom -f cia -o 3dssavesync.cia -elf 3dssavesync.elf -rsf app.rsf -icon build/icon.icn -banner build/banner.bnr -exefslogo -target t
       - uses: actions/upload-artifact@v4
         with:
           name: homebrew-3ds

@@ -53,13 +53,15 @@ Chaque phase se termine par une démonstration et une validation avant la suivan
 - Emplacements GB/GBA : TWiLight (dossier `saves` ou à côté de la ROM), open_agb_firm (`useSavesFolder`), forwarders mGBA ; la touche X reste.
 - Liste des jeux 3DS natifs configurable (8 Pokémon par défaut).
 - Français et anglais selon la langue de la console.
-- Certificats racine : ISRG Root X1 + GTS Root R1/R4 (version cloud), testés sur une vraie 3DS.
+- Certificats racine : ISRG Root X1 suffit (Let's Encrypt). Paquet de racines reporté avec Cloudflare. Serveur local : HTTP, sans certificat.
 - `pc/forwarder3ds.py` rendu générique (outils et base téléchargés et vérifiés), ou intégré au programme Go.
 
 ## Phase 6 — Serveur
 
 - Docker : image publiée, `docker-compose.yml` simple ; variante avec Caddy pour le HTTPS automatique (sans reverse proxy existant). Même format de données qu'aujourd'hui : un serveur v2 change seulement d'image.
-- Cloudflare : Worker + Durable Object SQLite, bouton « Deploy to Cloudflare », même suite de tests du contrat HTTP.
+- **Serveur local dans l'exe PC** (`3dssavesync serve`, décision du 2026-11-01) : le même contrat HTTP, réécrit en Go dans le Lanceur, sur le réseau local, en HTTP avec jeton. L'assistant le configure (démarrage avec le système, adresse et jeton à entrer sur la 3DS). Limite : synchronisation à la maison, PC allumé. Ne jamais ouvrir ce port sur Internet. Même suite de tests du contrat HTTP.
+- Deux façons de servir, au choix de l'utilisateur : serveur personnel (Docker, HTTPS, synchronisation partout) ou serveur local sur le PC.
+- Cloudflare : **reporté** (2026-11-01). Trop lourd pour l'utilisateur (compte, déploiement) et pour la maintenance (deuxième serveur en TypeScript, certificats variables). À reprendre seulement si des utilisateurs le demandent.
 
 ## Phase 7 — Documentation et version publique
 

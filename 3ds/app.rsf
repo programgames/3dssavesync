@@ -1,8 +1,8 @@
-# Description CIA de ndssync, adaptée de meta/ftpd-classic-cia.rsf (github.com/mtheall/ftpd) :
+# Description CIA de 3dssavesync, adaptée de meta/ftpd-classic-cia.rsf (github.com/mtheall/ftpd) :
 # même profil de services (soc:U, ssl:C, SD) ; seuls le titre et l'identifiant changent.
 BasicInfo:
-  Title                   : "ndssync"
-  ProductCode             : "ndssync"
+  Title                   : "3dssavesync"
+  ProductCode             : "3dssavesync"
   Logo                    : Homebrew # Nintendo / Licensed / Distributed / iQue / iQueForSystem
 
 TitleInfo:
@@ -33,7 +33,7 @@ AccessControlInfo:
   # FS:USER Archive Access Permissions
   # Uncomment as required
   FileSystemAccess:
-   - CategorySystemApplication   # ndssync : sauvegardes des autres titres (ADR 0009)
+   - CategorySystemApplication   # 3dssavesync : sauvegardes des autres titres (ADR 0009)
    - CategoryHardwareCheck
    - CategoryFileSystemTool
    #- Debug

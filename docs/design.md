@@ -115,7 +115,7 @@ C + libctru, console texte, `3ds-curl` + `3ds-mbedtls`.
 | `source/net.c` | les 4 appels HTTP avec curl, ISRG Root X1 embarqué |
 | `test/test_etat.c` | lit `tests/cas_etat.csv`, compilé avec `gcc` sur PC |
 
-Fichiers sur la SD, dans `sd:/3ds/nds-save-sync/` : `config.ini` (URL, jeton, `roms=sd:/roms/nds`, `saves=sd:/roms/nds/saves`), `base.ini` (`CODE=hash`), `copies/`.
+Fichiers sur la SD, dans `sd:/3ds/3dssavesync/` (avant la v3 : `sd:/3ds/nds-save-sync/`, repris au premier lancement) : `config.ini` (URL, jeton, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba` ; sauvegardes vides = à côté de la ROM), `titres.ini` (jeux 3DS synchronisés, `<title ID>=<nom>` ; absent = les 8 Pokémon), `base.ini` (`CLÉ=hash`), `copies/`.
 
 1. Lire `config.ini` ; absent → écran de configuration.
 2. Scanner `roms/*.nds` (racine seulement) : Code jeu de chaque ROM. Plusieurs ROM pour un Code jeu → Doublon.
