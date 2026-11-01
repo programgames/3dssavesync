@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="{{.Langue}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</title>
+<style>
+:root {
+  --fond: #f4f5f7; --carte: #ffffff; --texte: #1d2129; --doux: #5d6573; --bord: #d9dde3;
+  --accent: #2f6fdf; --accent-texte: #ffffff; --ok: #1f7a43; --alerte: #a15c00; --erreur: #b3261e;
+  --champ: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #15171c; --carte: #1e2128; --texte: #e6e8ec; --doux: #9aa2b1; --bord: #343944;
+    --accent: #6a9cf5; --accent-texte: #0d1117; --ok: #5fc48b; --alerte: #e0a24a; --erreur: #f2847b;
+    --champ: #15171c;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 24px 16px 96px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+p.sous { color: var(--doux); margin: 0 0 20px; }
+section { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
+label { display: block; margin: 8px 0 4px; font-weight: 600; }
+label.choix { font-weight: normal; display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+label.choix span { min-width: 0; }
+code, .aide { overflow-wrap: anywhere; }
+input[type=text], input[type=password], input[type=number], select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit;
+}
+input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.aide { color: var(--doux); font-size: 13px; margin: 4px 0 0; }
+.alerte { color: var(--alerte); }
+.erreur { color: var(--erreur); }
+.ok { color: var(--ok); }
+.ligne { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.ligne > div { flex: 1 1 220px; }
+button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); cursor: pointer; }
+button.principal { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); font-weight: 600; }
+button:disabled { opacity: .6; cursor: default; }
+.emu { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; margin: 10px 0; }
+.emu.inactif .details { display: none; }
+.emu .tete { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.emu .tete strong { font-size: 15px; }
+.emu .chemin { color: var(--doux); font-size: 13px; word-break: break-all; }
+.systeme { display: grid; grid-template-columns: 52px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; }
+.systeme span { font-weight: 600; }
+.masque { display: none !important; }
+.barre { position: fixed; left: 0; right: 0; bottom: 0; background: var(--carte); border-top: 1px solid var(--bord); padding: 12px 16px; }
+.barre div { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; flex-wrap: wrap; }
+#resultat ul { margin: 0; padding-left: 20px; }
+@media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</h1>
+  <p class="sous">{{t "Synchronise les sauvegardes DS, GB, GBA et 3DS entre la 3DS et ce PC. Rien n'est écrit avant le bouton « Enregistrer » ; chaque fichier modifié est copié avant." "Syncs DS, GB, GBA and 3DS saves between the 3DS and this PC. Nothing is written before the \"Save\" button; every changed file is copied first."}}</p>
+
+  <section id="resultat" class="masque" aria-live="polite"></section>
+
+  <section>
+    <h2>1. {{t "Serveur" "Server"}}</h2>
+    <label class="choix"><input type="radio" name="type" value="perso"> <span><b>{{t "Serveur personnel" "Personal server"}}</b> — {{t "Docker, adresse https://… : synchronisation partout." "Docker, https://… address: sync anywhere."}}</span></label>
+    <label class="choix"><input type="radio" name="type" value="local"> <span><b>{{t "Serveur local sur ce PC" "Local server on this PC"}}</b> — {{t "rien d'autre à installer ; synchronisation à la maison, PC allumé." "nothing else to install; sync at home, PC on."}}</span></label>
+    <div id="perso">
+      <label for="url">{{t "Adresse du serveur" "Server address"}}</label>
+      <input type="text" id="url" placeholder="https://saves.example.com" autocomplete="off">
+      <label for="jeton">{{t "Jeton" "Token"}}</label>
+      <input type="password" id="jeton" autocomplete="off">
+      <p class="ligne" style="margin-top:10px"><button type="button" id="tester">{{t "Tester la connexion" "Test the connection"}}</button> <span id="test" role="status"></span></p>
+    </div>
+    <div id="local" class="masque">
+      <label for="port">Port</label>
+      <input type="number" id="port" min="1" max="65535">
+      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton à entrer sur la 3DS (3dssavesync, SELECT)." "The token is created or kept. After saving, this page shows the address and token to enter on the 3DS (3dssavesync, SELECT)."}}</p>
+      <p class="aide alerte">{{t "N'ouvrez jamais ce port sur Internet (box, routeur) : il n'est pas chiffré." "Never open this port on the Internet (router): it is not encrypted."}}</p>
+    </div>
+  </section>
+
+  <section id="sectionProgramme">
+    <h2>2. {{t "Programme" "Program"}}</h2>
+    <label class="choix"><input type="checkbox" id="installer"> <span>{{t "Copier le programme dans" "Copy the program to"}} <code id="installe"></code></span></label>
+    <p class="aide">{{t "Les frontends et les raccourcis pointent vers cet emplacement fixe." "Frontends and shortcuts point to this fixed location."}}</p>
+  </section>
+
+  <section>
+    <h2>3. {{t "Émulateurs" "Emulators"}}</h2>
+    <p class="aide">{{t "Sauvegardes : vide ou valeur proposée = le réglage de l'émulateur. ROM : seulement pour les raccourcis (synchroniser tous les jeux)." "Saves: empty or suggested value = the emulator setting. ROMs: only for shortcuts (sync all games)."}}</p>
+    <div id="emulateurs"></div>
+    <details style="margin-top:12px">
+      <summary>{{t "Ajouter un émulateur à la main" "Add an emulator by hand"}}</summary>
+      <div class="ligne" style="margin-top:8px">
+        <div><label for="profil">{{t "Profil" "Profile"}}</label><select id="profil"></select></div>
+        <div id="nomPerso" class="masque"><label for="nom">{{t "Nom (minuscules, chiffres, tirets)" "Name (lowercase, digits, dashes)"}}</label><input type="text" id="nom" placeholder="bgb"></div>
+        <div><label for="exe">{{t "Exécutable" "Executable"}}</label><input type="text" id="exe"></div>
+        <button type="button" id="ajouter">{{t "Ajouter" "Add"}}</button>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2>4. {{t "Frontends et raccourcis" "Frontends and shortcuts"}}</h2>
+    <div id="lb" class="masque">
+      <label for="launchbox">{{t "Dossier de LaunchBox (vide = pas de LaunchBox)" "LaunchBox folder (empty = no LaunchBox)"}}</label>
+      <input type="text" id="launchbox">
+      <p class="aide">{{t "Un nouvel émulateur « … (3dssavesync) » devient celui par défaut ; l'émulateur d'origine reste intact. LaunchBox doit être fermé." "A new \"… (3dssavesync)\" emulator becomes the default one; the original emulator stays intact. LaunchBox must be closed."}}</p>
+    </div>
+    <label class="choix masque" id="esdeLigne"><input type="checkbox" id="esde"> <span>{{t "Configurer ES-DE" "Set up ES-DE"}} (<code id="esdeChemin"></code>)</span></label>
+    <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
+  </section>
+</main>
+
+<div class="barre"><div>
+  <button type="button" class="principal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
+  <button type="button" id="reparer">{{t "Réparer les frontends" "Repair frontends"}}</button>
+  <button type="button" id="terminer">{{t "Terminer" "Finish"}}</button>
+</div></div>
+
+<script>
+const T = {
+  rom: {{t "à côté de la ROM" "next to the ROM"}},
+  roms: {{t "dossier des ROM (facultatif)" "ROM folder (optional)"}},
+  inchange: {{t "inchangé" "unchanged"}},
+  attente: {{t "Patiente…" "Please wait…"}},
+  fini: {{t "Terminé." "Done."}},
+  ferme: {{t "Tu peux fermer cet onglet." "You can close this tab."}},
+  erreur: {{t "Erreur : " "Error: "}},
+  coche: {{t "Utiliser" "Use"}},
+  ligne: {{t "Ligne de commande" "Command line"}},
+  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du Système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
+  extension: {{t "Extension de la sauvegarde" "Save extension"}},
+  processus: {{t "Nom du processus (facultatif)" "Process name (optional)"}},
+  processusAide: {{t "défaut : nom de l'exécutable" "default: executable name"}},
+  interne: {{t "ROM en .zip : la sauvegarde porte le nom du fichier dans le zip (sinon celui du zip)" ".zip ROM: the save is named after the file inside the zip (otherwise after the zip)"}},
+  obligatoire: {{t "dossier des sauvegardes (obligatoire)" "save folder (required)"}},
+  enPlus: {{t "Arguments en plus (avant la ROM)" "Extra arguments (before the ROM)"}},
+  commande: {{t "Commande : " "Command: "}},
+  manuel: {{t "ajouté à la main" "added by hand"}},
+  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}}
+};
+const racine = location.pathname;
+const $ = id => document.getElementById(id);
+let etat;
+
+async function api(chemin, corps) {
+  const r = await fetch(racine + "api/" + chemin, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps || {})});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+function texte(balise, contenu, classe) {
+  const e = document.createElement(balise);
+  e.textContent = contenu;
+  if (classe) e.className = classe;
+  return e;
+}
+
+function carte(x) {
+  const d = document.createElement("div");
+  d.className = "emu" + (x.Actif ? "" : " inactif");
+  d.emu = x;
+  const tete = document.createElement("div");
+  tete.className = "tete";
+  const c = document.createElement("input");
+  c.type = "checkbox"; c.checked = x.Actif; c.setAttribute("aria-label", T.coche + " " + x.Nom);
+  c.onchange = () => { x.Actif = c.checked; d.classList.toggle("inactif", !c.checked); };
+  tete.append(c, texte("strong", x.Nom), texte("span", "(" + x.Source + ")", "aide"));
+  d.append(tete, texte("div", x.Exe, "chemin"));
+  const details = document.createElement("div");
+  details.className = "details";
+  if (x.Erreur) details.append(texte("p", x.Erreur, "erreur"));
+  const commande = texte("p", "", "aide");
+  const maj = () => { clearTimeout(d.minuterie); d.minuterie = setTimeout(() => apercu(x, commande), 300); };
+  if (x.Personnalise) {
+    details.append(champ(T.ligne, x.Commande, "-f {rom}", v => { x.Commande = v; maj(); }),
+      texte("p", T.reperes, "aide"),
+      champ(T.extension, x.Extension, ".sav", v => { x.Extension = v; }),
+      champ(T.processus, x.Processus, T.processusAide, v => { x.Processus = v; }));
+    const interne = document.createElement("label");
+    interne.className = "choix";
+    const ci = document.createElement("input");
+    ci.type = "checkbox"; ci.checked = x.NomInterne; ci.onchange = () => { x.NomInterne = ci.checked; };
+    interne.append(ci, texte("span", T.interne));
+    const systemes = document.createElement("div");
+    systemes.className = "ligne";
+    for (const nom of ["DS", "GB", "GBA"]) {
+      const l = document.createElement("label");
+      l.className = "choix";
+      const c = document.createElement("input");
+      c.type = "checkbox"; c.checked = (x.Systemes || []).some(s => s.Systeme === nom);
+      c.onchange = () => {
+        x.Systemes = c.checked ? [...(x.Systemes || []), {Systeme: nom, Sauvegardes: "", Defaut: "", Roms: ""}] : x.Systemes.filter(s => s.Systeme !== nom);
+        d.replaceWith(carte(x));
+      };
+      l.append(c, texte("span", nom));
+      systemes.append(l);
+    }
+    details.append(interne, systemes);
+  }
+  for (const s of x.Systemes || []) {
+    const l = document.createElement("div");
+    l.className = "systeme";
+    const sav = document.createElement("input");
+    sav.type = "text"; sav.value = s.Sauvegardes; sav.placeholder = x.Personnalise ? T.obligatoire : (s.Defaut || T.rom);
+    sav.setAttribute("aria-label", s.Systeme + " saves");
+    sav.oninput = () => { s.Sauvegardes = sav.value.trim() || s.Defaut; maj(); };
+    const rom = document.createElement("input");
+    rom.type = "text"; rom.value = s.Roms; rom.placeholder = T.roms;
+    rom.setAttribute("aria-label", s.Systeme + " ROM");
+    rom.oninput = () => { s.Roms = rom.value.trim(); maj(); };
+    l.append(texte("span", s.Systeme), sav, rom);
+    details.append(l);
+  }
+  if (!x.Personnalise && !x.Erreur) details.append(champ(T.enPlus, x.EnPlus, "-f", v => { x.EnPlus = v; maj(); }));
+  if (x.Conseil) details.append(texte("p", x.Conseil, "aide alerte"));
+  details.append(commande);
+  d.append(details);
+  if (x.Actif || x.Personnalise) apercu(x, commande);
+  return d;
+}
+
+function champ(etiquette, valeur, exemple, changer) {
+  const l = document.createElement("label");
+  const i = document.createElement("input");
+  i.type = "text"; i.value = valeur || ""; i.placeholder = exemple;
+  i.oninput = () => changer(i.value);
+  l.append(texte("span", etiquette), i);
+  return l;
+}
+
+async function apercu(x, ligne) {
+  if (!x.Systemes || !x.Systemes.length) { ligne.textContent = ""; return; }
+  const r = await api("apercu", x).catch(e => ({Erreur: e.message}));
+  ligne.textContent = r.Erreur || T.commande + r.Commande;
+  ligne.className = r.Erreur ? "aide erreur" : "aide";
+}
+
+function afficher(titre, lignes, erreur) {
+  const r = $("resultat");
+  r.replaceChildren(texte("h2", titre));
+  if (erreur) r.append(texte("p", T.erreur + erreur, "erreur"));
+  if (lignes && lignes.length) {
+    const ul = document.createElement("ul");
+    for (const l of lignes) ul.append(texte("li", l));
+    r.append(ul);
+  }
+  r.classList.remove("masque");
+  r.scrollIntoView({behavior: "smooth"});
+}
+
+function type() { return document.querySelector("input[name=type]:checked").value; }
+
+function choix() {
+  return {
+    Local: type() === "local", URL: $("url").value.trim(), Jeton: $("jeton").value, Port: +$("port").value,
+    Installer: $("installer").checked,
+    Emulateurs: [...$("emulateurs").children].map(d => d.emu),
+    LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
+    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked
+  };
+}
+
+async function action(bouton, travail) {
+  const boutons = document.querySelectorAll(".barre button");
+  boutons.forEach(b => b.disabled = true);
+  const avant = bouton.textContent;
+  bouton.textContent = T.attente;
+  try { await travail(avant); } catch (e) { afficher(avant, [], e.message); }
+  bouton.textContent = avant;
+  boutons.forEach(b => b.disabled = false);
+}
+
+async function charger() {
+  etat = await api("etat");
+  document.querySelector(`input[name=type][value=${etat.Local ? "local" : "perso"}]`).checked = true;
+  $("url").value = etat.URL || "";
+  $("jeton").placeholder = etat.JetonPresent ? T.inchange : "";
+  $("port").value = etat.Port;
+  $("installe").textContent = etat.Installe;
+  const enPlace = etat.Courant.toLowerCase() === etat.Installe.toLowerCase();
+  $("sectionProgramme").classList.toggle("masque", enPlace);
+  $("installer").checked = !enPlace;
+  $("emulateurs").replaceChildren(...(etat.Emulateurs || []).map(carte));
+  const perso = texte("option", T.perso);
+  perso.value = "";
+  $("profil").replaceChildren(...etat.Profils.map(p => texte("option", p)), perso);
+  $("lb").classList.toggle("masque", !etat.Windows);
+  $("launchbox").value = etat.LaunchBox || "";
+  $("esdeLigne").classList.toggle("masque", !etat.EsDe);
+  $("esdeChemin").textContent = etat.EsDe || "";
+  $("esde").checked = etat.EsDeActif;
+  $("raccourcis").checked = !etat.Existe;
+  basculer();
+}
+
+function basculer() {
+  $("perso").classList.toggle("masque", type() !== "perso");
+  $("local").classList.toggle("masque", type() !== "local");
+}
+
+document.querySelectorAll("input[name=type]").forEach(r => r.onchange = basculer);
+$("tester").onclick = async () => {
+  $("test").textContent = T.attente; $("test").className = "";
+  try {
+    const r = await api("tester", choix());
+    $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
+  } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
+};
+$("profil").onchange = () => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
+$("ajouter").onclick = async () => {
+  const exe = $("exe").value.trim(), nom = $("nom").value.trim().toLowerCase();
+  if (!exe || ($("profil").value === "" && !nom)) return;
+  const x = $("profil").value === ""
+    ? {Nom: nom, Profil: nom, Exe: exe, Source: T.manuel, Actif: true, Personnalise: true, Commande: "{rom}", Extension: ".sav", Systemes: []}
+    : await api("emulateur", {Profil: $("profil").value, Exe: exe});
+  $("emulateurs").append(carte(x));
+  $("exe").value = ""; $("nom").value = "";
+};
+$("enregistrer").onclick = e => action(e.target, async () => {
+  const r = await api("appliquer", choix());
+  afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur);
+  if (!r.Erreur) { $("jeton").value = ""; await charger(); }
+});
+$("reparer").onclick = e => action(e.target, async titre => {
+  const r = await api("reparer");
+  afficher(titre, r.Lignes, r.Erreur);
+});
+$("terminer").onclick = async () => {
+  await api("terminer").catch(() => {});
+  document.querySelector("main").replaceChildren(texte("h1", T.fini), texte("p", T.ferme, "sous"));
+  document.querySelector(".barre").remove();
+};
+setInterval(() => api("ping").catch(() => {}), 20000);
+charger().catch(e => afficher("3dssavesync", [], e.message));
+</script>
+</body>
+</html>

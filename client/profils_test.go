@@ -42,8 +42,8 @@ func TestProfils(t *testing.T) {
 
 	// melonDS : melonDS.toml à côté de l'exe (build portable)
 	e, p := emu("melonds", "melon", Emulateur{})
-	ecrire(t, filepath.Join(d("melon"), "melonDS.toml"), []byte("[Instance0]\nSaveFilePath = \"D:/Saves/DS\"\n[Instance0.Audio]\nSaveFilePath = \"faux\"\n"))
-	egal(e.dossier(p, "DS", rom), filepath.Clean("D:/Saves/DS"), "melonDS lit SaveFilePath de [Instance0]")
+	ecrire(t, filepath.Join(d("melon"), "melonDS.toml"), []byte("[Instance0]\nSaveFilePath = \""+filepath.ToSlash(d("Saves/DS"))+"\"\n[Instance0.Audio]\nSaveFilePath = \"faux\"\n"))
+	egal(e.dossier(p, "DS", rom), d("Saves/DS"), "melonDS lit SaveFilePath de [Instance0]")
 	egal(fichierSauvegarde("x", "DS", "ADAF", "Pokemon Diamant", p.Ext), filepath.Join("x", "Pokemon Diamant.sav"), "melonDS : .sav")
 
 	// mGBA portable : savegamePath et autoload dans config.ini
@@ -51,11 +51,13 @@ func TestProfils(t *testing.T) {
 	egal(e.dossier(p, "GB", rom), filepath.Dir(rom), "mGBA sans réglage : à côté de la ROM")
 	egal(conseil(e, p), "", "mGBA sans config.ini : rien à signaler")
 	ecrire(t, filepath.Join(d("mgba"), "portable.ini"), nil)
-	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[gba.input.QT_K]\nautoload=0\n[ports.qt]\nautoload=1\nsavegamePath=D:/Saves/GB\n"))
-	egal(e.dossier(p, "GB", rom), filepath.Clean("D:/Saves/GB"), "mGBA lit savegamePath de [ports.qt]")
+	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[gba.input.QT_K]\nautoload=0\n[ports.qt]\nautoload=1\nsavegamePath="+filepath.ToSlash(d("Saves/GB"))+"\n"))
+	egal(e.dossier(p, "GB", rom), d("Saves/GB"), "mGBA lit savegamePath de [ports.qt]")
 	if !strings.Contains(conseil(e, p), "autoload=0") {
 		t.Errorf("mGBA autoload=1 : conseil attendu, obtenu %q", conseil(e, p))
 	}
+	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nsavegamePath=savegame\n"))
+	egal(e.dossier(p, "GB", rom), filepath.Join(d("mgba"), "savegame"), "mGBA : savegamePath relatif au dossier de config.ini")
 	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nautoload=0\n"))
 	egal(conseil(e, p), "", "mGBA autoload=0 : rien à signaler")
 	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nfullscreen=1\n"))
@@ -143,5 +145,23 @@ func TestTitres3DS(t *testing.T) {
 	_, cle, nom, _, err := lireRom(rom3DS(t, "Mon jeu", 0x00040000000EC300))
 	if err != nil || cle != "3DS-00040000000EC300" || nom != "Jeu a moi" {
 		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", cle, nom, err)
+	}
+}
+
+func TestCommandeEtDecoupage(t *testing.T) {
+	e := &Emulateur{Exe: "mGBA.exe", ArgsEnPlus: []string{"-f"}}
+	p, _ := e.profil("mgba")
+	if c := strings.Join(e.commande(p, "GBA", "r.gba", "S"), "|"); c != "mGBA.exe|-C|savegamePath=S|-f|r.gba" {
+		t.Errorf("arguments en plus avant la ROM : %s", c)
+	}
+	if c := strings.Join(e.commande(p, "", "", ""), "|"); c != "mGBA.exe|-f" {
+		t.Errorf("launch : arguments en plus à la fin : %s", c)
+	}
+	a := decouper(`  -rom "{rom}"  --dir='C:\Mes jeux\saves' -f `)
+	if strings.Join(a, "|") != `-rom|{rom}|--dir=C:\Mes jeux\saves|-f` {
+		t.Errorf("decouper : %q", a)
+	}
+	if j := joindre(a); j != `-rom {rom} "--dir=C:\Mes jeux\saves" -f` || strings.Join(decouper(j), "|") != strings.Join(a, "|") {
+		t.Errorf("joindre : %s", j)
 	}
 }

@@ -170,6 +170,58 @@ func (e *Emulateur) profil(nom string) (Profil, error) {
 	}}, nil
 }
 
+// Commande complète : exécutable, arguments du profil, et ArgsEnPlus juste avant la ROM (à la fin sans ROM).
+func (e *Emulateur) commande(p Profil, systeme, rom, dossier string) []string {
+	a := p.Args(e, systeme, rom, dossier)
+	if n := len(a); rom != "" && n > 0 && a[n-1] == rom {
+		a = append(append(append([]string{}, a[:n-1]...), e.ArgsEnPlus...), rom)
+	} else {
+		a = append(a, e.ArgsEnPlus...)
+	}
+	return append([]string{e.Exe}, a...)
+}
+
+// decouper : une ligne de commande saisie par l'utilisateur -> arguments. Espaces = séparateurs, sauf entre
+// guillemets doubles ou simples ; la barre oblique inverse reste telle quelle (chemins Windows).
+func decouper(ligne string) []string {
+	var a []string
+	var courant strings.Builder
+	guillemet, dans := rune(0), false
+	for _, c := range ligne {
+		switch {
+		case guillemet != 0 && c == guillemet:
+			guillemet = 0
+		case guillemet == 0 && (c == '"' || c == '\''):
+			guillemet, dans = c, true
+		case guillemet == 0 && (c == ' ' || c == '\t'):
+			if dans {
+				a = append(a, courant.String())
+				courant.Reset()
+				dans = false
+			}
+		default:
+			courant.WriteRune(c)
+			dans = true
+		}
+	}
+	if dans {
+		a = append(a, courant.String())
+	}
+	return a
+}
+
+// joindre : l'inverse de decouper, pour afficher une commande (guillemets autour d'un argument avec espace).
+func joindre(a []string) string {
+	l := make([]string, len(a))
+	for i, x := range a {
+		if x == "" || strings.ContainsAny(x, " \t") {
+			x = `"` + x + `"`
+		}
+		l[i] = x
+	}
+	return strings.Join(l, " ")
+}
+
 // Systèmes gérés : ceux de la configuration s'il y en a, sinon ceux du profil.
 func (e *Emulateur) gere(p Profil, systeme string) bool {
 	if len(e.Sauvegardes) > 0 || len(e.Coeurs) > 0 {
@@ -304,6 +356,9 @@ func reglage(fichier, section, cle string) string {
 	}
 	if strings.HasPrefix(v, "~/") {
 		v = maison(v[2:])
+	}
+	if !filepath.IsAbs(v) && !strings.HasPrefix(v, ":") && v != "default" { // relatif (mGBA portable : savegamePath=savegame) : au dossier du réglage
+		v = filepath.Join(filepath.Dir(fichier), v)
 	}
 	return filepath.Clean(v)
 }

@@ -31,6 +31,16 @@ Chaque phase se termine par une démonstration et une validation avant la suivan
 - Avertissement quand un émulateur recharge un état au lancement (mGBA `autoload`, RetroArch `savestate_auto_load`, VBA-M), avec le réglage à changer.
 - Plus tard : DeSmuME, NO$GBA, gpSP, Beetle GBA (conversion de format nécessaire), BGB, Emulicious, SkyEmu, NanoBoyAdvance, Panda3DS.
 
+### Plus d'émulateurs, émulateur personnalisé dans la page (demande du 2026-11-01)
+
+Fait : émulateur personnalisé dans la page, arguments en plus, aperçu de la commande, avertissement « aucune sauvegarde après la partie ». Reste : les profils intégrés suivants (dernier point).
+
+- **Émulateur personnalisé dans la page de réglages** (aujourd'hui seulement à la main dans `config.json`, champ `args`) : nom, exécutable, une ligne de commande avec `{rom}` et `{sauvegardes}` (ex. `-f {rom}`, `--battery-dir={sauvegardes} {rom}`), Systèmes gérés, dossier des sauvegardes par Système (obligatoire : le Lanceur ne connaît pas les réglages de cet émulateur), extension (`.sav`, `.srm`…), nom de la sauvegarde (nom de la ROM ou du fichier dans le zip), aperçu de la commande avec une ROM d'exemple.
+- **Arguments en plus pour un profil intégré** (ex. `-f` pour le plein écran de mGBA), ajoutés avant la ROM ; les arguments propres au profil (`-C savegamePath=…` de mGBA, `-L <cœur>` de RetroArch) restent gérés par le Lanceur.
+- **Contrôle après la partie** : si la sauvegarde attendue n'existe toujours pas après une partie, notification « sauvegarde introuvable dans <dossier> : vérifie le réglage » (erreur de dossier ou d'extension dans un profil personnalisé).
+- **Limite d'un profil personnalisé** : sauvegarde brute seulement (avec ou sans Trailer d'horloge GB/GBA). Les formats à convertir (DeSmuME `.dsv`, NO$GBA, gpSP, Beetle GBA) demandent un profil intégré.
+- **Profils intégrés suivants** (research-v3-emulateurs.md, « Plus tard ») : DeSmuME (conversion `.dsv`), SkyEmu, NanoBoyAdvance, BGB, cœurs RetroArch gpSP et Beetle GBA (taille à convertir), Panda3DS.
+
 ## Phase 3 — Fenêtres, notifications, langues
 
 - Fenêtres natives (Windows, macOS ; zenity ou kdialog sous Linux) ; sans fenêtre possible, règle Q16 : rien n'est remplacé, notification.
@@ -42,7 +52,7 @@ Chaque phase se termine par une démonstration et une validation avant la suivan
 - Configuration automatique (avec copie de sauvegarde du fichier modifié) : LaunchBox/BigBox, ES-DE, Steam ROM Manager.
 - Guides pas à pas : Playnite, EmuDeck, RetroBat, Pegasus, Lutris, Attract-Mode, RetroDECK.
 - `3dssavesync repair` : refait la configuration après une mise à jour d'EmuDeck ; avertit si la synchro cloud d'EmuDeck est active.
-- **À faire avant la version publique : une interface graphique pour l'assistant** (demande du 2026-11-01). La version texte dans une console fonctionne, mais elle n'est pas assez simple. Choix à faire :
+- **Interface graphique de l'assistant** (demande du 2026-11-01) : **faite**, page web locale servie par l'exe (choix ci-dessous) ; la console reste disponible (`setup --texte`). La version texte dans une console fonctionne, mais elle n'est pas assez simple. Choix à faire :
   - page web locale servie par l'exe (`net/http`, ouverture du navigateur par défaut) : aucune dépendance, même binaire, compilation croisée inchangée, marche sur Windows, Linux, macOS et le Steam Deck en mode Bureau (recommandé) ;
   - Fyne ou Gio (fenêtre native en Go) : demande cgo et OpenGL, compilation croisée plus difficile, binaire plus gros ;
   - Wails (fenêtre avec moteur web) : demande WebView2 (Windows) ou webkit2gtk (Linux).
