@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -202,4 +203,13 @@ func processusActif(nom string) bool {
 		}
 	}
 	return false
+}
+
+// Processus indépendant de la console de l'assistant (l'exe est une application GUI : aucune console héritée).
+func demarrerDetache(exe string, args []string) error {
+	c := exec.Command(exe, args...)
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Process.Release()
 }

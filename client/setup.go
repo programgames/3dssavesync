@@ -5,6 +5,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -184,7 +186,55 @@ func assistant(q *Questions, config string) error {
 	if err := enregistrerConfig(q, config, &cfg); err != nil {
 		return err
 	}
+	if cfg.ServeurLocal != nil && slices.Contains(etapes, "serveur") {
+		if err := serveurLocal(q, &cfg, config); err != nil {
+			return err
+		}
+	}
 	q.dire("\n%s", tr("Terminé.", "Done."))
+	return nil
+}
+
+// Adaptateurs remplacés par les tests (aucun raccourci réel, serveur dans le test).
+var autostart, lancerServeur, creerRaccourci = demarrageAuto, demarrerDetache, raccourci
+
+// Serveur local : démarrage automatique, lancement s'il ne répond pas encore, test, puis ce qu'il faut entrer sur la 3DS.
+func serveurLocal(q *Questions, cfg *Config, config string) error {
+	q.dire("\n== %s ==", tr("Serveur local", "Local server"))
+	lanceur := lanceurDe(cfg)
+	args := []string{"serve"}
+	if config != configDefaut() {
+		args = append(args, "--config", config)
+	}
+	f, err := autostart(tr("3dssavesync serveur", "3dssavesync server"), lanceur, args)
+	if err != nil {
+		q.dire("%s %s", tr("Démarrage automatique impossible :", "Autostart failed:"), err)
+	} else {
+		q.dire("%s %s", tr("Démarrage automatique :", "Autostart:"), f)
+	}
+	if testerServeur(cfg) != nil {
+		if runtime.GOOS == "windows" {
+			q.dire("%s", tr("Windows peut demander d'autoriser 3dssavesync sur le réseau : accepte pour les réseaux privés.",
+				"Windows may ask to allow 3dssavesync on the network: accept for private networks."))
+		}
+		if err := lancerServeur(lanceur, args); err != nil {
+			return fmt.Errorf(tr("lancement du serveur local : %w", "cannot start the local server: %w"), err)
+		}
+		for i := 0; i < 20 && testerServeur(cfg) != nil; i++ {
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+	if err := testerServeur(cfg); err != nil {
+		return fmt.Errorf(tr("le serveur local ne répond pas : %w", "the local server does not answer: %w"), err)
+	}
+	q.dire("%s", tr("Serveur local en marche.", "Local server running."))
+	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
+	for _, ip := range adressesLocales() {
+		q.dire("  %s http://%s:%d", tr("Serveur :", "Server:"), ip, cfg.ServeurLocal.Port)
+	}
+	q.dire("  %s %s", tr("Jeton :", "Token:"), cfg.Jeton)
+	q.dire("%s", tr("Garde ce jeton pour toi. N'ouvre jamais ce port sur Internet (box, routeur).",
+		"Keep this token private. Never open this port on the Internet (router)."))
 	return nil
 }
 
@@ -208,6 +258,38 @@ func jsonDe(c *Config) string { o, _ := json.Marshal(c); return string(o) }
 
 func etapeServeur(q *Questions, cfg *Config) error {
 	q.dire("\n== %s ==", tr("Serveur", "Server"))
+	q.dire("  1. %s", tr("Serveur personnel (Docker, adresse https://…) : synchronisation partout",
+		"Personal server (Docker, https://… address): sync anywhere"))
+	q.dire("  2. %s", tr("Serveur local sur ce PC : à la maison, PC allumé, rien d'autre à installer",
+		"Local server on this PC: at home, PC on, nothing else to install"))
+	defaut := "1"
+	if cfg.ServeurLocal != nil {
+		defaut = "2"
+	}
+	if q.texte(tr("Choix", "Choice"), defaut) == "2" {
+		port := 8765
+		if cfg.ServeurLocal != nil && cfg.ServeurLocal.Port > 0 {
+			port = cfg.ServeurLocal.Port
+		}
+		if p, err := strconv.Atoi(q.texte(tr("Port", "Port"), strconv.Itoa(port))); err == nil && p > 0 && p < 65536 {
+			port = p
+		}
+		if cfg.ServeurLocal == nil {
+			cfg.ServeurLocal = &ServeurLocal{}
+		}
+		cfg.ServeurLocal.Port = port
+		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", port)
+		if cfg.Jeton == "" {
+			o := make([]byte, 16)
+			rand.Read(o)
+			cfg.Jeton = hex.EncodeToString(o)
+		}
+		return nil // démarré et testé une fois config.json écrit (serveurLocal)
+	}
+	cfg.ServeurLocal = nil
+	if strings.HasPrefix(cfg.URL, "http://127.0.0.1:") {
+		cfg.URL = ""
+	}
 	for {
 		cfg.URL = strings.TrimRight(q.texte(tr("Adresse du serveur (https://…)", "Server address (https://…)"), cfg.URL), "/")
 		question := tr("Jeton (la saisie reste cachée)", "Token (input stays hidden)")
@@ -550,10 +632,10 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	}
 	sort.Strings(noms)
 	for _, n := range noms {
-		f, err := raccourci("3dssavesync "+n, lanceur, []string{"launch", n}, false)
+		f, err := creerRaccourci("3dssavesync "+n, lanceur, []string{"launch", n}, false)
 		afficherRaccourci(q, f, err)
 	}
-	f, err := raccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, true)
+	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, true)
 	afficherRaccourci(q, f, err)
 	var sansRoms []string
 	for _, n := range noms {

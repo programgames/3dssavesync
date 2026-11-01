@@ -257,13 +257,7 @@ func fichierDesktop(nom string, exec []string, terminal bool) string {
 func raccourci(nom, lanceur string, args []string, console bool) (string, error) {
 	switch runtime.GOOS {
 	case "windows":
-		c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			`[Console]::OutputEncoding=[Text.Encoding]::UTF8; $d=[Environment]::GetFolderPath('Desktop'); $l=Join-Path $d ($env:R_NOM+'.lnk'); `+
-				`$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l); $s.TargetPath=$env:R_CIBLE; $s.Arguments=$env:R_ARGS; `+
-				`$s.WorkingDirectory=(Split-Path $env:R_CIBLE); $s.Save(); $l`)
-		c.Env = append(os.Environ(), "R_NOM="+nom, "R_CIBLE="+lanceur, "R_ARGS="+strings.Join(args, " "))
-		o, err := c.Output()
-		return strings.TrimSpace(string(o)), err
+		return lnk("Desktop", nom, lanceur, args)
 	case "darwin":
 		app := maison("Applications", nom+".app")
 		script := "#!/bin/sh\nexec " + argShell(lanceur) + " " + strings.Join(mapper(args, argShell), " ") + "\n"
@@ -285,6 +279,50 @@ func raccourci(nom, lanceur string, args []string, console bool) (string, error)
 		return "", err
 	}
 	return f, os.WriteFile(f, []byte(fichierDesktop(nom, append([]string{lanceur}, args...), console)), 0o755)
+}
+
+// Raccourci .lnk dans un dossier spécial de Windows (Desktop, Startup). Arguments avec espace entre guillemets.
+func lnk(dossier, nom, lanceur string, args []string) (string, error) {
+	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`[Console]::OutputEncoding=[Text.Encoding]::UTF8; $d=[Environment]::GetFolderPath($env:R_DOSSIER); $l=Join-Path $d ($env:R_NOM+'.lnk'); `+
+			`$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l); $s.TargetPath=$env:R_CIBLE; $s.Arguments=$env:R_ARGS; `+
+			`$s.WorkingDirectory=(Split-Path $env:R_CIBLE); $s.Save(); $l`)
+	var a []string
+	for _, x := range args {
+		if strings.ContainsAny(x, " \t") {
+			x = `"` + x + `"`
+		}
+		a = append(a, x)
+	}
+	c.Env = append(os.Environ(), "R_DOSSIER="+dossier, "R_NOM="+nom, "R_CIBLE="+lanceur, "R_ARGS="+strings.Join(a, " "))
+	o, err := c.Output()
+	return strings.TrimSpace(string(o)), err
+}
+
+// demarrageAuto : lance lanceur + args à l'ouverture de session. Windows : .lnk dans Démarrage ; Linux : autostart XDG ;
+// macOS : LaunchAgent.
+func demarrageAuto(nom, lanceur string, args []string) (string, error) {
+	switch runtime.GOOS {
+	case "windows":
+		return lnk("Startup", nom, lanceur, args)
+	case "darwin":
+		f := maison("Library", "LaunchAgents", "com.3dssavesync.serveur.plist")
+		var p strings.Builder
+		for _, x := range append([]string{lanceur}, args...) {
+			p.WriteString("<string>" + echapperXML(x) + "</string>")
+		}
+		plist := `<?xml version="1.0" encoding="UTF-8"?>` + "\n<plist version=\"1.0\"><dict><key>Label</key><string>com.3dssavesync.serveur</string>" +
+			"<key>ProgramArguments</key><array>" + p.String() + "</array><key>RunAtLoad</key><true/></dict></plist>\n"
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			return "", err
+		}
+		return f, os.WriteFile(f, []byte(plist), 0o644)
+	}
+	f := xdgConfig("autostart", "3dssavesync-serveur.desktop")
+	if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+		return "", err
+	}
+	return f, os.WriteFile(f, []byte(fichierDesktop(nom, append([]string{lanceur}, args...), false)), 0o644)
 }
 
 func argShell(a string) string { return "'" + strings.ReplaceAll(a, "'", `'\''`) + "'" }

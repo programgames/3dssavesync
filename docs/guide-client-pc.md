@@ -32,6 +32,7 @@ Un autre emplacement : option `--config <fichier>`. Modèle : [`client/config.ex
 |---|---|
 | `url`, `jeton` | Le Serveur et son jeton. |
 | `copies` | Dossier des Copies de sécurité (facultatif ; défaut : `copies` à côté de `config.json`). |
+| `serveur_local` | Facultatif : `{"port": 8765, "donnees": "…"}` pour `3dssavesync serve` ; `url` vaut alors `http://127.0.0.1:<port>`. Voir [guide-serveur.md](guide-serveur.md). |
 | `titres_3ds` | Facultatif : jeux 3DS en plus des 8 Pokémon, `{"<title ID>": "<nom>"}`. Même liste que l'écran « Jeux 3DS » de la 3DS ; seulement des jeux dont la sauvegarde est un seul fichier `main`. |
 | `emulateurs.<nom>.exe` | L'émulateur. |
 | `emulateurs.<nom>.profil` | Facultatif : le Profil (tableau suivant). Défaut : le nom de l'entrée. Sert pour deux installations du même émulateur. |
@@ -93,6 +94,7 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 3dssavesync migrate-v2 <dossier de sync.ps1>
 3dssavesync setup            (ou sans argument)
 3dssavesync repair
+3dssavesync serve             (serveur local, voir guide-serveur.md)
 ```
 
 - **`run <rom>`** : un jeu. Pour les frontends (LaunchBox, Playnite, ES-DE…). `--emulator` est obligatoire seulement si deux émulateurs gèrent le même Système.

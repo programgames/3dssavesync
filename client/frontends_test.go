@@ -138,7 +138,7 @@ func TestAssistant(t *testing.T) {
 		os.MkdirAll(filepath.Join(m, "USERPROFILE", "ES-DE"), 0o755)
 	}
 	saves, roms := filepath.Join(tmp, "saves"), filepath.Join(tmp, "roms")
-	reponses := []string{url, "mauvais-jeton", "", "", "jeton-test", "", "", saves, roms, ""}
+	reponses := []string{"", url, "mauvais-jeton", "", "", "jeton-test", "", "", saves, roms, ""}
 	if runtime.GOOS == "windows" {
 		reponses = append(reponses, lb)
 	}

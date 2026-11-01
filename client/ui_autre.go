@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 )
 
 // Fenêtres hors Windows : osascript (macOS), zenity ou kdialog (Linux).
@@ -173,4 +174,14 @@ func processusActif(nom string) bool {
 		}
 	}
 	return false
+}
+
+// Processus qui survit à la fermeture du terminal de l'assistant (nouvelle session, sans SIGHUP).
+func demarrerDetache(exe string, args []string) error {
+	c := exec.Command(exe, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Process.Release()
 }

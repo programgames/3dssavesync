@@ -6,6 +6,7 @@
 //	3dssavesync migrate-v2 <dossier de sync.ps1>         reprend sync.config.json et base.json
 //	3dssavesync setup (ou sans argument)                 assistant d'installation
 //	3dssavesync repair                                   refait la configuration des frontends
+//	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
 //
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
 package main
@@ -36,6 +37,13 @@ type Config struct {
 	Lanceur    string                `json:"lanceur,omitempty"`    // exe installé, vers lequel pointent les frontends
 	Frontends  map[string]string     `json:"frontends,omitempty"`  // launchbox, esde -> dossier (réparation)
 	Titres3DS  map[string]string     `json:"titres_3ds,omitempty"` // jeux 3DS en plus des 8 Pokémon : title ID -> nom
+	// Serveur local (3dssavesync serve) : même jeton ; url = http://127.0.0.1:<port> pour ce PC.
+	ServeurLocal *ServeurLocal `json:"serveur_local,omitempty"`
+}
+
+type ServeurLocal struct {
+	Port    int    `json:"port"`
+	Donnees string `json:"donnees,omitempty"` // défaut : serveur/ à côté de config.json
 }
 
 type Emulateur struct {
@@ -88,12 +96,8 @@ func principal(args []string) int {
 	if len(args) == 0 { // double-clic sur l'exe : l'assistant
 		args = []string{"setup"}
 	}
-	defaut := "config.json"
-	if d, err := os.UserConfigDir(); err == nil {
-		defaut = filepath.Join(d, "3dssavesync", "config.json")
-	}
 	fl := flag.NewFlagSet(args[0], flag.ContinueOnError)
-	config := fl.String("config", defaut, "fichier de configuration")
+	config := fl.String("config", configDefaut(), "fichier de configuration")
 	emulateur := fl.String("emulator", "", "émulateur de la configuration")
 	rom := fl.String("rom", "", "ROM, avec une commande après --")
 	if err := fl.Parse(args[1:]); err != nil {
@@ -115,6 +119,8 @@ func principal(args []string) int {
 		code, err = commandeSetup(*config)
 	case "repair":
 		code, err = commandeRepair(*config)
+	case "serve":
+		code, err = commandeServe(*config)
 	case "migrate-v2":
 		if fl.NArg() != 1 {
 			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))
@@ -131,6 +137,13 @@ func principal(args []string) int {
 		return 1
 	}
 	return code
+}
+
+func configDefaut() string {
+	if d, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(d, "3dssavesync", "config.json")
+	}
+	return "config.json"
 }
 
 func nouvelleSession(chemin string) (*Session, error) {
