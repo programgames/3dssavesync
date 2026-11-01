@@ -1,0 +1,19 @@
+# Serveur 3dssavesync. .env (chmod 600) : NDSSYNC_TOKEN=<jeton long et aléatoire>. ./data doit appartenir à 1000:1000.
+# Le serveur parle HTTP sur le port 8080 : placez-le derrière un reverse proxy HTTPS (la 3DS exige HTTPS, TLS 1.2 ECDHE).
+services:
+  3dssavesync:
+    build: .
+    image: 3dssavesync:local
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Exemple Traefik (remplacer les ports ci-dessus) :
+    # labels:
+    #   - "traefik.enable=true"
+    #   - "traefik.http.routers.3dssavesync.rule=Host(`saves.example.com`)"
+    #   - "traefik.http.routers.3dssavesync.entrypoints=websecure"
+    #   - "traefik.http.routers.3dssavesync.tls.certresolver=letsencrypt"
+    #   - "traefik.http.services.3dssavesync.loadbalancer.server.port=8080"

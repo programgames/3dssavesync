@@ -1,0 +1,21 @@
+# Secrets : le jeton est dans ces trois fichiers
+server/.env
+pc/sync.config.json
+3ds/config.ini
+
+# État local du Lanceur
+pc/base.json
+pc/ndssync.log
+
+# Builds 3DS
+3ds/build/
+3ds/*.3dsx
+3ds/*.cia
+3ds/*.elf
+3ds/*.smdh
+
+# Outils tiers téléchargés, données de test (ROM, BIOS, sauvegardes réelles)
+tools/
+e2e/
+
+__pycache__/

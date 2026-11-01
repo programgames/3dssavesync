@@ -1,0 +1,13 @@
+cas;local_hash;local_taille;serveur_hash;serveur_taille;base;attendu
+identiques;a;512;a;512;-;A_JOUR
+identiques, base ancienne;a;512;a;512;z;A_JOUR
+premier Envoi;a;512;-;-;-;A_ENVOYER
+première Récupération;-;-;a;512;-;A_RECUPERER
+taille différente, serveur plus récent;a;512;b;256;a;CONFLIT
+taille différente, local plus récent;b;8;a;512;a;CONFLIT
+serveur plus récent;a;512;b;512;a;A_RECUPERER
+local plus récent;b;512;a;512;a;A_ENVOYER
+les deux ont changé;b;512;c;512;a;CONFLIT
+jamais synchronisé, différents;a;512;b;512;-;CONFLIT
+après 412, autre contenu;b;512;c;512;a;CONFLIT
+après 412, même contenu;b;512;b;512;a;A_JOUR
