@@ -103,8 +103,8 @@ func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []
 	var rapport []string
 	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
 	chemin := func(app string) string {
-		app = unescape(app)
-		if app != "" && !filepath.IsAbs(app) {
+		app = filepath.FromSlash(strings.ReplaceAll(unescape(app), `\`, "/")) // chemins Windows, même lus ailleurs (Wine)
+		if app != "" && !filepath.IsAbs(app) && !strings.Contains(app, ":") {
 			app = filepath.Join(dossierLB, app)
 		}
 		return filepath.Clean(app)
