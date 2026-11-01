@@ -720,17 +720,24 @@ static void choisir_titres(void)
             medias[n++] = MEDIATYPE_SD;
         }
     }
-    for (i = 0; i < n; i++) {
-        int t = titres_index(titres, nb_titres, ids[i]);
-        progression(T("Lecture des jeux : %d/%d", "Reading games: %d/%d"), i + 1, n);
-        c[i].id = ids[i];
-        c[i].media = medias[i];
-        c[i].coche = t >= 0;
-        c[i].seul = titre_seul_main(ids[i]);
-        if (titre_nom(ids[i], medias[i], langue, c[i].nom, sizeof c[i].nom)) {
-            if (t >= 0) snprintf(c[i].nom, sizeof c[i].nom, "%s", titres[t].nom);
-            else snprintf(c[i].nom, sizeof c[i].nom, "%016llX", ids[i]);
+    {   /* sans archive de sauvegarde et pas coché : caché (forwarders mGBA ou DS, jeu jamais lancé) */
+        int m = 0;
+        for (i = 0; i < n; i++) {
+            int t = titres_index(titres, nb_titres, ids[i]), seul;
+            progression(T("Lecture des jeux : %d/%d", "Reading games: %d/%d"), i + 1, n);
+            seul = titre_seul_main(ids[i]);
+            if (seul < 0 && t < 0) continue;
+            c[m].id = ids[i];
+            c[m].media = medias[i];
+            c[m].coche = t >= 0;
+            c[m].seul = seul;
+            if (titre_nom(ids[i], medias[i], langue, c[m].nom, sizeof c[m].nom)) {
+                if (t >= 0) snprintf(c[m].nom, sizeof c[m].nom, "%s", titres[t].nom);
+                else snprintf(c[m].nom, sizeof c[m].nom, "%016llX", ids[i]);
+            }
+            m++;
         }
+        n = m;
     }
     qsort(c, n, sizeof *c, comparer_choix);
     message[0] = '\0';
@@ -754,7 +761,8 @@ static void choisir_titres(void)
             printf("%s\n", T("Aucun jeu trouve.", "No game found."));
         }
         printf("\n%.300s\n", message);
-        printf("\x1b[26;1H" GRIS "%s" NORMAL, T("A cocher/decocher\nB enregistrer et revenir", "A tick/untick\nB save and go back"));
+        printf("\x1b[24;1H" GRIS "%s" NORMAL, T("Un jeu absent ? Lance-le une fois\net sauvegarde.\nA cocher/decocher\nB enregistrer et revenir",
+                                                "A game is missing? Start it once\nand save.\nA tick/untick\nB save and go back"));
         k = touche();
         if (k & KEY_B) break;
         if (k & KEY_DOWN && curseur + 1 < n) curseur++;
