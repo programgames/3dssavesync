@@ -56,6 +56,8 @@ func TestProfils(t *testing.T) {
 	if !strings.Contains(conseil(e, p), "autoload=0") {
 		t.Errorf("mGBA autoload=1 : conseil attendu, obtenu %q", conseil(e, p))
 	}
+	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nsavegamePath=savegame\n"))
+	egal(e.dossier(p, "GB", rom), filepath.Join(d("mgba"), "savegame"), "mGBA : savegamePath relatif au dossier de config.ini")
 	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nautoload=0\n"))
 	egal(conseil(e, p), "", "mGBA autoload=0 : rien à signaler")
 	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[ports.qt]\nfullscreen=1\n"))

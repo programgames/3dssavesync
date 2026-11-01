@@ -87,7 +87,10 @@ func emplacementInstalle() string {
 // Exe en cours ; vide en test (le binaire de test n'est pas le Lanceur).
 var executable = func() string { e, _ := os.Executable(); return e }
 
-func commandeSetup(config string) (int, error) {
+func commandeSetup(config string, texte, sansNavigateur bool) (int, error) {
+	if !texte {
+		return commandeSetupWeb(config, sansNavigateur)
+	}
 	ouvrirConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout, terminal: true}
 	err := assistant(q, config)
@@ -332,6 +335,19 @@ func etapeInstallation(q *Questions, cfg *Config) {
 	if !q.oui(fmt.Sprintf(tr("Copier le programme dans %s ?", "Copy the program to %s?"), cible), true) {
 		return
 	}
+	q.dire("%s", installerExe(cfg))
+}
+
+// Copie de l'exe en cours à l'emplacement fixe ; cfg.Lanceur suit. Rend la ligne à afficher.
+func installerExe(cfg *Config) string {
+	courant, cible := executable(), emplacementInstalle()
+	if cfg.Lanceur == "" {
+		cfg.Lanceur = courant
+	}
+	if courant == "" || strings.EqualFold(filepath.Clean(courant), filepath.Clean(cible)) {
+		cfg.Lanceur = courant
+		return tr("Exe en place : ", "Exe in place: ") + courant
+	}
 	o, err := os.ReadFile(courant)
 	if err == nil {
 		err = os.MkdirAll(filepath.Dir(cible), 0o755)
@@ -344,11 +360,10 @@ func etapeInstallation(q *Questions, cfg *Config) {
 		}
 	}
 	if err != nil {
-		q.dire("%s %s", tr("Copie impossible (le programme tourne peut-être) :", "Copy failed (the program may be running):"), err)
-		return
+		return tr("Copie impossible (le programme tourne peut-être) : ", "Copy failed (the program may be running): ") + err.Error()
 	}
 	cfg.Lanceur = cible
-	q.dire("%s %s", tr("Programme copié :", "Program copied:"), cible)
+	return tr("Programme copié : ", "Program copied: ") + cible
 }
 
 // --- Émulateurs ----------------------------------------------------------------------------------
@@ -625,6 +640,11 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	if !q.oui(tr("Créer un raccourci par émulateur (synchronise tout, lance l'émulateur) ?", "Create one shortcut per emulator (syncs everything, starts the emulator)?"), true) {
 		return
 	}
+	creerRaccourcis(q, cfg)
+}
+
+// Un raccourci par émulateur (launch) et un pour les réglages.
+func creerRaccourcis(q *Questions, cfg *Config) {
 	lanceur := lanceurDe(cfg)
 	var noms []string
 	for n := range cfg.Emulateurs {
@@ -635,7 +655,7 @@ func etapeFrontends(q *Questions, cfg *Config) {
 		f, err := creerRaccourci("3dssavesync "+n, lanceur, []string{"launch", n}, false)
 		afficherRaccourci(q, f, err)
 	}
-	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, true)
+	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, false)
 	afficherRaccourci(q, f, err)
 	var sansRoms []string
 	for _, n := range noms {
@@ -646,9 +666,9 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	}
 	if len(sansRoms) > 0 {
 		q.dire(tr("Note : %s n'ont pas de dossier des ROM : leur raccourci lance l'émulateur sans rien synchroniser. "+
-			"Pour en ajouter un : menu 1, « Modifier ses dossiers ».",
+			"Pour en ajouter un : « 3dssavesync réglages », dossier des ROM de l'émulateur.",
 			"Note: %s have no ROM folder: their shortcut starts the emulator without syncing anything. "+
-				"To add one: menu 1, \"Change its folders\"."), strings.Join(sansRoms, ", "))
+				"To add one: \"3dssavesync settings\", the emulator ROM folder."), strings.Join(sansRoms, ", "))
 	}
 }
 

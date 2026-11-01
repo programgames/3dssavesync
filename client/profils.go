@@ -305,6 +305,9 @@ func reglage(fichier, section, cle string) string {
 	if strings.HasPrefix(v, "~/") {
 		v = maison(v[2:])
 	}
+	if !filepath.IsAbs(v) && !strings.HasPrefix(v, ":") && v != "default" { // relatif (mGBA portable : savegamePath=savegame) : au dossier du réglage
+		v = filepath.Join(filepath.Dir(fichier), v)
+	}
 	return filepath.Clean(v)
 }
 

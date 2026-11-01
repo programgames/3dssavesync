@@ -4,7 +4,7 @@
 //	3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>  enveloppe une commande quelconque
 //	3dssavesync launch <nom>                             tous les jeux d'un émulateur, puis l'émulateur
 //	3dssavesync migrate-v2 <dossier de sync.ps1>         reprend sync.config.json et base.json
-//	3dssavesync setup (ou sans argument)                 assistant d'installation
+//	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
 //	3dssavesync repair                                   refait la configuration des frontends
 //	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
 //
@@ -100,6 +100,8 @@ func principal(args []string) int {
 	config := fl.String("config", configDefaut(), "fichier de configuration")
 	emulateur := fl.String("emulator", "", "émulateur de la configuration")
 	rom := fl.String("rom", "", "ROM, avec une commande après --")
+	texte := fl.Bool("texte", false, "setup : assistant en texte dans une console, sans navigateur")
+	sansNavigateur := fl.Bool("sans-navigateur", false, "setup : affiche l'adresse de la page au lieu d'ouvrir le navigateur (SSH)")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -116,7 +118,7 @@ func principal(args []string) int {
 		}
 		code, err = commandeLaunch(*config, fl.Arg(0))
 	case "setup":
-		code, err = commandeSetup(*config)
+		code, err = commandeSetup(*config, *texte, *sansNavigateur)
 	case "repair":
 		code, err = commandeRepair(*config)
 	case "serve":

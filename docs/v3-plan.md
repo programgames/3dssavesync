@@ -42,7 +42,7 @@ Chaque phase se termine par une démonstration et une validation avant la suivan
 - Configuration automatique (avec copie de sauvegarde du fichier modifié) : LaunchBox/BigBox, ES-DE, Steam ROM Manager.
 - Guides pas à pas : Playnite, EmuDeck, RetroBat, Pegasus, Lutris, Attract-Mode, RetroDECK.
 - `3dssavesync repair` : refait la configuration après une mise à jour d'EmuDeck ; avertit si la synchro cloud d'EmuDeck est active.
-- **À faire avant la version publique : une interface graphique pour l'assistant** (demande du 2026-11-01). La version texte dans une console fonctionne, mais elle n'est pas assez simple. Choix à faire :
+- **Interface graphique de l'assistant** (demande du 2026-11-01) : **faite**, page web locale servie par l'exe (choix ci-dessous) ; la console reste disponible (`setup --texte`). La version texte dans une console fonctionne, mais elle n'est pas assez simple. Choix à faire :
   - page web locale servie par l'exe (`net/http`, ouverture du navigateur par défaut) : aucune dépendance, même binaire, compilation croisée inchangée, marche sur Windows, Linux, macOS et le Steam Deck en mode Bureau (recommandé) ;
   - Fyne ou Gio (fenêtre native en Go) : demande cgo et OpenGL, compilation croisée plus difficile, binaire plus gros ;
   - Wails (fenêtre avec moteur web) : demande WebView2 (Windows) ou webkit2gtk (Linux).

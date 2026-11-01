@@ -4,17 +4,18 @@ Un seul exécutable, sans dépendance. Sous Windows, il n'ouvre pas de console p
 
 ## Installation : l'assistant
 
-Double-cliquez sur l'exécutable (Windows), ou lancez `3dssavesync setup` dans un terminal (Linux, macOS, Steam Deck en mode Bureau). L'assistant :
+Double-cliquez sur l'exécutable, ou sur le raccourci « 3dssavesync réglages ». Le programme ouvre une page de réglages dans le navigateur (adresse locale `http://127.0.0.1:<port>/<secret>/`, accessible seulement depuis ce PC). La page présente 4 parties :
 
-1. demande l'adresse du serveur et le jeton (la saisie reste cachée), puis teste la connexion ;
-2. copie le programme à un emplacement fixe : `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS) ;
-3. cherche les émulateurs (PATH, dossiers usuels, Flatpak, AppImage d'EmuDeck, `/Applications`, émulateurs de LaunchBox) et demande une confirmation pour chacun ; on peut aussi en ajouter un à la main ;
-4. configure LaunchBox (Windows) et ES-DE, avec une copie datée de chaque fichier modifié ;
-5. crée un raccourci par émulateur (commande `launch`) et un raccourci « 3dssavesync réglages ».
+1. **Serveur** : serveur personnel (adresse et jeton, bouton « Tester la connexion ») ou serveur local sur ce PC ([guide-serveur.md](guide-serveur.md)) ;
+2. **Programme** : copie du programme à un emplacement fixe : `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS) ;
+3. **Émulateurs** : ceux de la configuration, et ceux trouvés sur le PC (PATH, dossiers usuels, Flatpak, AppImage d'EmuDeck, `/Applications`, émulateurs de LaunchBox), avec leurs dossiers de sauvegardes et de ROM ; on peut aussi en ajouter un à la main ;
+4. **Frontends et raccourcis** : LaunchBox (Windows), ES-DE, un raccourci par émulateur (commande `launch`).
 
-Avec une configuration existante, l'assistant affiche un menu : ajouter ou modifier un émulateur, **réparer** la configuration des frontends, changer le serveur ou le jeton, tout refaire. `config.json` est copié (date dans le nom) avant chaque modification.
+Rien n'est écrit avant le bouton **Enregistrer**. Un serveur personnel injoignable bloque l'enregistrement. Chaque fichier modifié (`config.json`, fichiers des frontends) est copié avant (date dans le nom). Le jeton ne s'affiche jamais, sauf l'adresse et le jeton du serveur local, à entrer sur la 3DS. Le programme s'arrête avec le bouton **Terminer**, ou 2 minutes après la fermeture de l'onglet.
 
-**Réparer** : après une mise à jour ou une réinitialisation d'un frontend (EmuDeck réécrit les fichiers d'ES-DE), ouvrez « 3dssavesync réglages » et choisissez « Réparer ». Ce qui est déjà en place ne change pas. Le frontend doit être fermé. Même chose en ligne de commande : `3dssavesync repair`.
+Sans navigateur (SSH, Steam Deck en mode Jeu) : `3dssavesync setup --sans-navigateur` affiche l'adresse de la page, et `3dssavesync setup --texte` pose les mêmes questions dans le terminal.
+
+**Réparer** : après une mise à jour ou une réinitialisation d'un frontend (EmuDeck réécrit les fichiers d'ES-DE), ouvrez « 3dssavesync réglages » et cliquez sur « Réparer les frontends ». Ce qui est déjà en place ne change pas. Le frontend doit être fermé. Même chose en ligne de commande : `3dssavesync repair`.
 
 Frontends à configurer à la main (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode) : [guide-frontends.md](guide-frontends.md).
 
@@ -92,7 +93,7 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>
 3dssavesync launch <nom>
 3dssavesync migrate-v2 <dossier de sync.ps1>
-3dssavesync setup            (ou sans argument)
+3dssavesync setup [--texte] [--sans-navigateur]   (ou sans argument)
 3dssavesync repair
 3dssavesync serve             (serveur local, voir guide-serveur.md)
 ```
