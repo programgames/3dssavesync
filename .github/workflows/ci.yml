@@ -47,24 +47,30 @@ jobs:
 
   homebrew-3ds:
     runs-on: ubuntu-latest
-    container: devkitpro/devkitarm:latest
     steps:
       - uses: actions/checkout@v4
       - name: makerom et bannertool
         run: |
-          apt-get update -qq && apt-get install -y -qq unzip curl >/dev/null
-          mkdir -p /opt/outils && cd /opt/outils
+          mkdir -p outils && cd outils
           curl -sSfLO https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
           curl -sSfLO https://github.com/Epicpkmn11/bannertool/releases/download/v1.2.2/bannertool.zip
           unzip -q -o makerom-v0.19.0-ubuntu_x86_64.zip -d makerom
           unzip -q -o bannertool.zip -d bannertool
-          cp "$(find makerom -type f -name makerom | head -1)" /usr/local/bin/makerom
-          cp "$(find bannertool -type f -path '*linux*x86*64*' -name bannertool | head -1)" /usr/local/bin/bannertool
-          chmod +x /usr/local/bin/makerom /usr/local/bin/bannertool
-          makerom -h | head -1 || true
-      - name: .3dsx et .cia
+          cp "$(find makerom -type f -name makerom | head -1)" ../3ds/makerom
+          cp "$(find bannertool -type f -path '*linux*x86*64*' -name bannertool | head -1)" ../3ds/bannertool
+          chmod +x ../3ds/makerom ../3ds/bannertool
+      # Compilation et bannertool dans l'image devkitPro ; makerom sur l'hôte (il exige une glibc plus récente).
+      - name: .3dsx, bannière, icône
+        run: |
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src/3ds devkitpro/devkitarm:latest sh -c '
+            make &&
+            ./bannertool makebanner -i meta/banner.png -a meta/banner.wav -o build/banner.bnr &&
+            ./bannertool makesmdh -s "$(sed -n "s/^APP_TITLE[[:space:]]*:=[[:space:]]*//p" Makefile)" \
+              -l "$(sed -n "s/^APP_DESCRIPTION[[:space:]]*:=[[:space:]]*//p" Makefile)" \
+              -p "$(sed -n "s/^APP_AUTHOR[[:space:]]*:=[[:space:]]*//p" Makefile)" -i meta/icon.png -o build/icon.icn'
+      - name: .cia
         working-directory: 3ds
-        run: make && make cia
+        run: ./makerom -f cia -o nds-save-sync.cia -elf nds-save-sync.elf -rsf app.rsf -icon build/icon.icn -banner build/banner.bnr -exefslogo -target t
       - uses: actions/upload-artifact@v4
         with:
           name: homebrew-3ds
