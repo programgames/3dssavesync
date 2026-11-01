@@ -36,6 +36,7 @@ func reinitialiser() {
 }
 
 func init() {
+	anglais = false // les vérifications lisent les textes français, quelle que soit la langue de la machine de test
 	demander = func(texte string, boutons []string) string {
 		questions = append(questions, texte)
 		if len(reponses) == 0 {

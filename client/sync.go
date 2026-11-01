@@ -263,7 +263,7 @@ func (s *Session) api(methode, chemin string, corps []byte, entetes map[string]s
 	}
 	defer rep.Body.Close()
 	if rep.StatusCode == http.StatusUnauthorized {
-		return 0, nil, errors.New("jeton refusé par le serveur (401)")
+		return 0, nil, errors.New(tr("jeton refusé par le serveur (401)", "token refused by the server (401)"))
 	}
 	octets, err := io.ReadAll(rep.Body)
 	return rep.StatusCode, octets, err
@@ -362,7 +362,7 @@ func ecrireVerifie(chemin string, octets []byte) error {
 		if relu, e := os.ReadFile(chemin); e != nil {
 			err = e
 		} else if !bytes.Equal(relu, octets) {
-			err = fmt.Errorf("%s : relecture différente", chemin)
+			err = fmt.Errorf(tr("%s : relecture différente", "%s: read-back differs"), chemin)
 		}
 	}
 	if err != nil {
@@ -420,14 +420,14 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		return fmt.Errorf("GET /saves/%s : %d", j.Cle, st)
 	}
 	if hachage(o) != srv.Hash {
-		return errors.New("Version reçue corrompue (Hash différent)")
+		return errors.New(tr("Version reçue corrompue (Hash différent)", "received version is corrupt (hash differs)"))
 	}
 	dossier := filepath.Dir(j.Fichier)
 	tmp := j.Fichier + ".3dssavesync-tmp"
 	if j.Systeme == "3DS" {
 		// Pas de dossier = Azahar n'a jamais vu ce jeu : il faut son .metadata, on ne crée rien (ADR 0009).
 		if _, err := os.Stat(dossier); err != nil {
-			return errors.New("jeu jamais lancé dans Azahar. Lance-le une fois et sauvegarde en jeu, puis relance-le ici")
+			return errors.New(tr("jeu jamais lancé dans Azahar. Lance-le une fois et sauvegarde en jeu, puis relance-le ici", "game never started in Azahar. Start it once and save in game, then start it here again"))
 		}
 		tmp = filepath.Join(filepath.Dir(dossier), "main.3dssavesync-tmp") // l'archive ne doit contenir que main
 	} else if err := os.MkdirAll(dossier, 0o755); err != nil {
@@ -436,7 +436,7 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 	contenu := o
 	if l != nil {
 		if err := s.copier(j, l.Brut); err != nil {
-			return fmt.Errorf("Copie de sécurité impossible : %w", err)
+			return fmt.Errorf(tr("Copie de sécurité impossible : %w", "backup copy failed: %w"), err)
 		}
 		if len(l.Brut) > len(l.SRAM) { // GB/GBA : on remet le Trailer d'horloge de ce PC après la SRAM reçue
 			contenu = append(append([]byte{}, o...), l.Brut[len(l.SRAM):]...)
@@ -451,7 +451,7 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		return err
 	}
 	if relu, err := os.ReadFile(j.Fichier); err != nil || !bytes.Equal(relu, contenu) {
-		return fmt.Errorf("%s : relecture différente après remplacement", j.Fichier)
+		return fmt.Errorf(tr("%s : relecture différente après remplacement", "%s: read-back differs after replacement"), j.Fichier)
 	}
 	s.recupere = true
 	return s.fixerBase(j.Cle, srv.Hash)
@@ -463,37 +463,44 @@ func formatAge(age *int64) string {
 	case age == nil:
 		return ""
 	case *age < 60:
-		return "à l'instant"
+		return tr("à l'instant", "just now")
 	case *age < 3600:
-		return fmt.Sprintf("il y a %d min", *age/60)
+		return fmt.Sprintf(tr("il y a %d min", "%d min ago"), *age/60)
 	case *age < 86400:
-		return fmt.Sprintf("il y a %d h", *age/3600)
+		return fmt.Sprintf(tr("il y a %d h", "%d h ago"), *age/3600)
 	}
-	return fmt.Sprintf("il y a %d j", *age/86400)
+	return fmt.Sprintf(tr("il y a %d j", "%d days ago"), *age/86400)
 }
 
 // Choix de l'utilisateur sur un Conflit (Q5). Sans fenêtre possible (Q16) : rien n'est remplacé.
 func resoudreConflit(j *Jeu, l *Local, srv *Version, apres bool) string {
-	texte := fmt.Sprintf("Conflit : %s\n\n"+
+	texte := fmt.Sprintf(tr("Conflit : %s\n\n"+
 		"La Sauvegarde du PC et celle du serveur ont toutes deux changé depuis la dernière Synchronisation.\n\n"+
 		"PC : %d octets (%s)\nServeur : %d octets (%s), envoyée par %s %s\n\n"+
 		"L'autre version reste dans l'Historique du serveur.",
+		"Conflict: %s\n\n"+
+			"The PC save and the server save have both changed since the last sync.\n\n"+
+			"PC: %d bytes (%s)\nServer: %d bytes (%s), sent by %s %s\n\n"+
+			"The other version stays in the server history."),
 		j.Nom, l.Taille, l.Hash[:8], srv.Taille, srv.Hash[:8], srv.Client, formatAge(srv.Age))
+	serveur, pc := tr("Prendre le serveur", "Take the server"), tr("Garder le PC", "Keep the PC")
+	pasJouer := tr("Ne pas jouer", "Don't play")
 	var choix string
 	if apres {
-		choix = demander(texte, []string{"Garder le PC", "Ne rien faire"})
+		choix = demander(texte, []string{pc, tr("Ne rien faire", "Do nothing")})
 	} else {
-		choix = demander(texte, []string{"Prendre le serveur", "Garder le PC", "Ne pas jouer"})
+		choix = demander(texte, []string{serveur, pc, pasJouer})
 	}
 	switch choix {
-	case "Prendre le serveur":
+	case serveur:
 		return aRecuperer
-	case "Garder le PC":
+	case pc:
 		return forcer
-	case "Ne pas jouer":
+	case pasJouer:
 		return annuler
 	case "":
-		notifier("Conflit sur " + j.Nom + " : rien n'est remplacé. La partie utilise la Sauvegarde du PC.")
+		notifier(fmt.Sprintf(tr("Conflit sur %s : rien n'est remplacé. La partie utilise la Sauvegarde du PC.",
+			"Conflict on %s: nothing is replaced. The game uses the PC save."), j.Nom))
 	}
 	return rien
 }
@@ -540,5 +547,5 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 			return false, nil
 		}
 	}
-	return false, errors.New("le serveur change sans cesse (412 répétés)")
+	return false, errors.New(tr("le serveur change sans cesse (412 répétés)", "the server keeps changing (repeated 412)"))
 }

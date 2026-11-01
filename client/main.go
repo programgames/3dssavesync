@@ -103,23 +103,23 @@ func principal(args []string) int {
 		code, err = commandeRun(*config, *emulateur, *rom, fl.Args())
 	case "launch":
 		if fl.NArg() != 1 {
-			err = errors.New("launch : un nom d'émulateur")
+			err = errors.New(tr("launch : un nom d'émulateur", "launch: one emulator name"))
 			break
 		}
 		code, err = commandeLaunch(*config, fl.Arg(0))
 	case "migrate-v2":
 		if fl.NArg() != 1 {
-			err = errors.New("migrate-v2 : le dossier de sync.ps1")
+			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))
 			break
 		}
 		err = migrerV2(fl.Arg(0), *config)
 	default:
-		err = fmt.Errorf("commande inconnue : %s", args[0])
+		err = fmt.Errorf(tr("commande inconnue : %s", "unknown command: %s"), args[0])
 	}
 	if err != nil {
 		(&Session{dossier: dossier}).journal("erreur : " + err.Error() + " (" + strings.Join(args, " ") + ")")
 		fmt.Fprintln(os.Stderr, err)
-		demander("Erreur de 3dssavesync : "+err.Error(), []string{"OK"})
+		demander(tr("Erreur de 3dssavesync : ", "3dssavesync error: ")+err.Error(), []string{"OK"})
 		return 1
 	}
 	return code
@@ -145,7 +145,7 @@ func (c *Config) emulateurPour(systeme, demande string) (string, error) {
 	}
 	if demande != "" {
 		if !gere(demande) {
-			return "", fmt.Errorf("l'émulateur %s ne gère pas le Système %s", demande, systeme)
+			return "", fmt.Errorf(tr("l'émulateur %s ne gère pas le Système %s", "emulator %s does not handle the %s system"), demande, systeme)
 		}
 		return demande, nil
 	}
@@ -158,22 +158,22 @@ func (c *Config) emulateurPour(systeme, demande string) (string, error) {
 	sort.Strings(noms)
 	switch len(noms) {
 	case 0:
-		return "", fmt.Errorf("aucun émulateur configuré pour %s", systeme)
+		return "", fmt.Errorf(tr("aucun émulateur configuré pour %s", "no emulator configured for %s"), systeme)
 	case 1:
 		return noms[0], nil
 	}
-	return "", fmt.Errorf("plusieurs émulateurs pour %s (%s) : précise --emulator", systeme, strings.Join(noms, ", "))
+	return "", fmt.Errorf(tr("plusieurs émulateurs pour %s (%s) : précise --emulator", "several emulators for %s (%s): use --emulator"), systeme, strings.Join(noms, ", "))
 }
 
 func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	commande := reste
 	if rom == "" {
 		if len(reste) != 1 {
-			return 2, errors.New("run : une ROM, ou --rom <rom> -- <commande>")
+			return 2, errors.New(tr("run : une ROM, ou --rom <rom> -- <commande>", "run: one ROM, or --rom <rom> -- <command>"))
 		}
 		rom, commande = reste[0], nil
 	} else if len(reste) == 0 {
-		return 2, errors.New("run --rom : la commande à lancer manque après --")
+		return 2, errors.New(tr("run --rom : la commande à lancer manque après --", "run --rom: the command to run is missing after --"))
 	}
 	s, err := nouvelleSession(config)
 	if err != nil {
@@ -185,7 +185,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 		return 1, err
 	}
 	if systeme == "" {
-		return 1, fmt.Errorf("ROM non reconnue (extension) : %s", rom)
+		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom)
 	}
 	if s.profil, err = s.cfg.emulateurPour(systeme, demande); err != nil {
 		return 1, err
@@ -207,7 +207,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	case cle == "": // homebrew, ou 3DS hors des 8 Pokémon
 		s.journal("sans synchronisation : Clé illisible ou jeu hors périmètre")
 	case dossier == "":
-		return 1, fmt.Errorf("dossier des sauvegardes %s de %s introuvable : précise-le dans sauvegardes", systeme, s.profil)
+		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable : précise-le dans sauvegardes", "%s save folder of %s not found: set it in sauvegardes"), systeme, s.profil)
 	default:
 		if p.NomInterne && interne != "" {
 			nom = interne
@@ -234,7 +234,7 @@ func commandeLaunch(config, nom string) (int, error) {
 	s.journal("lancement de " + nom)
 	e := s.cfg.Emulateurs[nom]
 	if e == nil {
-		return 1, fmt.Errorf("émulateur absent de la configuration : %s", nom)
+		return 1, fmt.Errorf(tr("émulateur absent de la configuration : %s", "emulator missing from the configuration: %s"), nom)
 	}
 	p, err := e.profil(nom)
 	if err != nil {
@@ -263,7 +263,7 @@ func (s *Session) refus(e *Emulateur) bool {
 		return false
 	}
 	s.journal("refus : " + nom + " tourne déjà")
-	notifier(nom + " tourne déjà. Ferme-le avant de lancer un jeu.")
+	notifier(nom + tr(" tourne déjà. Ferme-le avant de lancer un jeu.", " is already running. Close it before starting a game."))
 	return true
 }
 
@@ -322,15 +322,19 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 		}
 	}
 	if len(echecs) > 0 {
-		r := demander("Synchronisation impossible\n\n"+strings.Join(echecs, "\n")+"\n\nJouer avec la Sauvegarde locale ?", []string{"Oui", "Non"})
-		if r == "Non" {
+		non := tr("Non", "No")
+		r := demander(tr("Synchronisation impossible", "Sync failed")+"\n\n"+strings.Join(echecs, "\n")+"\n\n"+
+			tr("Jouer avec la Sauvegarde locale ?", "Play with the local save?"), []string{tr("Oui", "Yes"), non})
+		if r == non {
 			return 0, nil
 		}
 	}
 	if conseil != "" && s.recupere {
-		r := demander("Une Sauvegarde vient d'arriver du serveur.\n\n"+conseil+"\n\nSinon, une sauvegarde en jeu peut la remplacer par une partie plus ancienne.",
-			[]string{"Jouer quand même", "Ne pas jouer"})
-		if r == "Ne pas jouer" {
+		pasJouer := tr("Ne pas jouer", "Don't play")
+		r := demander(tr("Une Sauvegarde vient d'arriver du serveur.", "A save just came from the server.")+"\n\n"+conseil+"\n\n"+
+			tr("Sinon, une sauvegarde en jeu peut la remplacer par une partie plus ancienne.", "Otherwise, an in-game save can replace it with an older game."),
+			[]string{tr("Jouer quand même", "Play anyway"), pasJouer})
+		if r == pasJouer {
 			return 0, nil
 		}
 		if r == "" { // pas de fenêtre : la partie a lieu, l'avertissement reste visible
@@ -340,7 +344,7 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 		s.journal("avertissement : " + conseil)
 	}
 	if err := lancer(commande); err != nil {
-		return 1, fmt.Errorf("lancement de %s : %w", commande[0], err)
+		return 1, fmt.Errorf(tr("lancement de %s : %w", "cannot start %s: %w"), commande[0], err)
 	}
 	echecs = nil
 	for _, j := range jeux {
@@ -350,7 +354,7 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 		}
 	}
 	if len(echecs) > 0 {
-		notifier("Envoi impossible (" + strings.Join(echecs, " ; ") + ").\nLa Sauvegarde reste sur le PC ; elle partira au prochain lancement.")
+		notifier(tr("Envoi impossible (", "Upload failed (") + strings.Join(echecs, " ; ") + tr(").\nLa Sauvegarde reste sur le PC ; elle partira au prochain lancement.", ").\nThe save stays on the PC; it will be sent at the next launch."))
 	}
 	return 0, nil
 }
@@ -361,7 +365,7 @@ func migrerV2(depuis, config string) error {
 	dossier := filepath.Dir(config)
 	for _, f := range []string{config, filepath.Join(dossier, "bases")} {
 		if _, err := os.Stat(f); err == nil {
-			return fmt.Errorf("%s existe déjà : rien n'est remplacé", f)
+			return fmt.Errorf(tr("%s existe déjà : rien n'est remplacé", "%s already exists: nothing is replaced"), f)
 		}
 	}
 	var v2 map[string]string
