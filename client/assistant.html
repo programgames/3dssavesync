@@ -26,6 +26,8 @@ p.sous { color: var(--doux); margin: 0 0 20px; }
 section { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
 label { display: block; margin: 8px 0 4px; font-weight: 600; }
 label.choix { font-weight: normal; display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
+label.choix span { min-width: 0; }
+code, .aide { overflow-wrap: anywhere; }
 input[type=text], input[type=password], input[type=number], select {
   width: 100%; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit;
 }
@@ -93,6 +95,7 @@ button:disabled { opacity: .6; cursor: default; }
       <summary>{{t "Ajouter un émulateur à la main" "Add an emulator by hand"}}</summary>
       <div class="ligne" style="margin-top:8px">
         <div><label for="profil">{{t "Profil" "Profile"}}</label><select id="profil"></select></div>
+        <div id="nomPerso" class="masque"><label for="nom">{{t "Nom (minuscules, chiffres, tirets)" "Name (lowercase, digits, dashes)"}}</label><input type="text" id="nom" placeholder="bgb"></div>
         <div><label for="exe">{{t "Exécutable" "Executable"}}</label><input type="text" id="exe"></div>
         <button type="button" id="ajouter">{{t "Ajouter" "Add"}}</button>
       </div>
@@ -126,8 +129,18 @@ const T = {
   fini: {{t "Terminé." "Done."}},
   ferme: {{t "Tu peux fermer cet onglet." "You can close this tab."}},
   erreur: {{t "Erreur : " "Error: "}},
-  autre: {{t "autre installation" "other install"}},
-  coche: {{t "Utiliser" "Use"}}
+  coche: {{t "Utiliser" "Use"}},
+  ligne: {{t "Ligne de commande" "Command line"}},
+  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du Système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
+  extension: {{t "Extension de la sauvegarde" "Save extension"}},
+  processus: {{t "Nom du processus (facultatif)" "Process name (optional)"}},
+  processusAide: {{t "défaut : nom de l'exécutable" "default: executable name"}},
+  interne: {{t "ROM en .zip : la sauvegarde porte le nom du fichier dans le zip (sinon celui du zip)" ".zip ROM: the save is named after the file inside the zip (otherwise after the zip)"}},
+  obligatoire: {{t "dossier des sauvegardes (obligatoire)" "save folder (required)"}},
+  enPlus: {{t "Arguments en plus (avant la ROM)" "Extra arguments (before the ROM)"}},
+  commande: {{t "Commande : " "Command: "}},
+  manuel: {{t "ajouté à la main" "added by hand"}},
+  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}}
 };
 const racine = location.pathname;
 const $ = id => document.getElementById(id);
@@ -160,23 +173,70 @@ function carte(x) {
   const details = document.createElement("div");
   details.className = "details";
   if (x.Erreur) details.append(texte("p", x.Erreur, "erreur"));
+  const commande = texte("p", "", "aide");
+  const maj = () => { clearTimeout(d.minuterie); d.minuterie = setTimeout(() => apercu(x, commande), 300); };
+  if (x.Personnalise) {
+    details.append(champ(T.ligne, x.Commande, "-f {rom}", v => { x.Commande = v; maj(); }),
+      texte("p", T.reperes, "aide"),
+      champ(T.extension, x.Extension, ".sav", v => { x.Extension = v; }),
+      champ(T.processus, x.Processus, T.processusAide, v => { x.Processus = v; }));
+    const interne = document.createElement("label");
+    interne.className = "choix";
+    const ci = document.createElement("input");
+    ci.type = "checkbox"; ci.checked = x.NomInterne; ci.onchange = () => { x.NomInterne = ci.checked; };
+    interne.append(ci, texte("span", T.interne));
+    const systemes = document.createElement("div");
+    systemes.className = "ligne";
+    for (const nom of ["DS", "GB", "GBA"]) {
+      const l = document.createElement("label");
+      l.className = "choix";
+      const c = document.createElement("input");
+      c.type = "checkbox"; c.checked = (x.Systemes || []).some(s => s.Systeme === nom);
+      c.onchange = () => {
+        x.Systemes = c.checked ? [...(x.Systemes || []), {Systeme: nom, Sauvegardes: "", Defaut: "", Roms: ""}] : x.Systemes.filter(s => s.Systeme !== nom);
+        d.replaceWith(carte(x));
+      };
+      l.append(c, texte("span", nom));
+      systemes.append(l);
+    }
+    details.append(interne, systemes);
+  }
   for (const s of x.Systemes || []) {
     const l = document.createElement("div");
     l.className = "systeme";
     const sav = document.createElement("input");
-    sav.type = "text"; sav.value = s.Sauvegardes; sav.placeholder = s.Defaut || T.rom;
+    sav.type = "text"; sav.value = s.Sauvegardes; sav.placeholder = x.Personnalise ? T.obligatoire : (s.Defaut || T.rom);
     sav.setAttribute("aria-label", s.Systeme + " saves");
-    sav.oninput = () => { s.Sauvegardes = sav.value.trim() || s.Defaut; };
+    sav.oninput = () => { s.Sauvegardes = sav.value.trim() || s.Defaut; maj(); };
     const rom = document.createElement("input");
     rom.type = "text"; rom.value = s.Roms; rom.placeholder = T.roms;
     rom.setAttribute("aria-label", s.Systeme + " ROM");
-    rom.oninput = () => { s.Roms = rom.value.trim(); };
+    rom.oninput = () => { s.Roms = rom.value.trim(); maj(); };
     l.append(texte("span", s.Systeme), sav, rom);
     details.append(l);
   }
+  if (!x.Personnalise && !x.Erreur) details.append(champ(T.enPlus, x.EnPlus, "-f", v => { x.EnPlus = v; maj(); }));
   if (x.Conseil) details.append(texte("p", x.Conseil, "aide alerte"));
+  details.append(commande);
   d.append(details);
+  if (x.Actif || x.Personnalise) apercu(x, commande);
   return d;
+}
+
+function champ(etiquette, valeur, exemple, changer) {
+  const l = document.createElement("label");
+  const i = document.createElement("input");
+  i.type = "text"; i.value = valeur || ""; i.placeholder = exemple;
+  i.oninput = () => changer(i.value);
+  l.append(texte("span", etiquette), i);
+  return l;
+}
+
+async function apercu(x, ligne) {
+  if (!x.Systemes || !x.Systemes.length) { ligne.textContent = ""; return; }
+  const r = await api("apercu", x).catch(e => ({Erreur: e.message}));
+  ligne.textContent = r.Erreur || T.commande + r.Commande;
+  ligne.className = r.Erreur ? "aide erreur" : "aide";
 }
 
 function afficher(titre, lignes, erreur) {
@@ -225,7 +285,9 @@ async function charger() {
   $("sectionProgramme").classList.toggle("masque", enPlace);
   $("installer").checked = !enPlace;
   $("emulateurs").replaceChildren(...(etat.Emulateurs || []).map(carte));
-  $("profil").replaceChildren(...etat.Profils.map(p => texte("option", p)));
+  const perso = texte("option", T.perso);
+  perso.value = "";
+  $("profil").replaceChildren(...etat.Profils.map(p => texte("option", p)), perso);
   $("lb").classList.toggle("masque", !etat.Windows);
   $("launchbox").value = etat.LaunchBox || "";
   $("esdeLigne").classList.toggle("masque", !etat.EsDe);
@@ -248,11 +310,15 @@ $("tester").onclick = async () => {
     $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
   } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
 };
+$("profil").onchange = () => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
 $("ajouter").onclick = async () => {
-  if (!$("exe").value.trim()) return;
-  const x = await api("emulateur", {Profil: $("profil").value, Exe: $("exe").value.trim()});
+  const exe = $("exe").value.trim(), nom = $("nom").value.trim().toLowerCase();
+  if (!exe || ($("profil").value === "" && !nom)) return;
+  const x = $("profil").value === ""
+    ? {Nom: nom, Profil: nom, Exe: exe, Source: T.manuel, Actif: true, Personnalise: true, Commande: "{rom}", Extension: ".sav", Systemes: []}
+    : await api("emulateur", {Profil: $("profil").value, Exe: exe});
   $("emulateurs").append(carte(x));
-  $("exe").value = "";
+  $("exe").value = ""; $("nom").value = "";
 };
 $("enregistrer").onclick = e => action(e.target, async () => {
   const r = await api("appliquer", choix());

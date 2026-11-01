@@ -55,6 +55,7 @@ type Emulateur struct {
 	Processus   string            `json:"processus,omitempty"`   // défaut : nom de l'exécutable
 	// Profil personnalisé : arguments ({rom}, {sauvegardes}), extension (défaut .sav), nom du fichier interne d'une archive.
 	Args       []string `json:"args,omitempty"`
+	ArgsEnPlus []string `json:"args_en_plus,omitempty"` // profil intégré : ajoutés avant la ROM (ex. -f)
 	Extension  string   `json:"extension,omitempty"`
 	NomInterne bool     `json:"nom_interne,omitempty"`
 }
@@ -226,7 +227,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	}
 	dossier := e.dossier(p, systeme, rom)
 	if commande == nil {
-		commande = append([]string{e.Exe}, p.Args(e, systeme, rom, dossier)...)
+		commande = e.commande(p, systeme, rom, dossier)
 	}
 	var jeux []*Jeu
 	switch {
@@ -279,7 +280,7 @@ func commandeLaunch(config, nom string) (int, error) {
 			dossier = d
 		}
 	}
-	return s.jouer(s.jeuxDe(e, p), append([]string{e.Exe}, p.Args(e, "", "", dossier)...), conseil(e, p))
+	return s.jouer(s.jeuxDe(e, p), e.commande(p, "", "", dossier), conseil(e, p))
 }
 
 // L'émulateur tourne déjà : synchroniser maintenant écraserait ou enverrait une partie en cours.
@@ -369,8 +370,16 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 	} else if conseil != "" {
 		s.journal("avertissement : " + conseil)
 	}
+	// Un jeu sans sauvegarde avant la partie : s'il n'en a toujours pas après, le dossier ou l'extension est
+	// peut-être faux (profil personnalisé). Un seul jeu (run) : launch en aurait des dizaines jamais joués.
+	sansSauvegarde := len(jeux) == 1 && jeux[0].Systeme != "3DS" && !existe(jeux[0].Fichier)
 	if err := lancer(commande); err != nil {
 		return 1, fmt.Errorf(tr("lancement de %s : %w", "cannot start %s: %w"), commande[0], err)
+	}
+	if sansSauvegarde && !existe(jeux[0].Fichier) {
+		s.journal("aucune sauvegarde après la partie : " + jeux[0].Fichier)
+		notifier(fmt.Sprintf(tr("Aucune sauvegarde après la partie : %s\nSi tu as sauvegardé en jeu, vérifie le dossier des sauvegardes et l'extension de %s.",
+			"No save after the game: %s\nIf you saved in game, check the save folder and the extension of %s."), jeux[0].Fichier, s.profil))
 	}
 	echecs = nil
 	for _, j := range jeux {

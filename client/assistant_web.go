@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -40,6 +41,12 @@ type EmuWeb struct {
 	Systemes                            []SysWeb
 	Conseil, Erreur                     string
 	Coeurs                              map[string]string
+	EnPlus                              string // profil intégré : arguments en plus, avant la ROM
+	// Émulateur personnalisé : ligne de commande ({rom}, {sauvegardes}), extension, nom du fichier dans le zip.
+	Personnalise bool
+	Commande     string
+	Extension    string
+	NomInterne   bool
 }
 
 type SysWeb struct {
@@ -142,6 +149,10 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var t Trouve
 		json.NewDecoder(r.Body).Decode(&t)
 		reponse = emuWeb(t.Profil, &Emulateur{Exe: t.Exe}, "manuel", true)
+	case "api/apercu":
+		var x EmuWeb
+		json.NewDecoder(r.Body).Decode(&x)
+		reponse = apercu(x)
 	case "api/tester":
 		var c ChoixWeb
 		json.NewDecoder(r.Body).Decode(&c)
@@ -178,9 +189,13 @@ func texteErreur(err error) string {
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
 func emuWeb(nom string, e *Emulateur, source string, actif bool) EmuWeb {
-	x := EmuWeb{Nom: nom, Profil: e.Profil, Exe: e.Exe, Processus: e.Processus, Source: source, Actif: actif, Coeurs: e.Coeurs}
+	x := EmuWeb{Nom: nom, Profil: e.Profil, Exe: e.Exe, Processus: e.Processus, Source: source, Actif: actif, Coeurs: e.Coeurs,
+		EnPlus: joindre(e.ArgsEnPlus)}
 	if x.Profil == "" {
 		x.Profil = nom
+	}
+	if _, integre := profils[x.Profil]; !integre && e.Args != nil {
+		x.Personnalise, x.Commande, x.Extension, x.NomInterne, x.EnPlus = true, joindre(e.Args), e.Extension, e.NomInterne, ""
 	}
 	if x.Profil == "retroarch" && len(e.Coeurs) == 0 {
 		e.Coeurs = coeursRetroArch(e.Exe)
@@ -202,6 +217,67 @@ func emuWeb(nom string, e *Emulateur, source string, actif bool) EmuWeb {
 	}
 	x.Conseil = conseil(e, p)
 	return x
+}
+
+var reNomEmulateur = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,15}$`)
+
+// emulateurDe : l'émulateur que la page décrit. Rend une erreur claire pour un émulateur personnalisé incomplet.
+func emulateurDe(x EmuWeb) (*Emulateur, error) {
+	e := &Emulateur{Exe: x.Exe, Processus: x.Processus, Coeurs: x.Coeurs}
+	if !x.Personnalise {
+		if x.Profil != x.Nom {
+			e.Profil = x.Profil
+		}
+		e.ArgsEnPlus = decouper(x.EnPlus)
+		return e, nil
+	}
+	if _, integre := profils[x.Nom]; integre || !reNomEmulateur.MatchString(x.Nom) {
+		return nil, fmt.Errorf(tr("nom « %s » : lettres minuscules, chiffres et tirets, différent des profils intégrés",
+			"name \"%s\": lowercase letters, digits and dashes, different from the built-in profiles"), x.Nom)
+	}
+	e.Args = decouper(x.Commande)
+	if !strings.Contains(x.Commande, "{rom}") {
+		return nil, fmt.Errorf(tr("%s : la ligne de commande doit contenir {rom}", "%s: the command line must contain {rom}"), x.Nom)
+	}
+	if len(x.Systemes) == 0 {
+		return nil, fmt.Errorf(tr("%s : coche au moins un Système", "%s: tick at least one system"), x.Nom)
+	}
+	e.Extension = strings.TrimSpace(x.Extension)
+	if e.Extension != "" && !strings.HasPrefix(e.Extension, ".") {
+		e.Extension = "." + e.Extension
+	}
+	e.NomInterne = x.NomInterne
+	return e, nil
+}
+
+// apercu : la commande lancée pour une ROM d'exemple du premier Système (affichage seulement).
+func apercu(x EmuWeb) map[string]string {
+	e, err := emulateurDe(x)
+	if err == nil && len(x.Systemes) == 0 {
+		err = fmt.Errorf("%s", tr("aucun Système", "no system"))
+	}
+	if err != nil {
+		return map[string]string{"Erreur": err.Error()}
+	}
+	s := x.Systemes[0]
+	exemples := map[string]string{"DS": "Pokemon Platine.nds", "GB": "Pokemon Cristal.gbc", "GBA": "Pokemon Emeraude.gba", "3DS": "Pokemon X.3ds"}
+	dossierRoms := s.Roms
+	if dossierRoms == "" {
+		dossierRoms = filepath.Join(maison(), "roms")
+	}
+	rom := filepath.Join(dossierRoms, exemples[s.Systeme])
+	if x.Personnalise {
+		e.Sauvegardes = map[string]string{s.Systeme: s.Sauvegardes}
+	}
+	p, err := e.profil(x.Nom)
+	if err != nil {
+		return map[string]string{"Erreur": err.Error()}
+	}
+	d := s.Sauvegardes
+	if d == "" {
+		d = e.dossier(p, s.Systeme, rom)
+	}
+	return map[string]string{"Commande": joindre(e.commande(p, s.Systeme, rom, d))}
 }
 
 func (a *AssistantWeb) etat() EtatWeb {
@@ -298,15 +374,11 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 		if emus[x.Nom] != nil {
 			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : garde-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
 		}
-		e := &Emulateur{Exe: x.Exe, Processus: x.Processus, Coeurs: x.Coeurs}
-		if ancien := cfg.Emulateurs[x.Nom]; ancien != nil && strings.EqualFold(ancien.Exe, x.Exe) {
-			e = ancien // mêmes réglages (args d'un profil personnalisé…)
+		e, err := emulateurDe(x)
+		if err != nil {
+			return nil, err
 		}
-		if x.Profil != x.Nom {
-			e.Profil = x.Profil
-		}
-		e.Sauvegardes, e.Roms = nil, nil
-		explicite := false
+		explicite := x.Personnalise // le Lanceur ne connaît pas les réglages d'un émulateur personnalisé
 		for _, s := range x.Systemes {
 			explicite = explicite || s.Sauvegardes != s.Defaut
 			if s.Roms != "" {

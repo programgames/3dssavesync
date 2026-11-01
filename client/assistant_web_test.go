@@ -90,3 +90,47 @@ func TestAssistantWeb(t *testing.T) {
 		t.Errorf("état après enregistrement (jamais le jeton) : %+v", etat)
 	}
 }
+
+// Émulateur personnalisé dans la page : contrôles, aperçu, enregistrement.
+func TestAssistantWebPersonnalise(t *testing.T) {
+	maisonFactice(t)
+	serveur := httptest.NewServer(&Serveur{data: t.TempDir(), jeton: "j"})
+	defer serveur.Close()
+	detecterAvant := detecter
+	t.Cleanup(func() { detecter = detecterAvant })
+	detecter = func(string) []Trouve { return nil }
+	config := filepath.Join(t.TempDir(), "config.json")
+	a := &AssistantWeb{config: config}
+	saves := filepath.Join(t.TempDir(), "saves")
+	x := EmuWeb{Nom: "bgb", Profil: "bgb", Exe: `C:\Emu\bgb.exe`, Actif: true, Personnalise: true, Commande: `-rom {rom} -batt "{sauvegardes}"`,
+		Extension: "sav", Systemes: []SysWeb{{Systeme: "GB", Sauvegardes: saves}}}
+	if r := apercu(x); r["Erreur"] != "" || !strings.HasPrefix(r["Commande"], `C:\Emu\bgb.exe -rom `) || !strings.Contains(r["Commande"], "Pokemon Cristal.gbc") ||
+		!strings.Contains(r["Commande"], saves) {
+		t.Errorf("aperçu : %v", r)
+	}
+	for _, mauvais := range []EmuWeb{
+		{Nom: "mgba", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                            // nom d'un profil intégré
+		{Nom: "BGB", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                             // majuscules
+		{Nom: "bgb", Personnalise: true, Commande: "-rom", Systemes: x.Systemes},                              // sans {rom}
+		{Nom: "bgb", Personnalise: true, Commande: "{rom}"},                                                   // aucun Système
+		{Nom: "bgb", Personnalise: true, Commande: "{rom}", Systemes: []SysWeb{{Systeme: "GB"}}, Actif: true}, // dossier vide
+	} {
+		mauvais.Actif = true
+		if _, err := a.appliquer(ChoixWeb{URL: serveur.URL, Jeton: "j", Emulateurs: []EmuWeb{mauvais}}); err == nil {
+			t.Errorf("refus attendu : %+v", mauvais)
+		}
+	}
+	if _, err := a.appliquer(ChoixWeb{URL: serveur.URL, Jeton: "j", Emulateurs: []EmuWeb{x}}); err != nil {
+		t.Fatal(err)
+	}
+	var cfg Config
+	lireJSON(config, &cfg)
+	e := cfg.Emulateurs["bgb"]
+	if e == nil || strings.Join(e.Args, "|") != "-rom|{rom}|-batt|{sauvegardes}" || e.Extension != ".sav" || e.Sauvegardes["GB"] != saves {
+		t.Fatalf("émulateur personnalisé dans config.json : %+v", e)
+	}
+	var etat EtatWeb = a.etat()
+	if len(etat.Emulateurs) != 1 || !etat.Emulateurs[0].Personnalise || etat.Emulateurs[0].Commande != `-rom {rom} -batt {sauvegardes}` {
+		t.Errorf("relu par la page : %+v", etat.Emulateurs)
+	}
+}

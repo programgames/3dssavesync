@@ -72,7 +72,7 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 
 **État rechargé au lancement** : un émulateur qui recharge un état peut remplacer une Version qui vient du serveur par une partie plus ancienne. Après une Récupération, le Lanceur pose la question « Jouer quand même / Ne pas jouer » et donne le réglage à changer. Sans Récupération, il écrit seulement un avertissement dans le journal.
 
-**Profil personnalisé** : pour un émulateur que le Lanceur ne connaît pas, une entrée avec `args` (modèle d'arguments) et `sauvegardes` :
+**Profil personnalisé** : dans la page de réglages, « Ajouter un émulateur à la main », choix « Autre émulateur (personnalisé) » : nom, exécutable, ligne de commande avec `{rom}` et `{sauvegardes}`, Systèmes, dossier des sauvegardes de chaque Système (obligatoire), extension ; la page affiche la commande obtenue avec une ROM d'exemple. Dans `config.json`, c'est une entrée avec `args` (modèle d'arguments) et `sauvegardes` :
 
 ```json
 "monemulateur": {
@@ -85,6 +85,10 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 ```
 
 `{rom}` est la ROM (retiré par `launch`, qui lance l'émulateur sans jeu) ; `{sauvegardes}` est le dossier du Système. `nom_interne` : `true` si l'émulateur nomme la Sauvegarde d'après le fichier dans le zip, et pas d'après le zip. Le format doit être la Sauvegarde brute (un éventuel Trailer d'horloge GB/GBA est géré).
+
+**Arguments en plus** (profil intégré) : champ « Arguments en plus » de la page, ou `args_en_plus` dans `config.json` (par exemple `["-f"]` pour le plein écran). Ils passent juste avant la ROM ; les arguments propres au profil (`-C savegamePath=…` de mGBA, `-L <cœur>` de RetroArch) restent gérés par le Lanceur.
+
+**Aucune sauvegarde après la partie** : si un jeu n'a pas de sauvegarde avant la partie et n'en a toujours pas après, une notification donne le fichier attendu. Si vous avez sauvegardé en jeu, le dossier ou l'extension de l'émulateur est faux.
 
 ## Commandes
 

@@ -147,3 +147,21 @@ func TestTitres3DS(t *testing.T) {
 		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", cle, nom, err)
 	}
 }
+
+func TestCommandeEtDecoupage(t *testing.T) {
+	e := &Emulateur{Exe: "mGBA.exe", ArgsEnPlus: []string{"-f"}}
+	p, _ := e.profil("mgba")
+	if c := strings.Join(e.commande(p, "GBA", "r.gba", "S"), "|"); c != "mGBA.exe|-C|savegamePath=S|-f|r.gba" {
+		t.Errorf("arguments en plus avant la ROM : %s", c)
+	}
+	if c := strings.Join(e.commande(p, "", "", ""), "|"); c != "mGBA.exe|-f" {
+		t.Errorf("launch : arguments en plus à la fin : %s", c)
+	}
+	a := decouper(`  -rom "{rom}"  --dir='C:\Mes jeux\saves' -f `)
+	if strings.Join(a, "|") != `-rom|{rom}|--dir=C:\Mes jeux\saves|-f` {
+		t.Errorf("decouper : %q", a)
+	}
+	if j := joindre(a); j != `-rom {rom} "--dir=C:\Mes jeux\saves" -f` || strings.Join(decouper(j), "|") != strings.Join(a, "|") {
+		t.Errorf("joindre : %s", j)
+	}
+}

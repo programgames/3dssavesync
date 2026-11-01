@@ -635,6 +635,23 @@ func TestLanceur(t *testing.T) {
 	verifier(joue && len(questions) == 0, "Sauvegarde à jour : pas de question, mGBA lancé")
 	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg-auto", "3dssavesync.log"))), "avertissement : mGBA"), "l'avertissement est écrit dans le journal")
 
+	t.Log("Émulateur personnalisé : commande avec {rom} et {sauvegardes} ; aucune sauvegarde après la partie : avertissement")
+	reinitialiser()
+	savesP := filepath.Join(tmp, "saves-perso")
+	cfgP := ecrireConfig(t, filepath.Join(tmp, "cfg-perso", "config.json"), Config{URL: url, Jeton: "jeton-test",
+		Emulateurs: map[string]*Emulateur{"perso": {Exe: "perso.exe", Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".srm",
+			Sauvegardes: map[string]string{"GBA": savesP}}}})
+	rubis := filepath.Join(tmp, "roms-perso", "Pokemon Rubis.gba")
+	ecrire(t, rubis, enteteGBA("AXVF"))
+	principal([]string{"run", "--config", cfgP, rubis})
+	verifier(strings.Join(commandeLancee, "|") == "perso.exe|--batt="+savesP+"|"+rubis, "commande personnalisée")
+	verifier(contient(notifications, filepath.Join(savesP, "Pokemon Rubis.srm")), "avertissement : aucune sauvegarde après la partie")
+	reinitialiser()
+	partie = func() { ecrire(t, filepath.Join(savesP, "Pokemon Rubis.srm"), aleatoire(131072, 60)) }
+	principal([]string{"run", "--config", cfgP, rubis})
+	verifier(len(notifications) == 0 && hachage(courante("GBA-AXVF")) == hachage(lire(filepath.Join(savesP, "Pokemon Rubis.srm"))),
+		"sauvegarde écrite pendant la partie : envoyée, aucun avertissement")
+
 	t.Log("migrate-v2 : sync.config.json et base.json repris, rien n'est remplacé")
 	reinitialiser()
 	v2dir := filepath.Join(tmp, "v2")

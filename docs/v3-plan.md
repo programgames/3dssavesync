@@ -31,7 +31,9 @@ Chaque phase se termine par une démonstration et une validation avant la suivan
 - Avertissement quand un émulateur recharge un état au lancement (mGBA `autoload`, RetroArch `savestate_auto_load`, VBA-M), avec le réglage à changer.
 - Plus tard : DeSmuME, NO$GBA, gpSP, Beetle GBA (conversion de format nécessaire), BGB, Emulicious, SkyEmu, NanoBoyAdvance, Panda3DS.
 
-### À faire : plus d'émulateurs, émulateur personnalisé dans la page (demande du 2026-11-01)
+### Plus d'émulateurs, émulateur personnalisé dans la page (demande du 2026-11-01)
+
+Fait : émulateur personnalisé dans la page, arguments en plus, aperçu de la commande, avertissement « aucune sauvegarde après la partie ». Reste : les profils intégrés suivants (dernier point).
 
 - **Émulateur personnalisé dans la page de réglages** (aujourd'hui seulement à la main dans `config.json`, champ `args`) : nom, exécutable, une ligne de commande avec `{rom}` et `{sauvegardes}` (ex. `-f {rom}`, `--battery-dir={sauvegardes} {rom}`), Systèmes gérés, dossier des sauvegardes par Système (obligatoire : le Lanceur ne connaît pas les réglages de cet émulateur), extension (`.sav`, `.srm`…), nom de la sauvegarde (nom de la ROM ou du fichier dans le zip), aperçu de la commande avec une ROM d'exemple.
 - **Arguments en plus pour un profil intégré** (ex. `-f` pour le plein écran de mGBA), ajoutés avant la ROM ; les arguments propres au profil (`-C savegamePath=…` de mGBA, `-L <cœur>` de RetroArch) restent gérés par le Lanceur.
