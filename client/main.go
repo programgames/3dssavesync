@@ -4,6 +4,8 @@
 //	3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>  enveloppe une commande quelconque
 //	3dssavesync launch <nom>                             tous les jeux d'un émulateur, puis l'émulateur
 //	3dssavesync migrate-v2 <dossier de sync.ps1>         reprend sync.config.json et base.json
+//	3dssavesync setup (ou sans argument)                 assistant d'installation
+//	3dssavesync repair                                   refait la configuration des frontends
 //
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
 package main
@@ -31,6 +33,8 @@ type Config struct {
 	Jeton      string                `json:"jeton"`
 	Copies     string                `json:"copies,omitempty"` // défaut : <dossier de la configuration>/copies
 	Emulateurs map[string]*Emulateur `json:"emulateurs"`
+	Lanceur    string                `json:"lanceur,omitempty"`   // exe installé, vers lequel pointent les frontends
+	Frontends  map[string]string     `json:"frontends,omitempty"` // launchbox, esde -> dossier (réparation)
 }
 
 type Emulateur struct {
@@ -80,9 +84,8 @@ func principal(args []string) int {
 	// on attend la fin de l'émulateur, puis on envoie. SIGKILL reste imparable.
 	signal.Notify(make(chan os.Signal, 1), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage : 3dssavesync run|launch|migrate-v2 … (voir docs)")
-		return 2
+	if len(args) == 0 { // double-clic sur l'exe : l'assistant
+		args = []string{"setup"}
 	}
 	defaut := "config.json"
 	if d, err := os.UserConfigDir(); err == nil {
@@ -107,6 +110,10 @@ func principal(args []string) int {
 			break
 		}
 		code, err = commandeLaunch(*config, fl.Arg(0))
+	case "setup":
+		code, err = commandeSetup(*config)
+	case "repair":
+		code, err = commandeRepair(*config)
 	case "migrate-v2":
 		if fl.NArg() != 1 {
 			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))

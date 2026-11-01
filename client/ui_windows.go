@@ -153,6 +153,32 @@ func notifierSysteme(texte string) {
 	notif.Call(2, uintptr(unsafe.Pointer(&n))) // NIM_DELETE
 }
 
+// Console de l'assistant : l'exe n'en a pas (-H windowsgui), on en ouvre une.
+// Go écrit et lit la console en UTF-16 : les accents passent.
+func ouvrirConsole() {
+	kernel32.NewProc("AllocConsole").Call()
+	if in, err := os.OpenFile("CONIN$", os.O_RDWR, 0); err == nil {
+		os.Stdin = in
+	}
+	if out, err := os.OpenFile("CONOUT$", os.O_RDWR, 0); err == nil {
+		os.Stdout, os.Stderr = out, out
+	}
+}
+
+// La fenêtre de console se ferme avec le programme : on laisse lire la fin.
+const consolePropre = true
+
+// Saisie sans écho (jeton) : retire ENABLE_ECHO_INPUT, rend la fonction qui remet le mode.
+func sansEcho() func() {
+	h := syscall.Handle(os.Stdin.Fd())
+	var mode uint32
+	if syscall.GetConsoleMode(h, &mode) != nil {
+		return func() {}
+	}
+	kernel32.NewProc("SetConsoleMode").Call(uintptr(h), uintptr(mode&^0x4))
+	return func() { kernel32.NewProc("SetConsoleMode").Call(uintptr(h), uintptr(mode)) }
+}
+
 // Langue de l'interface de Windows : "fr" si la langue principale est le français (LANG_FRENCH = 0x0C).
 func langueSysteme() string {
 	id, _, _ := kernel32.NewProc("GetUserDefaultUILanguage").Call()
