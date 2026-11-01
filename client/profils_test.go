@@ -42,8 +42,8 @@ func TestProfils(t *testing.T) {
 
 	// melonDS : melonDS.toml à côté de l'exe (build portable)
 	e, p := emu("melonds", "melon", Emulateur{})
-	ecrire(t, filepath.Join(d("melon"), "melonDS.toml"), []byte("[Instance0]\nSaveFilePath = \"D:/Saves/DS\"\n[Instance0.Audio]\nSaveFilePath = \"faux\"\n"))
-	egal(e.dossier(p, "DS", rom), filepath.Clean("D:/Saves/DS"), "melonDS lit SaveFilePath de [Instance0]")
+	ecrire(t, filepath.Join(d("melon"), "melonDS.toml"), []byte("[Instance0]\nSaveFilePath = \""+filepath.ToSlash(d("Saves/DS"))+"\"\n[Instance0.Audio]\nSaveFilePath = \"faux\"\n"))
+	egal(e.dossier(p, "DS", rom), d("Saves/DS"), "melonDS lit SaveFilePath de [Instance0]")
 	egal(fichierSauvegarde("x", "DS", "ADAF", "Pokemon Diamant", p.Ext), filepath.Join("x", "Pokemon Diamant.sav"), "melonDS : .sav")
 
 	// mGBA portable : savegamePath et autoload dans config.ini
@@ -51,8 +51,8 @@ func TestProfils(t *testing.T) {
 	egal(e.dossier(p, "GB", rom), filepath.Dir(rom), "mGBA sans réglage : à côté de la ROM")
 	egal(conseil(e, p), "", "mGBA sans config.ini : rien à signaler")
 	ecrire(t, filepath.Join(d("mgba"), "portable.ini"), nil)
-	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[gba.input.QT_K]\nautoload=0\n[ports.qt]\nautoload=1\nsavegamePath=D:/Saves/GB\n"))
-	egal(e.dossier(p, "GB", rom), filepath.Clean("D:/Saves/GB"), "mGBA lit savegamePath de [ports.qt]")
+	ecrire(t, filepath.Join(d("mgba"), "config.ini"), []byte("[gba.input.QT_K]\nautoload=0\n[ports.qt]\nautoload=1\nsavegamePath="+filepath.ToSlash(d("Saves/GB"))+"\n"))
+	egal(e.dossier(p, "GB", rom), d("Saves/GB"), "mGBA lit savegamePath de [ports.qt]")
 	if !strings.Contains(conseil(e, p), "autoload=0") {
 		t.Errorf("mGBA autoload=1 : conseil attendu, obtenu %q", conseil(e, p))
 	}
