@@ -258,7 +258,7 @@ func raccourci(nom, lanceur string, args []string, console bool) (string, error)
 	switch runtime.GOOS {
 	case "windows":
 		c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			`$d=[Environment]::GetFolderPath('Desktop'); $l=Join-Path $d ($env:R_NOM+'.lnk'); `+
+			`[Console]::OutputEncoding=[Text.Encoding]::UTF8; $d=[Environment]::GetFolderPath('Desktop'); $l=Join-Path $d ($env:R_NOM+'.lnk'); `+
 				`$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l); $s.TargetPath=$env:R_CIBLE; $s.Arguments=$env:R_ARGS; `+
 				`$s.WorkingDirectory=(Split-Path $env:R_CIBLE); $s.Save(); $l`)
 		c.Env = append(os.Environ(), "R_NOM="+nom, "R_CIBLE="+lanceur, "R_ARGS="+strings.Join(args, " "))

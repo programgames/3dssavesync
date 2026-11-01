@@ -396,9 +396,28 @@ func etapeEmulateurs(q *Questions, cfg *Config) {
 	if len(trouves) == 0 {
 		q.dire("%s", tr("Aucun émulateur trouvé automatiquement.", "No emulator found automatically."))
 	}
+	var configures []string
+	for n := range cfg.Emulateurs {
+		configures = append(configures, n)
+	}
+	sort.Strings(configures)
+	for _, n := range configures {
+		e := cfg.Emulateurs[n]
+		if q.oui(fmt.Sprintf(tr("%s est configuré (%s). Modifier ses dossiers ?", "%s is set up (%s). Change its folders?"), n, e.Exe), false) {
+			ajouterEmulateur(q, cfg, Trouve{Profil: n, Exe: e.Exe, Processus: e.Processus}, false)
+		}
+	}
 	for _, t := range trouves {
-		if q.oui(fmt.Sprintf(tr("%s trouvé (%s) : %s. L'utiliser ?", "%s found (%s): %s. Use it?"), t.Profil, t.Source, t.Exe), true) {
-			ajouterEmulateur(q, cfg, t)
+		a := cfg.Emulateurs[t.Profil]
+		switch {
+		case a != nil && strings.EqualFold(a.Exe, t.Exe):
+		case a != nil:
+			if q.oui(fmt.Sprintf(tr("Autre installation de %s trouvée (%s) : %s. L'utiliser à la place de %s ?", "Another %s install found (%s): %s. Use it instead of %s?"),
+				t.Profil, t.Source, t.Exe, a.Exe), false) {
+				ajouterEmulateur(q, cfg, t, true)
+			}
+		case q.oui(fmt.Sprintf(tr("%s trouvé (%s) : %s. L'utiliser ?", "%s found (%s): %s. Use it?"), t.Profil, t.Source, t.Exe), true):
+			ajouterEmulateur(q, cfg, t, false)
 		}
 	}
 	noms := make([]string, 0, len(profils))
@@ -415,14 +434,15 @@ func etapeEmulateurs(q *Questions, cfg *Config) {
 			continue
 		}
 		if exe := q.texte(tr("Chemin de l'exécutable", "Executable path"), ""); exe != "" {
-			ajouterEmulateur(q, cfg, Trouve{Profil: noms[i-1], Exe: exe, Source: "manuel"})
+			ajouterEmulateur(q, cfg, Trouve{Profil: noms[i-1], Exe: exe, Source: "manuel"}, false)
 		}
 	}
 }
 
-func ajouterEmulateur(q *Questions, cfg *Config, t Trouve) {
+// remplacer : l'utilisateur a déjà accepté de remplacer l'émulateur du même nom.
+func ajouterEmulateur(q *Questions, cfg *Config, t Trouve, remplacer bool) {
 	nom := t.Profil
-	if ancien := cfg.Emulateurs[nom]; ancien != nil && !strings.EqualFold(ancien.Exe, t.Exe) {
+	if ancien := cfg.Emulateurs[nom]; ancien != nil && !remplacer && !strings.EqualFold(ancien.Exe, t.Exe) {
 		if !q.oui(fmt.Sprintf(tr("%s existe déjà (%s). Le remplacer ?", "%s already exists (%s). Replace it?"), nom, ancien.Exe), false) {
 			return
 		}
@@ -535,9 +555,18 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	}
 	f, err := raccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, true)
 	afficherRaccourci(q, f, err)
-	if slices.ContainsFunc(noms, func(n string) bool { return len(cfg.Emulateurs[n].Roms) == 0 }) {
-		q.dire("%s", tr("Note : avec ce raccourci, un émulateur sans dossier des ROM ne synchronise rien (sauf les Pokémon 3DS d'Azahar).",
-			"Note: with this shortcut, an emulator without a ROM folder syncs nothing (except the 3DS Pokémon of Azahar)."))
+	var sansRoms []string
+	for _, n := range noms {
+		e := cfg.Emulateurs[n]
+		if p, err := e.profil(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systemes(p), []string{"3DS"}) {
+			sansRoms = append(sansRoms, n)
+		}
+	}
+	if len(sansRoms) > 0 {
+		q.dire(tr("Note : %s n'ont pas de dossier des ROM : leur raccourci lance l'émulateur sans rien synchroniser. "+
+			"Pour en ajouter un : menu 1, « Modifier ses dossiers ».",
+			"Note: %s have no ROM folder: their shortcut starts the emulator without syncing anything. "+
+				"To add one: menu 1, \"Change its folders\"."), strings.Join(sansRoms, ", "))
 	}
 }
 
