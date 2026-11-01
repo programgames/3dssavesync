@@ -129,7 +129,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease ;; *) pre= ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/* --title "3dssavesync $GITHUB_REF_NAME" --generate-notes --verify-tag $pre
+          # Job relancé (ex. image refusée) : la release existe déjà, on remplace seulement ses fichiers.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "3dssavesync $GITHUB_REF_NAME" --generate-notes --verify-tag $pre
+          fi
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
