@@ -96,5 +96,8 @@ Un frontend qui arrête le programme pendant la partie (signal d'arrêt sous Lin
 
 - **Conflit** : trois boutons nommés avant la partie (« Prendre le serveur », « Garder le PC », « Ne pas jouer »), deux après. Fermer la fenêtre = le dernier bouton, le plus prudent.
 - **État rechargé au lancement**, après une Récupération : « Jouer quand même », « Ne pas jouer ».
-- **Information** (émulateur déjà lancé, envoi impossible) : une notification Windows, rien à valider.
-- **Linux et macOS** : pas encore de fenêtre (phase 3). Un Conflit ne remplace rien : la partie utilise la Sauvegarde du PC, et le message va dans le journal.
+- **Information** (émulateur déjà lancé, envoi impossible) : une notification, rien à valider.
+- **Outils** : Windows : fenêtre et notification natives. macOS : `osascript` (fourni avec le système). Linux : `zenity` ou `kdialog` (celui de KDE en premier sous KDE), notifications par `notify-send`.
+- **Sans fenêtre possible** (aucun outil, aucun écran, par exemple en SSH) : un Conflit ne remplace rien, la partie utilise la Sauvegarde du PC, et le message part en notification et dans la sortie d'erreur.
+- **Langue** : français si le système est en français, sinon anglais (Windows : langue de l'interface ; Linux et macOS : `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`, puis la langue de macOS). Le journal reste en français.
+- **Non vérifié sur appareil** : Linux, macOS, Steam Deck en mode Jeu (Gamescope).

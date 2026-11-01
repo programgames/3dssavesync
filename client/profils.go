@@ -45,7 +45,7 @@ var profils = map[string]Profil{
 		Autoload: func(e *Emulateur) string {
 			f := configMGBA(e)
 			if f != "" && lire1(f, "ports.qt", "autoload") != "0" { // absent = actif (défaut de mGBA)
-				return "mGBA recharge l'état du slot 0 au lancement d'un jeu (réglage autoload). Mets autoload=0 dans " + f + "."
+				return tr("mGBA recharge l'état du slot 0 au lancement d'un jeu (réglage autoload). Mets autoload=0 dans ", "mGBA reloads the slot 0 state when a game starts (autoload setting). Set autoload=0 in ") + f + "."
 			}
 			return ""
 		},
@@ -83,7 +83,7 @@ var profils = map[string]Profil{
 		Dossier: dossierRetroArch,
 		Autoload: func(e *Emulateur) string {
 			if f := configRetroArch(e); lire1(f, "", "savestate_auto_load") == "true" {
-				return "RetroArch recharge l'état automatique au lancement (savestate_auto_load). Mets-le à false dans " + f + "."
+				return tr("RetroArch recharge l'état automatique au lancement (savestate_auto_load). Mets-le à false dans ", "RetroArch reloads the auto state at start (savestate_auto_load). Set it to false in ") + f + "."
 			}
 			return ""
 		},
@@ -108,7 +108,7 @@ var profils = map[string]Profil{
 		},
 		Autoload: func(e *Emulateur) string {
 			if f := configVBAM(e); lire1(f, "General", "AutoLoadLastState") == "1" {
-				return "VBA-M recharge le dernier état au lancement, sans lire la sauvegarde (AutoLoadLastState). Mets-le à 0 dans " + f + "."
+				return tr("VBA-M recharge le dernier état au lancement, sans lire la sauvegarde (AutoLoadLastState). Mets-le à 0 dans ", "VBA-M reloads the last state at start, without reading the save (AutoLoadLastState). Set it to 0 in ") + f + "."
 			}
 			return ""
 		},
@@ -144,11 +144,11 @@ func (e *Emulateur) profil(nom string) (Profil, error) {
 	}
 	if p == "retroarch" {
 		if len(e.Coeurs) == 0 {
-			return Profil{}, fmt.Errorf("%s : RetroArch demande un cœur par Système (champ coeurs)", nom)
+			return Profil{}, fmt.Errorf(tr("%s : RetroArch demande un cœur par Système (champ coeurs)", "%s: RetroArch needs one core per system (coeurs field)"), nom)
 		}
 		for _, c := range e.Coeurs {
 			if bibliotheque(c) == "" {
-				return Profil{}, fmt.Errorf("cœur RetroArch non géré : %s (gérés : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M)", c)
+				return Profil{}, fmt.Errorf(tr("cœur RetroArch non géré : %s (gérés : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M)", "RetroArch core not supported: %s (supported: melonDS DS, mGBA, Gambatte, SameBoy, VBA-M)"), c)
 			}
 		}
 	}
@@ -156,7 +156,7 @@ func (e *Emulateur) profil(nom string) (Profil, error) {
 		return pr, nil
 	}
 	if e.Args == nil {
-		return Profil{}, fmt.Errorf("profil d'émulateur inconnu : %s (un profil personnalisé demande le champ args)", p)
+		return Profil{}, fmt.Errorf(tr("profil d'émulateur inconnu : %s (un profil personnalisé demande le champ args)", "unknown emulator profile: %s (a custom profile needs the args field)"), p)
 	}
 	return Profil{Ext: e.Extension, NomInterne: e.NomInterne, Args: func(e *Emulateur, _, rom, dossier string) []string {
 		var a []string

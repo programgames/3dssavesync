@@ -153,6 +153,15 @@ func notifierSysteme(texte string) {
 	notif.Call(2, uintptr(unsafe.Pointer(&n))) // NIM_DELETE
 }
 
+// Langue de l'interface de Windows : "fr" si la langue principale est le français (LANG_FRENCH = 0x0C).
+func langueSysteme() string {
+	id, _, _ := kernel32.NewProc("GetUserDefaultUILanguage").Call()
+	if id&0x3FF == 0x0C {
+		return "fr"
+	}
+	return "en"
+}
+
 func processusActif(nom string) bool {
 	s, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
