@@ -41,20 +41,20 @@ type Jeu struct {
 
 var code4 = regexp.MustCompile(`^[A-Z0-9]{4}$`)
 
-// lireRom : Système, Clé et nom du .sav d'une ROM (fichier ou .zip).
+// lireRom : Système, Clé et noms possibles de la sauvegarde d'une ROM (fichier ou .zip).
 // Système vide = extension inconnue ; Clé vide = hors périmètre (homebrew, 3DS non listé).
-// nom : le .nds interne pour melonDS, le zip lui-même pour mGBA (qui nomme d'après le zip).
-func lireRom(rom string) (systeme, cle, nom string, err error) {
+// nom : la ROM ou le zip (mGBA, RetroArch) ; interne : le fichier dans le zip (melonDS), "" hors zip.
+func lireRom(rom string) (systeme, cle, nom, interne string, err error) {
 	ext := strings.ToLower(filepath.Ext(rom))
 	nom = strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom))
 	if ext != ".zip" && extensions[ext] == "" {
-		return "", "", nom, nil
+		return "", "", nom, "", nil
 	}
 	entete := make([]byte, 0x200)
 	if ext == ".zip" {
 		z, err := zip.OpenReader(rom)
 		if err != nil {
-			return "", "", nom, err
+			return "", "", nom, "", err
 		}
 		defer z.Close()
 		for _, f := range z.File {
@@ -62,21 +62,19 @@ func lireRom(rom string) (systeme, cle, nom string, err error) {
 			if s := extensions[e]; s == "DS" || s == "GB" || s == "GBA" {
 				r, err := f.Open()
 				if err != nil {
-					return "", "", nom, err
+					return "", "", nom, "", err
 				}
 				io.ReadFull(r, entete) // une ROM plus courte que l'en-tête garde des zéros
 				r.Close()
 				ext = e
-				if s == "DS" {
-					nom = strings.TrimSuffix(path.Base(f.Name), path.Ext(f.Name))
-				}
+				interne = strings.TrimSuffix(path.Base(f.Name), path.Ext(f.Name))
 				break
 			}
 		}
 	} else {
 		f, err := os.Open(rom)
 		if err != nil {
-			return "", "", nom, err
+			return "", "", nom, "", err
 		}
 		io.ReadFull(f, entete)
 		f.Close()
@@ -109,13 +107,13 @@ func lireRom(rom string) (systeme, cle, nom string, err error) {
 	case "3DS":
 		id, err := titleID3DS(rom)
 		if err != nil {
-			return "", "", nom, err
+			return "", "", nom, "", err
 		}
 		if t, ok := titres3DS[id]; ok {
 			cle, nom = "3DS-"+id, t
 		}
 	}
-	return systeme, cle, nom, nil
+	return systeme, cle, nom, interne, nil
 }
 
 // Title ID d'une ROM 3DS : NCSD (.3ds/.cci) -> partition 0 à u32@0x120 × 0x200, ou NCCH direct (.cxi) ;
@@ -144,12 +142,15 @@ func titleID3DS(rom string) (string, error) {
 }
 
 // Fichier de sauvegarde d'un Jeu dans le dossier d'un émulateur. 3DS : dossier = sdmc d'Azahar.
-func fichierSauvegarde(dossier, systeme, cle, nom string) string {
+func fichierSauvegarde(dossier, systeme, cle, nom, ext string) string {
 	if systeme == "3DS" {
 		id, z := strings.ToLower(cle[4:]), strings.Repeat("0", 32)
 		return filepath.Join(dossier, "Nintendo 3DS", z, z, "title", id[:8], id[8:], "data", "00000001", "main")
 	}
-	return filepath.Join(dossier, nom+".sav")
+	if ext == "" {
+		ext = ".sav"
+	}
+	return filepath.Join(dossier, nom+ext)
 }
 
 func hachage(o []byte) string {
@@ -227,10 +228,11 @@ func etat(local, serveur *Version, base string) string {
 
 // Session : un émulateur (profil) et son dossier de configuration (journal, Bases, Copies de sécurité).
 type Session struct {
-	cfg     *Config
-	dossier string
-	profil  string
-	http    *http.Client
+	cfg      *Config
+	dossier  string
+	profil   string
+	http     *http.Client
+	recupere bool // une Version est arrivée du serveur pendant cette Session
 }
 
 func (s *Session) journal(texte string) {
@@ -451,6 +453,7 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 	if relu, err := os.ReadFile(j.Fichier); err != nil || !bytes.Equal(relu, contenu) {
 		return fmt.Errorf("%s : relecture différente après remplacement", j.Fichier)
 	}
+	s.recupere = true
 	return s.fixerBase(j.Cle, srv.Hash)
 }
 
