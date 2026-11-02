@@ -70,6 +70,12 @@ func demarrerServeur(t *testing.T) {
 	}
 	c := exec.Command(py, filepath.Join("..", "server", "server.py"))
 	c.Env = append(os.Environ(), "NDSSYNC_TOKEN=jeton-test", "NDSSYNC_DATA="+filepath.Join(tmp, "data"), fmt.Sprintf("NDSSYNC_PORT=%d", port))
+	sortie, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sortie.Close()
+	c.Stdout, c.Stderr = sortie, sortie
 	if err := c.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -81,15 +87,16 @@ func demarrerServeur(t *testing.T) {
 	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
 	limite := time.After(time.Minute)
 	for {
-		if r, err := http.Get(url + "/saves"); err == nil {
+		r, err := http.Get(url + "/saves")
+		if err == nil {
 			r.Body.Close()
 			return
 		}
 		select {
 		case <-fini:
-			t.Fatalf("serveur arrêté au démarrage : %v", c.ProcessState)
+			t.Fatalf("serveur arrêté au démarrage : %v\n%s", c.ProcessState, lire(sortie.Name()))
 		case <-limite:
-			t.Fatal("serveur injoignable")
+			t.Fatalf("serveur injoignable (%v)\n%s", err, lire(sortie.Name()))
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
