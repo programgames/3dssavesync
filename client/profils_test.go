@@ -118,6 +118,42 @@ func TestProfils(t *testing.T) {
 	e, p = emu("sameboy", "sameboy", Emulateur{})
 	egal(e.dossier(p, "GB", rom), filepath.Dir(rom), "SameBoy : à côté de la ROM")
 
+	// SkyEmu : à côté de la ROM ; dossier de search_paths.bin si le .sav y est, ou si save_to_path (user_settings.bin) est coché
+	e, p = emu("skyemu", "sky", Emulateur{})
+	romSky := filepath.Join(m, "roms", "sky", "Pokemon Bleue.gb")
+	egal(e.dossier(p, "GB", romSky), filepath.Dir(romSky), "SkyEmu sans réglages : à côté de la ROM")
+	pref := filepath.Join(m, "APPDATA", "Sky", "SkyEmu")
+	ecrire(t, filepath.Join(pref, "search_paths.bin"), append([]byte(filepath.ToSlash(d("sky-saves"))+"/"), make([]byte, 1024*8)...))
+	reglages := make([]byte, 1024)
+	ecrire(t, filepath.Join(pref, "user_settings.bin"), reglages)
+	egal(e.dossier(p, "GB", romSky), filepath.Dir(romSky), "SkyEmu : .sav absent du dossier des réglages, save_to_path décoché")
+	ecrire(t, filepath.Join(d("sky-saves"), "Pokemon Bleue.sav"), nil)
+	egal(e.dossier(p, "GB", romSky), d("sky-saves"), "SkyEmu : .sav déjà dans le dossier des réglages")
+	ecrire(t, filepath.Join(filepath.Dir(romSky), "Pokemon Bleue.sav"), nil)
+	egal(e.dossier(p, "GB", romSky), filepath.Dir(romSky), "SkyEmu : .sav à côté de la ROM prioritaire")
+	reglages[80] = 1
+	ecrire(t, filepath.Join(pref, "user_settings.bin"), reglages)
+	egal(e.dossier(p, "GBA", filepath.Join(m, "roms", "sky", "Pokemon Emeraude.gba")), d("sky-saves"), "SkyEmu save_to_path : dossier des réglages")
+	egal(fichierSauvegarde("x", "DS", "ADAF", "Pokemon Diamant", p.Ext), filepath.Join("x", "Pokemon Diamant.sav"), "SkyEmu : .sav")
+	ecrire(t, filepath.Join(pref, "search_paths.bin"), []byte("./\x00"))
+	egal(e.dossier(p, "GBA", filepath.Join(m, "roms", "sky", "Pokemon Emeraude.gba")), filepath.Join(m, "roms", "sky"), "SkyEmu : dossier relatif ignoré")
+
+	// NanoBoyAdvance : general.save_folder de config.toml à côté de l'exe, seulement si le dossier existe
+	e, p = emu("nanoboyadvance", "nba", Emulateur{})
+	ecrire(t, filepath.Join(d("nba"), "config.toml"), []byte("[cartridge]\nsave_folder = \"faux\"\n\n[general]\nbios_path = \"bios.bin\"\nsave_folder = \""+filepath.ToSlash(d("nba-saves"))+"\"\n"))
+	egal(e.dossier(p, "GBA", rom), filepath.Dir(rom), "NanoBoyAdvance : save_folder absent du disque, à côté de la ROM")
+	ecrire(t, filepath.Join(d("nba-saves"), "x"), nil)
+	egal(e.dossier(p, "GBA", rom), d("nba-saves"), "NanoBoyAdvance lit save_folder de [general]")
+	egal(strings.Join(p.Args(e, "GBA", rom, ""), "|"), rom, "NanoBoyAdvance : la ROM seule")
+
+	// BGB : à côté de la ROM (« Save files » vide) ; -rom facultatif, args_en_plus avant la ROM
+	e, p = emu("bgb", "bgb", Emulateur{ArgsEnPlus: []string{"-nowarn"}})
+	egal(e.dossier(p, "GB", rom), filepath.Dir(rom), "BGB : à côté de la ROM")
+	egal(strings.Join(e.commande(p, "GB", rom, ""), "|"), e.Exe+"|-nowarn|"+rom, "BGB : exe, args_en_plus, ROM")
+	if e.gere(p, "GBA") || !e.gere(p, "GB") {
+		t.Error("BGB : GB seulement")
+	}
+
 	// config.json reste prioritaire
 	e, p = emu("mgba", "mgba", Emulateur{Sauvegardes: map[string]string{"GBA": "E:/GBA"}})
 	egal(e.dossier(p, "GBA", rom), "E:/GBA", "dossier de config.json prioritaire")

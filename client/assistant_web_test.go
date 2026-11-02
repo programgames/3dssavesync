@@ -119,18 +119,18 @@ func TestAssistantWebPersonnalise(t *testing.T) {
 	config := filepath.Join(t.TempDir(), "config.json")
 	a := &AssistantWeb{config: config}
 	saves := filepath.Join(t.TempDir(), "saves")
-	x := EmuWeb{Nom: "bgb", Profil: "bgb", Exe: `C:\Emu\bgb.exe`, Actif: true, Personnalise: true, Commande: `-rom {rom} -batt "{sauvegardes}"`,
+	x := EmuWeb{Nom: "gearboy", Profil: "gearboy", Exe: `C:\Emu\gearboy.exe`, Actif: true, Personnalise: true, Commande: `-rom {rom} -batt "{sauvegardes}"`,
 		Extension: "sav", Systemes: []SysWeb{{Systeme: "GB", Sauvegardes: saves}}}
-	if r := apercu(x); r["Erreur"] != "" || !strings.HasPrefix(r["Commande"], `C:\Emu\bgb.exe -rom `) || !strings.Contains(r["Commande"], "Pokemon Cristal.gbc") ||
+	if r := apercu(x); r["Erreur"] != "" || !strings.HasPrefix(r["Commande"], `C:\Emu\gearboy.exe -rom `) || !strings.Contains(r["Commande"], "Pokemon Cristal.gbc") ||
 		!strings.Contains(r["Commande"], saves) {
 		t.Errorf("aperçu : %v", r)
 	}
 	for _, mauvais := range []EmuWeb{
-		{Nom: "mgba", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                            // nom d'un profil intégré
-		{Nom: "BGB", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                             // majuscules
-		{Nom: "bgb", Personnalise: true, Commande: "-rom", Systemes: x.Systemes},                              // sans {rom}
-		{Nom: "bgb", Personnalise: true, Commande: "{rom}"},                                                   // aucun Système
-		{Nom: "bgb", Personnalise: true, Commande: "{rom}", Systemes: []SysWeb{{Systeme: "GB"}}, Actif: true}, // dossier vide
+		{Nom: "mgba", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                                // nom d'un profil intégré
+		{Nom: "GEARBOY", Personnalise: true, Commande: "{rom}", Systemes: x.Systemes},                             // majuscules
+		{Nom: "gearboy", Personnalise: true, Commande: "-rom", Systemes: x.Systemes},                              // sans {rom}
+		{Nom: "gearboy", Personnalise: true, Commande: "{rom}"},                                                   // aucun Système
+		{Nom: "gearboy", Personnalise: true, Commande: "{rom}", Systemes: []SysWeb{{Systeme: "GB"}}, Actif: true}, // dossier vide
 	} {
 		mauvais.Actif = true
 		if _, err := a.appliquer(ChoixWeb{URL: serveur.URL, Jeton: "j", Emulateurs: []EmuWeb{mauvais}}); err == nil {
@@ -142,7 +142,7 @@ func TestAssistantWebPersonnalise(t *testing.T) {
 	}
 	var cfg Config
 	lireJSON(config, &cfg)
-	e := cfg.Emulateurs["bgb"]
+	e := cfg.Emulateurs["gearboy"]
 	if e == nil || strings.Join(e.Args, "|") != "-rom|{rom}|-batt|{sauvegardes}" || e.Extension != ".sav" || e.Sauvegardes["GB"] != saves {
 		t.Fatalf("émulateur personnalisé dans config.json : %+v", e)
 	}

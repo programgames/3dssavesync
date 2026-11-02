@@ -300,13 +300,15 @@ Sources : `sinamas/gambatte` commit `4f0157e843c00105a2154a44d4760e49003c2c20` (
 
 - Version 1.6.6 (2025-07-20). Windows et Wine. Code fermé.
 - Dossier : réglage « Save files » (onglet Misc). Vide = dossier de la ROM.
-- Ligne de commande : `-rom <fichier>`, `-ini <fichier>`, `-nowriteini`, `-setting nom=valeur`, `-nobatt`, `-nobattsave`, `-loadbatt <fichier>`. Pas d'option plein écran documentée.
+- Ligne de commande : `[-rom] <fichier>` (le manuel met `-rom` entre crochets : facultatif), `-ini <fichier>`, `-nowriteini`, `-setting nom=valeur`, `-nobatt`, `-nobattsave`, `-loadbatt <fichier>`. Pas d'option plein écran documentée.
 - Zip et GZIP : lus. Nom du `.sav` pour un zip : NON VÉRIFIÉ.
-- Trailer RTC : 48 octets (44 en ancien format VBA), dwords petit-boutistes, horodatage Unix 64 bits. C'est la référence du format.
+- Trailer RTC : 48 octets (44 en ancien format VBA), dwords petit-boutistes, horodatage Unix 64 bits. C'est la référence du format. Les deux tailles sont dans la règle de l'ADR 0010.
 - MBC2 : 512 octets, valeur dans le quartet bas.
-- Emplacement de `bgb.ini` : NON VÉRIFIÉ.
+- Emplacement de `bgb.ini` et nom de la clé « Save files » : NON VÉRIFIÉ (pas dans le manuel).
+- Téléchargements : `bgb.zip` et `bgbw64.zip`. Nom de l'exécutable 64 bits : NON VÉRIFIÉ.
+- **Profil `bgb` (ticket #3)** : `bgb "<rom>"`, Sauvegarde à côté de la ROM. Le profil ne lit pas « Save files » : l'utilisateur indique `sauvegardes` s'il l'a rempli.
 
-Sources : https://bgb.bircd.org/ , https://bgb.bircd.org/manual.html , https://bgb.bircd.org/rtcsave.html , https://bgb.bircd.org/mbc2save.html.
+Sources : https://bgb.bircd.org/ , https://bgb.bircd.org/manual.html (§ « Commandline parameters », § « Misc »), https://bgb.bircd.org/rtcsave.html , https://bgb.bircd.org/mbc2save.html (relus le 2026-11-02).
 
 ### 3.5 Emulicious
 
@@ -370,24 +372,32 @@ Source : `LVBM src/libretro/libretro.cpp#L319-L335`.
 
 ### 4.3 NanoBoyAdvance
 
-- Version v1.8.3. Qt. Exécutable `NanoBoyAdvance` (NON VÉRIFIÉ pour le nom exact par système).
-- Lancement : `NanoBoyAdvance "<rom>"` (premier argument). Le programme change le dossier courant vers celui de l'exécutable. Plein écran : clé `window.fullscreen` dans la config, pas d'option CLI.
-- Dossier : clé `general.save_folder` de `config.toml`. Vide ou dossier absent → `.sav` à côté de la ROM.
-- Nom : nom du fichier chargé avec l'extension `.sav` (zip, rar, 7z, tar acceptés par la boîte de dialogue ; nom = nom de l'archive, déduction).
-- `config.toml` : macOS bundle → `~/Library/Application Support/org.github.fleroviux.NanoBoyAdvance/` ; build portable → dossier courant ; sinon `QStandardPaths::ConfigLocation/NanoBoyAdvance/`.
-- Format : données brutes du type de sauvegarde. Trailer RTC : NON VÉRIFIÉ.
+- Version v1.8.3. Qt. Exécutable `NanoBoyAdvance.exe` (Windows), `NanoBoyAdvance` (Linux, AppImage `NanoBoyAdvance*.AppImage`), `NanoBoyAdvance.app` (macOS) : `OUTPUT_NAME` et `build.yml`.
+- Lancement : `NanoBoyAdvance "<rom>"`. Seul `argv[1]` est lu : la ROM doit être le premier argument. Avec une ROM, le programme change le dossier courant vers celui de l'exécutable. Plein écran : clé `window.fullscreen` dans la config, pas d'option CLI.
+- Dossier : clé `general.save_folder` de `config.toml`. Vide ou dossier absent → `.sav` à côté de la ROM. Relue à chaque chargement de ROM (`config->Load()`).
+- Nom : `<dossier>/<nom du fichier chargé>.sav` (`replace_extension(".sav")`). Zip, rar, 7z, tar : nom de l'archive.
+- `config.toml` : macOS bundle → `~/Library/Application Support/org.github.fleroviux.NanoBoyAdvance/`. Sinon `PORTABLE_MODE` : `cmake_dependent_option(PORTABLE_MODE … OFF MACOS_BUILD_APP_BUNDLE ON)` le force à `ON` hors bundle macOS (le `-DPORTABLE_MODE=OFF` de la CI Linux n'a pas d'effet). Donc Windows et Linux : `config.toml` dans le dossier courant, c'est-à-dire à côté de l'exécutable quand une ROM est donnée (déduction : code + règle CMake).
+- Format : données brutes (`BackupFile`). Tailles valides : SRAM 32 Kio, Flash 64/128 Kio, EEPROM 512 o/8 Kio. À la lecture, la taille est arrondie au multiple de 64 inférieur (« required for mGBA save compatibility ») : le Trailer de 16 octets de mGBA est accepté et laissé en place. Un fichier de taille invalide est **recréé** (`trunc`, rempli de `0xFF`) : le Lanceur fait toujours sa Copie de sécurité avant.
+- Horloge : l'horloge GPIO lit l'heure du PC ; `rtc.cc` n'écrit rien dans un fichier. Pas de Trailer.
+- Savestate au lancement : aucune option.
+- Flathub : `io.nanoboyadvance.NanoBoyAdvance` donne 404.
+- **Profil `nanoboyadvance` (ticket #3)**.
 
-Sources : `NBA src/platform/core/src/loader/rom.cc#L23-L31` ; `NBA src/platform/qt/src/widget/main_window.cc#L926-L937` , `#L695` ; `NBA src/platform/qt/src/main.cc#L35-L60` ; `NBA src/platform/core/src/config.cc#L31` ; `NBA src/platform/qt/src/config.hh#L121-L142` ; `NBA src/platform/qt/src/config.cc#L42`.
+Sources : `NBA src/platform/core/src/loader/rom.cc#L23-L31` , `#L99-L165` ; `NBA src/platform/qt/src/widget/main_window.cc#L764-L820` , `#L926-L937` ; `NBA src/platform/qt/src/main.cc#L35-L60` , `#L108-L116` ; `NBA src/platform/core/src/config.cc#L27-L32` ; `NBA src/platform/qt/src/config.hh#L121-L142` ; `NBA src/platform/qt/CMakeLists.txt#L6-L9` , `#L92` ; `NBA .github/workflows/build.yml` ; `NBA src/nba/include/nba/rom/backup/backup_file.hh#L21-L65` ; `NBA src/nba/src/hw/rom/backup/eeprom.cc#L36` , `flash.cc#L28` , `sram.cc#L15` ; `NBA src/nba/src/hw/rom/gpio/rtc.cc`.
 
 ### 4.4 SkyEmu (GB, GBC, GBA, NDS)
 
-- Version v5. Lancement : `SkyEmu [fullscreen] "<rom>"` (le mot `fullscreen` en premier argument).
-- Nom : `<dossier ROM>/<nom ROM sans extension>.sav`. Si ce fichier manque et que le réglage « save to path » est actif (ou que le fichier existe déjà là), SkyEmu utilise le dossier de sauvegarde des réglages.
-- Réglages : `user_settings.bin` (binaire) dans `SDL_GetPrefPath("Sky", "SkyEmu")`. Pas de clé texte à modifier.
-- Format : SRAM brute, sans trailer (GB : `ram_size` ; GBA : 512 o, 8 Kio, 32 Kio, 64 Kio ou 128 Kio).
+- Version v5. Lancement : `SkyEmu [fullscreen] "<rom>"` (le mot `fullscreen` en premier argument). Release Windows : un seul fichier `SkyEmu-v5-Windows.exe` ; macOS `SkyEmu.app`.
+- Nom : `<dossier ROM>/<nom ROM sans extension>.sav` (dernière extension retirée ; zip : nom de l'archive). Si ce fichier manque et que « Create new files in paths » (`save_to_path`) est coché, ou que le fichier existe déjà dans « Save File/State Path », SkyEmu utilise ce dossier.
+- Réglages dans `SDL_GetPrefPath("Sky", "SkyEmu")` (SDL2 fourni dans le dépôt) : Windows `%APPDATA%\Sky\SkyEmu\`, Linux `$XDG_DATA_HOME/Sky/SkyEmu/` ou `~/.local/share/Sky/SkyEmu/`, macOS `~/Library/Application Support/Sky/SkyEmu/`.
+  - `search_paths.bin` : copie brute de `se_search_paths_t`, 8 chemins de 1024 octets ; le premier est « Save File/State Path » (texte terminé par 0). Vide = `./` (dossier courant).
+  - `user_settings.bin` : copie brute de `persistent_settings_t` (1024 octets, champs de 4 octets ; commentaire du code : « keep alignment and ordering the same »). `save_to_path` est le 21e champ, octets 80 à 83.
+- Format : SRAM brute, sans Trailer (GB : `ram_size` ; GBA : 512 o, 8 Kio, 32 Kio, 64 Kio ou 128 Kio ; NDS : `nds_get_save_size`). À la lecture, un fichier plus grand est coupé à la taille attendue : un Trailer d'un autre émulateur est ignoré, puis effacé à la prochaine écriture.
 - **Auto save state actif par défaut** (`auto_save_state_enable = true` depuis la version 4 des réglages) : écrit `<nom>.autosave.state.raw`. La restauration reste **manuelle** (bouton « Restore »).
+- Flathub : `com.skyemu.SkyEmu` et `io.github.skylersaleh.SkyEmu` donnent 404.
+- **Profil `skyemu` (ticket #3)** : le Lanceur reprend la règle de `se_load_rom` avec ces deux fichiers.
 
-Sources : `SKY src/main.c#L616-L626` , `#L2493-L2522` , `#L2628-L2639` , `#L2651-L2680` , `#L6050-L6057` , `#L7732-L7735` , `#L9012-L9016`.
+Sources : `SKY src/main.c#L170-L213` (`persistent_settings_t`) , `#L253-L262` (`se_search_paths_t`) , `#L616-L626` , `#L1579-L1600` , `#L2493-L2522` , `#L2628-L2639` , `#L2651-L2692` , `#L6633-L6638` , `#L7666-L7735` , `#L8797` , `#L9012-L9016` ; `SKY src/sb_types.h` (`sb_breakup_path`) ; `SKY src/gb.h#L1576-L1588` ; `SKY src/gba.h#L1754-L1762` ; `SKY src/nds.h#L3382-L3390` ; `SKY CMakeLists.txt#L209` ; `SKY src/SDL2/src/filesystem/windows/SDL_sysfilesystem.c` , `unix/SDL_sysfilesystem.c` , `cocoa/SDL_sysfilesystem.m` (`SDL_GetPrefPath`).
 
 ### 4.5 NO$GBA
 
@@ -702,34 +712,34 @@ Nom de fichier du cœur : `<préfixe>.dll` (Windows), `.so` (Linux), `.dylib` (m
 | format | SRAM + remplissage + pied 122 o |
 | autoload | aucun (`--load-slot` à la demande) |
 
-### SkyEmu (GB, GBC, GBA) — plus tard
+### SkyEmu (DS, GB, GBC, GBA) — profil `skyemu`
 
 | Champ | Valeur |
 |---|---|
 | lancer | `SkyEmu [fullscreen] "<rom>"` |
 | dossier_défaut | dossier de la ROM |
-| réglage_dossier | `user_settings.bin` (binaire, `SDL_GetPrefPath("Sky","SkyEmu")`) |
-| nom | `ROM.sav` |
+| réglage_dossier | `search_paths.bin` (1er chemin) + `user_settings.bin` (`save_to_path`, octets 80-83), dans `SDL_GetPrefPath("Sky","SkyEmu")` |
+| nom | `ROM.sav` ; zip → nom de l'archive |
 | format | SRAM brute |
 | autoload | écriture `.autosave.state.raw` active ; restauration manuelle |
 
-### NanoBoyAdvance (GBA) — plus tard
+### NanoBoyAdvance (GBA) — profil `nanoboyadvance`
 
 | Champ | Valeur |
 |---|---|
-| lancer | `NanoBoyAdvance "<rom>"` |
+| lancer | `NanoBoyAdvance "<rom>"` (ROM en premier argument) |
 | dossier_défaut | dossier de la ROM |
-| réglage_dossier | `config.toml` → `general.save_folder` |
-| nom | `ROM.sav` |
-| format | brut (RTC NON VÉRIFIÉ) |
+| réglage_dossier | `config.toml` (à côté de l'exe ; bundle macOS : `~/Library/Application Support/org.github.fleroviux.NanoBoyAdvance/`) → `general.save_folder` |
+| nom | `ROM.sav` ; archive → nom de l'archive |
+| format | brut, pas de Trailer d'horloge |
 
-### BGB (GB, GBC ; Windows/Wine) — plus tard
+### BGB (GB, GBC ; Windows/Wine) — profil `bgb`
 
 | Champ | Valeur |
 |---|---|
-| lancer | `bgb -rom "<rom>"` (`-ini`, `-nowarn`) |
+| lancer | `bgb "<rom>"` (`-rom` facultatif ; `-ini`, `-nowarn`) |
 | dossier_défaut | dossier de la ROM |
-| réglage_dossier | « Save files » (Misc) dans `bgb.ini` (clé exacte NON VÉRIFIÉ) |
+| réglage_dossier | « Save files » (Misc) dans `bgb.ini` (clé exacte NON VÉRIFIÉ) : non lu, `sauvegardes` à la place |
 | nom | `ROM.sav` (zip : NON VÉRIFIÉ) |
 | format | SRAM + trailer 48 o ; MBC2 512 o |
 
@@ -788,10 +798,7 @@ Nom de fichier du cœur : `<préfixe>.dll` (Windows), `.so` (Linux), `.dylib` (m
 | Cœurs gpSP, Beetle GBA | taille de `.srm` fixe ou devinée : conversion à écrire et à tester |
 | Cœur Azahar / Citra | chemin `saves/<cœur>/<cœur>/sdmc` déduit, pas testé ; cœur Azahar récent |
 | NO$GBA | code fermé, Windows seulement, format Nocash, aucune doc officielle sur les sauvegardes |
-| BGB | code fermé, Windows/Wine, clé de dossier dans `bgb.ini` non documentée |
 | Emulicious | aucune documentation officielle sur les sauvegardes |
-| SkyEmu | réglages binaires (`user_settings.bin`), pas de dossier en CLI |
-| NanoBoyAdvance | pas de CLI pour le dossier ; RTC non vérifié ; moins répandu |
 | Gearboy, TGB Dual (standalone et cœurs) | peu utilisés ; cœurs déjà couverts par le profil RetroArch si besoin |
 | Panda3DS | sauvegarde rangée par nom de fichier ROM ; projet jeune |
 | Lime3DS, Citra standalone | projets arrêtés ; leurs utilisateurs passent à Azahar |
