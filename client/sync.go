@@ -567,8 +567,8 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 		}
 		action := etat(vu, srv, b[j.Cle])
 		if action == conflit {
-			var distant []byte // Pokémon 3DS : la Version du serveur est lue pour comparer les temps de jeu
-			if _, ok := formatsPokemon[len(l.SRAM)]; ok && j.Systeme == "3DS" {
+			var distant []byte // Pokémon : la Version du serveur est lue pour comparer les temps de jeu
+			if _, ok := partiePokemon(l.SRAM); ok {
 				if st, o, err := s.api("GET", "/saves/"+j.Cle, nil, nil); err == nil && st == 200 {
 					distant = o
 				}
