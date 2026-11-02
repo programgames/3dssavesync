@@ -13,7 +13,7 @@ Légende :
 - **SRAM brute, sans conversion** : melonDS, melonDS DS, mGBA (Trailer RTC déjà géré), SameBoy, VBA-M, BGB, SkyEmu, NanoBoyAdvance, Azahar (`main`).
 - **Conversion obligatoire** : DeSmuME (pied de page `.dsv` de 122 octets), NO$GBA (en-tête `NocashGbaBackupMediaSavDataFile`, compression possible), gpSP (`.srm` toujours de 128 Kio), Beetle GBA (taille devinée par heuristique), Panda3DS (sauvegarde rangée par nom de fichier ROM, pas par title ID).
 - **Deux écarts de format découverts, qui touchent l'ADR 0008 :**
-  1. La règle `taille - (taille mod 1024)` donne **0** pour les sauvegardes de 512 octets (GBA EEPROM 4 Kbit, GB MBC2). Voir §8.
+  1. La règle `taille - (taille mod 1024)` donne **0** pour les sauvegardes de 512 octets (GBA EEPROM 4 Kbit, GB MBC2). Voir §8. Décidé : ADR 0010.
   2. **GBA EEPROM** : open_agb_firm attend un autre ordre d'octets que les émulateurs PC (inversion des 8 octets de chaque bloc). Les Pokémon GBA (Flash) ne sont pas touchés.
 - **Savestate chargé au lancement, activé par défaut** : mGBA (`autoload=1`, slot 0). EmuDeck livre aussi `autoload=1` pour mGBA. RetroArch : `savestate_auto_load=false` par défaut, mais l'option « AutoSave » d'EmuDeck le met à `true`.
 - **Statut 3DS** : Azahar est le seul émulateur 3DS actif. Citra est retiré (dépôt `citra-emu/citra` en 404). Le dépôt GitHub de Lime3DS redirige vers Azahar. Azahar a maintenant un cœur libretro dans son propre dépôt.
@@ -214,7 +214,7 @@ Sources : `LMEL src/libretro/libretro.cpp#L85-L95` , `#L887-L895` , `#L119-L120`
 **Réponse courte.**
 - Version : dernière release 0.9.13 (2022-05-23). Le `master` reste actif (2026-10-25).
 - Lancement : `<exe> [options] "<rom>"`. Une seule ROM positionnelle. Windows : `--windowed-fullscreen`. Linux : pas d'option plein écran dans la table. `--load-slot N` charge un savestate.
-- Processus : nom de l'exe de la release Windows NON VÉRIFIÉ. Linux GTK : `desmume` (NON VÉRIFIÉ). Flathub `org.desmume.DeSmuME` existe.
+- Processus : release Windows 0.9.13 : `DeSmuME_0.9.13_x64.exe` (contenu du zip `desmume-0.9.13-win64.zip`, relevé le 2026-11-02). Linux GTK : `desmume` (NON VÉRIFIÉ). Flathub `org.desmume.DeSmuME` existe.
 - **Nom et dossier.**
   - Windows : clé `Battery` de la section `[PathSettings]` de `desmume.ini`. Défaut : `.\Battery` relatif au dossier de l'exécutable.
   - Linux (GTK) : `g_get_user_config_dir()/desmume/`, donc `~/.config/desmume/<rom>.dsv` (déduction : aucune autre affectation trouvée).
@@ -225,6 +225,7 @@ Sources : `LMEL src/libretro/libretro.cpp#L85-L95` , `#L887-L895` , `#L119-L120`
   - Puis 6 × `u32` petit-boutiste : taille écrite, taille remplie (`padSize`), type, taille d'adresse, taille mémoire, version (0).
   - Puis le cookie de 16 octets `|-DESMUME SAVE-|`.
   - Pied total : 82 + 24 + 16 = **122 octets**.
+  - DeSmuME lit comme SRAM tout ce qui précède le pied (taille du fichier - 122), égal à la taille remplie. La taille écrite est l'adresse qui a fait grandir le fichier : elle reste souvent en deçà de la puce (`mc.cpp` `BackupDevice::ensure`, chargement `#L344-L390`). Import d'un `.sav` brut : type et taille d'adresse pris dans `save_types` selon la taille (`mc.cpp#L300-L320`).
 - Si le `.dsv` manque, DeSmuME lit un `.sav` brut (ou NO$GBA) du même nom et le convertit en `.dsv`.
 - Option `backupSave` (défaut `false`) : copie `<rom>.dsv.bak` au chargement.
 - Savestate au lancement : aucune option automatique (seulement Lua `AutoLoad`, défaut `false`, et `--load-slot`).
@@ -543,7 +544,7 @@ Sources : `RD config/retrodeck/retrodeck.json#L3-L8` ; `RDC melonds/component_fu
 - Pour une sauvegarde de 512 octets, cette règle donne **0**. Cas réels :
   - GBA EEPROM 4 Kbit = 512 octets (`GBA_SIZE_EEPROM512 = 0x200` chez mGBA ; `SIZE_EEPROM_512` chez VBA-M ; 512 chez SkyEmu).
   - GB MBC2 = 512 octets chez SameBoy, VBA-M et BGB.
-- Proposition (à décider en ADR) : retirer un trailer seulement si `taille mod 512 ∈ {16, 44, 48}`, sinon garder le fichier entier.
+- Décidé (ADR 0010) : retirer un trailer seulement si `taille mod 512 ∈ {16, 44, 48}`, sinon garder le fichier entier.
 
 ### 8.2 GB MBC2 : trois tailles différentes
 

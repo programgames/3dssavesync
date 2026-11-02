@@ -197,9 +197,14 @@ func lireLocal(j *Jeu) (*Local, error) {
 		return nil, err
 	}
 	sram := brut
-	n := len(brut) - len(brut)%1024 // les trailers font moins de 1 Kio
-	if (j.Systeme == "GB" || j.Systeme == "GBA") && n > 0 && n < len(brut) {
-		sram = brut[:n]
+	r := len(brut) % 512 // Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010)
+	if (j.Systeme == "GB" || j.Systeme == "GBA") && len(brut) > r && (r == 16 || r == 44 || r == 48) {
+		sram = brut[:len(brut)-r]
+	}
+	if strings.EqualFold(filepath.Ext(j.Fichier), ".dsv") { // DeSmuME : pied de page retiré (dsv.go)
+		if sram, err = sramDSV(brut); err != nil {
+			return nil, fmt.Errorf("%s : %w", j.Fichier, err)
+		}
 	}
 	vide := j.Systeme != "3DS"
 	for _, c := range sram {
@@ -467,6 +472,15 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 			contenu = append(append([]byte{}, o...), l.Brut[len(l.SRAM):]...)
 		}
 	}
+	if strings.EqualFold(filepath.Ext(j.Fichier), ".dsv") { // DeSmuME : SRAM reçue + pied de page (dsv.go)
+		var ancien []byte
+		if l != nil {
+			ancien = l.Brut
+		}
+		if contenu, err = dsv(o, ancien); err != nil {
+			return err
+		}
+	}
 	os.Remove(tmp) // reste d'un arrêt brutal
 	if err := ecrireVerifie(tmp, contenu); err != nil {
 		return err
@@ -567,8 +581,8 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 		}
 		action := etat(vu, srv, b[j.Cle])
 		if action == conflit {
-			var distant []byte // Pokémon 3DS : la Version du serveur est lue pour comparer les temps de jeu
-			if _, ok := formatsPokemon[len(l.SRAM)]; ok && j.Systeme == "3DS" {
+			var distant []byte // Pokémon : la Version du serveur est lue pour comparer les temps de jeu
+			if _, ok := partiePokemon(l.SRAM); ok {
 				if st, o, err := s.api("GET", "/saves/"+j.Cle, nil, nil); err == nil && st == 200 {
 					distant = o
 				}

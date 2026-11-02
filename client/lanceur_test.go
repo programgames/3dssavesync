@@ -692,3 +692,22 @@ func TestLanceur(t *testing.T) {
 
 	t.Logf("%d vérifications", verifications)
 }
+
+// Mêmes tailles que sram_taille dans 3ds/test/test_cle.c (ADR 0010).
+func TestSRAM(t *testing.T) {
+	for _, c := range []struct {
+		systeme      string
+		taille, sram int
+	}{
+		{"GB", 32816, 32768}, {"GB", 32812, 32768}, {"GB", 32768, 32768}, {"GBA", 131088, 131072},
+		{"GB", 512, 512}, {"GBA", 528, 512}, {"GB", 560, 512}, {"GBA", 8208, 8192},
+		{"GB", 1536, 1536}, {"GB", 48, 48}, {"DS", 524298, 524298},
+	} {
+		f := filepath.Join(t.TempDir(), "s.sav")
+		ecrire(t, f, make([]byte, c.taille))
+		l, err := lireLocal(&Jeu{Systeme: c.systeme, Fichier: f})
+		if err != nil || len(l.SRAM) != c.sram || len(l.Brut) != c.taille {
+			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.systeme, c.taille, c.sram, l, err)
+		}
+	}
+}

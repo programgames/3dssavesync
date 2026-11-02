@@ -113,6 +113,25 @@ var profils = map[string]Profil{
 			return ""
 		},
 	},
+	"desmume": { // .dsv : SRAM + pied de page (dsv.go)
+		Systemes: []string{"DS"}, Ext: ".dsv", NomInterne: true,
+		Args: func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) },
+		Dossier: func(e *Emulateur, _, _ string) string {
+			switch runtime.GOOS {
+			case "windows": // desmume.ini à côté de l'exe ; Battery absent = .\Battery (path.cpp, winutil.cpp)
+				if d := reglage(pres(e, "desmume.ini"), "PathSettings", "Battery"); d != "" {
+					return d
+				}
+				return pres(e, "Battery")
+			case "linux": // GTK : tout dans le dossier de configuration (path.cpp LoadModulePath)
+				if d := premier(xdgConfig("desmume"), maison(".var", "app", "org.desmume.DeSmuME", "config", "desmume")); d != "" {
+					return d
+				}
+				return xdgConfig("desmume")
+			}
+			return ""
+		},
+	},
 	"sameboy": { // .sav toujours à côté de la ROM
 		Systemes: []string{"GB"},
 		Args:     func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) },

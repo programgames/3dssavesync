@@ -123,5 +123,5 @@ Le programme PC (`3dssavesync`, autrefois `pc/sync.ps1`) qu'un frontend ou un ra
 _Éviter_ : wrapper, plugin, script de sync
 
 **Profil** :
-Ce que le Lanceur sait d'un émulateur : comment le lancer, où et sous quel nom il range les Sauvegardes de chaque Système, et quel réglage recharge un état au lancement. Intégré (melonDS, mGBA, Azahar, RetroArch, VBA-M, SameBoy) ou personnalisé dans la configuration.
+Ce que le Lanceur sait d'un émulateur : comment le lancer, où et sous quel nom il range les Sauvegardes de chaque Système, et quel réglage recharge un état au lancement. Intégré (melonDS, mGBA, Azahar, RetroArch, VBA-M, SameBoy, DeSmuME) ou personnalisé dans la configuration.
 _Éviter_ : preset, modèle, fiche

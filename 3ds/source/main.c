@@ -50,7 +50,7 @@ typedef struct {
     int a_local, a_serveur;
     int vide; /* SRAM locale vierge : comptée comme absente (cle.h) */
     time_t modif;   /* DS, GB, GBA : date du fichier (horloge de la 3DS) ; 0 si inconnue */
-    int a_partie;   /* Pokémon 3DS : temps de jeu et dresseur lus (pokemon.h) */
+    int a_partie;   /* Pokémon : temps de jeu et dresseur lus (pokemon.h) */
     partie_t partie;
     int etat;
 } jeu_t;
@@ -262,9 +262,8 @@ static void lire_local(jeu_t *j)
         /* stat() ne donne pas la date sur la SD. archive_getmtime la convertit en temps UNIX ; un horodatage 0 (Azahar)
          * devient le 1er janvier 2000 : date inconnue. */
         if (R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modif = (time_t)mtime;
-    } else {
-        j->a_partie = pokemon_partie(octets, taille, &j->partie) == 0;
     }
+    j->a_partie = pokemon_partie(octets, taille, &j->partie) == 0; /* SRAM seule : sans Trailer d'horloge */
     hash_hex(octets, taille, j->hash_local);
     j->local.taille = taille;
     j->a_local = 1;
@@ -282,7 +281,7 @@ static void scanner_3ds(void)
         j->titre = titres[i].id;
         j->systeme = SYS_3DS;
         j->nb_roms = 1;
-        lire_local(j); /* Hash, et temps de jeu d'un Pokémon 3DS */
+        lire_local(j); /* Hash, et temps de jeu d'un Pokémon */
         if (!j->a_local) continue; /* jamais lancé ou absent */
         cle_3ds(j->titre, j->cle);
         snprintf(j->nom, sizeof j->nom, "%s", titres[i].nom);
@@ -576,7 +575,7 @@ static void texte_partie(const partie_t *p, char *out, size_t n)
     else snprintf(out, n, T("%d h %02d \xC2\xB7 partie jamais commencée", "%d h %02d \xC2\xB7 game never started"), p->heures, p->minutes);
 }
 
-/* Sauvegarde de la 3DS : temps de jeu (Pokémon 3DS), sinon date du fichier si l'horloge la rend crédible. */
+/* Sauvegarde de la 3DS : temps de jeu (Pokémon), sinon date du fichier si l'horloge la rend crédible. */
 static void texte_local(const jeu_t *j, char *out, size_t n)
 {
     time_t maintenant = time(NULL);
@@ -590,7 +589,7 @@ static void texte_local(const jeu_t *j, char *out, size_t n)
     } else snprintf(out, n, "%s", T("sauvegarde présente", "save present"));
 }
 
-/* Version du serveur : qui l'a envoyée et quand ; avec lire, pour un Pokémon 3DS, son temps de jeu (téléchargée). */
+/* Version du serveur : qui l'a envoyée et quand ; avec lire, pour un Pokémon, son temps de jeu (téléchargée). */
 static void texte_serveur(const jeu_t *j, int lire, char *out, size_t n)
 {
     char age[24], url[300], *corps;
@@ -603,7 +602,7 @@ static void texte_serveur(const jeu_t *j, int lire, char *out, size_t n)
     }
     format_age(j->age, age, sizeof age);
     snprintf(out, n, T("envoyée par %s, %s", "sent by %s, %s"), j->client[0] ? j->client : "?", age);
-    if (!lire || !j->a_partie) return; /* seulement si la 3DS a un Pokémon 3DS reconnu */
+    if (!lire || !j->a_partie) return; /* seulement si la 3DS a un Pokémon reconnu */
     progression(0, 0, "%s", T("Lecture de la version du serveur…", "Reading the server version…"));
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->cle);
     statut = net_get(url, cfg.jeton, &corps, &taille);
