@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -11,12 +12,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -288,10 +293,84 @@ func (s *Session) api(methode, chemin string, corps []byte, entetes map[string]s
 	}
 	defer rep.Body.Close()
 	if rep.StatusCode == http.StatusUnauthorized {
-		return 0, nil, errors.New(tr("jeton refusé par le serveur (401)", "token refused by the server (401)"))
+		return 0, nil, &erreurHTTP{methode + " " + chemin, 401}
 	}
 	octets, err := io.ReadAll(rep.Body)
 	return rep.StatusCode, octets, err
+}
+
+// Réponse du serveur autre que celle attendue. Error() garde le détail technique, pour le journal.
+type erreurHTTP struct {
+	requete string
+	code    int
+}
+
+func (e *erreurHTTP) Error() string { return fmt.Sprintf("%s : %d", e.requete, e.code) }
+
+// Page d'aide des messages d'erreur, ajoutée aux fenêtres d'erreur du PC.
+const pageAide = "https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md"
+
+// classer : texte pour l'utilisateur (sans code HTTP ni texte de Go) ; global = le serveur ou le réseau est en cause,
+// les autres jeux de la passe échoueraient pareil. Erreur inconnue : son texte, déjà écrit pour l'utilisateur.
+func classer(err error) (texte string, global bool) {
+	var h *erreurHTTP
+	var dns *net.DNSError
+	var cert *tls.CertificateVerificationError
+	var entete tls.RecordHeaderError
+	var reseau net.Error
+	var ue *neturl.Error
+	var errno syscall.Errno
+	var chemin *fs.PathError
+	errors.As(err, &errno)
+	windows := runtime.GOOS == "windows"
+	switch {
+	case err == nil:
+		return "", false
+	case errors.As(err, &h) && h.code == 401:
+		return tr("Le serveur répond, mais refuse ce jeton. Copiez le jeton exact du serveur.",
+			"The server answers, but refuses this token. Copy the exact token of the server."), true
+	case errors.As(err, &h) && h.code == 404:
+		return tr("Cette adresse ne mène pas à un serveur 3dssavesync. Vérifiez l'adresse.",
+			"This address does not lead to a 3dssavesync server. Check the address."), true
+	case errors.As(err, &h) && h.code == 413:
+		return tr("sauvegarde trop grande pour le serveur : augmentez la limite de taille du serveur (ou de son proxy)",
+			"save too large for the server: raise the size limit of the server (or of its proxy)"), false
+	case errors.As(err, &h) && h.code == 400:
+		return tr("le serveur refuse cette sauvegarde (vide, trop grande ou envoi coupé). Relancez le jeu",
+			"the server refuses this save (empty, too large or upload cut). Start the game again"), false
+	case errors.As(err, &h) && h.code >= 500:
+		return tr("Le serveur a un problème interne. Réessayez plus tard ; si cela dure, lisez le journal du serveur.",
+			"The server has an internal problem. Try again later; if it lasts, read the server log."), true
+	case errors.As(err, &h):
+		return tr("Réponse inattendue du serveur. Vérifiez l'adresse du serveur.", "Unexpected answer from the server. Check the server address."), true
+	case errors.As(err, &cert) || errors.As(err, &entete):
+		return tr("Connexion sécurisée refusée : certificat du serveur invalide. Vérifiez l'adresse (https://) et la date du PC.",
+			"Secure connection refused: invalid server certificate. Check the address (https://) and the PC date."), true
+	case errors.As(err, &dns):
+		return tr("Adresse du serveur introuvable (pas d'Internet, ou adresse fausse). Vérifiez la connexion et l'adresse.",
+			"Server address not found (no Internet, or wrong address). Check the connection and the address."), true
+	case errors.Is(err, syscall.ECONNREFUSED) || windows && errno == 10061: // WSAECONNREFUSED
+		return tr("Le serveur refuse la connexion : il est arrêté, ou le port est faux. Démarrez le serveur ou vérifiez l'adresse.",
+			"The server refuses the connection: it is stopped, or the port is wrong. Start the server or check the address."), true
+	case errors.As(err, &reseau) && reseau.Timeout(), errors.As(err, &ue):
+		return tr("Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", "The server does not answer (no Internet, or wrong address)."), true
+	case windows && (errno == 32 || errno == 33): // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
+		return tr("un autre programme utilise ce fichier : fermez l'émulateur, puis relancez le jeu",
+			"another program is using this file: close the emulator, then start the game again"), false
+	case errors.Is(err, syscall.ENOSPC) || windows && (errno == 112 || errno == 39): // ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL
+		return tr("disque plein : libérez de la place, puis relancez le jeu", "disk full: free some space, then start the game again"), false
+	case errors.Is(err, fs.ErrPermission) && errors.As(err, &chemin):
+		return fmt.Sprintf(tr("accès refusé à %s : vérifiez les droits de ce dossier", "access denied to %s: check the rights of this folder"), chemin.Path), false
+	case errors.Is(err, fs.ErrPermission):
+		return tr("accès refusé : vérifiez les droits du dossier", "access denied: check the folder rights"), false
+	}
+	return err.Error(), false
+}
+
+// texteErreur : l'erreur telle que l'utilisateur la lit ("" sans erreur).
+func texteErreur(err error) string {
+	t, _ := classer(err)
+	return t
 }
 
 // Nom de Client pour le serveur ([a-z0-9]{1,16}) : deux émulateurs = deux Clients (Q17).
@@ -312,7 +391,7 @@ func (s *Session) versionServeur(cle string) (*Version, error) {
 		return nil, err
 	}
 	if st != 200 {
-		return nil, fmt.Errorf("GET /saves : %d", st)
+		return nil, &erreurHTTP{"GET /saves", st}
 	}
 	var liste []Version
 	if err := json.Unmarshal(o, &liste); err != nil {
@@ -410,7 +489,7 @@ func (s *Session) envoyer(j *Jeu, l *Local, srv *Version) (bool, error) {
 		return false, nil
 	}
 	if st != 200 {
-		return false, fmt.Errorf("PUT : %d", st)
+		return false, &erreurHTTP{"PUT /saves/" + j.Cle, st}
 	}
 	return true, s.fixerBase(j.Cle, l.Hash)
 }
@@ -442,10 +521,11 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		return err
 	}
 	if st != 200 {
-		return fmt.Errorf("GET /saves/%s : %d", j.Cle, st)
+		return &erreurHTTP{"GET /saves/" + j.Cle, st}
 	}
 	if hachage(o) != srv.Hash {
-		return errors.New(tr("Version reçue corrompue (Hash différent)", "received version is corrupt (hash differs)"))
+		return errors.New(tr("la sauvegarde reçue du serveur est abîmée (transfert incomplet) : rien n'est remplacé. Relancez le jeu",
+			"the save received from the server is damaged (incomplete transfer): nothing is replaced. Start the game again"))
 	}
 	dossier := filepath.Dir(j.Fichier)
 	tmp := j.Fichier + ".3dssavesync-tmp"
@@ -455,7 +535,8 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		if _, err := os.Stat(dossier); err != nil {
 			format, meta := formats3DS[strings.ToUpper(strings.TrimPrefix(j.Cle, "3DS-"))], filepath.Join(filepath.Dir(dossier), "00000001.metadata")
 			if format == nil || existe(meta) {
-				return errors.New(tr("jeu jamais lancé dans Azahar. Lance-le une fois et sauvegarde en jeu, puis relance-le ici", "game never started in Azahar. Start it once and save in game, then start it here again"))
+				return errors.New(tr("jeu jamais lancé dans Azahar. Lancez-le une fois dans Azahar et sauvegardez en jeu, puis relancez-le ici",
+					"game never started in Azahar. Start it once in Azahar and save in game, then start it here again"))
 			}
 			if err := os.MkdirAll(dossier, 0o755); err != nil {
 				return err
@@ -472,7 +553,7 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 	contenu := o
 	if l != nil {
 		if err := s.copier(j, l.Brut); err != nil {
-			return fmt.Errorf(tr("Copie de sécurité impossible : %w", "backup copy failed: %w"), err)
+			return fmt.Errorf(tr("copie de sécurité impossible : %w", "backup copy failed: %w"), err)
 		}
 		if len(l.Brut) > len(l.SRAM) { // GB/GBA : on remet le Trailer d'horloge de ce PC après la SRAM reçue
 			contenu = append(append([]byte{}, o...), l.Brut[len(l.SRAM):]...)
@@ -544,9 +625,9 @@ func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool)
 		enLigne += " · " + p
 	}
 	texte := fmt.Sprintf(tr("Conflit : %s\n\n"+
-		"La Sauvegarde du PC et celle du serveur ont toutes deux changé depuis la dernière Synchronisation.\n\n"+
+		"La sauvegarde du PC et celle du serveur ont toutes deux changé depuis la dernière synchronisation.\n\n"+
 		"PC : %s\nServeur : %s\n\n"+
-		"L'autre version reste dans l'Historique du serveur.",
+		"L'autre version reste dans l'historique du serveur.",
 		"Conflict: %s\n\n"+
 			"The PC save and the server save have both changed since the last sync.\n\n"+
 			"PC: %s\nServer: %s\n\n"+
@@ -568,7 +649,7 @@ func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool)
 	case pasJouer:
 		return annuler
 	case "":
-		notifier(fmt.Sprintf(tr("Conflit sur %s : rien n'est remplacé. La partie utilise la Sauvegarde du PC.",
+		notifier(fmt.Sprintf(tr("Conflit sur %s : rien n'est remplacé. La partie utilise la sauvegarde du PC.",
 			"Conflict on %s: nothing is replaced. The game uses the PC save."), j.Nom))
 	}
 	return rien
@@ -622,5 +703,6 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 			return false, nil
 		}
 	}
-	return false, errors.New(tr("le serveur change sans cesse (412 répétés)", "the server keeps changing (repeated 412)"))
+	return false, errors.New(tr("la sauvegarde change sans cesse sur le serveur (un autre appareil envoie en même temps). Relancez le jeu dans un moment",
+		"the save keeps changing on the server (another device is uploading at the same time). Start the game again in a moment"))
 }

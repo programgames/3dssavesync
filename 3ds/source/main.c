@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include "cle.h"
 #include "ecran.h"
+#include "erreurs.h"
 #include "etat.h"
 #include "fichiers.h"
 #include "net.h"
@@ -28,6 +29,7 @@
 #define LIGNES_HAUT 14 /* lignes d'une liste sur l'écran du haut */
 #define MASQUE -1   /* ni Sauvegarde locale ni Version courante : pas affiché */
 #define DOUBLON 100 /* plusieurs ROM pour une Clé (ADR 0005) */
+#define HORS_LIGNE 101 /* serveur non lu : état inconnu, aucune action proposée */
 
 static int anglais; /* langue de la console : français, sinon anglais */
 static u8 langue;   /* CFG_LANGUAGE_* : titre des jeux 3DS dans cette langue */
@@ -103,6 +105,7 @@ static void montrer_alerte(void)
 
 static int curseur_liste; /* jeu choisi dans la liste : l'écran du haut des dialogues et de la progression */
 static int lu;            /* 0 tant que la première lecture n'est pas finie */
+static int serveur_lu;    /* 0 si la dernière lecture du serveur a échoué : les jeux locaux restent listés */
 static void progression(int fait, int total, const char *format, ...);
 
 /* ---------------------------------------------------------------- fichiers */
@@ -190,8 +193,8 @@ static void fixer_base(const char *cle, const char *hash)
     snprintf(bases[i].hash, 65, "%s", hash);
     for (i = 0; i < nb_bases; i++) n += snprintf(t + n, sizeof t - n, "%s=%s\n", bases[i].cle, bases[i].hash);
     if (remplacer_fichier(DOSSIER "/base.ini", t, n)) /* une coupure pendant l'écriture ne vide plus base.ini */
-        alerter(T("Bases non enregistrées : des conflits peuvent apparaître. Vérifiez la carte SD.",
-                  "Bases not saved: conflicts may appear. Check the SD card."));
+        alerter(T("État de synchronisation non enregistré : des conflits peuvent apparaître. Vérifiez la carte SD.",
+                  "Sync state not saved: conflicts may appear. Check the SD card."));
 }
 
 /* ---------------------------------------------------------------- observation */
@@ -382,14 +385,17 @@ static int lire_serveur(void)
     int i;
 
     for (i = 0; i < nb_jeux; i++) jeux[i].a_serveur = 0;
+    serveur_lu = 0;
     snprintf(url, sizeof url, "%s/saves", cfg.url);
     statut = net_get(url, cfg.jeton, &corps, &taille);
     if (statut != 200) {
-        if (statut < 0) snprintf(message, sizeof message, T("Serveur injoignable : %s", "Server unreachable: %s"), net_erreur(statut));
-        else snprintf(message, sizeof message, T("Serveur : HTTP %ld%s", "Server: HTTP %ld%s"), statut, statut == 401 ? T(" (jeton refusé)", " (token refused)") : "");
+        char t[200];
+        snprintf(t, sizeof t, T("Lecture du serveur impossible. %s", "Cannot read the server. %s"), texte_reseau(statut, net_wifi(), anglais));
+        alerter(t); /* ajouté au message de l'action en cours (montrer_alerte) */
         if (statut > 0) free(corps);
         return -1;
     }
+    serveur_lu = 1;
     /* [{"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc"}, ...]
      * ponytail: lecture à la main, liée au format de json.dumps (séparateur ": ") ; un vrai parseur (jsmn) si le serveur change. */
     for (p = strstr(corps, "\"code\": \""); p; p = strstr(p + 1, "\"code\": \"")) {
@@ -441,6 +447,7 @@ static void calculer_etats(void)
         j->serveur.hash = j->hash_serveur;
         if (j->nb_roms > 1) j->etat = DOUBLON;
         else if (!vu && !j->a_serveur) j->etat = MASQUE;
+        else if (!serveur_lu) j->etat = HORS_LIGNE;
         else j->etat = etat(vu ? &j->local : NULL, j->a_serveur ? &j->serveur : NULL, base_de(j->cle));
         if (j->etat == A_JOUR && (!base_de(j->cle) || strcmp(base_de(j->cle), j->hash_local)))
             fixer_base(j->cle, j->hash_local);
@@ -455,8 +462,7 @@ static int relire_serveur(void)
     int r;
     progression(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     r = lire_serveur();
-    if (r == 0) calculer_etats();
-    else nb_visibles = 0;
+    calculer_etats(); /* serveur non lu : les jeux locaux restent listés, sans action */
     lu = 1;
     return r;
 }
@@ -468,8 +474,7 @@ static int rafraichir(void)
     scanner();
     progression(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     r = lire_serveur();
-    if (r == 0) calculer_etats();
-    else nb_visibles = 0;
+    calculer_etats();
     lu = 1;
     return r;
 }
@@ -486,7 +491,7 @@ static int envoyer(jeu_t *j)
     long statut;
 
     if (lire_sauvegarde(j, &octets, &taille)) {
-        snprintf(message, sizeof message, T("%s : lecture impossible.", "%s: cannot read."), j->court);
+        snprintf(message, sizeof message, T("%s : lecture de la sauvegarde impossible. Vérifiez la carte SD.", "%s: cannot read the save. Check the SD card."), j->court);
         return 0;
     }
     taille = sram_taille(j->systeme, taille);
@@ -502,10 +507,8 @@ static int envoyer(jeu_t *j)
         snprintf(message, sizeof message, T("%s : envoyé au serveur.", "%s: uploaded."), j->court);
     } else if (statut == 412) {
         snprintf(message, sizeof message, T("%s : le serveur a changé entre-temps (conflit).", "%s: the server changed meanwhile (conflict)."), j->court);
-    } else if (statut < 0) {
-        snprintf(message, sizeof message, "%s : %s", j->court, net_erreur(statut));
     } else {
-        snprintf(message, sizeof message, T("%s : envoi refusé, HTTP %ld.", "%s: upload refused, HTTP %ld."), j->court, statut);
+        snprintf(message, sizeof message, T("%s : envoi impossible. %s", "%s: upload failed. %s"), j->court, texte_reseau(statut, net_wifi(), anglais));
     }
     return statut == 200;
 }
@@ -528,13 +531,14 @@ static int recuperer(jeu_t *j)
     statut = net_get(url, cfg.jeton, &corps, &taille);
     if (statut != 200) {
         if (statut > 0) free(corps);
-        snprintf(message, sizeof message, T("%s : récupération impossible (%ld).", "%s: download failed (%ld)."), j->court, statut);
+        snprintf(message, sizeof message, T("%s : récupération impossible. %s La sauvegarde de la 3DS reste intacte.", "%s: download failed. %s The 3DS save is intact."),
+                 j->court, texte_reseau(statut, net_wifi(), anglais));
         return 0;
     }
     hash_hex((unsigned char *)corps, taille, hash);
     if (strcmp(hash, j->hash_serveur)) {
         free(corps);
-        snprintf(message, sizeof message, T("%s : version reçue différente, rien n'est écrit.", "%s: received version differs, nothing written."), j->court);
+        snprintf(message, sizeof message, T("%s : version reçue abîmée, rien n'est écrit. Réessayez.", "%s: received version damaged, nothing written. Try again."), j->court);
         return 0;
     }
     /* Copie dès que la Sauvegarde existe, même si le scan n'a pas pu la lire : jamais d'écrasement sans copie. */
@@ -548,7 +552,7 @@ static int recuperer(jeu_t *j)
         if (echec) {
             free(ancien);
             free(corps);
-            snprintf(message, sizeof message, T("%s : copie de sécurité impossible, rien n'est écrit.", "%s: backup copy failed, nothing written."), j->court);
+            snprintf(message, sizeof message, T("%s : copie de sécurité impossible, rien n'est écrit. Vérifiez la carte SD.", "%s: backup copy failed, nothing written. Check the SD card."), j->court);
             return 0;
         }
     }
@@ -669,7 +673,7 @@ static void texte_serveur(const jeu_t *j, int lire, char *out, size_t n)
     long statut;
     partie_t p;
     if (!j->a_serveur) {
-        snprintf(out, n, "%s", T("aucune version", "no version"));
+        snprintf(out, n, "%s", serveur_lu ? T("aucune version", "no version") : T("non lu", "not read"));
         return;
     }
     format_age(j->age, age, sizeof age);
@@ -702,7 +706,8 @@ static u32 couleur_etat(int e)
     case A_ENVOYER: return C_JAUNE;
     case A_RECUPERER: return C_CYAN;
     case CONFLIT: return C_ROUGE;
-    case DOUBLON: return GRIS_C;
+    case DOUBLON:
+    case HORS_LIGNE: return GRIS_C;
     }
     return GRIS_F;
 }
@@ -714,6 +719,7 @@ static const char *etat_court(int e)
     case A_RECUPERER: return T("Récupérer", "Download");
     case CONFLIT: return T("Conflit", "Conflict");
     case DOUBLON: return T("Doublon", "Duplicate");
+    case HORS_LIGNE: return T("Inconnu", "Unknown");
     }
     return "ok";
 }
@@ -822,7 +828,7 @@ static void dessiner_haut(int curseur)
     for (i = 0; i < nb_visibles; i++) n[priorite(jeux[visibles[i]].etat)]++;
     ecran_haut();
     ecran_texte(6, 4, 0.55f, BLANC, 0, "3dssavesync");
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 5 && (serveur_lu || !lu); i++) {
         int e = etats[i], c = n[priorite(e)];
         if (!c && e != A_JOUR) continue;
         snprintf(t, sizeof t, e == A_JOUR ? T("%d à jour", "%d in sync") : e == DOUBLON ? T("%d doublon(s)", "%d duplicate(s)")
@@ -832,9 +838,15 @@ static void dessiner_haut(int curseur)
         ecran_texte(x, 6, 0.45f, e == A_JOUR ? C_VERT : couleur_etat(e), 0, t);
         x -= 12;
     }
+    if (lu && !serveur_lu) { /* compteurs sans le serveur : faux */
+        x = 400 - 6 - ecran_largeur(0.45f, T("serveur non lu", "server not read"));
+        ecran_texte(x, 6, 0.45f, C_ROUGE, 0, T("serveur non lu", "server not read"));
+    }
     ecran_rect(0, 23, 400, 1, GRIS_F);
 
-    if (!nb_visibles) ecran_paragraphe(10, 40, 0.5f, GRIS_C, 380, lu ? T("Aucun jeu à afficher.", "No game to show.") : T("Lecture en cours…", "Reading…"));
+    if (!nb_visibles) ecran_paragraphe(10, 40, 0.5f, GRIS_C, 380, !lu ? T("Lecture en cours…", "Reading…")
+                                                              : serveur_lu ? T("Aucun jeu à afficher.", "No game to show.")
+                                                              : T("Serveur non lu, et aucune sauvegarde sur la 3DS.", "Server not read, and no save on the 3DS."));
     for (i = debut; i < nb_visibles && i < debut + LIGNES_HAUT; i++) {
         jeu_t *k = &jeux[visibles[i]];
         float y = 27 + (i - debut) * 15;
@@ -861,13 +873,28 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
     case A_ENVOYER: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
     case A_RECUPERER: return T("Le serveur a une version plus récente. \xEE\x80\x80 la copie sur la 3DS (copie de sécurité faite avant).",
                                "The server has a newer version. \xEE\x80\x80 copies it to the 3DS (backup copy made first).");
-    case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 te laisse choisir la version à garder.",
+    case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 permet de choisir la version à garder.",
                            "Conflict: the 3DS and the server both changed since the last sync. \xEE\x80\x80 lets you choose the version to keep.");
     case DOUBLON:
-        snprintf(t, n, T("%d ROM ont la même clé : garde-en une seule. Rien à faire ici.", "%d ROMs have the same key: keep only one. Nothing to do here."), j->nb_roms);
+        snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule sur la carte SD.", "%d ROMs hold this game: keep only one on the SD card."), j->nb_roms);
         return t;
+    case HORS_LIGNE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     }
     return T("À jour : la 3DS et le serveur ont la même sauvegarde. Rien à faire.", "In sync: the 3DS and the server have the same save. Nothing to do.");
+}
+
+/* Message (jaune) à partir de y, jamais sous la barre des touches (bas) : s'il ne tient pas, il remonte sur un fond,
+ * par-dessus la fin des détails. */
+static void dessiner_message(float y, float bas)
+{
+    float h;
+    if (!message[0]) return;
+    h = ecran_hauteur(0.45f, 304, message);
+    if (y + h > bas) {
+        y = bas - h < 6 ? 6 : bas - h;
+        ecran_rect(0, y - 4, 320, bas - y + 4, RGB(0x1E242C));
+    }
+    ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, message);
 }
 
 static void dessiner_bas(const jeu_t *j)
@@ -901,7 +928,7 @@ static void dessiner_bas(const jeu_t *j)
         if (gb) y = detail(y, T("Joué avec", "Played with"), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS)) ? "forwarder mGBA" : j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
         y += 6;
     }
-    if (message[0]) ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, message);
+    dessiner_message(y, HAUT_BARRE - 5);
 
     /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
      * en bas, les touches générales. */
@@ -960,7 +987,7 @@ static void progression(int fait, int total, const char *format, ...)
     ecran_bas();
     ecran_paragraphe(16, 70, 0.55f, BLANC, 288, t);
     if (total > 0) {
-        char n[24];
+        char n[32];
         ecran_rect(16, 140, 288, 12, RGB(0x2A313B));
         ecran_rect(16, 140, 288.0f * fait / total, 12, C_VERT);
         snprintf(n, sizeof n, "%d / %d", fait, total);
@@ -1011,10 +1038,7 @@ static int tester_connexion(char *out, size_t n)
     snprintf(url, sizeof url, "%s/saves", cfg.url);
     statut = net_get(url, cfg.jeton, &corps, &taille);
     if (statut > 0) free(corps);
-    if (statut == 200) snprintf(out, n, "%s", T("Connexion réussie.", "Connection OK."));
-    else if (statut == 401) snprintf(out, n, "%s", T("Jeton refusé (401).", "Token refused (401)."));
-    else if (statut < 0) snprintf(out, n, T("Serveur injoignable : %s", "Server unreachable: %s"), net_erreur(statut));
-    else snprintf(out, n, "HTTP %ld", statut);
+    snprintf(out, n, "%s", statut == 200 ? T("Connexion réussie.", "Connection OK.") : texte_reseau(statut, net_wifi(), anglais));
     return statut == 200;
 }
 
@@ -1042,7 +1066,8 @@ static void choisir_titres(void)
 
     progression(0, 0, "%s", T("Lecture des jeux installés…", "Reading installed games…"));
     if (R_FAILED(amInit())) {
-        snprintf(message, sizeof message, "%s", T("Service AM indisponible : liste impossible.", "AM service unavailable: no list."));
+        snprintf(message, sizeof message, "%s", T("Liste des jeux installés illisible. Redémarrez la 3DS, puis réessayez.",
+                                                  "Cannot read the installed games. Restart the 3DS, then try again."));
         return;
     }
     n = titres_installes(ids, medias, 200);
@@ -1110,12 +1135,12 @@ static void choisir_titres(void)
             y += ecran_paragraphe(8, y, 0.45f, ch->seul == 1 ? C_VERT : ch->seul == 0 ? C_ROUGE : C_JAUNE, 304,
                                   ch->seul == 1 ? T("Sauvegarde : un seul fichier. Ce jeu peut être synchronisé.", "Save: a single file. This game can be synced.")
                                   : ch->seul == 0 ? T("Plusieurs fichiers de sauvegarde : ce jeu ne peut pas être synchronisé.", "Several save files: this game cannot be synced.")
-                                                  : T("Pas encore de sauvegarde : lance le jeu une fois et sauvegarde.", "No save yet: start the game once and save.")) + 6;
+                                                  : T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.", "No save yet: start the game once and save.")) + 6;
         } else {
             y += ecran_paragraphe(8, y, 0.5f, GRIS_C, 304, T("Aucun jeu trouvé.", "No game found.")) + 6;
         }
-        y += ecran_paragraphe(8, y, 0.42f, GRIS_C, 304, T("Un jeu absent de la liste ? Lance-le une fois et sauvegarde.", "A game is missing? Start it once and save.")) + 6;
-        if (message[0]) ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, message);
+        y += ecran_paragraphe(8, y, 0.42f, GRIS_C, 304, T("Un jeu absent de la liste ? Lancez-le une fois et sauvegardez.", "A game is missing? Start it once and save.")) + 6;
+        dessiner_message(y, 240 - HAUTEUR_TOUCHE - 9);
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
         ecran_finir();
@@ -1144,7 +1169,7 @@ static void choisir_titres(void)
             }
         mkdir(DOSSIER, 0777);
         snprintf(message, sizeof message, "%s",
-                 titres_ecrire(DOSSIER "/titres.ini", titres, nb_titres) ? T("titres.ini : écriture impossible.", "titres.ini: write failed.")
+                 titres_ecrire(DOSSIER "/titres.ini", titres, nb_titres) ? T("Liste des jeux 3DS non enregistrée. Vérifiez la carte SD.", "3DS game list not saved. Check the SD card.")
                                                                           : T("Liste des jeux 3DS enregistrée.", "3DS game list saved."));
     } else {
         message[0] = '\0';
@@ -1214,12 +1239,12 @@ static int reglages(int premier)
         ecran_bas();
         nb_boutons = 0;
         y = 8;
-        if (premier) y += ecran_paragraphe(8, y, 0.5f, C_JAUNE, 304, T("Premier lancement : entre au moins le serveur et le jeton.", "First start: enter at least the server and the token.")) + 8;
+        if (premier) y += ecran_paragraphe(8, y, 0.5f, C_JAUNE, 304, T("Premier lancement : entrez au moins le serveur et le jeton.", "First start: enter at least the server and the token.")) + 8;
         y += ecran_paragraphe(8, y, 0.5f, BLANC, 304, c < nb ? T(l[c].aide, l[c].aide_en)
                                                      : c == nb ? T("Jeux 3DS natifs à synchroniser. Par défaut : les 8 Pokémon 3DS.", "Native 3DS games to sync. Default: the 8 3DS Pokémon.")
-                                                               : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 8;
+                                                               : T("Test de l'adresse et du jeton du serveur.", "Test of the server address and token.")) + 8;
         if (test[0]) y += ecran_paragraphe(8, y, 0.5f, test_ok ? C_VERT : C_ROUGE, 304, test) + 6;
-        if (message[0]) ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, message);
+        dessiner_message(y, 240 - HAUTEUR_TOUCHE - 9);
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
         ecran_finir();
@@ -1285,7 +1310,7 @@ static int agir(jeu_t *j)
             y += 20;
             y += ecran_paragraphe(8, y, 0.5f, BLANC, 250, j->court);
             y = y < 58 ? 60 : y + 4;
-            y += ecran_paragraphe(8, y, 0.45f, BLANC, 304, T("La 3DS et le serveur ont changé depuis la dernière synchronisation. Choisis la version à garder :",
+            y += ecran_paragraphe(8, y, 0.45f, BLANC, 304, T("La 3DS et le serveur ont changé depuis la dernière synchronisation. Choisissez la version à garder :",
                                                             "The 3DS and the server both changed since the last sync. Choose the version to keep:")) + 6;
             carte(6, y, KEY_A, T("Garder la 3DS", "Keep the 3DS"), srv);
             carte(162, y, KEY_X, T("Prendre le serveur", "Take the server"), q);
@@ -1307,7 +1332,11 @@ static int agir(jeu_t *j)
         break;
     }
     case DOUBLON:
-        snprintf(message, sizeof message, T("%s : %d ROM ont la même clé. Garde-en une seule.", "%s: %d ROMs have the same key. Keep only one."), j->court, j->nb_roms);
+        snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule sur la carte SD.", "%s: %d ROMs hold this game. Keep only one on the SD card."),
+                 j->court, j->nb_roms);
+        break;
+    case HORS_LIGNE:
+        snprintf(message, sizeof message, T("%s : serveur non lu. Appuyez sur \xEE\x80\x83 pour réessayer.", "%s: server not read. Press \xEE\x80\x83 to try again."), j->court);
         break;
     default:
         snprintf(message, sizeof message, T("%s : rien à faire, déjà à jour.", "%s: nothing to do, already in sync."), j->court);
@@ -1361,8 +1390,13 @@ static int basculer(jeu_t *j)
 /* START : Envois et Récupérations ; ignore Conflits et Doublons ; une confirmation pour les écrasements. */
 static int tout_synchroniser(void)
 {
-    char q[1200];
-    int i, ecrase = 0, envois = 0, recups = 0, ignores = 0, ok_ecraser = 1, total = 0, fait = 0;
+    char q[1200], premier[200] = "";
+    int i, ecrase = 0, envois = 0, recups = 0, ignores = 0, echecs = 0, ok_ecraser = 1, total = 0, fait = 0;
+
+    if (!serveur_lu) {
+        snprintf(message, sizeof message, "%s", T("Serveur non lu : appuyez sur \xEE\x80\x83 pour réessayer.", "Server not read: press \xEE\x80\x83 to try again."));
+        return 0;
+    }
 
     snprintf(q, sizeof q, "%s", T("Ces sauvegardes de la 3DS seront remplacées par la version du serveur (copie de sécurité faite avant) :\n\n",
                                   "These 3DS saves will be replaced by the server version (backup copy made first):\n\n"));
@@ -1391,14 +1425,19 @@ static int tout_synchroniser(void)
         int faire_recup = j->etat == A_RECUPERER && (ok_ecraser || !j->a_local);
         if (faire_envoi || faire_recup)
             progression(++fait, total, "%s\n%s", faire_envoi ? T("Envoi", "Upload") : T("Récupération", "Download"), j->court);
-        if (faire_envoi) envois += envoyer(j);
-        else if (faire_recup) recups += recuperer(j);
-        else if (j->etat == CONFLIT || j->etat == DOUBLON) ignores++;
-        if (faire_envoi || faire_recup) lire_local(j);
+        if (faire_envoi || faire_recup) {
+            int ok = faire_envoi ? envoyer(j) : recuperer(j);
+            envois += faire_envoi && ok;
+            recups += faire_recup && ok;
+            if (!ok && !echecs++) snprintf(premier, sizeof premier, "%.199s", message); /* « jeu : raison » */
+            lire_local(j);
+        } else if (j->etat == CONFLIT || j->etat == DOUBLON) ignores++;
     }
-    snprintf(q, sizeof q, "%.200s", message); /* message de la dernière action : utile seulement si une action a échoué */
-    snprintf(message, sizeof message, T("%d envoi(s), %d récupération(s), %d ignoré(s)%s%s", "%d upload(s), %d download(s), %d skipped%s%s"),
-             envois, recups, ignores, envois + recups < total ? T("\nDernier : ", "\nLast: ") : "", envois + recups < total ? q : "");
+    /* Résumé, puis le premier échec : le message de la dernière action ne dit rien des autres. */
+    snprintf(message, sizeof message, T("%d envoi(s), %d récupération(s)", "%d upload(s), %d download(s)"), envois, recups);
+    if (echecs) snprintf(message + strlen(message), sizeof message - strlen(message), T(", %d échec(s)", ", %d failed"), echecs);
+    if (ignores) snprintf(message + strlen(message), sizeof message - strlen(message), T(", %d ignoré(s)", ", %d skipped"), ignores);
+    if (echecs) snprintf(message + strlen(message), sizeof message - strlen(message), "\n%s%s", echecs > 1 ? T("Premier échec : ", "First failure: ") : "", premier);
     return total > 0;
 }
 
@@ -1417,7 +1456,7 @@ int main(void)
     }
     anglais = langue != CFG_LANGUAGE_FR;
     if (migrer_dossier(ANCIEN, DOSSIER) == 1)
-        snprintf(message, sizeof message, T("Réglages et Bases repris de %s.", "Settings and bases taken from %s."), ANCIEN);
+        snprintf(message, sizeof message, T("Réglages repris de %s.", "Settings taken from %s."), ANCIEN);
     snprintf(cfg.roms, sizeof cfg.roms, "sdmc:/roms/nds");
     snprintf(cfg.saves, sizeof cfg.saves, "sdmc:/roms/nds/saves");
     snprintf(cfg.roms_gb, sizeof cfg.roms_gb, "sdmc:/roms/gb");   /* TWiLight : .sav à côté des ROM */
@@ -1435,7 +1474,7 @@ int main(void)
             ecran_texte(6, 4, 0.55f, BLANC, 0, "3dssavesync");
             ecran_bas();
             nb_boutons = 0;
-            ecran_paragraphe(16, 70, 0.55f, C_ROUGE, 288, T("Échec de l'initialisation du réseau.", "Network setup failed."));
+            ecran_paragraphe(16, 70, 0.55f, C_ROUGE, 288, T("Démarrage du réseau impossible. Redémarrez la 3DS, puis relancez 3dssavesync.", "Network start failed. Restart the 3DS, then start 3dssavesync again."));
             fond_barre(1);
             ligne_touches(&b, 1, 240 - HAUTEUR_TOUCHE - 4, 0);
             ecran_finir();

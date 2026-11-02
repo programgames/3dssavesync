@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -236,11 +238,12 @@ func adressesLocales() []string {
 // 3dssavesync serve : le serveur local, avec le jeton et le dossier de config.json.
 func commandeServe(config string) (int, error) {
 	var cfg Config
-	if err := lireJSON(config, &cfg); err != nil {
+	if err := lireConfig(config, &cfg); err != nil {
 		return 1, err
 	}
 	if cfg.ServeurLocal == nil {
-		return 1, fmt.Errorf("%s", tr("pas de serveur local dans config.json (lance l'assistant)", "no local server in config.json (run the assistant)"))
+		return 1, fmt.Errorf("%s", tr("pas de serveur local dans la configuration : choisissez « Serveur local sur ce PC » dans « 3dssavesync réglages ».",
+			"no local server in the configuration: choose \"Local server on this PC\" in \"3dssavesync settings\"."))
 	}
 	data := cfg.ServeurLocal.Donnees
 	if data == "" {
@@ -252,5 +255,17 @@ func commandeServe(config string) (int, error) {
 	(&Session{dossier: filepath.Dir(config)}).journal(fmt.Sprintf("serveur local : port %d, données %s", cfg.ServeurLocal.Port, data))
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.ServeurLocal.Port), Handler: &Serveur{data: data, jeton: cfg.Jeton},
 		ReadHeaderTimeout: 30 * time.Second}
-	return 1, srv.ListenAndServe()
+	err := srv.ListenAndServe()
+	var errno syscall.Errno
+	if errors.Is(err, syscall.EADDRINUSE) || errors.As(err, &errno) && errno == 10048 { // WSAEADDRINUSE
+		// Démarrage à l'ouverture de session alors qu'il tourne déjà : rien à signaler.
+		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", cfg.ServeurLocal.Port)
+		if testerServeur(&cfg) == nil {
+			(&Session{dossier: filepath.Dir(config)}).journal("serveur local déjà en marche")
+			return 0, nil
+		}
+		return 1, fmt.Errorf(tr("le port %d est déjà pris par un autre programme : le serveur local ne démarre pas. Choisissez un autre port dans « 3dssavesync réglages », puis entrez la nouvelle adresse sur la 3DS.",
+			"port %d is already used by another program: the local server does not start. Choose another port in \"3dssavesync settings\", then enter the new address on the 3DS."), cfg.ServeurLocal.Port)
+	}
+	return 1, err
 }

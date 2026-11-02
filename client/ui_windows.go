@@ -142,8 +142,12 @@ func notifierSysteme(texte string) {
 	copy(n.SzTip[:127], syscall.StringToUTF16("3dssavesync"))
 	copy(n.SzInfoTitle[:63], syscall.StringToUTF16("3dssavesync"))
 	info := syscall.StringToUTF16(texte)
-	if len(info) > 255 {
-		info = append(info[:254], 0)
+	if len(info) > 256 { // 255 caractères au plus : coupé avec « … », jamais au milieu d'une paire UTF-16
+		n := 254
+		if info[n-1] >= 0xD800 && info[n-1] < 0xDC00 {
+			n--
+		}
+		info = append(info[:n], '…', 0)
 	}
 	copy(n.SzInfo[:], info)
 	notif := shell32.NewProc("Shell_NotifyIconW")

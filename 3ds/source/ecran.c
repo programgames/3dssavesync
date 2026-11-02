@@ -77,8 +77,8 @@ float ecran_texte(float x, float y, float taille, u32 couleur, float largeur, co
     return l;
 }
 
-/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. */
-float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s)
+/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. dessiner = 0 : mesure. */
+static float paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s, int dessiner)
 {
     char ligne[256];
     float interligne = fontGetInfo(NULL)->lineFeed * taille, h = 0;
@@ -93,13 +93,20 @@ float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeu
         if (s[n] && s[n] != '\n' && coupe) n = coupe; /* ligne trop longue : coupée au dernier espace */
         memcpy(ligne, s, n);
         ligne[n] = '\0';
-        ecran_texte(x, y + h, taille, couleur, largeur, ligne);
+        if (dessiner) ecran_texte(x, y + h, taille, couleur, largeur, ligne);
         h += interligne;
         s += n;
         if (*s == ' ' || *s == '\n') s++;
     }
     return h;
 }
+
+float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s)
+{
+    return paragraphe(x, y, taille, couleur, largeur, s, 1);
+}
+
+float ecran_hauteur(float taille, float largeur, const char *s) { return paragraphe(0, 0, taille, 0, largeur, s, 0); }
 
 void ecran_icone(const u16 *pixels, int l, int h, float x, float y, float echelle)
 {

@@ -157,7 +157,7 @@ func TestAssistant(t *testing.T) {
 	if strings.Contains(sortie.String(), "jeton-test") {
 		t.Error("le jeton ne doit jamais s'afficher")
 	}
-	if !strings.Contains(sortie.String(), "401") || !strings.Contains(sortie.String(), "Connexion réussie") {
+	if !strings.Contains(sortie.String(), "refuse ce jeton") || !strings.Contains(sortie.String(), "Connexion réussie") {
 		t.Errorf("mauvais jeton refusé, puis connexion réussie attendus :\n%s", sortie.String())
 	}
 	var cfg Config

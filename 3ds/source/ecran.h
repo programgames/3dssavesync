@@ -27,6 +27,9 @@ float ecran_largeur(float taille, const char *s);
 /* Texte sur plusieurs lignes, retour à la ligne avant largeur. Hauteur dessinée. */
 float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s);
 
+/* Hauteur qu'aurait ce paragraphe, sans le dessiner. */
+float ecran_hauteur(float taille, float largeur, const char *s);
+
 /* Icône en RGB565 ligne par ligne (l, h <= 64), agrandie par echelle. */
 void ecran_icone(const u16 *pixels, int l, int h, float x, float y, float echelle);
 

@@ -93,7 +93,7 @@ func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
 		fmt.Println(adresse)
 	} else if err := ouvrirNavigateur(adresse); err != nil {
 		fmt.Println(adresse)
-		notifier(tr("Ouvre cette adresse dans ton navigateur : ", "Open this address in your browser: ") + adresse)
+		notifier(tr("Ouvrez cette adresse dans le navigateur : ", "Open this address in the browser: ") + adresse)
 	}
 	// Fin : bouton « Terminer », ou plus de signe de vie de la page (onglet fermé) pendant 2 minutes.
 	for {
@@ -168,8 +168,8 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reponse = map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
 	case "api/reparer":
 		var cfg Config
-		if err := lireJSON(a.config, &cfg); err != nil {
-			reponse = map[string]any{"Erreur": err.Error()}
+		if err := lireConfig(a.config, &cfg); err != nil {
+			reponse = map[string]any{"Erreur": texteErreur(err)}
 		} else {
 			reponse = map[string]any{"Lignes": reparer(&cfg, lanceurDe(&cfg))}
 		}
@@ -186,13 +186,6 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(reponse)
-}
-
-func texteErreur(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
 }
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
@@ -248,7 +241,7 @@ func emulateurDe(x EmuWeb) (*Emulateur, error) {
 		return nil, fmt.Errorf(tr("%s : la ligne de commande doit contenir {rom}", "%s: the command line must contain {rom}"), x.Nom)
 	}
 	if len(x.Systemes) == 0 {
-		return nil, fmt.Errorf(tr("%s : coche au moins un Système", "%s: tick at least one system"), x.Nom)
+		return nil, fmt.Errorf(tr("%s : cochez au moins un système", "%s: tick at least one system"), x.Nom)
 	}
 	e.Extension = strings.TrimSpace(x.Extension)
 	if e.Extension != "" && !strings.HasPrefix(e.Extension, ".") {
@@ -262,7 +255,7 @@ func emulateurDe(x EmuWeb) (*Emulateur, error) {
 func apercu(x EmuWeb) map[string]string {
 	e, err := emulateurDe(x)
 	if err == nil && len(x.Systemes) == 0 {
-		err = fmt.Errorf("%s", tr("aucun Système", "no system"))
+		err = fmt.Errorf("%s", tr("aucun système", "no system"))
 	}
 	if err != nil {
 		return map[string]string{"Erreur": err.Error()}
@@ -335,7 +328,7 @@ func (a *AssistantWeb) ouvrir(nom string) map[string]any {
 		return map[string]any{"Ok": false, "Message": tr("Émulateur absent de la configuration : ", "Emulator missing from the configuration: ") + nom}
 	}
 	if err := ouvrirDetache(lanceurDe(&cfg), []string{"launch", "--config", a.config, nom}); err != nil {
-		return map[string]any{"Ok": false, "Message": err.Error()}
+		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
 	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre : ses jeux sont synchronisés avant, puis envoyés à sa fermeture.",
 		"%s is opening: its games are synced first, then uploaded when it closes."), nom)}
@@ -348,11 +341,8 @@ func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
 	if c.Jeton != "" {
 		cfg.Jeton = c.Jeton
 	}
-	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
-		return map[string]any{"Ok": false, "Message": tr("Entre l'adresse du serveur (https://…).", "Enter the server address (https://…).")}
-	}
 	if err := testerServeur(&cfg); err != nil {
-		return map[string]any{"Ok": false, "Message": tr("Connexion impossible : ", "Cannot connect: ") + err.Error()}
+		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
 	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connection OK.")}
 }
@@ -385,7 +375,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			cfg.Jeton = c.Jeton
 		}
 		if err := testerServeur(&cfg); err != nil {
-			return nil, fmt.Errorf(tr("serveur injoignable (%v) : rien n'est écrit", "server unreachable (%v): nothing is written"), err)
+			return nil, fmt.Errorf("%s %s", texteErreur(err), tr("Rien n'est écrit.", "Nothing is written."))
 		}
 	}
 
@@ -395,7 +385,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			continue
 		}
 		if emus[x.Nom] != nil {
-			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : garde-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
+			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : gardez-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
 		}
 		e, err := emulateurDe(x)
 		if err != nil {

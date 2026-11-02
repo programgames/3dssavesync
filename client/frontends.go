@@ -130,7 +130,7 @@ func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []
 			rapport = append(rapport, fmt.Sprintf(tr("%s : déjà en place", "%s: already set up"), e.Nom))
 			continue
 		case original == "":
-			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox (ajoute-le dans LaunchBox, puis relance la réparation)",
+			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox (ajoutez-le dans LaunchBox, puis relancez la réparation)",
 				"%s: emulator not in LaunchBox (add it in LaunchBox, then run the repair again)"), e.Nom))
 			continue
 		}
@@ -369,16 +369,16 @@ func reparer(cfg *Config, lanceur string) []string {
 		o, err := os.ReadFile(f)
 		switch {
 		case emulateurActif("LaunchBox") || emulateurActif("BigBox"):
-			rapport = append(rapport, tr("LaunchBox : ouvert, rien n'est fait. Ferme LaunchBox et BigBox, puis relance la réparation.",
+			rapport = append(rapport, tr("LaunchBox : ouvert, rien n'est fait. Fermez LaunchBox et BigBox, puis relancez la réparation.",
 				"LaunchBox: open, nothing done. Close LaunchBox and BigBox, then run the repair again."))
 		case err != nil:
-			rapport = append(rapport, "LaunchBox : "+err.Error())
+			rapport = append(rapport, "LaunchBox : "+texteErreur(err))
 		default:
 			nouveau, r := launchbox(string(o), d, lanceur, lb)
 			rapport = append(rapport, prefixer("LaunchBox", r)...)
 			if nouveau != string(o) {
 				if err := remplacerFichier(f, []byte(nouveau)); err != nil {
-					rapport = append(rapport, "LaunchBox : "+err.Error())
+					rapport = append(rapport, "LaunchBox : "+texteErreur(err))
 				}
 			}
 		}
@@ -388,7 +388,7 @@ func reparer(cfg *Config, lanceur string) []string {
 		s, _ := os.ReadFile(fs)
 		r, _ := os.ReadFile(fr)
 		if emulateurActif("ES-DE") {
-			rapport = append(rapport, tr("ES-DE : ouvert, rien n'est fait. Ferme ES-DE, puis relance la réparation.",
+			rapport = append(rapport, tr("ES-DE : ouvert, rien n'est fait. Fermez ES-DE, puis relancez la réparation.",
 				"ES-DE: open, nothing done. Close ES-DE, then run the repair again."))
 		} else {
 			ns, nr, rap := esde(string(s), string(r), lanceur, emus)
@@ -396,7 +396,7 @@ func reparer(cfg *Config, lanceur string) []string {
 			for f, c := range map[string][2]string{fs: {string(s), ns}, fr: {string(r), nr}} {
 				if c[0] != c[1] {
 					if err := remplacerFichier(f, []byte(c[1])); err != nil {
-						rapport = append(rapport, "ES-DE : "+err.Error())
+						rapport = append(rapport, "ES-DE : "+texteErreur(err))
 					}
 				}
 			}
@@ -419,7 +419,7 @@ func prefixer(p string, l []string) []string {
 func avertissementEmuDeck() string {
 	o, err := os.ReadFile(maison("emudeck", "settings.sh"))
 	if err == nil && regexp.MustCompile(`(?m)^cloud_sync_status="?true"?`).Match(o) {
-		return tr("EmuDeck : CloudSync semble actif. Désactive-le pour DS, GB, GBA et 3DS : deux outils enverraient les mêmes sauvegardes.",
+		return tr("EmuDeck : CloudSync semble actif. Désactivez-le pour DS, GB, GBA et 3DS : deux outils enverraient les mêmes sauvegardes.",
 			"EmuDeck: CloudSync seems active. Turn it off for DS, GB, GBA and 3DS: two tools would upload the same saves.")
 	}
 	return ""

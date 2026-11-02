@@ -7,18 +7,24 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -483,6 +489,8 @@ func TestLanceur(t *testing.T) {
 		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "inutilise.exe", Sauvegardes: map[string]string{"DS": saves}}}})
 	reponses = []string{"Non"}
 	principal([]string{"run", "--config", hors, rom})
+	verifier(strings.Contains(strings.Join(questions, ""), "Le serveur refuse la connexion") && !strings.Contains(strings.Join(questions, ""), "dial tcp"),
+		"message clair, sans le texte de Go : "+strings.Join(questions, ""))
 	verifier(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
 	verifier(!joue, "melonDS non lancé")
 
@@ -774,5 +782,53 @@ func TestSRAM(t *testing.T) {
 		if err != nil || len(l.SRAM) != c.sram || len(l.Brut) != c.taille {
 			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.systeme, c.taille, c.sram, l, err)
 		}
+	}
+}
+
+// Erreurs du réseau, du serveur et des fichiers -> texte pour l'utilisateur ; global = un seul message pour la passe.
+func TestClasser(t *testing.T) {
+	type cas struct {
+		err    error
+		texte  string
+		global bool
+	}
+	transport := func(err error) error { return &neturl.Error{Op: "Get", URL: "https://x/saves", Err: err} }
+	l := []cas{
+		{&erreurHTTP{"GET /saves", 401}, "Le serveur répond, mais refuse ce jeton. Copiez le jeton exact du serveur.", true},
+		{&erreurHTTP{"GET /saves", 404}, "Cette adresse ne mène pas à un serveur 3dssavesync. Vérifiez l'adresse.", true},
+		{&erreurHTTP{"PUT /saves/IRBF", 413}, "sauvegarde trop grande pour le serveur", false},
+		{&erreurHTTP{"PUT /saves/IRBF", 400}, "le serveur refuse cette sauvegarde", false},
+		{&erreurHTTP{"GET /saves", 502}, "Le serveur a un problème interne.", true},
+		{&erreurHTTP{"GET /saves", 418}, "Réponse inattendue du serveur.", true},
+		{transport(&net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}), "Adresse du serveur introuvable", true},
+		{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}), "Le serveur refuse la connexion", true},
+		{transport(os.ErrDeadlineExceeded), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
+		{transport(io.ErrUnexpectedEOF), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
+		{transport(&tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}), "certificat du serveur invalide", true},
+		{fmt.Errorf("copie de sécurité impossible : %w", &fs.PathError{Op: "write", Path: "c.sav", Err: syscall.ENOSPC}), "disque plein", false},
+		{&fs.PathError{Op: "open", Path: "x/a.sav", Err: fs.ErrPermission}, "accès refusé à x/a.sav", false},
+		{errors.New("jeu jamais lancé dans Azahar"), "jeu jamais lancé dans Azahar", false},
+	}
+	if runtime.GOOS == "windows" {
+		l = append(l,
+			cas{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier : fermez l'émulateur", false},
+			cas{&os.LinkError{Op: "rename", Old: "a.tmp", New: "a.sav", Err: syscall.Errno(112)}, "disque plein", false},
+			cas{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connectex", syscall.Errno(10061))}), "Le serveur refuse la connexion", true})
+	}
+	for _, c := range l {
+		if texte, global := classer(c.err); !strings.Contains(texte, c.texte) || global != c.global {
+			t.Errorf("%v : %q (global %v), attendu %q (global %v)", c.err, texte, global, c.texte, c.global)
+		}
+	}
+	if texteErreur(nil) != "" {
+		t.Error("sans erreur : texte vide attendu")
+	}
+
+	// Frontend qui lance un jeu avant l'assistant : pas de « The system cannot find the file specified ».
+	reinitialiser()
+	principal([]string{"run", "--config", filepath.Join(t.TempDir(), "absent", "config.json"), "x.nds"})
+	if len(questions) != 1 || !strings.Contains(questions[0], "3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync »") ||
+		!strings.Contains(questions[0], pageAide) {
+		t.Errorf("configuration absente : %q", questions)
 	}
 }

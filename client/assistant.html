@@ -132,13 +132,14 @@ const T = {
   rom: {{t "à côté de la ROM" "next to the ROM"}},
   roms: {{t "dossier des ROM (facultatif)" "ROM folder (optional)"}},
   inchange: {{t "inchangé" "unchanged"}},
-  attente: {{t "Patiente…" "Please wait…"}},
+  attente: {{t "Patientez…" "Please wait…"}},
   fini: {{t "Terminé." "Done."}},
-  ferme: {{t "Tu peux fermer cet onglet." "You can close this tab."}},
+  ferme: {{t "Fermez cet onglet." "Close this tab."}},
+  arrete: {{t "Le programme 3dssavesync s'est arrêté. Relancez-le." "The 3dssavesync program has stopped. Start it again."}},
   erreur: {{t "Erreur : " "Error: "}},
   coche: {{t "Utiliser" "Use"}},
   ligne: {{t "Ligne de commande" "Command line"}},
-  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du Système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
+  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
   extension: {{t "Extension de la sauvegarde" "Save extension"}},
   processus: {{t "Nom du processus (facultatif)" "Process name (optional)"}},
   processusAide: {{t "défaut : nom de l'exécutable" "default: executable name"}},
@@ -154,8 +155,9 @@ const $ = id => document.getElementById(id);
 let etat;
 
 async function api(chemin, corps) {
-  const r = await fetch(racine + "api/" + chemin, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps || {})});
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  // Programme arrêté (onglet resté ouvert) : « Failed to fetch » ou 404, remplacés par ce qu'il faut faire.
+  const r = await fetch(racine + "api/" + chemin, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps || {})}).catch(() => null);
+  if (!r || !r.ok) throw new Error(T.arrete);
   return r.json();
 }
 

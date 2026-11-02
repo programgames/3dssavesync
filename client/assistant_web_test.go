@@ -55,7 +55,7 @@ func TestAssistantWeb(t *testing.T) {
 
 	var test map[string]any
 	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/tester", `{"URL":"`+serveur.URL+`","Jeton":"faux"}`).Body.Bytes(), &test)
-	if test["Ok"] != false || !strings.Contains(test["Message"].(string), "401") {
+	if test["Ok"] != false || !strings.Contains(test["Message"].(string), "refuse ce jeton") {
 		t.Errorf("mauvais jeton : %v", test)
 	}
 
