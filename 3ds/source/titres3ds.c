@@ -107,26 +107,45 @@ static void ascii(const u16 *src, size_t max, char *nom, size_t n)
     nom[j] = '\0';
 }
 
-int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n)
+/* SMDH du titre (0x36C0 octets) : ExeFS:/icon de ARCHIVE_SAVEDATA_AND_CONTENT (méthode de FBI). 0 si lu. */
+static int lire_smdh(u64 id, FS_MediaType media, u16 *smdh)
 {
-    /* ExeFS:/icon de ARCHIVE_SAVEDATA_AND_CONTENT (méthode de FBI). SMDH : 16 titres de 0x200 octets à 0x08,
-     * titre court (0x40 caractères UTF-16) en tête de chacun. */
     static const u32 fichier[5] = { 0, 0, 2, 0x6E6F6369, 0 }; /* "icon" */
     u32 archive[4] = { (u32)id, (u32)(id >> 32), media, 0 };
-    u16 *smdh = malloc(0x36C0);
     Handle f;
     u32 lu = 0;
     int ok = 0;
-    if (!smdh) return -1;
     if (R_SUCCEEDED(FSUSER_OpenFileDirectly(&f, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive },
                                             (FS_Path){ PATH_BINARY, sizeof fichier, fichier }, FS_OPEN_READ, 0))) {
         ok = R_SUCCEEDED(FSFILE_Read(f, &lu, 0, smdh, 0x36C0)) && lu == 0x36C0 && !memcmp(smdh, "SMDH", 4);
         FSFILE_Close(f);
     }
+    return ok ? 0 : -1;
+}
+
+int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n)
+{
+    /* SMDH : 16 titres de 0x200 octets à 0x08, titre court (0x40 caractères UTF-16) en tête de chacun. */
+    u16 *smdh = malloc(0x36C0);
+    int ok = smdh && lire_smdh(id, media, smdh) == 0;
     if (ok) {
         const u16 *t = smdh + (8 + 0x200 * (langue & 0xF)) / 2;
         if (!t[0]) t = smdh + (8 + 0x200 * 1) / 2; /* titre vide dans cette langue : anglais */
         ascii(t, 0x40, nom, n);
+    }
+    free(smdh);
+    return ok ? 0 : -1;
+}
+
+int titre_icone(u64 id, FS_MediaType media, u16 *pixels)
+{
+    /* Grande icône du SMDH à 0x24C0 : 48×48 RGB565 en tuiles 8×8, ordre de Morton dans chaque tuile. */
+    u16 *smdh = malloc(0x36C0);
+    int ok = smdh && lire_smdh(id, media, smdh) == 0, i;
+    for (i = 0; ok && i < 48 * 48; i++) {
+        int tuile = i >> 6, k = i & 63;
+        int x = (tuile % 6) * 8 + ((k & 1) | (k >> 1 & 2) | (k >> 2 & 4)), y = (tuile / 6) * 8 + ((k >> 1 & 1) | (k >> 2 & 2) | (k >> 3 & 4));
+        pixels[y * 48 + x] = smdh[0x24C0 / 2 + i];
     }
     free(smdh);
     return ok ? 0 : -1;

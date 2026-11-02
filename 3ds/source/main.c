@@ -13,6 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "cle.h"
+#include "ecran.h"
 #include "etat.h"
 #include "fichiers.h"
 #include "net.h"
@@ -23,11 +24,12 @@
 #define ANCIEN "sdmc:/3ds/nds-save-sync" /* nom avant la v3 : réglages et Bases repris au premier lancement */
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Sauvegardes des forwarders mGBA */
 #define MAX_JEUX 512 /* ponytail: tableau fixe ; au-delà de 512 ROM, les suivantes sont ignorées */
-#define LIGNES 27
+#define LIGNES 27 /* écrans en console : lignes de la liste */
+#define LIGNES_HAUT 14 /* écran principal dessiné : lignes de la liste */
 #define MASQUE -1   /* ni Sauvegarde locale ni Version courante : pas affiché */
 #define DOUBLON 100 /* plusieurs ROM pour une Clé (ADR 0005) */
 
-static int anglais; /* langue de la console : français, sinon anglais (sans accents : police de la console) */
+static int anglais; /* langue de la console : français, sinon anglais (sans accents en console : police 8×8) */
 static u8 langue;   /* CFG_LANGUAGE_* : titre des jeux 3DS dans cette langue */
 #define T(fr, en) (anglais ? (en) : (fr))
 
@@ -36,6 +38,7 @@ typedef struct {
     systeme_t systeme;
     char rom[600];  /* ROM (icône DS) ; vide pour la 3DS */
     char sav[600];  /* fichier de Sauvegarde ; vide pour la 3DS (archive) */
+    char sav_rom[600]; /* GB/GBA : sa Sauvegarde sans forwarder mGBA (dossier des sauvegardes) */
     u64 titre;      /* 3DS : title ID */
     FS_MediaType media; /* 3DS : SD ou cartouche */
     char nom[256];  /* nom de la ROM sans extension = nom du .sav */
@@ -235,17 +238,38 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
         j->systeme = s;
         snprintf(j->nom, sizeof j->nom, "%.*s", (int)(ext - e->d_name), e->d_name);
         snprintf(j->rom, sizeof j->rom, "%s", chemin);
-        snprintf(j->sav, sizeof j->sav, "%s/%.*s.sav", saves, (int)(ext - e->d_name), e->d_name);
-        if (s != SYS_DS) { /* forwarder mGBA : sa Sauvegarde prime si elle existe (docs/guide-forwarders-mgba.md) */
-            char f[600];
-            snprintf(f, sizeof f, FORWARDERS "/%.*s.sav", (int)(ext - e->d_name), e->d_name);
-            if (access(f, F_OK) == 0) snprintf(j->sav, sizeof j->sav, "%s", f);
-        }
+        snprintf(j->sav_rom, sizeof j->sav_rom, "%s/%.*s.sav", saves, (int)(ext - e->d_name), e->d_name);
         nom_court(j->nom, j->court, sizeof j->court);
         j->nb_roms = 1;
         if (nb_jeux % 10 == 0) progression(T("Lecture des ROM : %d jeu(x)...", "Reading ROMs: %d game(s)..."), nb_jeux);
     }
     if (d) closedir(d);
+}
+
+/* Sauvegarde locale d'un Jeu : son fichier (forwarder mGBA s'il existe, docs/guide-forwarders-mgba.md) et son Hash
+ * (SRAM seule pour GB/GBA, ADR 0008 ; /main pour la 3DS). Appelée au scan, et après une action sur ce seul Jeu. */
+static void lire_local(jeu_t *j)
+{
+    unsigned char *octets;
+    size_t taille;
+    j->a_local = j->vide = 0;
+    j->local.taille = 0;
+    j->hash_local[0] = '\0';
+    if (j->systeme == SYS_DS) snprintf(j->sav, sizeof j->sav, "%s", j->sav_rom);
+    else if (j->systeme != SYS_3DS) {
+        char f[600];
+        snprintf(f, sizeof f, FORWARDERS "/%s.sav", j->nom);
+        snprintf(j->sav, sizeof j->sav, "%s", access(f, F_OK) == 0 ? f : j->sav_rom);
+    }
+    if (j->nb_roms != 1 || lire_sauvegarde(j, &octets, &taille)) return;
+    if (j->systeme != SYS_3DS) {
+        taille = sram_taille(j->systeme, taille);
+        j->vide = sauvegarde_vide(j->systeme, octets, taille);
+    }
+    hash_hex(octets, taille, j->hash_local);
+    j->local.taille = taille;
+    j->a_local = 1;
+    free(octets);
 }
 
 /* Les jeux 3DS de titres.ini dont l'archive existe (jeu installé ou cartouche insérée, ADR 0009). */
@@ -284,18 +308,8 @@ static void scanner(void)
     scanner_dossier(SYS_GBA, cfg.roms_gba, cfg.saves_gba[0] ? cfg.saves_gba : cfg.roms_gba);
     avant = nb_jeux;
     for (i = 0; i < avant; i++) {
-        jeu_t *j = &jeux[i];
-        unsigned char *octets;
-        size_t taille;
-        progression(T("Lecture des sauvegardes : %d/%d\n\n%.38s", "Reading saves: %d/%d\n\n%.38s"), i + 1, avant, j->court);
-        if (j->nb_roms == 1 && lire_sauvegarde(j, &octets, &taille) == 0) {
-            taille = sram_taille(j->systeme, taille);
-            hash_hex(octets, taille, j->hash_local);
-            j->local.taille = taille;
-            j->a_local = 1;
-            j->vide = sauvegarde_vide(j->systeme, octets, taille);
-            free(octets);
-        }
+        progression(T("Lecture des sauvegardes : %d/%d\n\n%.38s", "Reading saves: %d/%d\n\n%.38s"), i + 1, avant, jeux[i].court);
+        lire_local(&jeux[i]);
     }
     scanner_3ds();
 }
@@ -376,6 +390,18 @@ static void calculer_etats(void)
     qsort(visibles, nb_visibles, sizeof *visibles, comparer);
 }
 
+/* Après une action : le Jeu touché est déjà relu (lire_local), seul le serveur change. */
+static int relire_serveur(void)
+{
+    int r;
+    progression(T("Lecture du serveur...", "Reading the server..."));
+    r = lire_serveur();
+    if (r == 0) calculer_etats();
+    else nb_visibles = 0;
+    return r;
+}
+
+/* Tout relire : ROM, Sauvegardes, serveur (Y, réglages modifiés). */
 static int rafraichir(void)
 {
     int r;
@@ -526,101 +552,271 @@ static int recuperer(jeu_t *j)
 #define GRIS "\x1b[1m\x1b[30m"
 #define SURLIGNE "\x1b[44m"
 
-static const char *couleur(int e)
-{
-    switch (e) {
-    case A_ENVOYER: return JAUNE;
-    case A_RECUPERER: return CYAN;
-    case CONFLIT: return ROUGE;
-    case DOUBLON: return GRIS;
-    }
-    return VERT;
-}
-
-static const char *libelle(int e)
-{
-    switch (e) {
-    case A_JOUR: return T("  a jour  ", "  in sync ");
-    case A_ENVOYER: return T("^ ENVOYER ", "^ UPLOAD  ");
-    case A_RECUPERER: return T("v RECUPER.", "v DOWNLOAD");
-    case CONFLIT: return T("! CONFLIT ", "! CONFLICT");
-    case DOUBLON: return T("= doublon ", "= duplic. ");
-    }
-    return "?         ";
-}
-
-/* Icône 32×32 du jeu, lue dans la ROM et dessinée directement dans l'écran du bas (console en RGB565).
+/* Icône 32×32 d'un jeu DS, lue dans la ROM, en RGB565 ligne par ligne. 0 si lue.
  * Bannière NDS : son offset est à 0x68 de l'en-tête ; tuiles 4 bits à +0x20, palette BGR555 à +0x220. */
-static void dessiner_icone(const jeu_t *j, int x0, int y0)
+#define FOND_ICONE 0x10C3 /* couleur 0 de la palette (transparente) : fond de l'écran du bas (0x14181E) */
+static int icone_ds(const jeu_t *j, u16 *pixels)
 {
-    char chemin[600];
     unsigned char o[4], icone[512 + 32];
-    u16 larg, haut_fb, *fb;
     u32 offset;
     FILE *f;
     int t, l, k;
 
-    if (j->systeme != SYS_DS) return; /* seules les ROM DS ont une bannière avec icône */
-    snprintf(chemin, sizeof chemin, "%s", j->rom);
-    if (!(f = fopen(chemin, "rb"))) return;
+    if (j->systeme != SYS_DS || !(f = fopen(j->rom, "rb"))) return -1; /* seules les ROM DS ont une bannière */
     offset = fseek(f, 0x68, SEEK_SET) == 0 && fread(o, 1, 4, f) == 4 ? o[0] | o[1] << 8 | o[2] << 16 | (u32)o[3] << 24 : 0;
     if (!offset || fseek(f, offset + 0x20, SEEK_SET) || fread(icone, 1, sizeof icone, f) != sizeof icone) {
         fclose(f);
-        return;
+        return -1;
     }
     fclose(f);
-    fb = (u16 *)gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, &larg, &haut_fb); /* écran tourné : larg = 240 */
-    for (t = 0; t < 16; t++)                                                /* 4×4 tuiles de 8×8 */
+    for (t = 0; t < 16; t++) /* 4×4 tuiles de 8×8 */
         for (l = 0; l < 8; l++)
             for (k = 0; k < 8; k++) {
                 int idx = (icone[t * 32 + l * 4 + k / 2] >> ((k & 1) * 4)) & 0xF;
-                int x = x0 + (t % 4) * 8 + k, y = y0 + (t / 4) * 8 + l;
                 u16 c = icone[512 + idx * 2] | icone[512 + idx * 2 + 1] << 8;
-                if (idx) /* couleur 0 = transparente */
-                    fb[x * larg + (larg - 1 - y)] = (c & 0x1F) << 11 | ((c >> 5) & 0x1F) << 6 | ((c >> 10) & 0x1F);
+                pixels[((t / 4) * 8 + l) * 32 + (t % 4) * 8 + k] =
+                    idx ? (c & 0x1F) << 11 | ((c >> 5) & 0x1F) << 6 | ((c >> 10) & 0x1F) : FOND_ICONE;
             }
+    return 0;
+}
+
+/* Écrans encore en console (Conflit) : icône écrite directement dans l'écran du bas (RGB565, tourné). */
+static void dessiner_icone(const jeu_t *j, int x0, int y0)
+{
+    u16 p[32 * 32], larg, haut_fb, *fb;
+    int x, y;
+    if (icone_ds(j, p)) return;
+    fb = (u16 *)gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, &larg, &haut_fb); /* écran tourné : larg = 240 */
+    for (y = 0; y < 32; y++)
+        for (x = 0; x < 32; x++)
+            if (p[y * 32 + x] != FOND_ICONE) fb[(x0 + x) * larg + (larg - 1 - (y0 + y))] = p[y * 32 + x];
     gfxFlushBuffers();
+}
+
+/* ---------------------------------------------------------------- écran principal (citro2d, issue #21) */
+
+#define BLANC RGB(0xE8EAED)
+#define GRIS_C RGB(0x8A929C)
+#define GRIS_F RGB(0x5A626C)
+#define C_VERT RGB(0x4CC060)
+#define C_JAUNE RGB(0xF0C040)
+#define C_CYAN RGB(0x40C8E8)
+#define C_ROUGE RGB(0xF05050)
+
+static u32 couleur_etat(int e)
+{
+    switch (e) {
+    case A_ENVOYER: return C_JAUNE;
+    case A_RECUPERER: return C_CYAN;
+    case CONFLIT: return C_ROUGE;
+    case DOUBLON: return GRIS_C;
+    }
+    return GRIS_F;
+}
+
+static const char *etat_court(int e)
+{
+    switch (e) {
+    case A_ENVOYER: return T("Envoyer", "Upload");
+    case A_RECUPERER: return T("Récupérer", "Download");
+    case CONFLIT: return T("Conflit", "Conflict");
+    case DOUBLON: return T("Doublon", "Duplicate");
+    }
+    return "ok";
+}
+
+/* Barre des touches en bas de l'écran du bas (maquette 3 de l'issue #21) : chaque touche est aussi touchable au stylet. */
+typedef struct {
+    u32 touche;
+    const char *texte;
+    int actif; /* 0 : grisée (A sans rien à faire) */
+} touche_t;
+static struct { float x, y, l; u32 touche; } boutons[8];
+static int nb_boutons;
+#define HAUTEUR_TOUCHE 22
+#define HAUT_BARRE (240 - 2 * HAUTEUR_TOUCHE - 4)
+
+/* Glyphe de la police du système (U+E000 A, E001 B, E002 X, E003 Y) à la couleur de la New 3DS, ou START / SELECT. */
+static const char *glyphe(u32 t)
+{
+    return t == KEY_A ? "\xEE\x80\x80" : t == KEY_B ? "\xEE\x80\x81" : t == KEY_X ? "\xEE\x80\x82" : t == KEY_Y ? "\xEE\x80\x83" : t == KEY_START ? "START" : "SELECT";
+}
+
+static float largeur_touche(const touche_t *t)
+{
+    int mot = t->touche & (KEY_START | KEY_SELECT);
+    return ecran_largeur(mot ? 0.36f : 0.55f, glyphe(t->touche)) + 4 + ecran_largeur(0.42f, t->texte);
+}
+
+/* Une ligne de touches à partir de y ; ecart = 0 : touches réparties sur toute la largeur. */
+static void ligne_touches(const touche_t *t, int n, float y, float ecart)
+{
+    float l[6], total = 0, x = 6;
+    int i;
+    for (i = 0; i < n; i++) total += l[i] = largeur_touche(&t[i]);
+    if (!ecart) ecart = n > 1 ? (308 - total) / (n - 1) : 0;
+    for (i = 0; i < n; i++) {
+        int mot = t[i].touche & (KEY_START | KEY_SELECT);
+        u32 c = !t[i].actif ? GRIS_F : t[i].touche == KEY_A ? RGB(0xE04848) : t[i].touche == KEY_B ? RGB(0xF0C030)
+              : t[i].touche == KEY_X ? RGB(0x4080F0) : t[i].touche == KEY_Y ? RGB(0x40B060) : GRIS_C;
+        float g = ecran_texte(x, y + (mot ? 5 : 2), mot ? 0.36f : 0.55f, c, 0, glyphe(t[i].touche));
+        ecran_texte(x + g + 4, y + 3, 0.42f, t[i].actif ? BLANC : GRIS_F, 0, t[i].texte);
+        if (nb_boutons < 8) { /* zone touchable : la touche et la moitié de l'écart de chaque côté */
+            boutons[nb_boutons].x = x - ecart / 2;
+            boutons[nb_boutons].y = y - 2;
+            boutons[nb_boutons].l = l[i] + ecart;
+            boutons[nb_boutons++].touche = t[i].touche;
+        }
+        x += l[i] + ecart;
+    }
+}
+
+/* Touche du bouton sous le stylet, 0 si aucun. */
+static u32 bouton_touche(void)
+{
+    touchPosition p;
+    int i;
+    hidTouchRead(&p);
+    for (i = 0; i < nb_boutons; i++)
+        if (p.px >= boutons[i].x && p.px < boutons[i].x + boutons[i].l && p.py >= boutons[i].y && p.py < boutons[i].y + HAUTEUR_TOUCHE)
+            return boutons[i].touche;
+    return 0;
+}
+
+/* Message des actions, sans les codes couleur de la console. */
+static void sans_ansi(const char *s, char *out, size_t n)
+{
+    size_t j = 0;
+    while (*s && j + 1 < n) {
+        if (*s == '\x1b') {
+            while (*s && *s != 'm' && *s != 'H' && *s != 'J') s++;
+            if (*s) s++;
+        } else {
+            out[j++] = *s++;
+        }
+    }
+    out[j] = '\0';
+}
+
+static void dessiner_haut(int curseur)
+{
+    static const int etats[] = { A_JOUR, DOUBLON, A_ENVOYER, A_RECUPERER, CONFLIT }; /* compteurs, de droite à gauche */
+    int i, n[5] = { 0 }, debut = curseur < LIGNES_HAUT ? 0 : curseur - LIGNES_HAUT + 1;
+    char t[48];
+    float x = 400 - 6;
+
+    for (i = 0; i < nb_visibles; i++) n[priorite(jeux[visibles[i]].etat)]++;
+    ecran_haut();
+    ecran_texte(6, 4, 0.55f, BLANC, 0, "3dssavesync");
+    for (i = 0; i < 5; i++) {
+        int e = etats[i], c = n[priorite(e)];
+        if (!c && e != A_JOUR) continue;
+        snprintf(t, sizeof t, e == A_JOUR ? T("%d à jour", "%d in sync") : e == DOUBLON ? T("%d doublon(s)", "%d duplicate(s)")
+                            : e == A_ENVOYER ? T("%d à envoyer", "%d to upload") : e == A_RECUPERER ? T("%d à récupérer", "%d to download")
+                                                                                 : T("%d conflit(s)", "%d conflict(s)"), c);
+        x -= ecran_largeur(0.45f, t);
+        ecran_texte(x, 6, 0.45f, e == A_JOUR ? C_VERT : couleur_etat(e), 0, t);
+        x -= 12;
+    }
+    ecran_rect(0, 23, 400, 1, GRIS_F);
+
+    if (!nb_visibles) ecran_paragraphe(10, 40, 0.5f, GRIS_C, 380, T("Aucun jeu à afficher.", "No game to show."));
+    for (i = debut; i < nb_visibles && i < debut + LIGNES_HAUT; i++) {
+        jeu_t *k = &jeux[visibles[i]];
+        float y = 27 + (i - debut) * 15;
+        if (i == curseur) ecran_rect(0, y - 1, 400, 15, RGB(0x24508C));
+        ecran_texte(8, y, 0.45f, i == curseur && k->etat == A_JOUR ? GRIS_C : couleur_etat(k->etat), 62, etat_court(k->etat));
+        ecran_texte(76, y, 0.45f, GRIS_C, 0, NOMS_SYSTEMES[k->systeme]);
+        ecran_texte(108, y, 0.5f, BLANC, 400 - 108 - 14, k->court);
+    }
+    if (debut > 0) ecran_texte(388, 26, 0.4f, GRIS_C, 0, "\xE2\x96\xB2");                         /* ▲ */
+    if (debut + LIGNES_HAUT < nb_visibles) ecran_texte(388, 224, 0.4f, GRIS_C, 0, "\xE2\x96\xBC"); /* ▼ */
+}
+
+/* Une ligne « libellé  valeur » des détails. */
+static float detail(float y, const char *libelle, const char *valeur)
+{
+    ecran_texte(8, y, 0.45f, GRIS_C, 0, libelle);
+    ecran_texte(108, y, 0.45f, BLANC, 204, valeur);
+    return y + 15;
+}
+
+static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
+{
+    switch (j->etat) {
+    case A_ENVOYER: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
+    case A_RECUPERER: return T("Le serveur a une version plus récente. \xEE\x80\x80 la copie sur la 3DS (copie de sécurité faite avant).",
+                               "The server has a newer version. \xEE\x80\x80 copies it to the 3DS (backup copy made first).");
+    case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 te laisse choisir la version à garder.",
+                           "Conflict: the 3DS and the server both changed since the last sync. \xEE\x80\x80 lets you choose the version to keep.");
+    case DOUBLON:
+        snprintf(t, n, T("%d ROM ont la même clé : garde-en une seule. Rien à faire ici.", "%d ROMs have the same key: keep only one. Nothing to do here."), j->nb_roms);
+        return t;
+    }
+    return T("À jour : la 3DS et le serveur ont la même sauvegarde. Rien à faire.", "In sync: the 3DS and the server have the same save. Nothing to do.");
+}
+
+static void dessiner_bas(const jeu_t *j)
+{
+    char t[600], age[24];
+    float y = 6;
+    int action = 0, gb = 0;
+    u16 icone[48 * 48];
+
+    ecran_bas();
+    nb_boutons = 0;
+    if (j) {
+        const char *b = base_de(j->cle);
+        int i3ds = j->systeme == SYS_3DS;
+        gb = j->systeme == SYS_GB || j->systeme == SYS_GBA;
+        action = j->etat == A_ENVOYER || j->etat == A_RECUPERER || j->etat == CONFLIT;
+        if (i3ds ? titre_icone(j->titre, j->media, icone) == 0 : icone_ds(j, icone) == 0)
+            ecran_icone(icone, i3ds ? 48 : 32, i3ds ? 48 : 32, 320 - 6 - 48, 6, i3ds ? 1.0f : 1.5f);
+        y += ecran_paragraphe(8, y, 0.6f, BLANC, 320 - 8 - 62, j->court);
+        ecran_texte(8, y, 0.4f, GRIS_C, 320 - 8 - 62, j->systeme == SYS_DS ? "Nintendo DS" : j->systeme == SYS_GB ? "Game Boy / Game Boy Color"
+                                                       : j->systeme == SYS_GBA ? "Game Boy Advance" : "Nintendo 3DS");
+        y = y + 14 < 58 ? 62 : y + 18; /* sous l'icône */
+
+        y += ecran_paragraphe(8, y, 0.5f, j->etat == A_JOUR ? C_VERT : couleur_etat(j->etat), 304, phrase_etat(j, t, sizeof t)) + 6;
+        y = detail(y, "3DS", !j->a_local ? T("aucune sauvegarde", "no save") : j->vide ? T("sauvegarde vierge", "blank save") : T("sauvegarde présente", "save present"));
+        format_age(j->age, age, sizeof age);
+        if (j->a_serveur) snprintf(t, sizeof t, T("envoyée par %s, %s", "sent by %s, %s"), j->client[0] ? j->client : "?", age);
+        y = detail(y, T("Serveur", "Server"), j->a_serveur ? t : T("aucune version", "no version"));
+        y = detail(y, T("Dernière synchro", "Last sync"),
+                   !b ? T("jamais", "never")
+                   : !strcmp(b, j->hash_local) && !strcmp(b, j->hash_serveur) ? T("identique aux deux", "same as both")
+                   : !strcmp(b, j->hash_local) ? T("identique à la 3DS", "same as the 3DS")
+                   : !strcmp(b, j->hash_serveur) ? T("identique au serveur", "same as the server") : T("autre version", "another version"));
+        if (gb) y = detail(y, T("Joué avec", "Played with"), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS)) ? "forwarder mGBA" : j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
+        y += 6;
+    }
+    sans_ansi(message, t, sizeof t);
+    if (t[0]) ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, t);
+
+    /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
+     * en bas, les touches générales. */
+    ecran_rect(0, HAUT_BARRE - 3, 320, 240 - HAUT_BARRE + 3, RGB(0x1E242C));
+    {
+        char x[80];
+        touche_t jeu[2] = { { KEY_A, !j ? T("Aucun jeu", "No game") : j->etat == A_ENVOYER ? T("Envoyer au serveur", "Upload to the server")
+                                     : j->etat == A_RECUPERER ? T("Récupérer du serveur", "Download from the server")
+                                     : j->etat == CONFLIT ? T("Résoudre le conflit", "Resolve the conflict") : T("Rien à faire", "Nothing to do"), action },
+                            { KEY_X, x, 1 } };
+        const touche_t generales[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
+                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
+        if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS))
+                                                    ? (j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++") : T("le forwarder mGBA", "the mGBA forwarder"));
+        ligne_touches(jeu, gb ? 2 : 1, HAUT_BARRE, 18);
+        ligne_touches(generales, 4, HAUT_BARRE + HAUTEUR_TOUCHE, 0);
+    }
 }
 
 static void dessiner(int curseur)
 {
-    int i, n[5] = { 0 }, debut = curseur < LIGNES ? 0 : curseur - LIGNES + 1;
-    jeu_t *j = nb_visibles ? &jeux[visibles[curseur]] : NULL;
-    char age[24];
-
-    for (i = 0; i < nb_visibles; i++) n[priorite(jeux[visibles[i]].etat)]++;
-    consoleSelect(&haut);
-    printf(T("\x1b[2J\x1b[1;1H" "3dssavesync " VERT "%d a jour " JAUNE "%d envoi " CYAN "%d recup " ROUGE "%d conflit" NORMAL "\n\n",
-             "\x1b[2J\x1b[1;1H" "3dssavesync " VERT "%d in sync " JAUNE "%d up " CYAN "%d down " ROUGE "%d conflict" NORMAL "\n\n"),
-           n[4], n[2], n[1], n[0]);
-    for (i = debut; i < nb_visibles && i < debut + LIGNES; i++) {
-        jeu_t *k = &jeux[visibles[i]];
-        const char *s = NOMS_SYSTEMES[k->systeme];
-        if (i == curseur) printf(SURLIGNE "%s %-3s %-34.34s" NORMAL "\n", libelle(k->etat), s, k->court);
-        else printf("%s%s" NORMAL GRIS " %-3s" NORMAL " %.34s\n", couleur(k->etat), libelle(k->etat), s, k->court);
-    }
-
-    consoleSelect(&bas);
-    printf("\x1b[2J\x1b[1;1H");
-    if (j) {
-        const char *b = base_de(j->cle);
-        format_age(j->age, age, sizeof age);
-        printf("%.34s\n%s  %s%s" NORMAL "\n\n\n", j->court, j->cle, couleur(j->etat), libelle(j->etat));
-        if (j->a_local) printf(T("3DS     : %7lu o  %.8s\n", "3DS     : %7lu B  %.8s\n"), j->local.taille, j->hash_local);
-        else printf("%s", T("3DS     : (aucune)\n", "3DS     : (none)\n"));
-        if (j->a_serveur)
-            printf(T("Serveur : %7lu o  %.8s\n          %s, %s\n", "Server  : %7lu B  %.8s\n          %s, %s\n"), j->serveur.taille,
-                   j->hash_serveur, j->client, age);
-        else printf("%s", T("Serveur : (aucune)\n", "Server  : (none)\n"));
-        printf(GRIS "Base    : %.8s" NORMAL "\n", b ? b : T("(aucune)", "(none)"));
-        if (j->systeme == SYS_GB || j->systeme == SYS_GBA)
-            printf(GRIS "%s%s" NORMAL "\n", T("Fichier : ", "File    : "), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS)) ? "forwarder mGBA"
-                                                    : j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight");
-    }
-    printf("\n%.300s\n", message);
-    printf("\x1b[24;1H" GRIS "%s" NORMAL, T("Haut/Bas choisir  A action\nX forwarder/ROM  START tout synchro\nY rafraichir  SELECT reglages  B quitter",
-                                            "Up/Down choose  A action\nX forwarder/ROM  START sync all\nY refresh  SELECT settings  B quit"));
-    if (j) dessiner_icone(j, 320 - 32 - 6, 6);
+    ecran_debut();
+    dessiner_haut(curseur);
+    dessiner_bas(nb_visibles ? &jeux[visibles[curseur]] : NULL);
+    ecran_finir();
 }
 
 /* Attend A, B ou X. */
@@ -793,8 +989,9 @@ static void choisir_titres(void)
     }
 }
 
-/* Écran de réglages : une ligne par réglage, A pour modifier, aide en bas. premier : aucun réglage encore. */
-static void reglages(int premier)
+/* Écran de réglages : une ligne par réglage, A pour modifier, aide en bas. premier : aucun réglage encore.
+ * 1 si un réglage ou la liste des jeux 3DS a changé (il faut alors tout relire). */
+static int reglages(int premier)
 {
     struct {
         const char *nom, *nom_en, *aide, *aide_en;
@@ -817,7 +1014,13 @@ static void reglages(int premier)
           "open_agb_firm (useSavesFolder=true):\nsdmc:/3ds/open_agb_firm/saves\nEmpty = next to the ROM.", cfg.saves_gba, sizeof cfg.saves_gba },
     };
     const int nb = (int)(sizeof l / sizeof *l), total = nb + 2;
-    int c = 0, i;
+    int c = 0, i, change;
+    static titre_t avant_titres[MAX_TITRES];
+    int avant_nb = nb_titres;
+    char avant[sizeof cfg];
+
+    memcpy(avant, &cfg, sizeof cfg);
+    memcpy(avant_titres, titres, sizeof titres);
 
     message[0] = '\0';
     while (aptMainLoop()) {
@@ -864,24 +1067,28 @@ static void reglages(int premier)
             }
         }
     }
-    ecrire_config();
     message[0] = '\0';
+    change = memcmp(avant, &cfg, sizeof cfg) || avant_nb != nb_titres || memcmp(avant_titres, titres, sizeof titres);
+    if (memcmp(avant, &cfg, sizeof cfg)) ecrire_config();
+    return change;
 }
 
-/* A sur un Jeu : son action, avec confirmation avant tout écrasement (Q5). */
-static void agir(jeu_t *j)
+/* A sur un Jeu : son action, avec confirmation avant tout écrasement (Q5). 1 si une action a été tentée. */
+static int agir(jeu_t *j)
 {
     char q[400];
+    int fait = 0;
     switch (j->etat) {
     case A_ENVOYER:
         envoyer(j);
+        fait = 1;
         break;
     case A_RECUPERER:
         snprintf(q, sizeof q, T("Recuperer la Version du serveur pour\n" CYAN "%.38s" NORMAL " ?\n\n%s",
                                 "Download the server version for\n" CYAN "%.38s" NORMAL "?\n\n%s"), j->court,
                  j->a_local ? T("La Sauvegarde de la 3DS sera remplacee\n(Copie de securite faite avant).",
                                 "The 3DS save will be replaced\n(backup copy made first).") : "");
-        if (confirmer(q)) recuperer(j);
+        if ((fait = confirmer(q))) recuperer(j);
         break;
     case CONFLIT:
         format_age(j->age, q, sizeof q);
@@ -899,41 +1106,53 @@ static void agir(jeu_t *j)
                j->court, j->local.taille, j->hash_local, j->serveur.taille, j->hash_serveur, j->client, q);
         dessiner_icone(j, 320 - 32 - 6, 6);
         switch (attendre_touche()) {
-        case KEY_A: envoyer(j); break;
-        case KEY_X: recuperer(j); break;
-        default: snprintf(message, sizeof message, T("%s : Conflit laisse tel quel", "%s: conflict left as is"), j->cle);
+        case KEY_A: fait = 1; envoyer(j); break;
+        case KEY_X: fait = 1; recuperer(j); break;
+        default: snprintf(message, sizeof message, T("%s : Conflit laisse tel quel", "%s: conflict left as is"), j->court);
         }
         break;
     case DOUBLON:
         snprintf(message, sizeof message, T("%s : %d ROM ont cette Cle. Garde-en une seule.", "%s: %d ROMs have this key. Keep only one."), j->court, j->nb_roms);
         break;
     default:
-        snprintf(message, sizeof message, T("%s : rien a faire", "%s: nothing to do"), j->cle);
+        snprintf(message, sizeof message, T("%s : rien à faire, déjà à jour.", "%s: nothing to do, already in sync."), j->court);
     }
+    if (fait) lire_local(j);
+    return fait;
 }
 
 /* X sur un Jeu GB/GBA : sa Sauvegarde passe du forwarder mGBA au .sav à côté de la ROM (open_agb_firm,
  * TWiLight), ou l'inverse. Le fichier du forwarder prime dès qu'il existe (scanner_dossier) : le retirer
  * suffit à revenir côté ROM. Copie de sécurité du fichier remplacé (fichiers.h). */
-static void basculer(jeu_t *j)
+static int basculer(jeu_t *j)
 {
-    char rom_sav[600], fwd[600], copie[700], date[20], q[300];
+    char rom_sav[600], fwd[600], copie[700], date[20], q[600];
     const char *ext = strrchr(j->rom, '.');
-    const char *autre = j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight";
+    const char *autre = j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++";
     int vers_rom;
     time_t t = time(NULL);
 
     if ((j->systeme != SYS_GB && j->systeme != SYS_GBA) || !ext) {
-        snprintf(message, sizeof message, "%s", T("X : seulement pour les jeux GB et GBA", "X: GB and GBA games only"));
-        return;
+        snprintf(message, sizeof message, "%s", T("X : seulement pour les jeux GB et GBA.", "X: GB and GBA games only."));
+        return 0;
     }
     snprintf(rom_sav, sizeof rom_sav, "%.*s.sav", (int)(ext - j->rom), j->rom);
     snprintf(fwd, sizeof fwd, FORWARDERS "/%s.sav", j->nom);
     vers_rom = !strcmp(j->sav, fwd);
-    snprintf(q, sizeof q, T(CYAN "%.38s" NORMAL "\n\nJouer avec %s ?\n\nLa Sauvegarde actuelle y sera copiee\n(Copie de securite faite avant).",
-                            CYAN "%.38s" NORMAL "\n\nPlay with %s?\n\nThe current save will be copied there\n(backup copy made first)."),
-             j->court, vers_rom ? autre : T("le forwarder mGBA", "the mGBA forwarder"));
-    if (!confirmer(q)) return;
+    snprintf(q, sizeof q,
+             T(CYAN "%.38s" NORMAL "\n\n"
+               "Sur la 3DS, ce jeu peut se jouer avec\nTWiLight Menu++ ou open_agb_firm\n(sauvegarde a cote de la ROM), ou avec\nun forwarder mGBA (icone sur le menu\nHOME, sauvegarde dans sdmc:/mGBA).\n"
+               "3dssavesync synchronise une seule de\nces deux sauvegardes.\n\n"
+               "Aujourd'hui : " CYAN "%s" NORMAL "\nPasser a : " CYAN "%s" NORMAL " ?\n\n"
+               "La sauvegarde y sera copiee (copie de\nsecurite faite avant).%s",
+               CYAN "%.38s" NORMAL "\n\n"
+               "On the 3DS, this game is played with\nTWiLight Menu++ or open_agb_firm\n(save next to the ROM), or with an mGBA\nforwarder (HOME menu icon, save in\nsdmc:/mGBA).\n"
+               "3dssavesync syncs only one of these\ntwo saves.\n\n"
+               "Now: " CYAN "%s" NORMAL "\nSwitch to: " CYAN "%s" NORMAL "?\n\n"
+               "The save will be copied there (backup\ncopy made first).%s"),
+             j->court, vers_rom ? T("forwarder mGBA", "mGBA forwarder") : autre, vers_rom ? autre : T("forwarder mGBA", "mGBA forwarder"),
+             vers_rom ? T("\nLe forwarder n'aura plus de sauvegarde.", "\nThe forwarder will have no save left.") : "");
+    if (!confirmer(q)) return 0;
     strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
     mkdir(DOSSIER "/copies", 0777);
     snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.sav", j->nom, date);
@@ -942,11 +1161,13 @@ static void basculer(jeu_t *j)
     if (deplacer_sauvegarde(j->sav, vers_rom ? rom_sav : fwd, copie, vers_rom))
         snprintf(message, sizeof message, T("%s : bascule impossible, rien n'est perdu", "%s: switch failed, nothing lost"), j->court);
     else
-        snprintf(message, sizeof message, T("%s : se joue maintenant avec %s", "%s: now played with %s"), j->court, vers_rom ? autre : T("le forwarder", "the forwarder"));
+        snprintf(message, sizeof message, T("%s : se joue maintenant avec %s.", "%s: now played with %s."), j->court, vers_rom ? autre : T("le forwarder mGBA", "the mGBA forwarder"));
+    lire_local(j);
+    return 1;
 }
 
 /* START : Envois et Récupérations ; ignore Conflits et Doublons ; une confirmation pour les écrasements. */
-static void tout_synchroniser(void)
+static int tout_synchroniser(void)
 {
     char q[1200];
     int i, ecrase = 0, envois = 0, recups = 0, ignores = 0, ok_ecraser = 1, total = 0, fait = 0;
@@ -980,11 +1201,13 @@ static void tout_synchroniser(void)
         if (faire_envoi) envois += envoyer(j);
         else if (faire_recup) recups += recuperer(j);
         else if (j->etat == CONFLIT || j->etat == DOUBLON) ignores++;
+        if (faire_envoi || faire_recup) lire_local(j);
     }
     snprintf(q, sizeof q, "%.200s", message);
     snprintf(message, sizeof message, T("%d envoi(s), %d recuperation(s), %d ignore(s)\nDernier : %s",
                                         "%d upload(s), %d download(s), %d skipped\nLast: %s"),
              envois, recups, ignores, q);
+    return total > 0;
 }
 
 /* ---------------------------------------------------------------- boucle */
@@ -997,6 +1220,7 @@ int main(void)
     osSetSpeedupEnable(true); /* 804 MHz sur New 3DS (sans effet sur Old 3DS) : TLS et SHA-256 plus rapides */
     consoleInit(GFX_TOP, &haut);
     consoleInit(GFX_BOTTOM, &bas);
+    ecran_init(); /* après consoleInit : framebuffers en RGB565 */
     if (R_SUCCEEDED(cfguInit())) {
         CFGU_GetSystemLanguage(&langue);
         cfguExit();
@@ -1039,26 +1263,38 @@ int main(void)
         do {
             gspWaitForVBlank();
             hidScanInput();
-            k = hidKeysDownRepeat();
+            k = hidKeysDownRepeat() & ~KEY_TOUCH;
+            if (hidKeysDown() & KEY_TOUCH) k |= bouton_touche();
         } while (!k && aptMainLoop());
 
         if (k & KEY_B) break;
+        if (k & (KEY_UP | KEY_DOWN)) message[0] = '\0'; /* le message parle du jeu qu'on quitte */
         if (k & KEY_DOWN && curseur + 1 < nb_visibles) curseur++;
         if (k & KEY_UP && curseur > 0) curseur--;
         if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT)) {
             u64 debut = osGetTime();
-            if (k & KEY_SELECT) reglages(0);
-            else if (k & KEY_A && nb_visibles) agir(&jeux[visibles[curseur]]);
-            else if (k & KEY_X && nb_visibles) basculer(&jeux[visibles[curseur]]);
-            else if (k & KEY_START) tout_synchroniser();
-            if (rafraichir() == 0 && !(k & (KEY_A | KEY_X | KEY_START))) message[0] = '\0';
-            if (k & KEY_START)
+            int choisi = nb_visibles ? visibles[curseur] : -1, i;
+            message[0] = '\0';
+            /* Tout relire : Y, ou réglages modifiés. Après une action : le Jeu touché est déjà relu, le serveur seul. */
+            if (k & KEY_SELECT) {
+                if (reglages(0)) rafraichir();
+            } else if (k & KEY_Y) {
+                rafraichir();
+            } else if (k & KEY_A && nb_visibles) {
+                if (agir(&jeux[choisi])) relire_serveur();
+            } else if (k & KEY_X && nb_visibles) {
+                if (basculer(&jeux[choisi])) relire_serveur();
+            } else if (k & KEY_START) {
+                if (tout_synchroniser()) relire_serveur();
                 snprintf(message + strlen(message), sizeof message - strlen(message),
                          T("\nDuree : %llu s", "\nTime: %llu s"), (osGetTime() - debut) / 1000);
-            if (curseur >= nb_visibles) curseur = nb_visibles ? nb_visibles - 1 : 0;
+            }
+            for (i = 0; i < nb_visibles && visibles[i] != choisi; i++);
+            curseur = i < nb_visibles ? i : curseur < nb_visibles ? curseur : nb_visibles ? nb_visibles - 1 : 0;
         }
     }
     net_fin();
+    ecran_fin();
     gfxExit();
     return 0;
 }

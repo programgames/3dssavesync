@@ -20,6 +20,9 @@ int titre_seul_main(u64 id);
 /* Nom court du jeu (SMDH), dans la langue donnée, sans accents (police de la console). 0 si lu. */
 int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n);
 
+/* Grande icône du jeu (SMDH) : 48×48 pixels RGB565, ligne par ligne. 0 si lue. */
+int titre_icone(u64 id, FS_MediaType media, u16 *pixels);
+
 /* Applications installées (SD) et cartouche insérée. Nombre de titres (au plus max). */
 int titres_installes(u64 *ids, FS_MediaType *medias, int max);
 
