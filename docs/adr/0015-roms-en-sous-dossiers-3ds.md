@@ -1,20 +1,20 @@
-# ROM en sous-dossiers sur la 3DS : la Sauvegarde là où le lanceur l'écrit
+# ROMs in subfolders on the 3DS: the Save where the launcher writes it
 
-Avant, le homebrew ne lisait que la racine de chaque dossier des ROM (décision Q10). Il lit maintenant les sous-dossiers, sur 4 niveaux au plus. Il ne lit jamais les dossiers `saves`, les dossiers cachés (`.…`) ou qui commencent par `_` (`_nds` de TWiLight Menu++), ni `3ds`, `luma`, `mGBA` et `Nintendo 3DS` (utile si le dossier des ROM est la racine de la carte SD).
+Before, the homebrew read only the root of each ROM folder (decision Q10). It now reads subfolders, up to 4 levels. It never reads `saves` folders, hidden folders (`.…`) or folders starting with `_` (`_nds` of TWiLight Menu++), nor `3ds`, `luma`, `mGBA` and `Nintendo 3DS` (useful if the ROM folder is the root of the SD card).
 
-Sauvegarde d'une ROM `<roms>/<sous-dossier>/X.nds` (ou `.gb`, `.gbc`, `.gba`), selon le réglage « Sauvegardes » de son Système (`docs/research-v2.md` : `SAVE_LOCATION` de TWiLight Menu++ et de NTR_Forwarder, GameYob, `useSavesFolder` d'open_agb_firm) :
+Save of a ROM `<roms>/<subfolder>/X.nds` (or `.gb`, `.gbc`, `.gba`), depending on the "Saves" setting of its System (`docs/research-v2.md`, French: `SAVE_LOCATION` of TWiLight Menu++ and NTR_Forwarder, GameYob, `useSavesFolder` of open_agb_firm):
 
-| Réglage « Sauvegardes » | Sauvegarde | Lanceur |
+| "Saves" setting | Save | Launcher |
 |---|---|---|
-| `<roms>/saves` | `<roms>/<sous-dossier>/saves/X.sav` | TWiLight Menu++ et forwarders DS (`SAVE_LOCATION=0`, défaut) |
-| vide, ou égal à `<roms>` | `<roms>/<sous-dossier>/X.sav` | GameYob (GB), open_agb_firm `useSavesFolder=false`, `SAVE_LOCATION=1` |
-| autre dossier | `<saves>/X.sav` | open_agb_firm `useSavesFolder=true`, `SAVE_LOCATION=2` (`_nds/TWiLightMenu/saves`) |
+| `<roms>/saves` | `<roms>/<subfolder>/saves/X.sav` | TWiLight Menu++ and DS forwarders (`SAVE_LOCATION=0`, default) |
+| empty, or equal to `<roms>` | `<roms>/<subfolder>/X.sav` | GameYob (GB), open_agb_firm `useSavesFolder=false`, `SAVE_LOCATION=1` |
+| other folder | `<saves>/X.sav` | open_agb_firm `useSavesFolder=true`, `SAVE_LOCATION=2` (`_nds/TWiLightMenu/saves`) |
 
-Une ROM de la racine garde le même chemin qu'avant. Le forwarder mGBA ne change pas (`sdmc:/mGBA/forwarders/<nom>.sav`). La comparaison entre `saves` et `roms` ignore la casse (carte SD en FAT).
+A ROM at the root keeps the same path as before. The mGBA forwarder does not change (`sdmc:/mGBA/forwarders/<name>.sav`). The comparison between `saves` and `roms` ignores case (FAT SD card).
 
-Deux ROM qui donnent le même fichier de Sauvegarde (même nom dans deux sous-dossiers, avec un dossier de sauvegardes commun) sont un Doublon, comme deux ROM de même Clé. Deux Copies de sécurité de même nom dans la même seconde reçoivent la Clé dans leur nom.
+Two ROMs that give the same Save file (same name in two subfolders, with a shared save folder) are a Duplicate, like two ROMs with the same Key. Two Backup copies with the same name in the same second get the Key in their name.
 
-## Conséquences
+## Consequences
 
-- Chemins déduits du code des lanceurs, non vérifiés sur la 3DS pour une ROM en sous-dossier.
-- La limite de 512 jeux (`MAX_JEUX`) compte aussi les ROM des sous-dossiers ; au-delà, les ROM sont ignorées et signalées.
+- Paths deduced from the launchers' code, not verified on the 3DS for a ROM in a subfolder.
+- The 512-game limit (`MAX_JEUX`) also counts ROMs in subfolders; beyond it, ROMs are skipped and reported.

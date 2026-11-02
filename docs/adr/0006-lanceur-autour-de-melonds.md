@@ -1,16 +1,16 @@
-# Le Lanceur remplace melonDS dans LaunchBox, sans surveillance de fichiers
+# The Launcher replaces melonDS in LaunchBox, without file watching
 
-LaunchBox appelle `powershell.exe -File sync.ps1 <rom>` à la place de `melonDS.exe`. Le Lanceur fait la Récupération, lance melonDS, attend la fin du processus, puis fait l'Envoi.
+LaunchBox calls `powershell.exe -File sync.ps1 <rom>` instead of `melonDS.exe`. The Launcher does the Download, starts melonDS, waits for the process to end, then does the Upload.
 
-Raison : melonDS garde la Sauvegarde en mémoire, réécrit le fichier entier 2 à 3 s après chaque sauvegarde en jeu (écriture non atomique), et ne verrouille pas le fichier (`docs/research.md`, partie 1 §2). Lire le `.sav` pendant que melonDS tourne peut donner un fichier tronqué ; l'écrire pendant qu'il tourne est perdu à la prochaine sauvegarde en jeu. Seule la fin du processus est un point sûr.
+Reason: melonDS keeps the Save in memory, rewrites the whole file 2 to 3 s after each in-game save (non-atomic write), and does not lock the file (`docs/research.md`, part 1 §2, French). Reading the `.sav` while melonDS runs can give a truncated file; writing it while it runs is lost at the next in-game save. Only the end of the process is a safe point.
 
-## Options écartées
+## Rejected options
 
-- **Surveillance du dossier** (service qui envoie à chaque modification) : lit des fichiers à moitié écrits, et ne peut pas récupérer avant la partie.
-- **Plugin / script Lua** : melonDS n'a pas de système de plugins.
-- **Un raccourci par jeu** : LaunchBox lance déjà tous les jeux DS ; une seule entrée d'émulateur couvre les 3710 ROM.
+- **Folder watching** (a service that uploads on each change): reads half-written files, and cannot download before the game.
+- **Plugin / Lua script**: melonDS has no plugin system.
+- **One shortcut per game**: LaunchBox already starts all DS games; a single emulator entry covers the 3710 ROMs.
 
-## Conséquences
+## Consequences
 
-- Le Lanceur refuse de démarrer si `melonDS.exe` tourne déjà.
-- Charger un savestate melonDS réécrit le `.sav` avec une ancienne Sauvegarde ; le Lanceur ne peut pas le voir. À signaler dans le README.
+- The Launcher refuses to start if `melonDS.exe` is already running.
+- Loading a melonDS savestate rewrites the `.sav` with an old Save; the Launcher cannot see it. To be noted in the README.

@@ -1,40 +1,40 @@
-# Frontends : configuration à la main
+# Frontend guide
 
-L'assistant (`3dssavesync setup`) configure seul **LaunchBox**, **ES-DE** et les **raccourcis**. Pour les autres frontends, suivez cette page. Sources et détails : [research-v3-frontends.md](research-v3-frontends.md).
+The settings page sets up **LaunchBox**, **ES-DE** and the **shortcuts** by itself. For the other frontends, follow this page. Sources and details (French): [research-v3-frontends.md](research-v3-frontends.md).
 
-Règles communes :
+Common rules:
 
-- `<exe>` = le chemin du Lanceur installé : `%LOCALAPPDATA%\Programs\3dssavesync\3dssavesync.exe` (Windows), `~/.local/bin/3dssavesync` (Linux), `~/Applications/3dssavesync/3dssavesync` (macOS).
-- `<nom>` = le nom de l'émulateur dans `config.json` : `melonds`, `mgba`, `azahar`, `retroarch`, `vbam`, `sameboy`, `desmume`.
-- Mettez toujours `--emulator <nom>` **avant** la ROM.
-- Désactivez la synchronisation propre au frontend pour DS, GB, GBA et 3DS (CloudSync d'EmuDeck, par exemple) : deux outils enverraient les mêmes sauvegardes.
-- Après une mise à jour ou une réinitialisation d'un frontend, ouvrez « 3dssavesync réglages » et choisissez **Réparer**.
+- `<exe>` = the path of the installed program: `%LOCALAPPDATA%\Programs\3dssavesync\3dssavesync.exe` (Windows), `~/.local/bin/3dssavesync` (Linux), `~/Applications/3dssavesync/3dssavesync` (macOS).
+- `<name>` = the name of the emulator in `config.json`: `melonds`, `mgba`, `azahar`, `retroarch`, `vbam`, `sameboy`, `desmume`…
+- Always put `--emulator <name>` **before** the ROM.
+- Turn off the frontend's own save sync for DS, GB, GBA and 3DS (EmuDeck CloudSync, for example): two tools would upload the same saves.
+- After a frontend update or reset, open **3dssavesync settings** and click **Repair frontends**.
 
-## Steam ROM Manager (Steam Deck et bureau)
+## Steam ROM Manager (Steam Deck and desktop)
 
-Ajoutez un **nouvel** analyseur (ne modifiez pas ceux d'EmuDeck) :
+Add a **new** parser (do not change the EmuDeck ones):
 
-| Champ | Valeur |
+| Field | Value |
 |---|---|
 | Parser type | Glob |
-| ROMs directory | dossier des ROM DS (par exemple `~/Emulation/roms/nds`) |
+| ROMs directory | the DS ROM folder (for example `~/Emulation/roms/nds`) |
 | User's glob | `${title}@(.nds\|.NDS\|.zip\|.ZIP)` |
 | Executable | `<exe>` |
-| Command line arguments | `run --emulator <nom> "${filePath}"` |
+| Command line arguments | `run --emulator <name> "${filePath}"` |
 
-Puis « Add games » et « Save to Steam » dans l'interface de SRM. Pour un Flatpak, le profil de `config.json` doit avoir `"processus"` (l'assistant le remplit).
+Then click "Add games" and "Save to Steam" in SRM. For a Flatpak, the profile in `config.json` needs `"processus"` (the settings page fills it in).
 
 ## EmuDeck (Steam Deck)
 
-1. Lancez l'assistant dans le mode Bureau : il configure ES-DE (`~/ES-DE/custom_systems`), qu'EmuDeck utilise.
-2. Pour le mode Jeu, ajoutez l'analyseur Steam ROM Manager ci-dessus.
-3. Désactivez CloudSync d'EmuDeck pour DS, GB, GBA et 3DS. L'assistant avertit s'il semble actif.
-4. Ne modifiez pas les scripts de `~/Emulation/tools/launchers` : EmuDeck les remet à chaque lancement.
-5. Après une réinitialisation d'EmuDeck : **Réparer**.
+1. Run the settings page in Desktop mode: it sets up ES-DE (`~/ES-DE/custom_systems`), which EmuDeck uses.
+2. For Game mode, add the Steam ROM Manager parser above.
+3. Turn off EmuDeck CloudSync for DS, GB, GBA and 3DS. The settings page warns you if it seems active.
+4. Do not change the scripts in `~/Emulation/tools/launchers`: EmuDeck puts them back at each start.
+5. After an EmuDeck reset: **Repair frontends**.
 
 ## RetroDECK
 
-L'ES-DE interne de RetroDECK est dans un bac à sable : l'assistant ne le configure pas. Utilisez Steam ROM Manager ou un raccourci, avec un profil personnalisé dans `config.json` :
+The ES-DE inside RetroDECK runs in a sandbox: the settings page does not set it up. Use Steam ROM Manager or a shortcut, with a custom profile in `config.json`:
 
 ```json
 "retrodeck-nds": {
@@ -45,24 +45,24 @@ L'ES-DE interne de RetroDECK est dans un bac à sable : l'assistant ne le config
 }
 ```
 
-Non vérifié : `flatpak run` attend-il la fin du jeu ?
+Not checked: does `flatpak run` wait for the end of the game?
 
 ## Playnite (Windows)
 
-Bibliothèque > Configurer les émulateurs > Ajouter un profil personnalisé :
+Library > Configure Emulators > add a custom profile:
 
-| Champ | Valeur |
+| Field | Value |
 |---|---|
 | Executable | `<exe>` |
-| Arguments | `run --emulator <nom> "{ImagePath}"` |
-| Supported file types | `nds, zip` (DS) ; `gb, gbc, gba, zip` (mGBA) ; `3ds, cci, cxi` (Azahar) |
+| Arguments | `run --emulator <name> "{ImagePath}"` |
+| Supported file types | `nds, zip` (DS); `gb, gbc, gba, zip` (mGBA); `3ds, cci, cxi` (Azahar) |
 | Tracking mode | Original process |
 
-Puis choisissez ce profil pour les jeux concernés.
+Then choose this profile for these games.
 
 ## RetroBat (Windows)
 
-Créez `RetroBat\emulationstation\.emulationstation\es_systems_3dssavesync.cfg`. RetroBat garde son fichier d'origine ; pour revenir en arrière, supprimez ce fichier.
+Create `RetroBat\emulationstation\.emulationstation\es_systems_3dssavesync.cfg`. RetroBat keeps its original file; to go back, delete this file.
 
 ```xml
 <?xml version="1.0"?>
@@ -74,37 +74,37 @@ Créez `RetroBat\emulationstation\.emulationstation\es_systems_3dssavesync.cfg`.
 </systemList>
 ```
 
-`run --rom … --` synchronise la ROM, puis lance la commande de RetroBat telle quelle. L'émulateur de `config.json` qui gère ce Système donne le dossier des sauvegardes.
+`run --rom … --` syncs the ROM, then runs the RetroBat command as is. The emulator of `config.json` that handles this system gives the save folder.
 
 ## Pegasus
 
-Dans `metadata.pegasus.txt` de la collection :
+In the `metadata.pegasus.txt` file of the collection:
 
 ```
-launch: "<exe>" run --emulator <nom> "{file.path}"
+launch: "<exe>" run --emulator <name> "{file.path}"
 ```
 
 ## Lutris (Linux)
 
-Un jeu avec le runner « Linux » :
+A game with the "Linux" runner:
 
-| Champ | Valeur |
+| Field | Value |
 |---|---|
 | Executable | `<exe>` |
-| Arguments | `run --emulator <nom> "/chemin/du/jeu.nds"` |
+| Arguments | `run --emulator <name> "/path/to/game.nds"` |
 
-N'utilisez pas « Stop » de Lutris pendant la partie : il tue le Lanceur avant l'envoi (l'envoi part au lancement suivant).
+Do not use the Lutris "Stop" button during the game: it kills 3dssavesync before the upload (the upload goes out at the next launch).
 
 ## Attract-Mode
 
-Nouveau fichier `emulators/<nom>-3dssavesync.cfg` (dans `~/.attract`, ou le dossier d'Attract-Mode sous Windows) :
+New file `emulators/<name>-3dssavesync.cfg` (in `~/.attract`, or the Attract-Mode folder on Windows):
 
 ```
 executable           <exe>
-args                 run --emulator <nom> "[romfilename]"
-rompath              /chemin/roms/nds
+args                 run --emulator <name> "[romfilename]"
+rompath              /path/to/roms/nds
 romext               .nds;.zip
 nb_mode_wait         0
 ```
 
-Puis reliez une liste de ROM à cet émulateur dans les réglages d'Attract-Mode.
+Then link a ROM list to this emulator in the Attract-Mode settings.

@@ -1,18 +1,18 @@
-# Synchronisation à trois points par Hash, jamais par date
+# Three-way sync by Hash, never by date
 
-Chaque Client garde une Base par Jeu et compare trois Hash : Sauvegarde locale (L), Version courante (S), Base (B). Les dates de modification sont inutilisables : nds-bootstrap écrit les secteurs du `.sav` sans mettre à jour l'entrée FAT, donc le `mtime` ne bouge pas quand on joue sur la 3DS (voir `docs/research.md`, partie 1 §1), et l'horloge de la 3DS est réglable à la main.
+Each Client keeps a Base per Game and compares three Hashes: Local save (L), Current version (S), Base (B). File modification dates cannot be used: nds-bootstrap writes the sectors of the `.sav` without updating the FAT entry, so the `mtime` does not move when you play on the 3DS (see `docs/research.md`, part 1 §1, French), and the 3DS clock can be set by hand.
 
-| Cas | État |
+| Case | State |
 |---|---|
-| L == S | À jour (et B := L) |
-| S absent | À envoyer |
-| L absent | À récupérer |
-| taille(L) != taille(S) | Conflit |
-| L == B et S != B | À récupérer |
-| S == B et L != B | À envoyer |
-| sinon | Conflit |
+| L == S | In sync (and B := L) |
+| S absent | To upload |
+| L absent | To download |
+| size(L) != size(S) | Conflict |
+| L == B and S != B | To download |
+| S == B and L != B | To upload |
+| otherwise | Conflict |
 
-## Conséquences
+## Consequences
 
-- Une taille différente donne toujours un Conflit : melonDS tronque ou complète un `.sav` à la taille de sa base, et nds-bootstrap écrit modulo la taille du fichier. Synchroniser une mauvaise taille peut corrompre la partie.
-- L'Envoi porte `If-Match: <S vu par le Client>`. Si un autre Client a envoyé entre-temps, le Serveur répond `412` et le Client repasse en Conflit. Aucun Conflit n'est jamais résolu automatiquement.
+- A different size always gives a Conflict: melonDS truncates or pads a `.sav` to the size of its database, and nds-bootstrap writes modulo the file size. Syncing a wrong size can corrupt the game.
+- The Upload carries `If-Match: <S as seen by the Client>`. If another Client uploaded in the meantime, the Server answers `412` and the Client goes back to Conflict. No Conflict is ever resolved automatically.

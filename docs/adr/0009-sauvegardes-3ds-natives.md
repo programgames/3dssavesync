@@ -1,19 +1,19 @@
-# Sauvegardes 3DS natives : le fichier `main` de l'archive, code maison inspiré de Checkpoint
+# Native 3DS saves: the `main` file of the archive, home-made code inspired by Checkpoint
 
-Pour les 8 Pokémon 3DS (X, Y, Rubis Oméga, Saphir Alpha, Soleil, Lune, Ultra-Soleil, Ultra-Lune), la sauvegarde est une archive (`ARCHIVE_USER_SAVEDATA`) qui contient un seul fichier, `main`. Azahar range la même archive en fichiers ordinaires (`…/title/00040000/<low>/data/00000001/main`). On synchronise ce fichier seul.
+For the 8 3DS Pokémon games (X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon), the save is an archive (`ARCHIVE_USER_SAVEDATA`) that holds a single file, `main`. Azahar stores the same archive as ordinary files (`…/title/00040000/<low>/data/00000001/main`). We sync this file only.
 
-- 3DS, lecture : ouvrir l'archive (SD, sinon cartouche), lire `/main`.
-- 3DS, écriture : Copie de sécurité, écrire `/main`, `ControlArchive(COMMIT)`, puis supprimer la secure value (comme Checkpoint, JKSM, Cloudpoint), sinon le jeu refuse une sauvegarde restaurée.
-- PC : lire le title ID dans l'en-tête NCSD/NCCH de la ROM extraite par LaunchBox, puis le fichier `main` d'Azahar. Un `00000001.metadata` existant n'est jamais touché.
-- Table fixe des 8 title ID (un seul par jeu, toutes régions).
+- 3DS, read: open the archive (SD, otherwise cartridge), read `/main`.
+- 3DS, write: Backup copy, write `/main`, `ControlArchive(COMMIT)`, then delete the secure value (like Checkpoint, JKSM, Cloudpoint), otherwise the game refuses a restored save.
+- PC: read the title ID in the NCSD/NCCH header of the ROM extracted by LaunchBox, then the Azahar `main` file. An existing `00000001.metadata` is never touched.
+- Fixed table of the 8 title IDs (one per game, all regions).
 
-## Options écartées
+## Rejected options
 
-- **Copier le code de Checkpoint** : C++ sous GPL-3 ; il imposerait la GPL-3 au homebrew et un second langage. On reprend sa méthode (même ordre d'opérations), sur le modèle du code C sous MIT de DaeMoon.
-- **Toutes les sauvegardes 3DS, multi-fichiers** : demande un format de paquet (zip ou manifeste) côté Serveur. Inutile pour les 8 jeux visés.
+- **Copy the Checkpoint code**: C++ under GPL-3; it would force GPL-3 on the homebrew and a second language. We reuse its method (same order of operations), modelled on the MIT C code of DaeMoon.
+- **All 3DS saves, multi-file**: requires a package format (zip or manifest) on the Server side. Useless for the 8 target games.
 
-## Conséquences
+## Consequences
 
-- Un jeu jamais lancé n'a pas d'archive sur la 3DS : on ne crée rien, on demande de lancer le jeu une fois et de sauvegarder.
-- Azahar (révisé le 2026-11-02, issue #9) : pour un jeu jamais lancé, le Lanceur crée le dossier, `main` et un `00000001.metadata` de valeur connue (relevée sur Lune et Ultra-Soleil, même valeur supposée pour les 8 Pokémon). Test sur une copie d'Azahar : Pokémon X charge la partie sans reformater. Sans valeur connue, ou si un `.metadata` existe déjà sans dossier, le Lanceur refuse.
-- Le `.cia` reprend la liste `FileSystemAccess` de Checkpoint : un `.3dsx` peut ne pas avoir le droit d'ouvrir la sauvegarde d'un autre titre (sources contradictoires).
+- A game never started has no archive on the 3DS: nothing is created, the user is asked to start the game once and save.
+- Azahar (revised on 2026-11-02, issue #9): for a game never started, the Launcher creates the folder, `main` and a `00000001.metadata` with a known value (read on Moon and Ultra Sun, same value assumed for the 8 Pokémon). Test on a copy of Azahar: Pokémon X loads the game without reformatting. Without a known value, or if a `.metadata` already exists without a folder, the Launcher refuses.
+- The `.cia` reuses the `FileSystemAccess` list of Checkpoint: a `.3dsx` may not have the right to open the save of another title (conflicting sources).

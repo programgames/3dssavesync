@@ -355,7 +355,7 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves, co
     if (d) closedir(d);
 }
 
-/* Sauvegarde locale d'un Jeu : son fichier (forwarder mGBA s'il existe, docs/guide-forwarders-mgba.md) et son Hash
+/* Sauvegarde locale d'un Jeu : son fichier (forwarder mGBA s'il existe, docs/guide-forwarders.md) et son Hash
  * (SRAM seule pour GB/GBA, ADR 0008 ; /main pour la 3DS). Appelée au scan, et après une action sur ce seul Jeu. */
 static void lire_local(jeu_t *j)
 {
