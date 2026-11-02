@@ -104,7 +104,7 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 
 - **`run <rom>`** : un jeu. Pour les frontends (LaunchBox, Playnite, ES-DE…). `--emulator` est obligatoire seulement si deux émulateurs gèrent le même Système.
 - **`run --rom <rom> -- <commande>`** : synchronise la ROM, puis lance la commande donnée telle quelle. Pour les frontends qui passent par leur propre lanceur (RetroBat) ou un préfixe de commande (Lutris).
-- **`launch <nom>`** : sans frontend. Synchronise tous les jeux de l'émulateur (les ROM de ses dossiers `roms`, et les Pokémon 3DS déjà lancés dans Azahar), lance l'émulateur sans jeu, puis synchronise tout à sa fermeture. mGBA ne reçoit son dossier de sauvegardes que si GB et GBA partagent le même dossier.
+- **`launch <nom>`** : sans frontend. Synchronise tous les jeux de l'émulateur (les ROM de ses dossiers `roms`, et les Pokémon 3DS, même jamais lancés dans Azahar), lance l'émulateur sans jeu, puis synchronise tout à sa fermeture. mGBA ne reçoit son dossier de sauvegardes que si GB et GBA partagent le même dossier.
 - **`migrate-v2`** : reprend `sync.config.json` et `base.json` de l'ancien Lanceur PowerShell. Rien n'est remplacé : la commande refuse si la configuration existe déjà. L'installation v2 n'est pas modifiée.
 
 Un frontend qui arrête le programme pendant la partie (signal d'arrêt sous Linux et macOS) n'empêche pas l'envoi : le programme attend la fin de l'émulateur. Un arrêt forcé (`SIGKILL`, « Terminer la tâche ») coupe l'envoi ; il part au lancement suivant.

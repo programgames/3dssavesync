@@ -304,7 +304,7 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 			for id, titre := range titres3DS {
 				cle := "3DS-" + id
 				j := &Jeu{systeme, cle, titre, fichierSauvegarde(dossier, systeme, cle, titre, "")}
-				if dossier != "" && existe(filepath.Dir(j.Fichier)) { // jamais lancé dans Azahar : ignoré
+				if dossier != "" && (existe(filepath.Dir(j.Fichier)) || formats3DS[id] != nil) { // jamais lancé, format inconnu : ignoré
 					jeux = append(jeux, j)
 				}
 			}

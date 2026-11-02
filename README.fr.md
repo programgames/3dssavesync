@@ -71,7 +71,6 @@ Autres frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Peg
 
 - **Savestates** : charger un état remplace la sauvegarde par une ancienne. mGBA recharge un état au lancement par défaut (`autoload`) ; le Lanceur avertit après une Récupération si ce réglage (ou celui de RetroArch, VBA-M) est actif.
 - **Sauvegarde vierge** (que des `0x00` ou `0xFF`) : comptée comme absente, jamais envoyée.
-- **Jeux 3DS dans Azahar** : lancez le jeu une fois dans Azahar et sauvegardez, pour que son dossier de sauvegarde existe.
 - **Horloge d'Or / Argent / Cristal** : chaque machine garde sa propre horloge ([ADR 0008](docs/adr/0008-gb-gba-par-fichiers-sram-seule.md)).
 - **Pas encore géré** : DeSmuME (`.dsv`), NO$GBA, gpSP, Beetle GBA (formats à convertir), jeux GBA à EEPROM, jeux GB MBC2.
 
