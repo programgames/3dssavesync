@@ -14,10 +14,11 @@ func maisonFactice(t *testing.T) string {
 		t.Setenv(v, filepath.Join(m, v))
 	}
 	// Raccourcis et démarrage automatique : jamais sur le vrai bureau (Windows les place selon le registre, pas l'environnement).
-	r, a := creerRaccourci, autostart
-	t.Cleanup(func() { creerRaccourci, autostart = r, a })
+	r, a, o := creerRaccourci, autostart, ouvrirDetache
+	t.Cleanup(func() { creerRaccourci, autostart, ouvrirDetache = r, a, o })
 	creerRaccourci = func(nom, _ string, _ []string, _ bool) (string, error) { return "test:" + nom, nil }
 	autostart = func(nom, _ string, _ []string) (string, error) { return "test:" + nom, nil }
+	ouvrirDetache = func(string, []string) error { return nil } // jamais un vrai émulateur
 	return m
 }
 

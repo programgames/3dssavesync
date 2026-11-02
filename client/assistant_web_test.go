@@ -89,6 +89,23 @@ func TestAssistantWeb(t *testing.T) {
 	if !etat.Existe || !etat.JetonPresent || etat.URL != serveur.URL || strings.Contains(requete("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.String(), "jeton-web") {
 		t.Errorf("état après enregistrement (jamais le jeton) : %+v", etat)
 	}
+
+	// « Ouvrir » : l'émulateur configuré, sans jeu, par launch ; un nom inconnu ne lance rien.
+	var lance []string
+	ouvrirDetache = func(exe string, args []string) error { lance = append([]string{exe}, args...); return nil }
+	var ouvre map[string]any
+	if len(etat.Configures) != 1 || etat.Configures[0] != "melonds" {
+		t.Errorf("boutons « Ouvrir » : %v", etat.Configures)
+	}
+	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/ouvrir", `{"Nom":"melonds"}`).Body.Bytes(), &ouvre)
+	if ouvre["Ok"] != true || strings.Join(lance[1:], " ") != "launch --config "+config+" melonds" {
+		t.Errorf("ouvrir melonds : %v, commande %q", ouvre, lance)
+	}
+	lance = nil
+	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/ouvrir", `{"Nom":"inconnu"}`).Body.Bytes(), &ouvre)
+	if ouvre["Ok"] != false || lance != nil {
+		t.Errorf("émulateur inconnu : refus attendu, rien de lancé (%v, %q)", ouvre, lance)
+	}
 }
 
 // Émulateur personnalisé dans la page : contrôles, aperçu, enregistrement.
