@@ -23,7 +23,7 @@ $config = "$tmp\cfg\sync.config.json"
     ConvertTo-Json | Set-Content $config
 New-Item -ItemType Directory "$tmp\gb", "$tmp\gba", "$tmp\azahar" -Force | Out-Null
 
-# Fausses ROM GB / GBA (en-tête seul) dans un .zip au nom No-Intro, comme D:\Roms\gb*.
+# Fausses ROM GB / GBA (en-tête seul) dans un .zip au nom No-Intro, comme dans un dossier de ROM No-Intro.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 function Nouvelle-RomZip($nom, $ext, [byte[]]$octets) {
     $brut = "$tmp\roms\$nom.$ext"; [IO.File]::WriteAllBytes($brut, $octets)

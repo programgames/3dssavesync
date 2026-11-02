@@ -93,7 +93,7 @@ LaunchBox appelle : `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowSt
 
 1. Si `melonDS.exe` tourne → message, arrêt.
 2. Lire le Code jeu de la ROM (`.nds`, ou première entrée `.nds` d'un `.zip`). Code invalide → lancer melonDS sans Synchronisation.
-3. Sauvegarde locale = `D:\Sauvegardes\DS\<nom de la ROM sans extension>.sav`.
+3. Sauvegarde locale = `<dossier des sauvegardes>\DS\<nom de la ROM sans extension>.sav`.
 4. **Avant la partie** : `GET /saves`, puis `etat`.
    - `A_RECUPERER` → Copie de sécurité (si le fichier existe), téléchargement dans un fichier temporaire, vérification du Hash, remplacement.
    - `A_ENVOYER` → Envoi.
@@ -102,7 +102,7 @@ LaunchBox appelle : `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowSt
 5. Lancer `melonDS.exe "<rom>"` et attendre la fin du processus.
 6. **Après la partie** : relire la Sauvegarde locale, `etat` avec la Base. `A_ENVOYER` → Envoi avec `If-Match` = Base. `412` → `etat` avec l'`ETag` reçu ; `CONFLIT` → boîte « Garder le PC » / « Ne rien faire ». Erreur réseau → message, la Sauvegarde reste locale.
 
-Copies de sécurité : `D:\Sauvegardes\DS\ndssync-copies\<nom>-<date>.sav`.
+Copies de sécurité : `<dossier des sauvegardes>\DS\ndssync-copies\<nom>-<date>.sav`.
 
 ## 4. Homebrew 3DS : `3ds/`
 
@@ -137,7 +137,7 @@ Fichiers sur la SD, dans `sd:/3ds/3dssavesync/` (avant la v3 : `sd:/3ds/nds-save
 Le cœur ne change pas (`etat`, Envoi conditionnel, Copie de sécurité). Ce qui s'ajoute :
 
 - **Clé par Système**, lue dans la ROM : DS `ADAF`, GBA `GBA-BPEF`, GB `GB-<titre>-<somme>`, 3DS `3DS-<title ID>` (ADR 0007). Le serveur n'accepte que ces formes.
-- **GB/GBA** : fichiers `.sav` à côté des ROM sur la 3DS (TWiLight, open_agb_firm), dossiers `D:\Sauvegardes\GB` / `GBA` sur le PC (mGBA, `-C savegamePath=…` par lancement). Hash, taille et Envoi portent sur la **SRAM seule** ; à la Récupération chaque machine remet son propre Trailer d'horloge (ADR 0008). Trailer = reste de `taille mod 512` s'il vaut 16, 44 ou 48 octets (ADR 0010).
+- **GB/GBA** : fichiers `.sav` à côté des ROM sur la 3DS (TWiLight, open_agb_firm), dossiers `<dossier des sauvegardes>\GB` / `GBA` sur le PC (mGBA, `-C savegamePath=…` par lancement). Hash, taille et Envoi portent sur la **SRAM seule** ; à la Récupération chaque machine remet son propre Trailer d'horloge (ADR 0008). Trailer = reste de `taille mod 512` s'il vaut 16, 44 ou 48 octets (ADR 0010).
 - **3DS** : le fichier `main` de l'archive de sauvegarde (8 Pokémon, table fixe), lu et écrit par `titres3ds.c` (commit, secure value) ; côté PC, `main` dans le dossier Azahar, jamais rien d'autre dans ce dossier ; un jeu jamais lancé est créé dans Azahar avec un `.metadata` connu, jamais sur la 3DS (ADR 0009).
 - **Lanceur** : une table `$SYSTEMES` (exécutable, processus, dossier, extensions) ; tout le reste est commun.
 - **Homebrew** : sources `sd:/roms/nds`, `sd:/roms/gb`, `sd:/roms/gba` (`config.ini` : `roms_gb`, `roms_gba`) et les archives 3DS ; le Système est affiché dans la liste.
