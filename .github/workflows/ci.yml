@@ -51,7 +51,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # macOS : peu de machines pour un compte gratuit, longue attente. Pas sur les PR ; après la fusion (main) et
+        # avant chaque release (tag). Les PR vérifient quand même que le code compile pour macOS (go vet croisé).
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["windows-latest", "ubuntu-latest"]') || fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +65,10 @@ jobs:
           go-version-file: client/go.mod
           cache: false
       - run: go vet ./...
+        working-directory: client
+      - name: go vet pour macOS (compilation croisée)
+        if: matrix.os == 'ubuntu-latest'
+        run: GOOS=darwin GOARCH=arm64 go vet ./...
         working-directory: client
       - run: go test -count=1 -v ./...
         working-directory: client
