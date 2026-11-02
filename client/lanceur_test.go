@@ -27,12 +27,13 @@ var (
 	tmp, url                           string
 	reponses, questions, notifications []string
 	partie                             func()
-	joue, actif                        bool
+	joue                               bool
+	actifs                             int // processus de l'émulateur en cours
 	commandeLancee                     []string
 )
 
 func reinitialiser() {
-	reponses, questions, notifications, partie, joue, actif, commandeLancee = nil, nil, nil, nil, false, false, nil
+	reponses, questions, notifications, partie, joue, actifs, commandeLancee = nil, nil, nil, nil, false, 0, nil
 }
 
 func init() {
@@ -54,7 +55,7 @@ func init() {
 		}
 		return nil
 	}
-	emulateurActif = func(string) bool { return actif }
+	instances = func(string) int { return actifs }
 }
 
 func demarrerServeur(t *testing.T) {
@@ -406,13 +407,45 @@ func TestLanceur(t *testing.T) {
 	verifier(contient(notifications, "rien n'est remplacé"), "notification")
 	verifier(localHash() == hachage(v12) && hachage(courante("IRBF")) == hachage(v13), "rien n'a bougé")
 
-	t.Log("melonDS tourne déjà : refus")
+	t.Log("melonDS ouvert hors de 3dssavesync : son jeu est inconnu, refus")
 	reinitialiser()
-	actif = true
+	actifs = 1
 	verifier(run(rom) == 1, "code de sortie 1")
-	verifier(len(questions) == 0 && contient(notifications, "tourne déjà"), "notification, aucune fenêtre")
+	verifier(len(questions) == 0 && contient(notifications, "hors de 3dssavesync"), "notification, aucune fenêtre")
 	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg", "3dssavesync.log"))), "refus"), "le refus est écrit dans 3dssavesync.log")
 	verifier(!joue, "melonDS non lancé")
+
+	// Verrou d'un autre Lanceur pour ce même émulateur (pid vivant : celui de ce test).
+	verrou := func(cle string) string {
+		f := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", os.Getpid()))
+		ecrire(t, f, []byte(cle))
+		return f
+	}
+
+	t.Log("Un autre jeu lancé par 3dssavesync tourne dans melonDS : partie possible (échange entre deux jeux)")
+	reinitialiser()
+	actifs = 1
+	f := verrou("XXXX")
+	verifier(run(rom) == 0 && joue, "melonDS lancé à côté de l'autre jeu")
+	verifier(!existe(f), "le verrou de ce Lanceur est retiré après l'envoi")
+
+	t.Log("Le même jeu tourne déjà, lancé par 3dssavesync : refus")
+	reinitialiser()
+	actifs = 1
+	f = verrou("IRBF")
+	verifier(run(rom) == 1 && !joue && contient(notifications, "déjà en cours"), "refus du même jeu")
+	os.Remove(f)
+
+	t.Log("Verrou d'un Lanceur disparu (plantage) : retiré ; l'instance est alors inconnue, refus")
+	reinitialiser()
+	actifs = 1
+	fini := exec.Command(os.Args[0], "-test.run=^$")
+	if err := fini.Run(); err != nil {
+		t.Fatal(err)
+	}
+	mort := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", fini.Process.Pid))
+	ecrire(t, mort, []byte("XXXX"))
+	verifier(run(rom) == 1 && !joue && !existe(mort) && contient(notifications, "hors de 3dssavesync"), "verrou périmé retiré, refus")
 
 	t.Log("Homebrew (code ####) : partie sans Synchronisation")
 	reinitialiser()
