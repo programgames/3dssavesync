@@ -625,28 +625,49 @@ static const char *etat_court(int e)
     return "ok";
 }
 
-/* Boutons de l'écran du bas : dessinés, et touchables au stylet. */
+/* Barre des touches en bas de l'écran du bas (maquette 3 de l'issue #21) : chaque touche est aussi touchable au stylet. */
+typedef struct {
+    u32 touche;
+    const char *texte;
+    int actif; /* 0 : grisée (A sans rien à faire) */
+} touche_t;
 static struct { float x, y, l; u32 touche; } boutons[8];
 static int nb_boutons;
-#define HAUTEUR_BOUTON 26
+#define HAUTEUR_TOUCHE 22
+#define HAUT_BARRE (240 - 2 * HAUTEUR_TOUCHE - 4)
 
-/* Glyphe de bouton de la police du système (U+E000 A, E001 B, E002 X, E003 Y), à la couleur de la New 3DS. */
-static void bouton(float x, float y, float l, u32 touche, const char *texte)
+/* Glyphe de la police du système (U+E000 A, E001 B, E002 X, E003 Y) à la couleur de la New 3DS, ou START / SELECT. */
+static const char *glyphe(u32 t)
 {
-    int mot = touche & (KEY_START | KEY_SELECT);
-    const char *glyphe = touche == KEY_A ? "\xEE\x80\x80" : touche == KEY_B ? "\xEE\x80\x81" : touche == KEY_X ? "\xEE\x80\x82"
-                       : touche == KEY_Y ? "\xEE\x80\x83" : touche == KEY_START ? "START" : "SELECT";
-    u32 c = touche == KEY_A ? RGB(0xE04848) : touche == KEY_B ? RGB(0xF0C030) : touche == KEY_X ? RGB(0x4080F0)
-          : touche == KEY_Y ? RGB(0x40B060) : GRIS_C;
-    float g;
-    ecran_rect(x, y, l, HAUTEUR_BOUTON, RGB(0x2A313B));
-    g = ecran_texte(x + 6, y + (mot ? 7 : 3), mot ? 0.4f : 0.6f, c, 0, glyphe);
-    ecran_texte(x + 12 + g, y + 6, 0.45f, BLANC, l - 18 - g, texte);
-    if (nb_boutons < 8) {
-        boutons[nb_boutons].x = x;
-        boutons[nb_boutons].y = y;
-        boutons[nb_boutons].l = l;
-        boutons[nb_boutons++].touche = touche;
+    return t == KEY_A ? "\xEE\x80\x80" : t == KEY_B ? "\xEE\x80\x81" : t == KEY_X ? "\xEE\x80\x82" : t == KEY_Y ? "\xEE\x80\x83" : t == KEY_START ? "START" : "SELECT";
+}
+
+static float largeur_touche(const touche_t *t)
+{
+    int mot = t->touche & (KEY_START | KEY_SELECT);
+    return ecran_largeur(mot ? 0.36f : 0.55f, glyphe(t->touche)) + 4 + ecran_largeur(0.42f, t->texte);
+}
+
+/* Une ligne de touches à partir de y ; ecart = 0 : touches réparties sur toute la largeur. */
+static void ligne_touches(const touche_t *t, int n, float y, float ecart)
+{
+    float l[6], total = 0, x = 6;
+    int i;
+    for (i = 0; i < n; i++) total += l[i] = largeur_touche(&t[i]);
+    if (!ecart) ecart = n > 1 ? (308 - total) / (n - 1) : 0;
+    for (i = 0; i < n; i++) {
+        int mot = t[i].touche & (KEY_START | KEY_SELECT);
+        u32 c = !t[i].actif ? GRIS_F : t[i].touche == KEY_A ? RGB(0xE04848) : t[i].touche == KEY_B ? RGB(0xF0C030)
+              : t[i].touche == KEY_X ? RGB(0x4080F0) : t[i].touche == KEY_Y ? RGB(0x40B060) : GRIS_C;
+        float g = ecran_texte(x, y + (mot ? 5 : 2), mot ? 0.36f : 0.55f, c, 0, glyphe(t[i].touche));
+        ecran_texte(x + g + 4, y + 3, 0.42f, t[i].actif ? BLANC : GRIS_F, 0, t[i].texte);
+        if (nb_boutons < 8) { /* zone touchable : la touche et la moitié de l'écart de chaque côté */
+            boutons[nb_boutons].x = x - ecart / 2;
+            boutons[nb_boutons].y = y - 2;
+            boutons[nb_boutons].l = l[i] + ecart;
+            boutons[nb_boutons++].touche = t[i].touche;
+        }
+        x += l[i] + ecart;
     }
 }
 
@@ -657,7 +678,7 @@ static u32 bouton_touche(void)
     int i;
     hidTouchRead(&p);
     for (i = 0; i < nb_boutons; i++)
-        if (p.px >= boutons[i].x && p.px < boutons[i].x + boutons[i].l && p.py >= boutons[i].y && p.py < boutons[i].y + HAUTEUR_BOUTON)
+        if (p.px >= boutons[i].x && p.px < boutons[i].x + boutons[i].l && p.py >= boutons[i].y && p.py < boutons[i].y + HAUTEUR_TOUCHE)
             return boutons[i].touche;
     return 0;
 }
@@ -723,20 +744,22 @@ static float detail(float y, const char *libelle, const char *valeur)
 static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
 {
     switch (j->etat) {
-    case A_ENVOYER: return T("La sauvegarde de la 3DS est plus récente : envoie-la au serveur.", "The 3DS save is newer: upload it to the server.");
-    case A_RECUPERER: return T("Le serveur a une version plus récente : récupère-la sur la 3DS.", "The server has a newer version: download it to the 3DS.");
-    case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation.", "Conflict: the 3DS and the server both changed since the last sync.");
+    case A_ENVOYER: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
+    case A_RECUPERER: return T("Le serveur a une version plus récente. \xEE\x80\x80 la copie sur la 3DS (copie de sécurité faite avant).",
+                               "The server has a newer version. \xEE\x80\x80 copies it to the 3DS (backup copy made first).");
+    case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 te laisse choisir la version à garder.",
+                           "Conflict: the 3DS and the server both changed since the last sync. \xEE\x80\x80 lets you choose the version to keep.");
     case DOUBLON:
-        snprintf(t, n, T("%d ROM ont la même clé : garde-en une seule.", "%d ROMs have the same key: keep only one."), j->nb_roms);
+        snprintf(t, n, T("%d ROM ont la même clé : garde-en une seule. Rien à faire ici.", "%d ROMs have the same key: keep only one. Nothing to do here."), j->nb_roms);
         return t;
     }
-    return T("À jour : la 3DS et le serveur ont la même sauvegarde.", "In sync: the 3DS and the server have the same save.");
+    return T("À jour : la 3DS et le serveur ont la même sauvegarde. Rien à faire.", "In sync: the 3DS and the server have the same save. Nothing to do.");
 }
 
 static void dessiner_bas(const jeu_t *j)
 {
     char t[600], age[24];
-    float y = 6, h = 240 - 6 - HAUTEUR_BOUTON;
+    float y = 6;
     int action = 0, gb = 0;
     u16 icone[48 * 48];
 
@@ -770,22 +793,21 @@ static void dessiner_bas(const jeu_t *j)
     sans_ansi(message, t, sizeof t);
     if (t[0]) ecran_paragraphe(8, y, 0.45f, C_JAUNE, 304, t);
 
-    /* Du bas vers le haut : SELECT et B, START et Y, puis X et A selon le jeu (toute la largeur). */
-    bouton(6, h, 152, KEY_SELECT, T("Réglages", "Settings"));
-    bouton(162, h, 152, KEY_B, T("Quitter", "Quit"));
-    h -= HAUTEUR_BOUTON + 4;
-    bouton(6, h, 152, KEY_START, T("Tout synchroniser", "Sync all"));
-    bouton(162, h, 152, KEY_Y, T("Rafraîchir", "Refresh"));
-    if (gb) {
-        int fwd = !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS));
-        h -= HAUTEUR_BOUTON + 4;
-        snprintf(t, sizeof t, T("Jouer avec %s", "Play with %s"), fwd ? (j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight") : T("le forwarder mGBA", "the mGBA forwarder"));
-        bouton(6, h, 308, KEY_X, t);
-    }
-    if (action) {
-        h -= HAUTEUR_BOUTON + 4;
-        bouton(6, h, 308, KEY_A, j->etat == A_ENVOYER ? T("Envoyer au serveur", "Upload to the server")
-                                 : j->etat == A_RECUPERER ? T("Récupérer du serveur", "Download from the server") : T("Résoudre le conflit", "Resolve the conflict"));
+    /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
+     * en bas, les touches générales. */
+    ecran_rect(0, HAUT_BARRE - 3, 320, 240 - HAUT_BARRE + 3, RGB(0x1E242C));
+    {
+        char x[80];
+        touche_t jeu[2] = { { KEY_A, !j ? T("Aucun jeu", "No game") : j->etat == A_ENVOYER ? T("Envoyer au serveur", "Upload to the server")
+                                     : j->etat == A_RECUPERER ? T("Récupérer du serveur", "Download from the server")
+                                     : j->etat == CONFLIT ? T("Résoudre le conflit", "Resolve the conflict") : T("Rien à faire", "Nothing to do"), action },
+                            { KEY_X, x, 1 } };
+        const touche_t generales[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
+                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
+        if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS))
+                                                    ? (j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++") : T("le forwarder mGBA", "the mGBA forwarder"));
+        ligne_touches(jeu, gb ? 2 : 1, HAUT_BARRE, 18);
+        ligne_touches(generales, 4, HAUT_BARRE + HAUTEUR_TOUCHE, 0);
     }
 }
 
