@@ -52,6 +52,10 @@ button:disabled { opacity: .6; cursor: default; }
 .barre { position: fixed; left: 0; right: 0; bottom: 0; background: var(--carte); border-top: 1px solid var(--bord); padding: 12px 16px; }
 .barre div { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; flex-wrap: wrap; }
 #resultat ul { margin: 0; padding-left: 20px; }
+summary { cursor: pointer; }
+.tableau { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
 @media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -119,6 +123,17 @@ button:disabled { opacity: .6; cursor: default; }
     <label class="choix masque" id="esdeLigne"><input type="checkbox" id="esde"> <span>{{t "Configurer ES-DE" "Set up ES-DE"}} (<code id="esdeChemin"></code>)</span></label>
     <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
   </section>
+
+  <section id="sectionHistorique" class="masque">
+    <details id="historique">
+      <summary><b>{{t "Historique : restaurer une ancienne version" "History: restore an old version"}}</b></summary>
+      <p class="aide">{{t "Le serveur garde chaque version reçue. Restaurer une version en fait la version actuelle du serveur ; chaque appareil la reçoit ensuite à sa prochaine synchronisation, après une copie de sécurité. Rien n'est écrit sur ce PC maintenant." "The server keeps every version it receives. Restoring a version makes it the current server version; each device then gets it at its next sync, after a backup copy. Nothing is written on this PC now."}}</p>
+      <label for="jeu">{{t "Jeu" "Game"}}</label>
+      <select id="jeu"></select>
+      <p id="histoEtat" role="status"></p>
+      <div id="versions" class="tableau"></div>
+    </details>
+  </section>
 </main>
 
 <div class="barre"><div>
@@ -148,7 +163,14 @@ const T = {
   enPlus: {{t "Arguments en plus (avant la ROM)" "Extra arguments (before the ROM)"}},
   commande: {{t "Commande : " "Command: "}},
   manuel: {{t "ajouté à la main" "added by hand"}},
-  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}}
+  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}},
+  choisirJeu: {{t "Choisissez un jeu" "Choose a game"}},
+  aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
+  colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
+  actuelle: {{t "Version actuelle" "Current version"}},
+  restaurer: {{t "Restaurer cette version" "Restore this version"}},
+  confirmer: {{t "Restaurer la version du %s ?" "Restore the version of %s?"}},
+  explication: {{t "Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde. Un appareil avec une partie pas encore envoyée affiche un conflit, et vous choisissez." "This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n\nEach device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save. A device with a game not yet uploaded shows a conflict, and you choose."}}
 };
 const racine = location.pathname;
 const $ = id => document.getElementById(id);
@@ -317,6 +339,60 @@ async function charger() {
     return b;
   }));
   basculer();
+  $("sectionHistorique").classList.toggle("masque", !etat.Existe);
+}
+
+function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = classe || ""; }
+
+// Historique : les jeux du serveur à la première ouverture, puis les versions du jeu choisi.
+async function jeux() {
+  statut(T.attente);
+  const r = await api("jeux");
+  if (r.Erreur) return statut(T.erreur + r.Erreur, "erreur");
+  if (!r.Jeux.length) return statut(T.aucunJeu);
+  const vide = texte("option", T.choisirJeu);
+  vide.value = "";
+  $("jeu").replaceChildren(vide, ...r.Jeux.map(j => {
+    const o = texte("option", j.Nom ? j.Nom + " (" + j.Cle + ")" : j.Cle);
+    o.value = j.Cle;
+    return o;
+  }));
+  statut("");
+}
+
+async function versions(cle, message, classe) {
+  $("versions").replaceChildren();
+  if (!cle) return statut("");
+  statut(T.attente);
+  const r = await api("versions", {Cle: cle});
+  if (r.Erreur) return statut(T.erreur + r.Erreur, "erreur");
+  const table = document.createElement("table");
+  const tete = document.createElement("tr");
+  tete.append(...T.colonnes.map(c => texte("th", c)));
+  table.append(tete);
+  for (const v of r.Versions) {
+    const ligne = document.createElement("tr");
+    ligne.append(texte("td", v.Date), texte("td", v.Client), texte("td", v.Taille), texte("td", v.Partie));
+    const action = document.createElement("td");
+    if (v.Courante) action.append(texte("span", T.actuelle, "ok"));
+    else {
+      const b = texte("button", T.restaurer);
+      b.type = "button";
+      b.onclick = () => restaurer(cle, v, r.Versions[0].Hash).catch(e => statut(T.erreur + e.message, "erreur"));
+      action.append(b);
+    }
+    ligne.append(action);
+    table.append(ligne);
+  }
+  $("versions").append(table);
+  statut(message || "", classe);
+}
+
+async function restaurer(cle, v, courant) {
+  if (!confirm(T.confirmer.replace("%s", v.Date + (v.Partie ? " (" + v.Partie + ")" : "")) + "\n\n" + T.explication)) return;
+  statut(T.attente);
+  const r = await api("restaurer", {Cle: cle, Fichier: v.Fichier, Courant: courant});
+  await versions(cle, r.Message, r.Ok ? "ok" : "erreur");
 }
 
 function basculer() {
@@ -332,7 +408,11 @@ $("tester").onclick = async () => {
     $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
   } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
 };
-$("profil").onchange = () => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
+$("historique").ontoggle = () => {
+  if ($("historique").open && !$("jeu").options.length) jeux().catch(e => statut(T.erreur + e.message, "erreur"));
+};
+$("jeu").onchange = () => versions($("jeu").value).catch(e => statut(T.erreur + e.message, "erreur"));
+$("profil").onchange =() => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
 $("ajouter").onclick = async () => {
   const exe = $("exe").value.trim(), nom = $("nom").value.trim().toLowerCase();
   if (!exe || ($("profil").value === "" && !nom)) return;

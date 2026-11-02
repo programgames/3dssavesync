@@ -7,6 +7,7 @@
 //	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
 //	3dssavesync repair                                   refait la configuration des frontends
 //	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
+//	3dssavesync restore [--oui] [<clé> [<n°>]]           remet une ancienne Version comme Version courante
 //
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
 package main
@@ -111,6 +112,7 @@ func principal(args []string) int {
 	rom := fl.String("rom", "", "ROM, avec une commande après --")
 	texte := fl.Bool("texte", false, "setup : assistant en texte dans une console, sans navigateur")
 	sansNavigateur := fl.Bool("sans-navigateur", false, "setup : affiche l'adresse de la page au lieu d'ouvrir le navigateur (SSH)")
+	oui := fl.Bool("oui", false, "restore : sans question de confirmation")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -132,6 +134,8 @@ func principal(args []string) int {
 		code, err = commandeRepair(*config)
 	case "serve":
 		code, err = commandeServe(*config)
+	case "restore":
+		code = commandeRestoreConsole(*config, fl.Args(), *oui)
 	case "migrate-v2":
 		if fl.NArg() != 1 {
 			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))

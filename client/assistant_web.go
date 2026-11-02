@@ -32,6 +32,7 @@ type AssistantWeb struct {
 	verrou               sync.Mutex
 	vu                   time.Time // dernier signe de vie de la page
 	fin                  chan struct{}
+	noms                 map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
 }
 
 // Émulateur tel que la page l'affiche et le renvoie.
@@ -177,6 +178,16 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var x struct{ Nom string }
 		json.NewDecoder(r.Body).Decode(&x)
 		reponse = a.ouvrir(x.Nom)
+	case "api/jeux":
+		reponse = a.jeuxWeb()
+	case "api/versions", "api/restaurer":
+		var x struct{ Cle, Fichier, Courant string }
+		json.NewDecoder(r.Body).Decode(&x)
+		if chemin == "api/versions" {
+			reponse = a.versionsWeb(x.Cle)
+		} else {
+			reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
+		}
 	case "api/terminer":
 		close(a.fin)
 		reponse = true
