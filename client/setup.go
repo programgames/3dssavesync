@@ -194,6 +194,10 @@ func assistant(q *Questions, config string) error {
 		if err := serveurLocal(q, &cfg, config); err != nil {
 			return err
 		}
+		dire3DS(q, &cfg)
+	}
+	if slices.Contains(etapes, "serveur") {
+		etapeCarteSD(q, &cfg)
 	}
 	q.dire("\n%s", tr("Terminé.", "Done."))
 	return nil
@@ -232,14 +236,23 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 		return fmt.Errorf(tr("le serveur local ne répond pas. %s", "the local server does not answer. %s"), texteErreur(err))
 	}
 	q.dire("%s", tr("Serveur local en marche.", "Local server running."))
-	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
-	for _, ip := range adressesLocales() {
-		q.dire("  %s http://%s:%d", tr("Serveur :", "Server:"), ip, cfg.ServeurLocal.Port)
+	return nil
+}
+
+// Console : l'adresse et le jeton à entrer sur la 3DS (la page web les montre dans un cadre à part).
+func dire3DS(q *Questions, cfg *Config) {
+	url, autres := adresse3DS(cfg)
+	if url == "" {
+		url = tr("adresse du PC introuvable : vérifiez que le PC est relié à la box", "PC address not found: check that the PC is connected to the router")
 	}
+	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
+	q.dire("  %s %s", tr("Serveur :", "Server:"), url)
 	q.dire("  %s %s", tr("Jeton :", "Token:"), cfg.Jeton)
+	if len(autres) > 0 {
+		q.dire("  %s %s", tr("Autres adresses, si la 3DS ne se connecte pas :", "Other addresses, if the 3DS does not connect:"), strings.Join(autres, ", "))
+	}
 	q.dire("%s", tr("Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur).",
 		"Keep this token private. Never open this port on the Internet (router)."))
-	return nil
 }
 
 // config.json : copie datée de l'ancien, puis écriture vérifiée. Rien si rien n'a changé.
@@ -267,7 +280,7 @@ func etapeServeur(q *Questions, cfg *Config) error {
 	q.dire("  2. %s", tr("Serveur local sur ce PC : à la maison, PC allumé, rien d'autre à installer",
 		"Local server on this PC: at home, PC on, nothing else to install"))
 	defaut := "1"
-	if cfg.ServeurLocal != nil {
+	if cfg.ServeurLocal != nil || cfg.URL == "" { // premier lancement : serveur local, rien d'autre à installer
 		defaut = "2"
 	}
 	if q.texte(tr("Choix", "Choice"), defaut) == "2" {

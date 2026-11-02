@@ -243,3 +243,19 @@ func demarrerDetache(exe string, args []string) error {
 	}
 	return c.Process.Release()
 }
+
+// Lecteurs amovibles (carte SD, clé USB) : E:\, F:\…
+func racinesAmovibles() []string {
+	var l []string
+	masque, _, _ := kernel32.NewProc("GetLogicalDrives").Call()
+	for i := 0; i < 26; i++ {
+		r := string(rune('A'+i)) + `:\`
+		if masque&(1<<i) == 0 {
+			continue
+		}
+		if t, _, _ := kernel32.NewProc("GetDriveTypeW").Call(uintptr(unsafe.Pointer(u16(r)))); t == 2 { // DRIVE_REMOVABLE
+			l = append(l, r)
+		}
+	}
+	return l
+}

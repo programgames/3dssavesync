@@ -47,13 +47,14 @@ For a personal server: `server/docker-compose.yml` (behind your HTTPS reverse pr
 Requirements: a 3DS with custom firmware (Luma3DS) and FBI.
 
 1. Download `3dssavesync.cia` from the [latest release](https://github.com/programgames/3dssavesync/releases/latest), copy it to the SD card, install it with FBI.
-2. Start **3dssavesync**: the settings screen opens. Enter the server address and token, check the ROM and save folders (TWiLight Menu++ defaults are filled in), then **Test the connection**.
+2. Easiest: first do step 3 with the 3DS SD card in the PC, and click **Prepare the 3DS SD card** on the settings page. Put the card back in the 3DS and start **3dssavesync**: it connects without typing anything.
+3. Otherwise, start **3dssavesync**: the settings screen opens. Enter the server address and token, check the ROM and save folders (TWiLight Menu++ defaults are filled in), then press B: the connection is tested.
 
 ### 3. The PC
 
 1. Download the program for your system from the [latest release](https://github.com/programgames/3dssavesync/releases/latest): `3dssavesync-windows-amd64.exe`, `-linux-amd64`, `-darwin-arm64`…
 2. Double-click it (Linux: `chmod +x`, then run `./3dssavesync-linux-amd64 setup`; macOS: first `xattr -d com.apple.quarantine <file>`, the program is not signed).
-3. A settings page opens in your browser: server, emulators (found automatically), LaunchBox, ES-DE, shortcuts. Click **Save**.
+3. A settings page opens in your browser: server (local by default), emulators (found automatically), LaunchBox, ES-DE, shortcuts. Click **Save**, then prepare the 3DS SD card.
 
 Other frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode): [frontend guide](docs/guide-frontends.md). Full PC guide: [docs/guide-client-pc.md](docs/guide-client-pc.md). The detailed guides are in French.
 

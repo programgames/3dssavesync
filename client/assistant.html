@@ -56,6 +56,11 @@ summary { cursor: pointer; }
 .tableau { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 14px; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
+.cadre { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+.cadre h3 { font-size: 15px; margin: 0 0 8px; }
+.cadre .valeur { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.cadre .valeur b { min-width: 70px; }
+.cadre .valeur code { font-size: 16px; }
 @media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -87,9 +92,23 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
     <div id="local" class="masque">
       <label for="port">Port</label>
       <input type="number" id="port" min="1" max="65535">
-      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton à entrer sur la 3DS (3dssavesync, SELECT)." "The token is created or kept. After saving, this page shows the address and token to enter on the 3DS (3dssavesync, SELECT)."}}</p>
+      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton pour la 3DS, et peut les écrire sur sa carte SD." "The token is created or kept. After saving, this page shows the address and token for the 3DS, and can write them to its SD card."}}</p>
       <p class="aide alerte">{{t "N'ouvrez jamais ce port sur Internet (box, routeur) : il n'est pas chiffré." "Never open this port on the Internet (router): it is not encrypted."}}</p>
     </div>
+  </section>
+
+  <section id="sectionCarte" class="masque">
+    <h2>{{t "Carte SD de la 3DS" "3DS SD card"}}</h2>
+    <p class="aide">{{t "Mettez la carte SD de la 3DS dans ce PC. Le fichier 3ds/3dssavesync/config.ini reçoit l'adresse et le jeton (l'ancien est copié avant, le reste de la carte n'est pas touché) : la 3DS se connecte sans rien taper." "Put the 3DS SD card in this PC. The file 3ds/3dssavesync/config.ini gets the address and token (the old one is copied first, the rest of the card is not touched): the 3DS connects without typing anything."}}</p>
+    <p class="aide">{{t "Adresse écrite :" "Address written:"}} <code id="adresseCarte"></code></p>
+    <div class="ligne">
+      <div><label for="carte">{{t "Carte SD trouvée" "SD card found"}}</label><select id="carte"></select></div>
+      <button type="button" id="chercher">{{t "Chercher à nouveau" "Search again"}}</button>
+    </div>
+    <label for="carteChemin">{{t "Ou dossier de la carte SD (facultatif)" "Or SD card folder (optional)"}}</label>
+    <input type="text" id="carteChemin" autocomplete="off">
+    <p class="ligne" style="margin-top:10px"><button type="button" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button> <span id="carteEtat" role="status"></span></p>
+    <p class="aide"><a href="config.ini" download>{{t "Télécharger config.ini" "Download config.ini"}}</a> : {{t "pour le copier par FTP dans sdmc:/3ds/3dssavesync/. Ce fichier remet les dossiers de la 3DS à leur valeur par défaut ; avec la carte SD, ils sont gardés." "to copy it by FTP to sdmc:/3ds/3dssavesync/. This file resets the 3DS folders to their default value; with the SD card, they are kept."}}</p>
   </section>
 
   <section id="sectionProgramme">
@@ -167,6 +186,15 @@ const T = {
   choisirJeu: {{t "Choisissez un jeu" "Choose a game"}},
   aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
   colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
+  sur3DS: {{t "À entrer sur la 3DS (3dssavesync, SELECT), ou à écrire sur sa carte SD plus bas" "To enter on the 3DS (3dssavesync, SELECT), or to write to its SD card below"}},
+  adresse: {{t "Serveur" "Server"}},
+  jeton: {{t "Jeton" "Token"}},
+  copier: {{t "Copier" "Copy"}},
+  copie: {{t "Copié." "Copied."}},
+  autres: {{t "Autres adresses, si la 3DS ne se connecte pas" "Other addresses, if the 3DS does not connect"}},
+  secret: {{t "Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur)." "Keep this token private. Never open this port on the Internet (router)."}},
+  introuvable: {{t "Adresse du PC introuvable : vérifiez que le PC est relié à la box." "PC address not found: check that the PC is connected to the router."}},
+  aucuneCarte: {{t "Aucune carte SD de 3DS trouvée" "No 3DS SD card found"}},
   actuelle: {{t "Version actuelle" "Current version"}},
   restaurer: {{t "Restaurer cette version" "Restore this version"}},
   confirmer: {{t "Restaurer la version du %s ?" "Restore the version of %s?"}},
@@ -270,10 +298,35 @@ async function apercu(x, ligne) {
   ligne.className = r.Erreur ? "aide erreur" : "aide";
 }
 
-function afficher(titre, lignes, erreur) {
+// Cadre après l'enregistrement du serveur local : adresse et jeton pour la 3DS, chacun avec « Copier ».
+function cadre3DS(r) {
+  const d = document.createElement("div");
+  d.className = "cadre";
+  d.append(texte("h3", T.sur3DS));
+  for (const [nom, valeur] of [[T.adresse, r.Adresse], [T.jeton, r.Jeton]]) {
+    const l = document.createElement("div");
+    l.className = "valeur";
+    if (!valeur) { l.append(texte("b", nom), texte("span", T.introuvable, "erreur")); d.append(l); continue; }
+    const b = texte("button", T.copier);
+    b.type = "button";
+    b.onclick = () => navigator.clipboard.writeText(valeur).then(() => { b.textContent = T.copie; }).catch(() => {});
+    l.append(texte("b", nom), texte("code", valeur), b);
+    d.append(l);
+  }
+  if (r.Autres && r.Autres.length) {
+    const autres = document.createElement("details");
+    autres.append(texte("summary", T.autres), ...r.Autres.map(a => texte("div", a, "aide")));
+    d.append(autres);
+  }
+  d.append(texte("p", T.secret, "aide alerte"));
+  return d;
+}
+
+function afficher(titre, lignes, erreur, cadre) {
   const r = $("resultat");
   r.replaceChildren(texte("h2", titre));
   if (erreur) r.append(texte("p", T.erreur + erreur, "erreur"));
+  if (cadre) r.append(cadre);
   if (lignes && lignes.length) {
     const ul = document.createElement("ul");
     for (const l of lignes) ul.append(texte("li", l));
@@ -340,6 +393,19 @@ async function charger() {
   }));
   basculer();
   $("sectionHistorique").classList.toggle("masque", !etat.Existe);
+  const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
+  $("sectionCarte").classList.toggle("masque", !sd);
+  $("adresseCarte").textContent = etat.Adresse3DS || "";
+  $("carteChemin").placeholder = etat.Windows ? "E:\\" : "/media/…";
+  if (sd) await cartes();
+}
+
+// Cartes SD de 3DS branchées sur le PC (racine avec un dossier « Nintendo 3DS »).
+async function cartes() {
+  const r = await api("cartes");
+  const l = r.Cartes || [];
+  $("carte").replaceChildren(...(l.length ? l.map(c => texte("option", c)) : [texte("option", T.aucuneCarte)]));
+  $("carte").disabled = !l.length;
 }
 
 function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = classe || ""; }
@@ -408,6 +474,14 @@ $("tester").onclick = async () => {
     $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
   } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
 };
+$("chercher").onclick = () => cartes().catch(e => { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; });
+$("preparer").onclick = async () => {
+  $("carteEtat").textContent = T.attente; $("carteEtat").className = "";
+  try {
+    const r = await api("preparer", {Racine: $("carteChemin").value.trim() || ($("carte").disabled ? "" : $("carte").value)});
+    $("carteEtat").textContent = r.Message; $("carteEtat").className = r.Ok ? "ok" : "erreur";
+  } catch (e) { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; }
+};
 $("historique").ontoggle = () => {
   if ($("historique").open && !$("jeu").options.length) jeux().catch(e => statut(T.erreur + e.message, "erreur"));
 };
@@ -424,7 +498,7 @@ $("ajouter").onclick = async () => {
 };
 $("enregistrer").onclick = e => action(e.target, async () => {
   const r = await api("appliquer", choix());
-  afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur);
+  afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur, r.Jeton ? cadre3DS(r) : null);
   if (!r.Erreur) { $("jeton").value = ""; await charger(); }
 });
 $("reparer").onclick = e => action(e.target, async titre => {
