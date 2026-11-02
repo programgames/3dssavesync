@@ -214,7 +214,7 @@ Sources : `LMEL src/libretro/libretro.cpp#L85-L95` , `#L887-L895` , `#L119-L120`
 **Réponse courte.**
 - Version : dernière release 0.9.13 (2022-05-23). Le `master` reste actif (2026-10-25).
 - Lancement : `<exe> [options] "<rom>"`. Une seule ROM positionnelle. Windows : `--windowed-fullscreen`. Linux : pas d'option plein écran dans la table. `--load-slot N` charge un savestate.
-- Processus : nom de l'exe de la release Windows NON VÉRIFIÉ. Linux GTK : `desmume` (NON VÉRIFIÉ). Flathub `org.desmume.DeSmuME` existe.
+- Processus : release Windows 0.9.13 : `DeSmuME_0.9.13_x64.exe` (contenu du zip `desmume-0.9.13-win64.zip`, relevé le 2026-11-02). Linux GTK : `desmume` (NON VÉRIFIÉ). Flathub `org.desmume.DeSmuME` existe.
 - **Nom et dossier.**
   - Windows : clé `Battery` de la section `[PathSettings]` de `desmume.ini`. Défaut : `.\Battery` relatif au dossier de l'exécutable.
   - Linux (GTK) : `g_get_user_config_dir()/desmume/`, donc `~/.config/desmume/<rom>.dsv` (déduction : aucune autre affectation trouvée).
@@ -225,6 +225,7 @@ Sources : `LMEL src/libretro/libretro.cpp#L85-L95` , `#L887-L895` , `#L119-L120`
   - Puis 6 × `u32` petit-boutiste : taille écrite, taille remplie (`padSize`), type, taille d'adresse, taille mémoire, version (0).
   - Puis le cookie de 16 octets `|-DESMUME SAVE-|`.
   - Pied total : 82 + 24 + 16 = **122 octets**.
+  - DeSmuME lit comme SRAM tout ce qui précède le pied (taille du fichier - 122), égal à la taille remplie. La taille écrite est l'adresse qui a fait grandir le fichier : elle reste souvent en deçà de la puce (`mc.cpp` `BackupDevice::ensure`, chargement `#L344-L390`). Import d'un `.sav` brut : type et taille d'adresse pris dans `save_types` selon la taille (`mc.cpp#L300-L320`).
 - Si le `.dsv` manque, DeSmuME lit un `.sav` brut (ou NO$GBA) du même nom et le convertit en `.dsv`.
 - Option `backupSave` (défaut `false`) : copie `<rom>.dsv.bak` au chargement.
 - Savestate au lancement : aucune option automatique (seulement Lua `AutoLoad`, défaut `false`, et `--load-slot`).

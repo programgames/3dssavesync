@@ -56,6 +56,9 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 | `retroarch` | ceux de `coeurs` | `retroarch.cfg` : `savefile_directory` et les options de tri | `<ROM ou zip>.srm` | `savestate_auto_load` |
 | `vbam` | GB, GBA | `vbam.ini` : `BatteryDir` | `<ROM ou zip>.sav` | `AutoLoadLastState` |
 | `sameboy` | GB | (toujours à côté de la ROM) | `<ROM>.sav` | — |
+| `desmume` | DS | Windows : `desmume.ini` à côté de l'exe, `[PathSettings]` `Battery` (défaut `Battery` à côté de l'exe) ; Linux : `~/.config/desmume` | `<ROM>.dsv` ; ROM dans un zip : nom du fichier interne | — |
+
+**DeSmuME** : le `.dsv` contient la SRAM puis un pied de page de 122 octets. Le Lanceur retire ce pied avant le Hash et l'Envoi : le serveur reçoit la même SRAM brute que celle de la 3DS. À la Récupération, il fait la Copie de sécurité, puis remet le pied du `.dsv` existant (même taille) ou écrit un pied neuf, comme DeSmuME à l'import d'un `.sav`. Un `.dsv` sans pied valide n'est pas synchronisé. macOS : dossier non vérifié, indique `sauvegardes`.
 
 **Cœurs RetroArch gérés** : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M. Le fichier `.rtc` (horloge des jeux GB) reste sur le PC. Exemple :
 
