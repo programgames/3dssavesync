@@ -7,6 +7,11 @@ Play the same game on a modded 3DS and on a PC emulator, without copying save fi
 - One small server keeps **every version** of every save and never deletes anything.
 - The 3DS app and the PC launcher compare fingerprints: when only one side changed, the save is copied; when both changed, you choose (**never** an automatic overwrite).
 - Before any save is replaced, a backup copy is made.
+- To help you choose, each version shows its play time and trainer (Pokémon 3DS games) or its file date (other games).
+
+| 3DS app: game list and details | Conflict: choose the version to keep |
+|---|---|
+| ![3DS app main screen](docs/images/homebrew-en-1.png) | ![3DS app conflict screen](docs/images/homebrew-en-2.png) |
 
 ## How it works
 
