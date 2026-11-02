@@ -277,21 +277,16 @@ static void scanner_3ds(void)
     int i;
     for (i = 0; i < nb_titres && nb_jeux < MAX_JEUX; i++) {
         jeu_t *j = &jeux[nb_jeux];
-        unsigned char *octets;
-        size_t taille;
         progression(i + 1, nb_titres, T("Lecture des sauvegardes 3DS\n%s", "Reading 3DS saves\n%s"), titres[i].nom);
         memset(j, 0, sizeof *j);
         j->titre = titres[i].id;
-        if (titre_lire(j->titre, &j->media, &octets, &taille)) continue; /* jamais lancé ou absent */
-        cle_3ds(j->titre, j->cle);
         j->systeme = SYS_3DS;
+        j->nb_roms = 1;
+        lire_local(j); /* Hash, et temps de jeu d'un Pokémon 3DS */
+        if (!j->a_local) continue; /* jamais lancé ou absent */
+        cle_3ds(j->titre, j->cle);
         snprintf(j->nom, sizeof j->nom, "%s", titres[i].nom);
         snprintf(j->court, sizeof j->court, "%.47s", titres[i].nom);
-        j->nb_roms = 1;
-        hash_hex(octets, taille, j->hash_local);
-        j->local.taille = taille;
-        j->a_local = 1;
-        free(octets);
         nb_jeux++;
     }
 }
