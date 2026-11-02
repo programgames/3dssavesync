@@ -186,6 +186,17 @@ func TestTitres3DS(t *testing.T) {
 	}
 }
 
+// Titre GB avec un octet >= 0x80 : même Clé que cle.c (3ds/test/test_cle.c), sans panique.
+func TestCleGB(t *testing.T) {
+	tmp = t.TempDir()
+	rom := filepath.Join(tmp, "Pokemon.gb")
+	ecrire(t, rom, enteteGB("Pok\xe9mon\x99", 0x91E6))
+	_, cle, _, _, err := lireRom(rom)
+	if err != nil || cle != "GB-POK_MON_-91E6" {
+		t.Errorf("Clé %q, erreur %v", cle, err)
+	}
+}
+
 func TestCommandeEtDecoupage(t *testing.T) {
 	e := &Emulateur{Exe: "mGBA.exe", ArgsEnPlus: []string{"-f"}}
 	p, _ := e.profil("mgba")

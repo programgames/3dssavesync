@@ -110,7 +110,10 @@ func lireRom(rom string) (systeme, cle, nom, interne string, err error) {
 			titre = titre[:i]
 		}
 		propre := make([]byte, len(titre))
-		for i, c := range bytes.ToUpper(titre) {
+		for i, c := range titre { // octet par octet comme cle.c : bytes.ToUpper changerait la longueur (octet >= 0x80)
+			if c >= 'a' && c <= 'z' {
+				c -= 'a' - 'A'
+			}
 			if (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 				c = '_'
 			}

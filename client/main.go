@@ -215,16 +215,32 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if systeme == "" {
-		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom)
-	}
-	if s.profil, err = s.cfg.emulateurPour(systeme, demande); err != nil {
+	// Format non lu (.7z, .rar, .cia…) : le jeu démarre quand même, sans Synchronisation, avec l'émulateur demandé
+	// (LaunchBox, ES-DE) ou le seul de la configuration.
+	nonLu := systeme == ""
+	if nonLu {
+		if demande == "" && len(s.cfg.Emulateurs) == 1 {
+			for n := range s.cfg.Emulateurs {
+				demande = n
+			}
+		}
+		if s.cfg.Emulateurs[demande] == nil {
+			return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom)
+		}
+		s.profil = demande
+	} else if s.profil, err = s.cfg.emulateurPour(systeme, demande); err != nil {
 		return 1, err
 	}
 	e := s.cfg.Emulateurs[s.profil]
 	p, err := e.profil(s.profil)
 	if err != nil {
 		return 1, err
+	}
+	if l := e.systemes(p); nonLu && len(l) == 1 {
+		systeme = l[0] // pour la commande (cœur RetroArch)
+	}
+	if nonLu && commande == nil && len(e.Coeurs) > 0 && e.Coeurs[systeme] == "" {
+		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom) // RetroArch : quel cœur ?
 	}
 	if s.refus(e, cle, nom) {
 		return 1, nil
@@ -245,6 +261,10 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 			nom = interne
 		}
 		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}}
+	}
+	if nonLu {
+		notifier(fmt.Sprintf(tr("Jeu lancé sans synchronisation : format de ROM non lu (%s). Utilisez une ROM .zip ou non compressée.",
+			"Game started without sync: ROM format not read (%s). Use a .zip or uncompressed ROM."), strings.ToLower(filepath.Ext(rom))))
 	}
 	return s.jouer(jeux, commande, conseil(e, p))
 }

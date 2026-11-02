@@ -33,6 +33,7 @@ int main(void)
     cas_rom(SYS_GB, 0x134, "PM_CRYSTAL", 0xF2E2, "GB-PM_CRYSTAL-F2E2");
     cas_rom(SYS_GB, 0x134, "pokemon yel", 0x0001, "GB-POKEMON_YEL-0001");
     cas_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 caractères, sans 0x00 */
+    cas_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* octets >= 0x80 : même Clé que client/profils_test.go */
     cas_rom(SYS_GB, 0x134, "", 0x1234, NULL);
     cas_rom(SYS_GBA, 0xAC, "BPEF", 0, "GBA-BPEF");
     cas_rom(SYS_GBA, 0xAC, "bp f", 0, NULL);

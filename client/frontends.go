@@ -220,11 +220,15 @@ func esde(systems, regles, lanceur string, emus map[string]string) (string, stri
 			systems = strings.Replace(systems, bloc, bloc[:i]+commande+"\n        "+bloc[i:], 1)
 			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : commande ajoutée en premier", "ES-DE %s: command added first"), n))
 		default:
+			ext := d[2]
 			if bloc != "" {
+				if e := champ(bloc, "extension"); e != "" { // liste de l'utilisateur gardée, jamais réduite
+					ext = e
+				}
 				systems = strings.Replace(systems, bloc, "", 1)
 			}
 			nouveau := "    <system>\n        <name>" + n + "</name>\n        <fullname>" + d[1] + "</fullname>\n        <path>%ROMPATH%/" + n +
-				"</path>\n        <extension>" + d[2] + "</extension>\n        " + commande + "\n        <platform>" + n +
+				"</path>\n        <extension>" + ext + "</extension>\n        " + commande + "\n        <platform>" + n +
 				"</platform>\n        <theme>" + n + "</theme>\n    </system>\n"
 			systems = strings.Replace(systems, "</systemList>", nouveau+"</systemList>", 1)
 			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : système ajouté (seulement la commande 3dssavesync)", "ES-DE %s: system added (3dssavesync command only)"), n))

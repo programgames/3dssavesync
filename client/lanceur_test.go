@@ -456,6 +456,17 @@ func TestLanceur(t *testing.T) {
 	verifier(joue, "melonDS lancé")
 	verifier(codes() == avant && len(questions) == 0, "rien envoyé, aucune question")
 
+	t.Log("ROM en .7z (LaunchBox, AutoExtract désactivé) : partie sans Synchronisation, une notification")
+	reinitialiser()
+	sept := filepath.Join(tmp, "roms", "Pokemon Noire.7z")
+	ecrire(t, sept, []byte("7z\xbc\xaf\x27\x1c"))
+	avant = codes()
+	verifier(run("--emulator", "melonds", sept) == 0 && joue && commandeLancee[len(commandeLancee)-1] == sept, "melonDS lancé avec le .7z")
+	verifier(codes() == avant && len(questions) == 0 && len(notifications) == 1 &&
+		contient(notifications, "format de ROM non lu (.7z)"), "rien envoyé, une seule notification")
+	reinitialiser()
+	verifier(run(sept) == 1 && !joue, "sans --emulator et plusieurs émulateurs : refus")
+
 	t.Log("ROM en .zip : Code jeu et nom lus dans l'archive")
 	reinitialiser()
 	nds := make([]byte, 0x200)

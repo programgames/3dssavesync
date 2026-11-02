@@ -106,6 +106,11 @@ func TestESDE(t *testing.T) {
 	if i < 0 || j < i || !strings.Contains(s4, "DeSmuME") {
 		t.Errorf("bloc EmuDeck : commande 3dssavesync en premier, les autres gardées :\n%s", s4)
 	}
+	sansCommande := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <extension>.nds .7z .rar</extension>\n    </system>\n</systemList>\n"
+	s5, _, _ := esde(sansCommande, "", "x", map[string]string{"DS": "melonds"})
+	if !strings.Contains(s5, "<extension>.nds .7z .rar</extension>") || !strings.Contains(s5, "3dssavesync (melonds)") {
+		t.Errorf("bloc sans commande : extensions de l'utilisateur gardées :\n%s", s5)
+	}
 }
 
 func TestDesktop(t *testing.T) {
