@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -223,15 +224,41 @@ func (s *Serveur) put(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, nil, `"`+h+`"`)
 }
 
-// Adresses IPv4 du PC sur le réseau local : celles à entrer sur la 3DS.
+// Adresses IPv4 du PC sur le réseau local : celles à entrer sur la 3DS, la plus probable en tête.
 func adressesLocales() []string {
+	route := ""
+	// UDP : « connecter » choisit seulement la route, rien n'est envoyé. 192.0.2.1 : adresse de documentation.
+	if c, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {
+		route = c.LocalAddr().(*net.UDPAddr).IP.String()
+		c.Close()
+	}
 	var l []string
 	adresses, _ := net.InterfaceAddrs()
 	for _, a := range adresses {
-		if ip, ok := a.(*net.IPNet); ok && ip.IP.To4() != nil && ip.IP.IsPrivate() {
+		if ip, ok := a.(*net.IPNet); ok && ip.IP.To4() != nil && ip.IP.IsPrivate() && !slices.Contains(l, ip.IP.String()) {
 			l = append(l, ip.IP.String())
 		}
 	}
+	return ordonnerAdresses(l, route)
+}
+
+// La carte réseau de la box d'abord : pas en .1 (côté PC d'un réseau virtuel : WSL, Docker, VirtualBox, VMware), puis
+// en 192.168 (plage des box), puis celle de la route par défaut (seule, elle désigne un VPN actif : ADR 0017).
+func ordonnerAdresses(l []string, route string) []string {
+	rang := func(a string) int {
+		r := 0
+		if strings.HasSuffix(a, ".1") {
+			r += 4
+		}
+		if !strings.HasPrefix(a, "192.168.") {
+			r += 2
+		}
+		if a != route {
+			r++
+		}
+		return r
+	}
+	slices.SortStableFunc(l, func(a, b string) int { return rang(a) - rang(b) })
 	return l
 }
 

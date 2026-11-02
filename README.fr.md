@@ -48,13 +48,14 @@ Serveur personnel : `server/docker-compose.yml` (derrière votre reverse proxy H
 Prérequis : une 3DS avec un firmware modifié (Luma3DS) et FBI.
 
 1. Téléchargez `3dssavesync.cia` dans la [dernière release](https://github.com/programgames/3dssavesync/releases/latest), copiez-le sur la carte SD, installez-le avec FBI.
-2. Lancez **3dssavesync** : l'écran de réglages s'ouvre. Entrez l'adresse du serveur et le jeton, vérifiez les dossiers des ROM et des sauvegardes (ceux de TWiLight Menu++ sont proposés), puis **Tester la connexion**.
+2. Le plus simple : faites d'abord l'étape 3 avec la carte SD de la 3DS dans le PC, et cliquez sur **Préparer la carte SD de la 3DS** dans la page de réglages. Remettez la carte dans la 3DS et lancez **3dssavesync** : il se connecte sans rien taper.
+3. Sinon, lancez **3dssavesync** : l'écran de réglages s'ouvre. Entrez l'adresse du serveur et le jeton, vérifiez les dossiers des ROM et des sauvegardes (ceux de TWiLight Menu++ sont proposés), puis appuyez sur B : la connexion est testée.
 
 ### 3. Le PC
 
 1. Téléchargez le programme de votre système dans la [dernière release](https://github.com/programgames/3dssavesync/releases/latest) : `3dssavesync-windows-amd64.exe`, `-linux-amd64`, `-darwin-arm64`…
 2. Double-cliquez dessus (Linux : `chmod +x`, puis `./3dssavesync-linux-amd64 setup` ; macOS : d'abord `xattr -d com.apple.quarantine <fichier>`, le programme n'est pas signé).
-3. Une page de réglages s'ouvre dans le navigateur : serveur, émulateurs (trouvés automatiquement), LaunchBox, ES-DE, raccourcis. Cliquez sur **Enregistrer**.
+3. Une page de réglages s'ouvre dans le navigateur : serveur (local par défaut), émulateurs (trouvés automatiquement), LaunchBox, ES-DE, raccourcis. Cliquez sur **Enregistrer**, puis préparez la carte SD de la 3DS.
 
 Autres frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode) : [guide des frontends](docs/guide-frontends.md). Guide complet du PC : [docs/guide-client-pc.md](docs/guide-client-pc.md).
 

@@ -1,6 +1,6 @@
-"""Serveur ndssync : Historique des Sauvegardes DS (docs/design.md §2, ADR 0004).
+"""Serveur personnel 3dssavesync : Historique des Sauvegardes DS, GB, GBA et 3DS (docs/design.md §2, ADR 0004).
 
-Variables d'environnement : NDSSYNC_TOKEN (obligatoire), NDSSYNC_DATA (défaut /data), NDSSYNC_PORT (défaut 8080).
+Variables d'environnement (préfixe NDSSYNC_ d'avant la v3, gardé pour les installations existantes) : NDSSYNC_TOKEN (obligatoire), NDSSYNC_DATA (défaut /data), NDSSYNC_PORT (défaut 8080).
 Une Version = data/<code>/<seq>-<date>-<client>-<hash>.sav ; la Version courante a le plus grand <seq>.
 Rien n'est jamais supprimé ni réécrit.
 """

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -60,6 +61,7 @@ type SysWeb struct {
 type EtatWeb struct {
 	Anglais, Windows, Existe, JetonPresent, Local bool
 	URL, Courant, Installe, LaunchBox, EsDe       string
+	Adresse3DS                                    string // écrite sur la carte SD de la 3DS
 	Port                                          int
 	EsDeActif                                     bool
 	Emulateurs                                    []EmuWeb
@@ -140,6 +142,19 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.Execute(w, map[string]any{"Langue": tr("fr", "en")})
 		return
 	}
+	if chemin == "config.ini" && r.Method == "GET" { // à copier par FTP sur la 3DS
+		var cfg Config
+		lireJSON(a.config, &cfg)
+		url, _ := adresse3DS(&cfg)
+		if url == "" || cfg.Jeton == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="config.ini"`)
+		io.WriteString(w, configIni("", url, cfg.Jeton))
+		return
+	}
 	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // une autre page ne peut pas envoyer ce type sans CORS
 		http.Error(w, "", 405)
 		return
@@ -166,7 +181,27 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var c ChoixWeb
 		json.NewDecoder(r.Body).Decode(&c)
 		lignes, err := a.appliquer(c)
-		reponse = map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		x := map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		var cfg Config
+		if err == nil && lireJSON(a.config, &cfg) == nil && cfg.ServeurLocal != nil { // cadre « à entrer sur la 3DS »
+			x["Adresse"], x["Autres"] = adresse3DS(&cfg)
+			x["Jeton"] = cfg.Jeton
+		}
+		reponse = x
+	case "api/cartes":
+		reponse = map[string]any{"Cartes": detecterCartes()}
+	case "api/preparer":
+		var x struct{ Racine string }
+		json.NewDecoder(r.Body).Decode(&x)
+		var cfg Config
+		lireJSON(a.config, &cfg)
+		url, _ := adresse3DS(&cfg)
+		if f, err := preparerCarte(x.Racine, url, cfg.Jeton); err != nil {
+			reponse = map[string]any{"Ok": false, "Message": texteErreur(err)}
+		} else {
+			reponse = map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("Carte SD prête (%s). Remettez-la dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
+				"SD card ready (%s). Put it back in the 3DS, then start 3dssavesync: it connects without typing anything."), f)}
+		}
 	case "api/reparer":
 		var cfg Config
 		if err := lireConfig(a.config, &cfg); err != nil {
@@ -296,7 +331,10 @@ func (a *AssistantWeb) etat() EtatWeb {
 	var cfg Config
 	existeCfg := lireJSON(a.config, &cfg) == nil
 	e := EtatWeb{Anglais: anglais, Windows: runtime.GOOS == "windows", Existe: existeCfg, JetonPresent: cfg.Jeton != "",
-		Local: cfg.ServeurLocal != nil, URL: cfg.URL, Courant: executable(), Installe: emplacementInstalle(), Port: 8765}
+		Local: cfg.ServeurLocal != nil || !existeCfg, URL: cfg.URL, Courant: executable(), Installe: emplacementInstalle(), Port: 8765}
+	if cfg.Jeton != "" {
+		e.Adresse3DS, _ = adresse3DS(&cfg)
+	}
 	if cfg.ServeurLocal != nil {
 		e.Port = cfg.ServeurLocal.Port
 		e.URL = ""

@@ -12,10 +12,11 @@ Les deux gardent les mêmes fichiers : `data/<Clé>/<n°>-<date>-<client>-<hash>
 
 ## Serveur local sur le PC
 
-1. Lancez l'assistant (`3dssavesync setup`, ou double-clic sur l'exe), étape « Serveur », choix **2**.
+1. Lancez l'assistant (`3dssavesync setup`, ou double-clic sur l'exe), étape « Serveur » : le serveur local est proposé au premier lancement (choix **2** en mode texte).
 2. L'assistant choisit un port (8765 par défaut), crée un jeton, lance le serveur et le fait démarrer avec la session (Windows : dossier Démarrage ; Linux : autostart ; macOS : LaunchAgent).
 3. Sous Windows, acceptez la demande du pare-feu pour les **réseaux privés**.
-4. L'assistant affiche l'adresse et le jeton à entrer sur la 3DS : 3dssavesync, SELECT, lignes « Serveur » (`http://192.168.1.20:8765` par exemple) et « Jeton ».
+4. L'assistant affiche l'adresse et le jeton pour la 3DS : l'adresse du PC sur la box d'abord, les autres (WSL, Docker, VPN) sous « Autres adresses ».
+5. Le plus simple : mettez la carte SD de la 3DS dans le PC, puis **Préparer la carte SD de la 3DS** : `3ds/3dssavesync/config.ini` reçoit l'adresse et le jeton. Sinon, entrez-les sur la 3DS : 3dssavesync, SELECT, lignes « Serveur » (`http://192.168.1.20:8765` par exemple) et « Jeton ».
 
 Les données sont dans `serveur/`, à côté de `config.json` (champ `serveur_local.donnees` pour un autre dossier). Commande : `3dssavesync serve`.
 

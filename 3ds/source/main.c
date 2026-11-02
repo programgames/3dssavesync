@@ -1214,8 +1214,11 @@ static int reglages(int premier)
     while (aptMainLoop()) {
         u32 k;
         float y = 30;
+        /* Premier lancement : B teste d'abord la connexion ; un second B après un échec revient quand même. */
         touche_t t[2] = { { KEY_A, c < nb ? T("Modifier", "Change") : c == nb ? T("Choisir", "Choose") : T("Tester", "Test"), 1 },
-                          { KEY_B, T("Enregistrer et revenir", "Save and go back"), 1 } };
+                          { KEY_B, !premier || test_ok ? T("Enregistrer et revenir", "Save and go back")
+                                   : test[0]           ? T("Revenir quand même", "Go back anyway")
+                                                       : T("Tester et revenir", "Test and go back"), 1 } };
 
         ecran_debut();
         ecran_haut();
@@ -1250,11 +1253,17 @@ static int reglages(int premier)
         ecran_finir();
 
         k = lire_touches();
-        if (k & KEY_B) break;
+        if (k & KEY_B) {
+            if (!premier || test_ok || test[0]) break;
+            message[0] = '\0';
+            if ((test_ok = tester_connexion(test, sizeof test))) break;
+            continue;
+        }
         if (k & KEY_DOWN && c + 1 < total) c++;
         if (k & KEY_UP && c > 0) c--;
         if (k & KEY_A) {
             message[0] = test[0] = '\0';
+            test_ok = 0;
             if (c < nb) {
                 size_t len;
                 editer(T(l[c].nom, l[c].nom_en), l[c].valeur, l[c].n, c == 1);
@@ -1267,8 +1276,7 @@ static int reglages(int premier)
             }
         }
     }
-    message[0] = '\0';
-    message[0] = '\0';
+    snprintf(message, sizeof message, "%s", premier ? test : ""); /* premier lancement : le résultat du test reste affiché */
     change = memcmp(avant, &cfg, sizeof cfg) || avant_nb != nb_titres || memcmp(avant_titres, titres, sizeof titres);
     if (memcmp(avant, &cfg, sizeof cfg)) ecrire_config();
     return change;
@@ -1488,8 +1496,8 @@ int main(void)
         char reprise[512];
         snprintf(reprise, sizeof reprise, "%s", message);
         if (!cfg.url[0]) snprintf(cfg.url, sizeof cfg.url, "https://");
-        reglages(1);
-        snprintf(message, sizeof message, "%s", reprise);
+        reglages(1); /* message : résultat du test de la connexion */
+        snprintf(message + strlen(message), sizeof message - strlen(message), "%s%.200s", reprise[0] && message[0] ? "\n" : "", reprise);
     }
     rafraichir();
     montrer_alerte();

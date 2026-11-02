@@ -6,12 +6,12 @@ Un seul exécutable, sans dépendance. Sous Windows, il n'ouvre pas de console p
 
 Double-cliquez sur l'exécutable, ou sur le raccourci « 3dssavesync réglages ». Le programme ouvre une page de réglages dans le navigateur (adresse locale `http://127.0.0.1:<port>/<secret>/`, accessible seulement depuis ce PC). La page présente 4 parties :
 
-1. **Serveur** : serveur personnel (adresse et jeton, bouton « Tester la connexion ») ou serveur local sur ce PC ([guide-serveur.md](guide-serveur.md)) ;
+1. **Serveur** : serveur local sur ce PC (proposé au premier lancement) ou serveur personnel (adresse et jeton, bouton « Tester la connexion ») ([guide-serveur.md](guide-serveur.md)). Une fois le serveur enregistré, la partie **Carte SD de la 3DS** écrit l'adresse et le jeton dans `3ds/3dssavesync/config.ini` de la carte SD (copie de l'ancien avant, autres réglages gardés), ou propose **Télécharger config.ini** pour une copie par FTP ;
 2. **Programme** : copie du programme à un emplacement fixe : `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS) ;
 3. **Émulateurs** : ceux de la configuration, et ceux trouvés sur le PC (PATH, dossiers usuels, Flatpak, AppImage d'EmuDeck, `/Applications`, émulateurs de LaunchBox), avec leurs dossiers de sauvegardes et de ROM ; on peut aussi en ajouter un à la main ;
 4. **Frontends et raccourcis** : LaunchBox (Windows), ES-DE, un raccourci par émulateur (commande `launch`).
 
-Rien n'est écrit avant le bouton **Enregistrer**. Un serveur personnel injoignable bloque l'enregistrement. Chaque fichier modifié (`config.json`, fichiers des frontends) est copié avant (date dans le nom). Le jeton ne s'affiche jamais, sauf l'adresse et le jeton du serveur local, à entrer sur la 3DS. Le programme s'arrête avec le bouton **Terminer**, ou 2 minutes après la fermeture de l'onglet.
+Rien n'est écrit avant le bouton **Enregistrer**. Un serveur personnel injoignable bloque l'enregistrement. Chaque fichier modifié (`config.json`, fichiers des frontends) est copié avant (date dans le nom). Le jeton ne s'affiche jamais, sauf l'adresse et le jeton du serveur local, dans un cadre « À entrer sur la 3DS ». Le programme s'arrête avec le bouton **Terminer**, ou 2 minutes après la fermeture de l'onglet.
 
 Sans navigateur (SSH, Steam Deck en mode Jeu) : `3dssavesync setup --sans-navigateur` affiche l'adresse de la page, et `3dssavesync setup --texte` pose les mêmes questions dans le terminal.
 
