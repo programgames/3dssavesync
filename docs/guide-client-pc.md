@@ -35,6 +35,7 @@ Un autre emplacement : option `--config <fichier>`. Modèle : [`client/config.ex
 | `copies` | Dossier des Copies de sécurité (facultatif ; défaut : `copies` à côté de `config.json`). |
 | `serveur_local` | Facultatif : `{"port": 8765, "donnees": "…"}` pour `3dssavesync serve` ; `url` vaut alors `http://127.0.0.1:<port>`. Voir [guide-serveur.md](guide-serveur.md). |
 | `titres_3ds` | Facultatif : jeux 3DS en plus des 8 Pokémon, `{"<title ID>": "<nom>"}`. Même liste que l'écran « Jeux 3DS » de la 3DS ; seulement des jeux dont la sauvegarde est un seul fichier `main`. |
+| `alias` | Facultatif : `{"<nom de la ROM sans extension>": "<Clé>"}`, pour un ROM hack qui garde la Clé de son jeu d'origine. Voir « ROM hack » plus bas. |
 | `emulateurs.<nom>.exe` | L'émulateur. |
 | `emulateurs.<nom>.profil` | Facultatif : le Profil (tableau suivant). Défaut : le nom de l'entrée. Sert pour deux installations du même émulateur. |
 | `emulateurs.<nom>.sauvegardes` | Facultatif : Système → dossier des Sauvegardes (`DS`, `GB`, `GBA` ; `3DS` : le dossier `sdmc`). Défaut : le réglage de l'émulateur. S'il est présent, l'émulateur ne gère que ces Systèmes. |
@@ -120,6 +121,22 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 - **`migrate-v2`** : reprend `sync.config.json` et `base.json` de l'ancien Lanceur PowerShell. Rien n'est remplacé : la commande refuse si la configuration existe déjà. L'installation v2 n'est pas modifiée.
 
 Un frontend qui arrête le programme pendant la partie (signal d'arrêt sous Linux et macOS) n'empêche pas l'envoi : le programme attend la fin de l'émulateur. Un arrêt forcé (`SIGKILL`, « Terminer la tâche ») coupe l'envoi ; il part au lancement suivant.
+
+**Envoi impossible après la partie** (réseau coupé, serveur arrêté) : la Sauvegarde est notée dans `en-attente.json`, à côté de `config.json`. Au début du prochain `run` ou `launch`, quel que soit le jeu, le Lanceur la synchronise d'abord, avec la comparaison habituelle : un Conflit pose la question habituelle (« Garder le PC » ou « Ne rien faire »), rien n'est jamais écrasé sans comparaison. Elle reste en attente tant que son émulateur est ouvert ou que le serveur ne répond pas.
+
+## ROM hack
+
+Un ROM hack garde souvent la Clé de son jeu d'origine (Pokémon Radical Red garde celle de Rouge Feu). Pour ne jamais mélanger les deux parties (ADR 0014) :
+
+- `run` : le Lanceur retient la ROM de chaque jeu synchronisé. Une autre ROM avec la même Clé démarre sans synchronisation, et une notification nomme les deux fichiers. Si la ROM retenue n'existe plus (renommée, déplacée), la nouvelle la remplace.
+- `launch` : deux ROM avec la même Clé dans les dossiers `roms` ne sont pas synchronisées ; une notification les nomme.
+
+Pour synchroniser le hack à part, donnez-lui un alias, avec la même valeur sur le PC et sur la 3DS :
+
+- PC, `config.json` : `"alias": {"Pokemon Radical Red": "GBA-0RAD"}` (nom du fichier de la ROM sans extension).
+- 3DS, fichier `sd:/3ds/3dssavesync/alias.ini`, une ligne par ROM : `Pokemon Radical Red=GBA-0RAD`.
+
+L'alias a la forme d'une Clé du Système de la ROM : `0RAD` (DS), `GBA-0RAD` (GBA), `GB-MONHACK-0001` (GB : titre de 1 à 15 caractères `A-Z`, `0-9`, `_`, puis 4 chiffres hexadécimaux). En DS et en GBA, commencez le code par un chiffre : aucun jeu du commerce n'a une telle Clé. Un alias invalide empêche la synchronisation de cette ROM ; la notification donne un exemple.
 
 ## LaunchBox
 

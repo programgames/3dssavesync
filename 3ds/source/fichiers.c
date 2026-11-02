@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "fichiers.h"
 
 int lire_fichier(const char *chemin, unsigned char **octets, size_t *taille)
@@ -77,4 +78,14 @@ int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int
 fin:
     free(octets);
     return r;
+}
+
+int chemin_sauvegarde(const char *roms, const char *saves, const char *dossier, const char *nom, char *out, size_t n)
+{
+    size_t l = strlen(roms);
+    int r;
+    if (!saves[0] || !strcasecmp(saves, roms)) r = snprintf(out, n, "%s/%s.sav", dossier, nom);
+    else if (!strncasecmp(saves, roms, l) && !strcasecmp(saves + l, "/saves")) r = snprintf(out, n, "%s/saves/%s.sav", dossier, nom);
+    else r = snprintf(out, n, "%s/%s.sav", saves, nom);
+    return r < 0 || (size_t)r >= n ? -1 : 0;
 }

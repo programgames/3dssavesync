@@ -43,6 +43,19 @@ int main(void)
     cle_3ds(0x00040000001B5000ULL, cle);
     verifier(!strcmp(cle, "3DS-00040000001B5000"), "3DS-00040000001B5000");
 
+    /* Alias (ADR 0014) : mêmes cas que TestCleAlias dans client/cas_test.go */
+    verifier(cle_alias(SYS_DS, "0rad", cle) == 0 && !strcmp(cle, "0RAD"), "alias DS 0rad -> 0RAD");
+    verifier(cle_alias(SYS_GBA, " GBA-0RAD ", cle) == 0 && !strcmp(cle, "GBA-0RAD"), "alias GBA avec espaces");
+    verifier(cle_alias(SYS_GB, "GB-MONHACK-0001", cle) == 0 && !strcmp(cle, "GB-MONHACK-0001"), "alias GB");
+    verifier(cle_alias(SYS_GB, "GB-POKEMON_GLDAAUF-6FC6", cle) == 0, "alias GB, titre de 15 caractères");
+    verifier(cle_alias(SYS_GBA, "GBA-BPRE-RADICALRED", cle) != 0, "alias GBA trop long : refusé");
+    verifier(cle_alias(SYS_GBA, "0RAD", cle) != 0, "alias d'un autre Système : refusé");
+    verifier(cle_alias(SYS_GB, "GB-MON-HACK-0001", cle) != 0, "alias GB avec un tiret dans le titre : refusé");
+    verifier(cle_alias(SYS_GB, "GB--0001", cle) != 0, "alias GB sans titre : refusé");
+    verifier(cle_alias(SYS_GB, "GB-MONHACK-00G1", cle) != 0, "alias GB, somme non hexadécimale : refusée");
+    verifier(cle_alias(SYS_DS, "", cle) != 0, "alias vide : refusé");
+    verifier(cle_alias(SYS_3DS, "3DS-00040000001B5000", cle) != 0, "pas d'alias 3DS");
+
     verifier(sram_taille(SYS_GB, 32816) == 32768, "GB 32816 -> 32768 (trailer mGBA 48 o)");
     verifier(sram_taille(SYS_GB, 32768) == 32768, "GB 32768 inchangé");
     verifier(sram_taille(SYS_GBA, 131088) == 131072, "GBA 131088 -> 131072 (trailer mGBA 16 o)");

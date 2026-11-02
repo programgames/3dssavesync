@@ -252,32 +252,86 @@ static int vers_fichier(const jeu_t *j, unsigned char **octets, size_t *taille, 
     return 0;
 }
 
-/* Une source de ROM (racine seulement, Q10) : Clé lue dans l'en-tête, .sav nommé comme la ROM dans le dossier saves. */
+/* Alias (alias.ini, ADR 0014) : "nom de la ROM sans extension=CLÉ", pour qu'un ROM hack ait sa propre Clé. */
+#define MAX_ALIAS 64
+static struct { char nom[256], valeur[CLE_MAX]; } alias[MAX_ALIAS];
+static int nb_alias;
+
+static void cle_alias_ini(const char *k, const char *v)
+{
+    size_t n = strlen(k);
+    while (n && k[n - 1] == ' ') n--; /* "Pokemon Radical Red = GBA-0RAD" */
+    if (nb_alias == MAX_ALIAS || !n || n >= sizeof alias[0].nom) return;
+    snprintf(alias[nb_alias].nom, sizeof alias[0].nom, "%.*s", (int)n, k);
+    snprintf(alias[nb_alias].valeur, sizeof alias[0].valeur, "%s", v); /* coupé : cle_alias le refusera */
+    nb_alias++;
+}
+
+static const char *alias_de(const char *nom)
+{
+    int i;
+    for (i = 0; i < nb_alias; i++)
+        if (!strcmp(alias[i].nom, nom)) return alias[i].valeur;
+    return NULL;
+}
+
+/* Dossiers jamais lus : sauvegardes, cachés, et ceux de TWiLight Menu++ et du système (_nds, 3ds, luma, Nintendo 3DS, mGBA). */
+static int dossier_ignore(const char *nom)
+{
+    return nom[0] == '.' || nom[0] == '_' || !strcasecmp(nom, "saves") || !strcasecmp(nom, "Nintendo 3DS") ||
+           !strcasecmp(nom, "3ds") || !strcasecmp(nom, "luma") || !strcasecmp(nom, "mGBA");
+}
+
+static int est_dossier(const struct dirent *e, const char *chemin)
+{
+    struct stat st;
+    if (e->d_type != DT_UNKNOWN) return e->d_type == DT_DIR;
+    return !stat(chemin, &st) && S_ISDIR(st.st_mode);
+}
+
+/* Une source de ROM, sous-dossiers compris (ADR 0015) : Clé lue dans l'en-tête (ou alias), Sauvegarde nommée comme la
+ * ROM (chemin_sauvegarde). Deux ROM de même Clé, ou de même fichier de Sauvegarde : Doublon. */
+#define PROFONDEUR 4 /* niveaux de sous-dossiers lus */
 static int ignorees; /* ROM au-delà de MAX_JEUX */
 
-static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
+static void scanner_dossier(systeme_t s, const char *roms, const char *saves, const char *dossier, int profondeur)
 {
-    DIR *d = opendir(roms);
+    DIR *d = opendir(dossier);
     struct dirent *e;
 
     while (d && (e = readdir(d))) {
-        char chemin[600], cle[CLE_MAX];
+        char chemin[600], sav[600], nom[256], cle[CLE_MAX];
         unsigned char entete[0x200];
-        const char *ext = strrchr(e->d_name, '.');
+        const char *ext = strrchr(e->d_name, '.'), *a;
         jeu_t *j = NULL;
         size_t n;
         FILE *f;
         int i;
 
+        if (snprintf(chemin, sizeof chemin, "%s/%s", dossier, e->d_name) >= (int)sizeof chemin) continue;
+        if (est_dossier(e, chemin)) {
+            if (profondeur < PROFONDEUR && !dossier_ignore(e->d_name)) scanner_dossier(s, roms, saves, chemin, profondeur + 1);
+            continue;
+        }
         if (!ext || !extension_de(s, ext)) continue;
-        snprintf(chemin, sizeof chemin, "%s/%s", roms, e->d_name);
+        snprintf(nom, sizeof nom, "%.*s", (int)(ext - e->d_name), e->d_name);
+        if (chemin_sauvegarde(roms, saves, dossier, nom, sav, sizeof sav)) continue;
         if (!(f = fopen(chemin, "rb"))) continue;
         n = fread(entete, 1, sizeof entete, f);
         fclose(f);
-        if (n < sizeof entete || cle_rom(s, entete, cle)) continue; /* homebrew ou en-tête illisible */
+        if (n < sizeof entete) continue;
+        if ((a = alias_de(nom))) {
+            if (cle_alias(s, a, cle)) {
+                char t[120];
+                snprintf(t, sizeof t, T("Alias invalide pour « %.40s » (alias.ini) : ROM non synchronisée.",
+                                        "Invalid alias for \"%.40s\" (alias.ini): ROM not synced."), nom);
+                alerter(t);
+                continue;
+            }
+        } else if (cle_rom(s, entete, cle)) continue; /* homebrew ou en-tête illisible */
 
         for (i = 0; i < nb_jeux; i++)
-            if (!strcmp(jeux[i].cle, cle)) j = &jeux[i];
+            if (!strcmp(jeux[i].cle, cle) || !strcasecmp(jeux[i].sav_rom, sav)) j = &jeux[i];
         if (j) {
             j->nb_roms++;
             continue;
@@ -290,9 +344,9 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
         memset(j, 0, sizeof *j);
         snprintf(j->cle, sizeof j->cle, "%s", cle);
         j->systeme = s;
-        snprintf(j->nom, sizeof j->nom, "%.*s", (int)(ext - e->d_name), e->d_name);
+        snprintf(j->nom, sizeof j->nom, "%s", nom);
         snprintf(j->rom, sizeof j->rom, "%s", chemin);
-        snprintf(j->sav_rom, sizeof j->sav_rom, "%s/%.*s.sav", saves, (int)(ext - e->d_name), e->d_name);
+        snprintf(j->sav_rom, sizeof j->sav_rom, "%s", sav);
         nom_court(j->nom, j->court, sizeof j->court);
         j->nb_roms = 1;
         j->mbc2 = s == SYS_GB && rom_mbc2(entete);
@@ -359,10 +413,11 @@ static void scanner(void)
 {
     int i, avant;
 
-    nb_jeux = nb_visibles = lu = ignorees = 0; /* la liste affichée n'est plus valable pendant la lecture */
-    scanner_dossier(SYS_DS, cfg.roms, cfg.saves[0] ? cfg.saves : cfg.roms); /* sauvegardes vides = à côté de la ROM */
-    scanner_dossier(SYS_GB, cfg.roms_gb, cfg.saves_gb[0] ? cfg.saves_gb : cfg.roms_gb);
-    scanner_dossier(SYS_GBA, cfg.roms_gba, cfg.saves_gba[0] ? cfg.saves_gba : cfg.roms_gba);
+    nb_jeux = nb_visibles = lu = ignorees = nb_alias = 0; /* la liste affichée n'est plus valable pendant la lecture */
+    lire_cles(DOSSIER "/alias.ini", cle_alias_ini);
+    scanner_dossier(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* sauvegardes vides = à côté de la ROM */
+    scanner_dossier(SYS_GB, cfg.roms_gb, cfg.saves_gb, cfg.roms_gb, 0);
+    scanner_dossier(SYS_GBA, cfg.roms_gba, cfg.saves_gba, cfg.roms_gba, 0);
     if (ignorees) {
         char t[80];
         snprintf(t, sizeof t, T("%d ROM ignorées : plus de %d jeux.", "%d ROMs skipped: more than %d games."), ignorees, MAX_JEUX);
@@ -547,6 +602,8 @@ static int recuperer(jeu_t *j)
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(DOSSIER "/copies", 0777);
         snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.%s", j->nom, date, j->systeme == SYS_3DS ? "main" : "sav");
+        if (access(copie, F_OK) == 0) /* même nom de ROM dans deux sous-dossiers, la même seconde : la Clé les sépare */
+            snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s-%s.%s", j->nom, date, j->cle, j->systeme == SYS_3DS ? "main" : "sav");
         echec = lire_sauvegarde(j, &ancien, &n);
         if (!echec) echec = ecrire_fichier(copie, ancien, n);
         if (echec) {
@@ -876,7 +933,7 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
     case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 permet de choisir la version à garder.",
                            "Conflict: the 3DS and the server both changed since the last sync. \xEE\x80\x80 lets you choose the version to keep.");
     case DOUBLON:
-        snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule sur la carte SD.", "%d ROMs hold this game: keep only one on the SD card."), j->nb_roms);
+        snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%d ROMs hold this game: keep only one, or give the others an alias (alias.ini)."), j->nb_roms);
         return t;
     case HORS_LIGNE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     }
@@ -1332,7 +1389,7 @@ static int agir(jeu_t *j)
         break;
     }
     case DOUBLON:
-        snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule sur la carte SD.", "%s: %d ROMs hold this game. Keep only one on the SD card."),
+        snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%s: %d ROMs hold this game. Keep only one, or give the others an alias (alias.ini)."),
                  j->court, j->nb_roms);
         break;
     case HORS_LIGNE:

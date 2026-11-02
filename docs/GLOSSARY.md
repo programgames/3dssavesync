@@ -17,15 +17,19 @@ L'identifiant d'un Jeu sur le Serveur, lu dans l'en-tête de la ROM : le Code je
 _Éviter_ : id, identifiant, game ID
 
 **ROM** :
-Le fichier qui contient un Jeu sur un Client (`.nds` sur la 3DS, `.zip` contenant un `.nds` sur le PC). Son nom de fichier n'a aucun rôle dans l'identité du Jeu.
+Le fichier qui contient un Jeu sur un Client (`.nds` sur la 3DS, `.zip` contenant un `.nds` sur le PC). Son nom de fichier n'a aucun rôle dans l'identité du Jeu, sauf par un Alias.
 _Éviter_ : image, dump, cartouche
+
+**Alias** :
+Une Clé choisie par l'utilisateur pour une ROM, à la place de celle de son en-tête : un ROM hack garde souvent la Clé de son jeu d'origine (ADR 0014).
+_Éviter_ : surnom, renommage
 
 **Code jeu** :
 Les 4 caractères ASCII de l'en-tête d'une ROM DS (offset `0x0C`) ou GBA (offset `0xAC`), région incluse (ex. `IRBF`). Deux régions d'un même titre ont deux Codes jeu, donc sont deux Jeux.
 _Éviter_ : game ID, title ID, serial, gamecode
 
 **Doublon** :
-Situation où un Client a plusieurs ROM avec la même Clé. Un Jeu en Doublon n'est pas synchronisé.
+Situation où un Client a plusieurs ROM avec la même Clé (ou, sur la 3DS, avec le même fichier de Sauvegarde). Un Jeu en Doublon n'est pas synchronisé.
 _Éviter_ : copie, conflit
 
 ## Sauvegardes
