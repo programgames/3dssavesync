@@ -63,7 +63,11 @@ type EtatWeb struct {
 	EsDeActif                                     bool
 	Emulateurs                                    []EmuWeb
 	Profils                                       []string
+	Configures                                    []string // émulateurs de config.json : boutons « Ouvrir »
 }
+
+// Ouvre un émulateur sans jeu, avec Synchronisation (launch), indépendant de la page. Remplacé par les tests.
+var ouvrirDetache = demarrerDetache
 
 type ChoixWeb struct {
 	Local            bool
@@ -169,6 +173,10 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reponse = map[string]any{"Lignes": reparer(&cfg, lanceurDe(&cfg))}
 		}
+	case "api/ouvrir":
+		var x struct{ Nom string }
+		json.NewDecoder(r.Body).Decode(&x)
+		reponse = a.ouvrir(x.Nom)
 	case "api/terminer":
 		close(a.fin)
 		reponse = true
@@ -302,6 +310,7 @@ func (a *AssistantWeb) etat() EtatWeb {
 		noms = append(noms, n)
 	}
 	sort.Strings(noms)
+	e.Configures = noms
 	for _, n := range noms {
 		e.Emulateurs = append(e.Emulateurs, emuWeb(n, cfg.Emulateurs[n], tr("configuré", "set up"), true))
 	}
@@ -316,6 +325,20 @@ func (a *AssistantWeb) etat() EtatWeb {
 	}
 	sort.Strings(e.Profils)
 	return e
+}
+
+// ouvrir : l'émulateur nom de config.json, sans jeu, par « launch » (Synchronisation avant et après). Pour « Ouvrir
+// mGBA » de LaunchBox, qui démarre le Lanceur sans argument, donc sur cette page.
+func (a *AssistantWeb) ouvrir(nom string) map[string]any {
+	var cfg Config
+	if err := lireJSON(a.config, &cfg); err != nil || cfg.Emulateurs[nom] == nil {
+		return map[string]any{"Ok": false, "Message": tr("Émulateur absent de la configuration : ", "Emulator missing from the configuration: ") + nom}
+	}
+	if err := ouvrirDetache(lanceurDe(&cfg), []string{"launch", "--config", a.config, nom}); err != nil {
+		return map[string]any{"Ok": false, "Message": err.Error()}
+	}
+	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre : ses jeux sont synchronisés avant, puis envoyés à sa fermeture.",
+		"%s is opening: its games are synced first, then uploaded when it closes."), nom)}
 }
 
 func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
