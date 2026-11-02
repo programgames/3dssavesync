@@ -33,6 +33,20 @@ var titres3DS = map[string]string{
 	"00040000001B5000": "Pokemon Ultra-Soleil", "00040000001B5100": "Pokemon Ultra-Lune",
 }
 
+// Format de l'archive de sauvegarde d'un jeu 3DS : le 00000001.metadata d'Azahar (ArchiveFormatInfo : total_size,
+// nombre de répertoires, nombre de fichiers en u32 LE, duplicate_data, 3 octets de bourrage). Avec lui, le Lanceur crée
+// le dossier d'un jeu jamais lancé dans Azahar ; sans lui, il refuse : un jeu sans .metadata peut reformater sa sauvegarde.
+// Relevé sur de vraies installations : Lune, Ultra-Soleil (2026-11-01). Les autres Pokémon : même moteur, même valeur
+// supposée ; Pokémon X vérifié par le test sur une copie d'Azahar (issue #9).
+var formats3DS = func() map[string][]byte {
+	pokemon := []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0} // 0x40000 octets, 1 répertoire, 1 fichier, dupliqué
+	m := map[string][]byte{}
+	for id := range titres3DS {
+		m[id] = pokemon
+	}
+	return m
+}()
+
 // Jeu : une Clé et le fichier de sauvegarde qui lui correspond chez un émulateur.
 type Jeu struct {
 	Systeme, Cle, Nom string
@@ -425,9 +439,20 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 	dossier := filepath.Dir(j.Fichier)
 	tmp := j.Fichier + ".3dssavesync-tmp"
 	if j.Systeme == "3DS" {
-		// Pas de dossier = Azahar n'a jamais vu ce jeu : il faut son .metadata, on ne crée rien (ADR 0009).
+		// Pas de dossier = Azahar n'a jamais vu ce jeu. Créé seulement avec un .metadata connu (formats3DS) et jamais
+		// par-dessus un .metadata existant ; sinon refus (ADR 0009).
 		if _, err := os.Stat(dossier); err != nil {
-			return errors.New(tr("jeu jamais lancé dans Azahar. Lance-le une fois et sauvegarde en jeu, puis relance-le ici", "game never started in Azahar. Start it once and save in game, then start it here again"))
+			format, meta := formats3DS[strings.ToUpper(strings.TrimPrefix(j.Cle, "3DS-"))], filepath.Join(filepath.Dir(dossier), "00000001.metadata")
+			if format == nil || existe(meta) {
+				return errors.New(tr("jeu jamais lancé dans Azahar. Lance-le une fois et sauvegarde en jeu, puis relance-le ici", "game never started in Azahar. Start it once and save in game, then start it here again"))
+			}
+			if err := os.MkdirAll(dossier, 0o755); err != nil {
+				return err
+			}
+			if err := ecrireVerifie(meta, format); err != nil {
+				os.Remove(dossier)
+				return err
+			}
 		}
 		tmp = filepath.Join(filepath.Dir(dossier), "main.3dssavesync-tmp") // l'archive ne doit contenir que main
 	} else if err := os.MkdirAll(dossier, 0o755); err != nil {

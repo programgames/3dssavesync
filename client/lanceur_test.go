@@ -504,15 +504,30 @@ func TestLanceur(t *testing.T) {
 	verifier(strings.Join(nomsDans(filepath.Dir(dx), "*"), ",") == dx, "pas de fichier temporaire oublié")
 	verifier(len(nomsDans(filepath.Join(copies, "azahar"), "*")) == 1, "Copie de sécurité hors de l'archive")
 
-	t.Log("3DS : jeu jamais lancé dans Azahar, rien n'est créé")
+	t.Log("3DS : jeu jamais lancé dans Azahar, format connu : dossier, .metadata et main créés")
 	reinitialiser()
 	y := rom3DS(t, "Pokemon Y (Europe)", 0x0004000000055E00)
 	envoi3ds("3DS-0004000000055E00", m2, nil)
-	reponses = []string{"Non"}
 	run(y)
+	dy := dossierAzahar(0x0004000000055E00)
+	verifier(len(questions) == 0 && joue, "pas de question, partie lancée")
+	verifier(hachage(lire(filepath.Join(dy, "main"))) == hachage(m2), "main est la Version du serveur")
+	verifier(bytes.Equal(lire(dy+".metadata"), []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}), "00000001.metadata écrit (16 octets)")
+	verifier(strings.Join(nomsDans(dy, "*"), ",") == filepath.Join(dy, "main"), "l'archive ne contient que main")
+
+	t.Log("3DS : jeu jamais lancé dans Azahar, format inconnu (titres_3ds) : rien n'est créé")
+	reinitialiser()
+	titres3DS["00040000000EC300"] = "Jeu a moi"
+	defer delete(titres3DS, "00040000000EC300")
+	autre := rom3DS(t, "Jeu a moi", 0x00040000000EC300)
+	envoi3ds("3DS-00040000000EC300", m2, nil)
+	reponses = []string{"Non"}
+	run(autre)
 	verifier(len(questions) == 1 && strings.Contains(questions[0], "Azahar"), "question qui explique de lancer le jeu une fois")
-	_, err := os.Stat(dossierAzahar(0x0004000000055E00))
+	_, err := os.Stat(dossierAzahar(0x00040000000EC300))
 	verifier(err != nil, "aucun dossier créé dans Azahar")
+	_, err = os.Stat(dossierAzahar(0x00040000000EC300) + ".metadata")
+	verifier(err != nil, "aucun .metadata créé")
 
 	t.Log("3DS hors des 8 Pokémon : partie sans Synchronisation")
 	reinitialiser()

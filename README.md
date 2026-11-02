@@ -70,7 +70,6 @@ Other frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pega
 
 - **Save states**: loading a state replaces the save with an older one. mGBA reloads a state at start by default (`autoload`); the launcher warns you after a download if this setting (or RetroArch's, VBA-M's) is on.
 - **Blank save** (only `0x00` or `0xFF`): counted as absent, never uploaded.
-- **3DS games in Azahar**: start the game once in Azahar and save, so its save folder exists.
 - **Gold / Silver / Crystal clock**: each machine keeps its own clock.
 - **Not supported yet**: DeSmuME (`.dsv`), NO$GBA, gpSP, Beetle GBA (formats to convert), GBA games with EEPROM saves, GB MBC2 games.
 
