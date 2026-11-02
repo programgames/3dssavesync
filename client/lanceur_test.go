@@ -68,21 +68,42 @@ func demarrerServeur(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		py = "python"
 	}
-	c := exec.Command(py, filepath.Join("..", "server", "server.py"))
-	c.Env = append(os.Environ(), "NDSSYNC_TOKEN=jeton-test", "NDSSYNC_DATA="+filepath.Join(tmp, "data"), fmt.Sprintf("NDSSYNC_PORT=%d", port))
+	// Le vrai serveur, mais sur 127.0.0.1 comme server/test_server.py, et sans socket.getfqdn
+	// (appelé par HTTPServer.server_bind) : sur les machines macOS de la CI, ces recherches de nom
+	// retardaient le démarrage de ~35 s par adresse (~70 s sur 0.0.0.0, 2026-11-02).
+	c := exec.Command(py, "-c", "import socket, server; socket.getfqdn = lambda nom='': nom; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
+	c.Dir = filepath.Join("..", "server")
+	sortie, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sortie.Close()
+	c.Stdout, c.Stderr = sortie, sortie
 	if err := c.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Process.Kill(); c.Wait() })
+	fini := make(chan struct{})
+	go func() { c.Wait(); close(fini) }()
+	t.Cleanup(func() { c.Process.Kill(); <-fini })
 	url = fmt.Sprintf("http://127.0.0.1:%d", port)
-	for range 100 {
-		if r, err := http.Get(url + "/saves"); err == nil {
+	// Le premier Python lancé sur une machine Windows neuve de la CI a dépassé 10 s (2026-11-02) :
+	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
+	// Délai court par essai : une connexion sans réponse ne doit pas manger toute la limite.
+	limite := time.After(time.Minute)
+	for {
+		r, err := (&http.Client{Timeout: time.Second}).Get(url + "/saves")
+		if err == nil {
 			r.Body.Close()
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-fini:
+			t.Fatalf("serveur arrêté au démarrage : %v\n%s", c.ProcessState, lire(sortie.Name()))
+		case <-limite:
+			t.Fatalf("serveur injoignable (%v)\n%s", err, lire(sortie.Name()))
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	t.Fatal("serveur injoignable")
 }
 
 // Requêtes directes au serveur, pour jouer « l'autre Client ».
