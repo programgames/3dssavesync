@@ -7,7 +7,7 @@ Jouer à la même partie sur une 3DS modifiée et sur un émulateur PC, sans cop
 - Un petit serveur garde **chaque version** de chaque sauvegarde et n'efface jamais rien.
 - L'application 3DS et le Lanceur PC comparent des empreintes : si un seul côté a changé, la sauvegarde est copiée ; si les deux ont changé, vous choisissez (**jamais** d'écrasement automatique).
 - Avant de remplacer une sauvegarde, une copie de sécurité est faite.
-- Pour vous aider à choisir, chaque version affiche son temps de jeu et son dresseur (Pokémon 3DS) ou la date de son fichier (autres jeux).
+- Pour vous aider à choisir, chaque version affiche son temps de jeu et son dresseur (Pokémon, de Rouge/Bleu à Ultra-Lune) ou la date de son fichier (autres jeux).
 
 | Application 3DS : liste des jeux et détails | Conflit : choisir la version à garder |
 |---|---|
