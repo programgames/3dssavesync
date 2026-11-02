@@ -73,16 +73,26 @@ func demarrerServeur(t *testing.T) {
 	if err := c.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Process.Kill(); c.Wait() })
+	fini := make(chan struct{})
+	go func() { c.Wait(); close(fini) }()
+	t.Cleanup(func() { c.Process.Kill(); <-fini })
 	url = fmt.Sprintf("http://127.0.0.1:%d", port)
-	for range 100 {
+	// Le premier Python lancé sur une machine Windows neuve de la CI a dépassé 10 s (2026-11-02) :
+	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
+	limite := time.After(time.Minute)
+	for {
 		if r, err := http.Get(url + "/saves"); err == nil {
 			r.Body.Close()
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-fini:
+			t.Fatalf("serveur arrêté au démarrage : %v", c.ProcessState)
+		case <-limite:
+			t.Fatal("serveur injoignable")
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	t.Fatal("serveur injoignable")
 }
 
 // Requêtes directes au serveur, pour jouer « l'autre Client ».
