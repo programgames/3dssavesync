@@ -115,11 +115,11 @@ C + libctru, console texte, `3ds-curl` + `3ds-mbedtls`.
 | `source/net.c` | les 4 appels HTTP avec curl, ISRG Root X1 embarqué |
 | `test/test_etat.c` | lit `tests/cas_etat.csv`, compilé avec `gcc` sur PC |
 
-Fichiers sur la SD, dans `sd:/3ds/3dssavesync/` (avant la v3 : `sd:/3ds/nds-save-sync/`, repris au premier lancement) : `config.ini` (URL, jeton, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba` ; sauvegardes vides = à côté de la ROM), `titres.ini` (jeux 3DS synchronisés, `<title ID>=<nom>` ; absent = les 8 Pokémon), `base.ini` (`CLÉ=hash`), `copies/`.
+Fichiers sur la SD, dans `sd:/3ds/3dssavesync/` (avant la v3 : `sd:/3ds/nds-save-sync/`, repris au premier lancement) : `config.ini` (URL, jeton, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba` ; sauvegardes vides = à côté de la ROM), `titres.ini` (jeux 3DS synchronisés, `<title ID>=<nom>` ; absent = les 8 Pokémon), `base.ini` (`CLÉ=hash`), `alias.ini` (facultatif, `<nom ROM>=CLÉ`, ADR 0014), `copies/`.
 
 1. Lire `config.ini` ; absent → écran de configuration.
-2. Scanner `roms/*.nds` (racine seulement) : Code jeu de chaque ROM. Plusieurs ROM pour un Code jeu → Doublon.
-3. Pour chaque Jeu : Sauvegarde locale = `saves/<nom ROM>.sav` (slot 0), Hash SHA-256 via mbedTLS.
+2. Scanner `roms/**/*.nds` (sous-dossiers sur 4 niveaux, ADR 0015) : Code jeu de chaque ROM, ou son Alias. Plusieurs ROM pour un Code jeu → Doublon.
+3. Pour chaque Jeu : Sauvegarde locale = `saves/<nom ROM>.sav` (slot 0 ; ROM en sous-dossier : ADR 0015), Hash SHA-256 via mbedTLS.
 4. `GET /saves`. Un Jeu présent sur le serveur, avec une ROM locale mais sans `.sav`, est `A_RECUPERER`. Un Jeu sans ROM locale n'est pas affiché.
 5. Liste : Jeu, État. Haut/Bas pour choisir ; A sur un Jeu = son action (ou le choix de Conflit : A garder la 3DS, X prendre le serveur, B rien) ; START = « Tout synchroniser » (ignore les Conflits et les Doublons, une seule confirmation listant les Récupérations qui écrasent).
 6. Récupération : Copie de sécurité → fichier temporaire → vérification du Hash → `rename`.

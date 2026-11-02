@@ -9,4 +9,4 @@ TWiLight et melonDS nomment le `.sav` d'après le nom de fichier de la ROM, et c
 ## Conséquences
 
 - Deux régions du même titre (`IRBF`, `IRBO`) sont deux Jeux distincts. La compatibilité des Sauvegardes entre langues n'est pas vérifiée, donc on ne les apparie pas.
-- Un ROM hack qui garde le Code jeu du jeu d'origine partage son identité : à éviter sur un même Client (il apparaîtra en Doublon).
+- Un ROM hack qui garde le Code jeu du jeu d'origine partage son identité : à éviter sur un même Client (il apparaîtra en Doublon). Complété par l'ADR 0014 (refus sur le PC, alias).

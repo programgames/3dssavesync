@@ -262,7 +262,12 @@ type Session struct {
 	dossier  string
 	profil   string
 	http     *http.Client
-	recupere bool // une Version est arrivée du serveur pendant cette Session
+	recupere bool              // une Version est arrivée du serveur pendant cette Session
+	romDe    map[string]string // Clé -> ROM de ce lancement, retenue avec la Base (ADR 0014)
+	// Liste GET /saves de la passe en cours (une seule lecture par passe) ; relue après un Envoi ou un 412.
+	liste    []Version
+	listeErr error
+	listeLue bool
 }
 
 func (s *Session) journal(texte string) {
@@ -384,8 +389,26 @@ func nomClient(profil string) string {
 	return b.String()
 }
 
-// Version courante d'un Jeu sur le serveur, ou nil.
+// Version courante d'un Jeu sur le serveur, ou nil. La liste est lue une fois par passe : une erreur aussi (réseau
+// coupé : un seul délai d'attente pour toute la passe).
 func (s *Session) versionServeur(cle string) (*Version, error) {
+	if !s.listeLue {
+		s.liste, s.listeErr = s.lireListe()
+		s.listeLue = true
+	}
+	if s.listeErr != nil {
+		return nil, s.listeErr
+	}
+	for i := range s.liste {
+		if s.liste[i].Code == cle {
+			v := s.liste[i]
+			return &v, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *Session) lireListe() ([]Version, error) {
 	st, o, err := s.api("GET", "/saves", nil, nil)
 	if err != nil {
 		return nil, err
@@ -394,15 +417,8 @@ func (s *Session) versionServeur(cle string) (*Version, error) {
 		return nil, &erreurHTTP{"GET /saves", st}
 	}
 	var liste []Version
-	if err := json.Unmarshal(o, &liste); err != nil {
-		return nil, err
-	}
-	for i := range liste {
-		if liste[i].Code == cle {
-			return &liste[i], nil
-		}
-	}
-	return nil, nil
+	err = json.Unmarshal(o, &liste)
+	return liste, err
 }
 
 // Bases : un fichier par émulateur (Q17), Clé -> Hash de la dernière Synchronisation.
@@ -426,7 +442,13 @@ func (s *Session) fixerBase(cle, hash string) error {
 		return err
 	}
 	m[cle] = hash
-	return ecrireJSON(s.cheminBase(), m, true)
+	if err := ecrireJSON(s.cheminBase(), m, true); err != nil {
+		return err
+	}
+	if err := s.retenirRom(cle); err != nil {
+		s.journal("ROM de " + cle + " non retenue : " + err.Error())
+	}
+	return nil
 }
 
 // ecrireJSON : fichier temporaire vérifié puis remplacement (remplacer=false : jamais d'écrasement).
@@ -491,6 +513,7 @@ func (s *Session) envoyer(j *Jeu, l *Local, srv *Version) (bool, error) {
 	if st != 200 {
 		return false, &erreurHTTP{"PUT /saves/" + j.Cle, st}
 	}
+	s.listeLue = false // la liste n'a plus la Version courante de ce Jeu
 	return true, s.fixerBase(j.Cle, l.Hash)
 }
 
@@ -524,7 +547,7 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		return &erreurHTTP{"GET /saves/" + j.Cle, st}
 	}
 	if hachage(o) != srv.Hash {
-		return errors.New(tr("la sauvegarde reçue du serveur est abîmée (transfert incomplet) : rien n'est remplacé. Relancez le jeu",
+		return erreurAbimee(tr("la sauvegarde reçue du serveur est abîmée (transfert incomplet) : rien n'est remplacé. Relancez le jeu",
 			"the save received from the server is damaged (incomplete transfer): nothing is replaced. Start the game again"))
 	}
 	dossier := filepath.Dir(j.Fichier)
@@ -595,6 +618,11 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 	return s.fixerBase(j.Cle, srv.Hash)
 }
 
+// Contenu reçu dont le Hash n'est pas celui de la liste.
+type erreurAbimee string
+
+func (e erreurAbimee) Error() string { return string(e) }
+
 // « il y a 2 h » à partir de l'âge en secondes donné par le serveur.
 func formatAge(age *int64) string {
 	switch {
@@ -658,6 +686,9 @@ func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool)
 // Une passe de Synchronisation. annule = l'utilisateur ne veut pas jouer.
 func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 	for essai := 0; essai < 3; essai++ { // un 412 relance une passe avec la nouvelle Version courante
+		if essai > 0 {
+			s.listeLue = false
+		}
 		srv, err := s.versionServeur(j.Cle)
 		if err != nil {
 			return false, err
@@ -696,7 +727,10 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 				return false, err
 			}
 		case aRecuperer:
-			return false, s.recuperer(j, l, srv)
+			// Contenu autre que la liste : une Version est arrivée depuis la lecture de la liste (passe longue), on relit.
+			if err := s.recuperer(j, l, srv); !errors.As(err, new(erreurAbimee)) || essai == 2 {
+				return false, err
+			}
 		case annuler:
 			return true, nil
 		default:
