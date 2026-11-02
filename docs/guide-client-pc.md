@@ -91,6 +91,8 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 
 **Arguments en plus** (profil intégré) : champ « Arguments en plus » de la page, ou `args_en_plus` dans `config.json` (par exemple `["-f"]` pour le plein écran). Ils passent juste avant la ROM ; les arguments propres au profil (`-C savegamePath=…` de mGBA, `-L <cœur>` de RetroArch) restent gérés par le Lanceur.
 
+**Panda3DS** : non géré. Sa seule version publiée (v0.9) lit et écrit les fichiers de sauvegarde à une position fausse ; le Lanceur pourrait envoyer une Sauvegarde 3DS fausse. Détails : `docs/research-v3-emulateurs.md` §5.4.
+
 **Aucune sauvegarde après la partie** : si un jeu n'a pas de sauvegarde avant la partie et n'en a toujours pas après, une notification donne le fichier attendu. Si vous avez sauvegardé en jeu, le dossier ou l'extension de l'émulateur est faux.
 
 ## Commandes

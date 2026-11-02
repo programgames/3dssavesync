@@ -466,7 +466,15 @@ Sources : `AZ src/citra_libretro/core_settings.cpp#L23-L25` , `#L82-L83` , `#L10
 - Sauvegarde : `<racine>/<nom du fichier ROM sans extension>/SaveData/main`. **Le dossier dépend du nom de fichier, pas du title ID.**
 - Format de `SaveData` : fichiers ordinaires, plus un fichier d'info de format. Compatibilité binaire avec `main` d'Azahar : probable mais NON VÉRIFIÉ.
 
-Sources : `P3DS src/emulator.cpp#L199-L237` ; `P3DS src/core/fs/archive_save_data.cpp#L12` , `#L181-L192` ; https://wiki.libsdl.org/SDL2/SDL_GetPrefPath.
+**Vérification du 2026-11-02 (ticket #5) : profil non ajouté.**
+
+- Fichier de format : `<racine>/<nom ROM>/FormatInfo/SaveData.format`, la structure `FormatInfo` (3 × u32, un bool, 16 octets avec le bourrage), même disposition que le `00000001.metadata` d'Azahar. Sans ce fichier, l'archive n'est pas formatée : le jeu la formate, et Panda3DS efface tout le dossier `SaveData` (`fs::remove_all`).
+- Ligne de commande : `Alber <rom>` (premier argument), pour les versions SDL et Qt. Exécutable `Alber` dans les deux cas. Racine portable si `UsePortableBuild = true` dans `config.toml` (cherché d'abord dans le dossier courant).
+- Contenu de `main` au `master` : les octets du fichier du jeu, écrits à leur position (`Kernel::writeFile` : `seek(offset)` puis `writeBytes`). Même contenu brut que le `main` d'Azahar.
+- **Bloquant** : dans la seule version publiée, v0.9 (2024-12-25), `Kernel::readFile` et `Kernel::writeFile` ignorent la position demandée par le jeu : ils lisent et écrivent à la position courante du fichier. La correction (commit `5a2d71553`, « FS: Add missing file seeks », 2025-06-28) n'existe dans aucune version publiée. Avec v0.9, un `main` écrit par un jeu qui n'écrit pas tout d'un bloc n'a pas la bonne disposition, et un `main` reçu d'Azahar ou de la 3DS est mal lu. Le Lanceur ne peut pas connaître la version de Panda3DS.
+- Conséquence : synchroniser Panda3DS pourrait envoyer un `main` faux au serveur, puis à la 3DS et à Azahar. Profil refusé jusqu'à une version publiée qui contient la correction. Autres points à traiter ce jour-là : dossier par nom de fichier ROM (pas par title ID, et rien à parcourir pour `launch`), création de `SaveData.format` pour un jeu jamais lancé, compatibilité des Pokémon 3DS avec Panda3DS (NON VÉRIFIÉ).
+
+Sources : `P3DS src/emulator.cpp#L199-L237` ; `P3DS src/core/fs/archive_save_data.cpp#L12` , `#L181-L192` ; https://wiki.libsdl.org/SDL2/SDL_GetPrefPath. Vérification du 2026-11-02 : `P3DS include/fs/archive_save_data.hpp#L23-L25` ; `P3DS include/fs/archive_base.hpp#L173-L178` ; `P3DS src/core/fs/archive_save_data.cpp` (`format`, `openArchive`) ; `P3DS src/core/kernel/file_operations.cpp` (`writeFile`, `readFile`) ; `P3DS src/panda_sdl/main.cpp` ; `P3DS src/panda_qt/main_window.cpp` (`QCoreApplication::arguments`) ; `P3DS src/emulator.cpp` (`getConfigPath`) ; tag `v0.9`, même fichier `file_operations.cpp` (pas de `seek`) ; https://github.com/wheremyfoodat/Panda3DS/commit/5a2d71553c23fd92e884d3f40ca855c0f6600d28.
 
 ---
 
