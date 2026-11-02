@@ -49,8 +49,8 @@ void cle_3ds(unsigned long long title_id, char cle[CLE_MAX])
 
 size_t sram_taille(systeme_t s, size_t t)
 {
-    size_t n = t - t % 1024;
-    if ((s == SYS_GB || s == SYS_GBA) && n > 0 && n < t) return n;
+    size_t r = t % 512; /* Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010) */
+    if ((s == SYS_GB || s == SYS_GBA) && t > r && (r == 16 || r == 44 || r == 48)) return t - r;
     return t;
 }
 

@@ -137,7 +137,7 @@ Fichiers sur la SD, dans `sd:/3ds/3dssavesync/` (avant la v3 : `sd:/3ds/nds-save
 Le cœur ne change pas (`etat`, Envoi conditionnel, Copie de sécurité). Ce qui s'ajoute :
 
 - **Clé par Système**, lue dans la ROM : DS `ADAF`, GBA `GBA-BPEF`, GB `GB-<titre>-<somme>`, 3DS `3DS-<title ID>` (ADR 0007). Le serveur n'accepte que ces formes.
-- **GB/GBA** : fichiers `.sav` à côté des ROM sur la 3DS (TWiLight, open_agb_firm), dossiers `D:\Sauvegardes\GB` / `GBA` sur le PC (mGBA, `-C savegamePath=…` par lancement). Hash, taille et Envoi portent sur la **SRAM seule** ; à la Récupération chaque machine remet son propre Trailer d'horloge (ADR 0008).
+- **GB/GBA** : fichiers `.sav` à côté des ROM sur la 3DS (TWiLight, open_agb_firm), dossiers `D:\Sauvegardes\GB` / `GBA` sur le PC (mGBA, `-C savegamePath=…` par lancement). Hash, taille et Envoi portent sur la **SRAM seule** ; à la Récupération chaque machine remet son propre Trailer d'horloge (ADR 0008). Trailer = reste de `taille mod 512` s'il vaut 16, 44 ou 48 octets (ADR 0010).
 - **3DS** : le fichier `main` de l'archive de sauvegarde (8 Pokémon, table fixe), lu et écrit par `titres3ds.c` (commit, secure value) ; côté PC, `main` dans le dossier Azahar, jamais rien d'autre dans ce dossier ; un jeu jamais lancé est créé dans Azahar avec un `.metadata` connu, jamais sur la 3DS (ADR 0009).
 - **Lanceur** : une table `$SYSTEMES` (exécutable, processus, dossier, extensions) ; tout le reste est commun.
 - **Homebrew** : sources `sd:/roms/nds`, `sd:/roms/gb`, `sd:/roms/gba` (`config.ini` : `roms_gb`, `roms_gba`) et les archives 3DS ; le Système est affiché dans la liste.
