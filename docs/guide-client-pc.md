@@ -57,8 +57,13 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 | `vbam` | GB, GBA | `vbam.ini` : `BatteryDir` | `<ROM ou zip>.sav` | `AutoLoadLastState` |
 | `sameboy` | GB | (toujours à côté de la ROM) | `<ROM>.sav` | — |
 | `desmume` | DS | Windows : `desmume.ini` à côté de l'exe, `[PathSettings]` `Battery` (défaut `Battery` à côté de l'exe) ; Linux : `~/.config/desmume` | `<ROM>.dsv` ; ROM dans un zip : nom du fichier interne | — |
+| `skyemu` | DS, GB, GBA | à côté de la ROM ; sinon « Save File/State Path » (`search_paths.bin`) si le `.sav` y est déjà ou si « Create new files in paths » est coché | `<ROM ou zip>.sav` | — (état écrit automatiquement, restauré seulement à la main) |
+| `nanoboyadvance` | GBA | `config.toml` à côté de l'exe (macOS : `~/Library/Application Support/org.github.fleroviux.NanoBoyAdvance/`) : `[general]` `save_folder`, s'il existe | `<ROM ou zip>.sav` | — |
+| `bgb` | GB | (à côté de la ROM) | `<ROM>.sav` | — |
 
 **DeSmuME** : le `.dsv` contient la SRAM puis un pied de page de 122 octets. Le Lanceur retire ce pied avant le Hash et l'Envoi : le serveur reçoit la même SRAM brute que celle de la 3DS. À la Récupération, il fait la Copie de sécurité, puis remet le pied du `.dsv` existant (même taille) ou écrit un pied neuf, comme DeSmuME à l'import d'un `.sav`. Un `.dsv` sans pied valide n'est pas synchronisé. macOS : dossier non vérifié, indique `sauvegardes`.
+
+**SkyEmu, NanoBoyAdvance, BGB** : la Sauvegarde est brute. BGB ajoute le Trailer d'horloge de 48 octets des jeux GB à horloge : le Lanceur le garde sur le PC, comme pour mGBA. Avant d'utiliser NanoBoyAdvance, laisse `args_en_plus` vide : la ROM doit être le premier argument. Si tu remplis « Save files » (onglet Misc) dans BGB, indique le même dossier dans `sauvegardes` : le Lanceur ne lit pas ce réglage (clé de `bgb.ini` non documentée). BGB sous Wine : `exe` = `wine`, `args_en_plus` = le chemin de `bgb.exe`, `processus` à préciser (non testé).
 
 **Cœurs RetroArch gérés** : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M. Le fichier `.rtc` (horloge des jeux GB) reste sur le PC. Exemple :
 
