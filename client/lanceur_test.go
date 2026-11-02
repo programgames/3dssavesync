@@ -68,8 +68,10 @@ func demarrerServeur(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		py = "python"
 	}
-	c := exec.Command(py, filepath.Join("..", "server", "server.py"))
-	c.Env = append(os.Environ(), "NDSSYNC_TOKEN=jeton-test", "NDSSYNC_DATA="+filepath.Join(tmp, "data"), fmt.Sprintf("NDSSYNC_PORT=%d", port))
+	// Le vrai serveur, mais sur 127.0.0.1 comme server/test_server.py : sur 0.0.0.0, le pare-feu
+	// des machines macOS de la CI laisse les connexions sans réponse ~70 s (2026-11-02).
+	c := exec.Command(py, "-c", "import server; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
+	c.Dir = filepath.Join("..", "server")
 	sortie, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -85,9 +87,10 @@ func demarrerServeur(t *testing.T) {
 	url = fmt.Sprintf("http://127.0.0.1:%d", port)
 	// Le premier Python lancé sur une machine Windows neuve de la CI a dépassé 10 s (2026-11-02) :
 	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
+	// Délai court par essai : une connexion sans réponse ne doit pas manger toute la limite.
 	limite := time.After(time.Minute)
 	for {
-		r, err := http.Get(url + "/saves")
+		r, err := (&http.Client{Timeout: time.Second}).Get(url + "/saves")
 		if err == nil {
 			r.Body.Close()
 			return
