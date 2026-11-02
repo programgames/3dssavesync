@@ -417,7 +417,8 @@ func (s *Session) lireListe() ([]Version, error) {
 		return nil, &erreurHTTP{"GET /saves", st}
 	}
 	var liste []Version
-	return liste, json.Unmarshal(o, &liste)
+	err = json.Unmarshal(o, &liste)
+	return liste, err
 }
 
 // Bases : un fichier par émulateur (Q17), Clé -> Hash de la dernière Synchronisation.
