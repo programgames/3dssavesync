@@ -163,6 +163,7 @@ var profils = map[string]Profil{
 // library_name des cœurs RetroArch gérés : nom du sous-dossier quand sort_savefiles_enable est actif.
 var bibliotheques = map[string]string{
 	"melondsds": "melonDS DS", "mgba": "mGBA", "gambatte": "Gambatte", "sameboy": "SameBoy", "vbam": "VBA-M",
+	"gpsp": "gpSP", "mednafen_gba": "Beetle GBA", // .srm de taille fixe, converti (srm.go)
 }
 
 func bibliotheque(coeur string) string {
@@ -189,7 +190,7 @@ func (e *Emulateur) profil(nom string) (Profil, error) {
 		}
 		for _, c := range e.Coeurs {
 			if bibliotheque(c) == "" {
-				return Profil{}, fmt.Errorf(tr("cœur RetroArch non géré : %s (gérés : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M)", "RetroArch core not supported: %s (supported: melonDS DS, mGBA, Gambatte, SameBoy, VBA-M)"), c)
+				return Profil{}, fmt.Errorf(tr("cœur RetroArch non géré : %s (gérés : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA)", "RetroArch core not supported: %s (supported: melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA)"), c)
 			}
 		}
 	}

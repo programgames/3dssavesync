@@ -244,7 +244,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 		if p.NomInterne && interne != "" {
 			nom = interne
 		}
-		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext)}}
+		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}}
 	}
 	return s.jouer(jeux, commande, conseil(e, p))
 }
@@ -352,7 +352,7 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 			dossier := e.dossier(p, systeme, "")
 			for id, titre := range titres3DS {
 				cle := "3DS-" + id
-				j := &Jeu{systeme, cle, titre, fichierSauvegarde(dossier, systeme, cle, titre, "")}
+				j := &Jeu{systeme, cle, titre, fichierSauvegarde(dossier, systeme, cle, titre, ""), ""}
 				if dossier != "" && (existe(filepath.Dir(j.Fichier)) || formats3DS[id] != nil) { // jamais lancé, format inconnu : ignoré
 					jeux = append(jeux, j)
 				}
@@ -374,7 +374,7 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 				if p.NomInterne && interne != "" {
 					nom = interne
 				}
-				jeux = append(jeux, &Jeu{sys, cle, nom, fichierSauvegarde(e.dossier(p, sys, chemin), sys, cle, nom, p.Ext)})
+				jeux = append(jeux, &Jeu{sys, cle, nom, fichierSauvegarde(e.dossier(p, sys, chemin), sys, cle, nom, p.Ext), bibliotheque(e.Coeurs[sys])})
 			}
 			return nil
 		})

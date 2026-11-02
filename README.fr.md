@@ -63,7 +63,7 @@ Autres frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Peg
 | | |
 |---|---|
 | **Sur la 3DS** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), forwarders mGBA (GB/GBC/GBA), jeux 3DS natifs (tout jeu dont la sauvegarde est un seul fichier `main` ; par défaut les 8 Pokémon) |
-| **Émulateurs PC** | melonDS, mGBA, Azahar, RetroArch (cœurs melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, DeSmuME (`.dsv`), SkyEmu, NanoBoyAdvance, BGB, et tout émulateur avec une ligne de commande personnalisée (sauvegardes brutes) |
+| **Émulateurs PC** | melonDS, mGBA, Azahar, RetroArch (cœurs melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP et Beetle GBA convertis), VBA-M, SameBoy, DeSmuME (`.dsv`), SkyEmu, NanoBoyAdvance, BGB, et tout émulateur avec une ligne de commande personnalisée (sauvegardes brutes) |
 | **Configuration automatique** | LaunchBox / BigBox, ES-DE, raccourcis (`.lnk`, `.desktop`, `.app`) |
 | **Guides** | Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode |
 | **Systèmes** | Windows, Linux, macOS (amd64 et arm64) |

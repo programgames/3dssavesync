@@ -759,7 +759,7 @@ func TestSRAM(t *testing.T) {
 	} {
 		f := filepath.Join(t.TempDir(), "s.sav")
 		ecrire(t, f, make([]byte, c.taille))
-		l, err := lireLocal(&Jeu{Systeme: c.systeme, Fichier: f})
+		l, err := lireLocal(&Jeu{Systeme: c.systeme, Fichier: f}, nil)
 		if err != nil || len(l.SRAM) != c.sram || len(l.Brut) != c.taille {
 			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.systeme, c.taille, c.sram, l, err)
 		}

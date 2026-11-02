@@ -51,6 +51,7 @@ var formats3DS = func() map[string][]byte {
 type Jeu struct {
 	Systeme, Cle, Nom string
 	Fichier           string
+	Coeur             string // bibliothèque du cœur RetroArch, "" sinon : gpSP et Beetle GBA ont un .srm à convertir (srm.go)
 }
 
 var code4 = regexp.MustCompile(`^[A-Z0-9]{4}$`)
@@ -188,7 +189,8 @@ type Local struct {
 }
 
 // GB/GBA : Hash, taille et envoi portent sur la SRAM seule ; le Trailer d'horloge reste local (ADR 0008).
-func lireLocal(j *Jeu) (*Local, error) {
+// srv : Version courante du serveur ou nil ; elle donne la taille de la SRAM d'un .srm gpSP ou Beetle GBA (ADR 0011).
+func lireLocal(j *Jeu, srv *Version) (*Local, error) {
 	brut, err := os.ReadFile(j.Fichier)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -206,14 +208,12 @@ func lireLocal(j *Jeu) (*Local, error) {
 			return nil, fmt.Errorf("%s : %w", j.Fichier, err)
 		}
 	}
-	vide := j.Systeme != "3DS"
-	for _, c := range sram {
-		if c != sram[0] || c != 0 && c != 0xFF {
-			vide = false
-			break
+	if srmFixes[j.Coeur] > 0 { // gpSP, Beetle GBA : .srm de taille fixe (srm.go)
+		if sram, err = sramSRM(j.Coeur, brut, srv); err != nil {
+			return nil, fmt.Errorf("%s : %w", j.Fichier, err)
 		}
 	}
-	return &Local{Version{Hash: hachage(sram), Taille: int64(len(sram))}, brut, sram, vide}, nil
+	return &Local{Version{Hash: hachage(sram), Taille: int64(len(sram))}, brut, sram, j.Systeme != "3DS" && vierge(sram)}, nil
 }
 
 // État d'un Jeu (docs/design.md §1, ADR 0001). nil = absent ; base vide = jamais synchronisé.
@@ -481,6 +481,11 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 			return err
 		}
 	}
+	if srmFixes[j.Coeur] > 0 { // gpSP, Beetle GBA : SRAM reçue dans un .srm de taille fixe (srm.go)
+		if contenu, err = srm(j.Coeur, o); err != nil {
+			return err
+		}
+	}
 	os.Remove(tmp) // reste d'un arrêt brutal
 	if err := ecrireVerifie(tmp, contenu); err != nil {
 		return err
@@ -559,11 +564,11 @@ func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool)
 // Une passe de Synchronisation. annule = l'utilisateur ne veut pas jouer.
 func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 	for essai := 0; essai < 3; essai++ { // un 412 relance une passe avec la nouvelle Version courante
-		l, err := lireLocal(j)
+		srv, err := s.versionServeur(j.Cle)
 		if err != nil {
 			return false, err
 		}
-		srv, err := s.versionServeur(j.Cle)
+		l, err := lireLocal(j, srv)
 		if err != nil {
 			return false, err
 		}

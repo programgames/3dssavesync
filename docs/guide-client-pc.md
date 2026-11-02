@@ -65,7 +65,7 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
 
 **SkyEmu, NanoBoyAdvance, BGB** : la Sauvegarde est brute. BGB ajoute le Trailer d'horloge de 48 octets des jeux GB à horloge : le Lanceur le garde sur le PC, comme pour mGBA. Avant d'utiliser NanoBoyAdvance, laisse `args_en_plus` vide : la ROM doit être le premier argument. Si tu remplis « Save files » (onglet Misc) dans BGB, indique le même dossier dans `sauvegardes` : le Lanceur ne lit pas ce réglage (clé de `bgb.ini` non documentée). BGB sous Wine : `exe` = `wine`, `args_en_plus` = le chemin de `bgb.exe`, `processus` à préciser (non testé).
 
-**Cœurs RetroArch gérés** : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M. Le fichier `.rtc` (horloge des jeux GB) reste sur le PC. Exemple :
+**Cœurs RetroArch gérés** : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA. Le fichier `.rtc` (horloge des jeux GB) reste sur le PC. Exemple :
 
 ```json
 "retroarch": {
@@ -77,6 +77,8 @@ Sans `sauvegardes`, le Lanceur lit le dossier dans le réglage de l'émulateur. 
   }
 }
 ```
+
+**gpSP et Beetle GBA** : ces cœurs écrivent un `.srm` de taille fixe (128 Kio pour gpSP, 136 Kio pour Beetle GBA), quel que soit le jeu. Le Lanceur envoie seulement la SRAM, à la taille de la Version du serveur : le Hash est le même qu'avec mGBA ou la 3DS. Il refuse la Synchronisation si le `.srm` a des données hors de cette taille, ou si le serveur n'a pas encore ce jeu : synchronise-le d'abord depuis mGBA ou la 3DS. À la Récupération, il fait la Copie de sécurité, puis écrit un `.srm` complet. Beetle GBA : garde l'option `gba_use_mednafen_save_method` à `libretro` (défaut). Détails : [ADR 0011](adr/0011-srm-gpsp-beetle-taille-du-serveur.md).
 
 **État rechargé au lancement** : un émulateur qui recharge un état peut remplacer une Version qui vient du serveur par une partie plus ancienne. Après une Récupération, le Lanceur pose la question « Jouer quand même / Ne pas jouer » et donne le réglage à changer. Sans Récupération, il écrit seulement un avertissement dans le journal.
 
