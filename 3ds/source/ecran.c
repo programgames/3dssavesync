@@ -1,0 +1,133 @@
+/* Dessin citro2d (ecran.h). */
+#include <citro2d.h>
+#include <string.h>
+#include "ecran.h"
+
+static C3D_RenderTarget *haut, *bas;
+static C2D_TextBuf tampon, mesure; /* mesure : vidé à chaque mesure */
+static C3D_Tex texture; /* icône du jeu : une seule par image */
+
+/* Sortie en RGB565 : le format que consoleInit a donné aux framebuffers (la console y écrit encore). */
+static C3D_RenderTarget *cible(gfxScreen_t ecran, int largeur)
+{
+    C3D_RenderTarget *t = C3D_RenderTargetCreate(240, largeur, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+    C3D_RenderTargetSetOutput(t, ecran, GFX_LEFT,
+                              GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) |
+                                  GX_TRANSFER_IN_FORMAT(GX_TRANSFER_FMT_RGBA8) | GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB565) |
+                                  GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO));
+    return t;
+}
+
+void ecran_init(void)
+{
+    fontEnsureMapped(); /* police du système */
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
+    C2D_Prepare();
+    haut = cible(GFX_TOP, 400);
+    bas = cible(GFX_BOTTOM, 320);
+    tampon = C2D_TextBufNew(4096);
+    mesure = C2D_TextBufNew(256);
+    C3D_TexInit(&texture, 64, 64, GPU_RGB565);
+    C3D_TexSetFilter(&texture, GPU_NEAREST, GPU_NEAREST); /* icône DS agrandie 1,5 fois : pixels nets */
+}
+
+void ecran_fin(void)
+{
+    C3D_TexDelete(&texture);
+    C2D_TextBufDelete(mesure);
+    C2D_TextBufDelete(tampon);
+    C2D_Fini();
+    C3D_Fini();
+}
+
+void ecran_debut(void)
+{
+    C2D_TextBufClear(tampon);
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(haut, RGB(0x0C0E12));
+    C2D_TargetClear(bas, RGB(0x14181E));
+}
+
+void ecran_haut(void) { C2D_SceneBegin(haut); }
+void ecran_bas(void) { C2D_SceneBegin(bas); }
+void ecran_finir(void) { C3D_FrameEnd(0); }
+
+void ecran_rect(float x, float y, float l, float h, u32 couleur) { C2D_DrawRectSolid(x, y, 0, l, h, couleur); }
+
+static float largeur_de(float taille, const char *s)
+{
+    C2D_Text t;
+    float l;
+    C2D_TextBufClear(mesure);
+    C2D_TextParse(&t, mesure, s);
+    C2D_TextGetDimensions(&t, taille, taille, &l, NULL);
+    return l;
+}
+
+float ecran_largeur(float taille, const char *s) { return largeur_de(taille, s); }
+
+float ecran_texte(float x, float y, float taille, u32 couleur, float largeur, const char *s)
+{
+    C2D_Text t;
+    char coupe[256];
+    float l = largeur_de(taille, s);
+    if (largeur > 0 && l > largeur) { /* raccourci octet par octet, sans couper un caractère UTF-8 */
+        size_t n = strlen(s) < sizeof coupe - 4 ? strlen(s) : sizeof coupe - 4;
+        do {
+            while (n > 0 && (s[--n] & 0xC0) == 0x80);
+            memcpy(coupe, s, n);
+            strcpy(coupe + n, "\xE2\x80\xA6"); /* … */
+            l = largeur_de(taille, coupe);
+        } while (n > 0 && l > largeur);
+        s = coupe;
+    }
+    C2D_TextParse(&t, tampon, s);
+    C2D_TextOptimize(&t);
+    C2D_DrawText(&t, C2D_WithColor, x, y, 0, taille, taille, couleur);
+    return l;
+}
+
+/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. */
+float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s)
+{
+    char ligne[256];
+    float interligne = fontGetInfo(NULL)->lineFeed * taille, h = 0;
+    while (*s) {
+        size_t n = 0, coupe = 0;
+        while (s[n] && s[n] != '\n' && n < sizeof ligne - 1) {
+            memcpy(ligne, s, n + 1);
+            ligne[n + 1] = '\0';
+            if (coupe && largeur_de(taille, ligne) > largeur) break;
+            if (s[++n] == ' ') coupe = n;
+        }
+        if (s[n] && s[n] != '\n' && coupe) n = coupe; /* ligne trop longue : coupée au dernier espace */
+        memcpy(ligne, s, n);
+        ligne[n] = '\0';
+        ecran_texte(x, y + h, taille, couleur, largeur, ligne);
+        h += interligne;
+        s += n;
+        if (*s == ' ' || *s == '\n') s++;
+    }
+    return h;
+}
+
+void ecran_icone(const u16 *pixels, int l, int h, float x, float y, float echelle)
+{
+    /* Tuiles 8×8 en ordre de Morton, ligne de tuiles 0 = haut de l'image (méthode de FBI, screen.c). */
+    static const Tex3DS_SubTexture sous = { 64, 64, 0.0f, 1.0f, 1.0f, 0.0f };
+    Tex3DS_SubTexture s = sous;
+    u16 *d = texture.data;
+    int px, py;
+    memset(d, 0, 64 * 64 * 2);
+    for (py = 0; py < h && py < 64; py++)
+        for (px = 0; px < l && px < 64; px++)
+            d[(((py >> 3) * 8 + (px >> 3)) << 6) + ((px & 1) | (py & 1) << 1 | (px & 2) << 1 | (py & 2) << 2 | (px & 4) << 2 | (py & 4) << 3)] =
+                pixels[py * l + px];
+    C3D_TexFlush(&texture);
+    s.width = l;
+    s.height = h;
+    s.right = l / 64.0f;
+    s.bottom = 1.0f - h / 64.0f;
+    C2D_DrawImageAt((C2D_Image){ &texture, &s }, x, y, 0, NULL, echelle, echelle);
+}
