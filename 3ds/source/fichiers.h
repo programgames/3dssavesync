@@ -10,6 +10,10 @@ int lire_fichier(const char *chemin, unsigned char **octets, size_t *taille);
 /* 0 si écrit en entier, -1 sinon. */
 int ecrire_fichier(const char *chemin, const void *octets, size_t taille);
 
+/* Remplace chemin sans perte : chemin.tmp écrit et relu, puis l'ancien retiré et chemin.tmp renommé.
+ * 0 si fait ; -1 sinon (ancien intact si chemin.tmp n'a pas pu être écrit). */
+int remplacer_fichier(const char *chemin, const void *octets, size_t taille);
+
 /* Met le contenu de src dans dst sans perte : copie de dst dans copie s'il existe, dst.tmp relu
  * et vérifié, puis remplacement. supprimer_src : retire src ensuite (dst a le même contenu).
  * 0 si fait ; -1 sinon, sans rien perdre (au pire, dst.tmp reste). */

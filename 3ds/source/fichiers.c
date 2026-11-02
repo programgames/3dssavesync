@@ -43,11 +43,22 @@ static int identique(const char *chemin, const unsigned char *octets, size_t tai
     return ok;
 }
 
+int remplacer_fichier(const char *chemin, const void *octets, size_t taille)
+{
+    char tmp[700];
+    snprintf(tmp, sizeof tmp, "%s.tmp", chemin);
+    if (ecrire_fichier(tmp, octets, taille) || !identique(tmp, octets, taille)) {
+        remove(tmp);
+        return -1;
+    }
+    remove(chemin); /* rename() refuse d'écraser sur la SD */
+    return rename(tmp, chemin) || !identique(chemin, octets, taille) ? -1 : 0;
+}
+
 int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int supprimer_src)
 {
     unsigned char *octets, *ancien;
     size_t taille, n;
-    char tmp[700];
     FILE *f;
     int r = -1;
 
@@ -60,13 +71,7 @@ int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int
         if (r) goto fin;
         r = -1;
     }
-    snprintf(tmp, sizeof tmp, "%s.tmp", dst);
-    if (ecrire_fichier(tmp, octets, taille) || !identique(tmp, octets, taille)) {
-        remove(tmp);
-        goto fin;
-    }
-    remove(dst); /* déjà copié ; rename() refuse d'écraser sur la SD */
-    if (rename(tmp, dst) || !identique(dst, octets, taille)) goto fin;
+    if (remplacer_fichier(dst, octets, taille)) goto fin; /* dst déjà copié */
     if (supprimer_src) remove(src);
     r = 0;
 fin:

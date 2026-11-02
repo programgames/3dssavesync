@@ -24,7 +24,7 @@
 #define DOSSIER "sdmc:/3ds/3dssavesync"
 #define ANCIEN "sdmc:/3ds/nds-save-sync" /* nom avant la v3 : réglages et Bases repris au premier lancement */
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Sauvegardes des forwarders mGBA */
-#define MAX_JEUX 512 /* ponytail: tableau fixe ; au-delà de 512 ROM, les suivantes sont ignorées */
+#define MAX_JEUX 512 /* ponytail: tableau fixe ; au-delà de 512 ROM, les suivantes sont ignorées (et signalées) */
 #define LIGNES_HAUT 14 /* lignes d'une liste sur l'écran du haut */
 #define MASQUE -1   /* ni Sauvegarde locale ni Version courante : pas affiché */
 #define DOUBLON 100 /* plusieurs ROM pour une Clé (ADR 0005) */
@@ -86,6 +86,20 @@ static struct { char cle[CLE_MAX], hash[65]; } bases[MAX_JEUX];
 static int nb_bases;
 static int visibles[MAX_JEUX], nb_visibles;
 static char message[512];
+static char alerte[300]; /* problème vu pendant une lecture ou une action : ajouté au message à la fin */
+
+static void alerter(const char *texte)
+{
+    if (!strstr(alerte, texte))
+        snprintf(alerte + strlen(alerte), sizeof alerte - strlen(alerte), "%s%s", alerte[0] ? "\n" : "", texte);
+}
+
+static void montrer_alerte(void)
+{
+    if (!alerte[0]) return;
+    snprintf(message + strlen(message), sizeof message - strlen(message), "%s%s", message[0] ? "\n" : "", alerte);
+    alerte[0] = '\0';
+}
 
 static int curseur_liste; /* jeu choisi dans la liste : l'écran du haut des dialogues et de la progression */
 static int lu;            /* 0 tant que la première lecture n'est pas finie */
@@ -107,6 +121,10 @@ static void lire_cles(const char *chemin, void (*cle)(const char *, const char *
 {
     FILE *f = fopen(chemin, "r");
     char ligne[512];
+    if (!f) { /* coupure entre le retrait de l'ancien et le renommage (remplacer_fichier) : le .tmp est complet */
+        snprintf(ligne, sizeof ligne, "%s.tmp", chemin);
+        f = fopen(ligne, "r");
+    }
     if (!f) return;
     while (fgets(ligne, sizeof ligne, f)) {
         char *egal;
@@ -133,13 +151,12 @@ static void cle_config(const char *k, const char *v)
 
 static void ecrire_config(void)
 {
-    FILE *f;
+    char t[sizeof cfg + 100];
     mkdir(DOSSIER, 0777);
-    if ((f = fopen(DOSSIER "/config.ini", "w"))) {
-        fprintf(f, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\n", cfg.url,
-                cfg.jeton, cfg.roms, cfg.saves, cfg.roms_gb, cfg.saves_gb, cfg.roms_gba, cfg.saves_gba);
-        fclose(f);
-    }
+    snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\n", cfg.url,
+             cfg.jeton, cfg.roms, cfg.saves, cfg.roms_gb, cfg.saves_gb, cfg.roms_gba, cfg.saves_gba);
+    if (remplacer_fichier(DOSSIER "/config.ini", t, strlen(t)))
+        alerter(T("Réglages non enregistrés. Vérifiez la carte SD.", "Settings not saved. Check the SD card."));
 }
 
 static void cle_base(const char *k, const char *v)
@@ -162,7 +179,8 @@ static const char *base_de(const char *cle)
 /* La seule écriture de Base (design §1) : après À jour, Envoi ou Récupération réussis. */
 static void fixer_base(const char *cle, const char *hash)
 {
-    FILE *f;
+    static char t[MAX_JEUX * (CLE_MAX + 66)];
+    size_t n = 0;
     int i;
     for (i = 0; i < nb_bases && strcmp(bases[i].cle, cle); i++);
     if (i == nb_bases) {
@@ -170,10 +188,10 @@ static void fixer_base(const char *cle, const char *hash)
         snprintf(bases[nb_bases++].cle, CLE_MAX, "%s", cle);
     }
     snprintf(bases[i].hash, 65, "%s", hash);
-    if ((f = fopen(DOSSIER "/base.ini", "w"))) {
-        for (i = 0; i < nb_bases; i++) fprintf(f, "%s=%s\n", bases[i].cle, bases[i].hash);
-        fclose(f);
-    }
+    for (i = 0; i < nb_bases; i++) n += snprintf(t + n, sizeof t - n, "%s=%s\n", bases[i].cle, bases[i].hash);
+    if (remplacer_fichier(DOSSIER "/base.ini", t, n)) /* une coupure pendant l'écriture ne vide plus base.ini */
+        alerter(T("Bases non enregistrées : des conflits peuvent apparaître. Vérifiez la carte SD.",
+                  "Bases not saved: conflicts may appear. Check the SD card."));
 }
 
 /* ---------------------------------------------------------------- observation */
@@ -232,12 +250,14 @@ static int vers_fichier(const jeu_t *j, unsigned char **octets, size_t *taille, 
 }
 
 /* Une source de ROM (racine seulement, Q10) : Clé lue dans l'en-tête, .sav nommé comme la ROM dans le dossier saves. */
+static int ignorees; /* ROM au-delà de MAX_JEUX */
+
 static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
 {
     DIR *d = opendir(roms);
     struct dirent *e;
 
-    while (d && (e = readdir(d)) && nb_jeux < MAX_JEUX) {
+    while (d && (e = readdir(d))) {
         char chemin[600], cle[CLE_MAX];
         unsigned char entete[0x200];
         const char *ext = strrchr(e->d_name, '.');
@@ -257,6 +277,10 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
             if (!strcmp(jeux[i].cle, cle)) j = &jeux[i];
         if (j) {
             j->nb_roms++;
+            continue;
+        }
+        if (nb_jeux == MAX_JEUX) {
+            ignorees++;
             continue;
         }
         j = &jeux[nb_jeux++];
@@ -332,10 +356,15 @@ static void scanner(void)
 {
     int i, avant;
 
-    nb_jeux = nb_visibles = lu = 0; /* la liste affichée n'est plus valable pendant la lecture */
+    nb_jeux = nb_visibles = lu = ignorees = 0; /* la liste affichée n'est plus valable pendant la lecture */
     scanner_dossier(SYS_DS, cfg.roms, cfg.saves[0] ? cfg.saves : cfg.roms); /* sauvegardes vides = à côté de la ROM */
     scanner_dossier(SYS_GB, cfg.roms_gb, cfg.saves_gb[0] ? cfg.saves_gb : cfg.roms_gb);
     scanner_dossier(SYS_GBA, cfg.roms_gba, cfg.saves_gba[0] ? cfg.saves_gba : cfg.roms_gba);
+    if (ignorees) {
+        char t[80];
+        snprintf(t, sizeof t, T("%d ROM ignorées : plus de %d jeux.", "%d ROMs skipped: more than %d games."), ignorees, MAX_JEUX);
+        alerter(t);
+    }
     avant = nb_jeux;
     for (i = 0; i < avant; i++) {
         progression(i + 1, avant, T("Lecture des sauvegardes\n%s", "Reading saves\n%s"), jeux[i].court);
@@ -566,7 +595,11 @@ static int recuperer(jeu_t *j)
         /* rename() refuse d'écraser sur la SD : on retire l'ancienne (déjà copiée) juste avant. */
         remove(j->sav);
         if (rename(tmp, j->sav)) {
-            snprintf(message, sizeof message, T("%s : renommage impossible, garde %s.tmp.", "%s: rename failed, keep %s.tmp."), j->court, j->nom);
+            const char *b = strrchr(j->sav, '/') ? strrchr(j->sav, '/') + 1 : j->sav, *ext = strrchr(b, '.');
+            int l = (int)strlen(b), coupe = l > 60; /* écran du bas : nom raccourci, extension gardée */
+            snprintf(message, sizeof message, T("%s : renommage impossible. Sauvegarde reçue : %.*s%s%s.tmp%s", "%s: rename failed. Downloaded save: %.*s%s%s.tmp%s"),
+                     j->court, coupe ? 50 : l, b, coupe ? "…" : "", coupe && ext ? ext : "",
+                     existe ? T(". Ancienne copiée dans /3ds/3dssavesync/copies.", ". Old one copied to /3ds/3dssavesync/copies.") : ".");
             return 0;
         }
     }
@@ -1420,6 +1453,7 @@ int main(void)
         snprintf(message, sizeof message, "%s", reprise);
     }
     rafraichir();
+    montrer_alerte();
     while (aptMainLoop()) {
         u32 k;
         curseur_liste = curseur;
@@ -1448,6 +1482,7 @@ int main(void)
                 snprintf(message + strlen(message), sizeof message - strlen(message),
                          T(" (%llu s)", " (%llu s)"), (osGetTime() - debut) / 1000);
             }
+            montrer_alerte();
             for (i = 0; i < nb_visibles && visibles[i] != choisi; i++);
             curseur = i < nb_visibles ? i : curseur < nb_visibles ? curseur : nb_visibles ? nb_visibles - 1 : 0;
             curseur_liste = curseur;

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "fichiers.h"
 
 static int echecs;
@@ -69,6 +70,12 @@ int main(void)
     verifier(deplacer_sauvegarde(src, dst, "dossier-absent/copie.sav", 1) != 0, "copie impossible : refus");
     verifier(contient(dst, "partie rom") && contient(src, "nouvelle"), "copie impossible : rien ne change");
 
+    /* base.ini, config.ini : remplacés par un .tmp vérifié */
+    verifier(remplacer_fichier(dst, "IRBF=ab\n", 8) == 0 && contient(dst, "IRBF=ab\n") && !existe("test-dst.sav.tmp"),
+             "remplacement : fait, sans .tmp restant");
+    verifier(remplacer_fichier("dossier-absent/base.ini", "x", 1) != 0, "remplacement impossible : échec signalé");
+    mkdir("test-dst.sav.tmp", 0777); /* .tmp impossible à écrire */
+    verifier(remplacer_fichier(dst, "nouveau", 7) != 0 && contient(dst, "IRBF=ab\n"), ".tmp impossible : l'ancien reste intact");
     remove(src), remove(dst), remove(copie), remove("test-dst.sav.tmp");
     printf("%s\n", echecs ? "ECHECS" : "fichiers : OK");
     return echecs != 0;
