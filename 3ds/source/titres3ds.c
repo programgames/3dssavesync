@@ -94,15 +94,17 @@ int titre_seul_main(u64 id)
     return -1;
 }
 
-/* UTF-16 -> ASCII : lettres accentuées latines ramenées à leur base, le reste remplacé par '?'. */
-static void ascii(const u16 *src, size_t max, char *nom, size_t n)
+/* UTF-16 (plan de base) -> UTF-8, sans couper un caractère ; retour à la ligne -> espace. */
+static void utf8(const u16 *src, size_t max, char *nom, size_t n)
 {
-    static const char *const LATIN1 = "AAAAAAACEEEEIIIIDNOOOOOxOUUUUYTsaaaaaaaceeeeiiiidnooooo/ouuuuyty";
     size_t i, j = 0;
-    for (i = 0; i < max && src[i] && j + 1 < n; i++) {
-        u16 c = src[i];
-        if (c == '\n') c = ' ';
-        nom[j++] = c < 0x80 ? (char)c : c >= 0xC0 && c <= 0xFF ? LATIN1[c - 0xC0] : c == 0x2019 ? '\'' : '?';
+    for (i = 0; i < max && src[i]; i++) {
+        u16 c = src[i] == '\n' ? ' ' : src[i];
+        size_t l = c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
+        if (j + l + 1 > n) break;
+        if (l == 1) nom[j++] = (char)c;
+        else if (l == 2) nom[j++] = (char)(0xC0 | c >> 6), nom[j++] = (char)(0x80 | (c & 0x3F));
+        else nom[j++] = (char)(0xE0 | c >> 12), nom[j++] = (char)(0x80 | (c >> 6 & 0x3F)), nom[j++] = (char)(0x80 | (c & 0x3F));
     }
     nom[j] = '\0';
 }
@@ -131,7 +133,7 @@ int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n)
     if (ok) {
         const u16 *t = smdh + (8 + 0x200 * (langue & 0xF)) / 2;
         if (!t[0]) t = smdh + (8 + 0x200 * 1) / 2; /* titre vide dans cette langue : anglais */
-        ascii(t, 0x40, nom, n);
+        utf8(t, 0x40, nom, n);
     }
     free(smdh);
     return ok ? 0 : -1;

@@ -17,7 +17,7 @@ int titre_ecrire(u64 id, FS_MediaType media, const void *octets, size_t taille);
  * 0 si elle contient autre chose, -1 si le jeu n'a pas d'archive (jamais lancé). */
 int titre_seul_main(u64 id);
 
-/* Nom court du jeu (SMDH), dans la langue donnée, sans accents (police de la console). 0 si lu. */
+/* Nom court du jeu (SMDH), dans la langue donnée, en UTF-8. 0 si lu. */
 int titre_nom(u64 id, FS_MediaType media, int langue, char *nom, size_t n);
 
 /* Grande icône du jeu (SMDH) : 48×48 pixels RGB565, ligne par ligne. 0 si lue. */
