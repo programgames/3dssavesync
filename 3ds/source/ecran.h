@@ -1,6 +1,5 @@
 /* Dessin des deux écrans avec citro2d (issue #21) : texte en police du système (accents, icônes des boutons),
- * rectangles, icône de jeu. Les écrans pas encore redessinés écrivent toujours avec la console libctru dans les
- * mêmes framebuffers (RGB565, sans double tampon) : chaque image citro2d recouvre tout l'écran. */
+ * rectangles, icône de jeu. */
 #ifndef ECRAN_H
 #define ECRAN_H
 
