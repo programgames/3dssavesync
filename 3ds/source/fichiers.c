@@ -44,16 +44,21 @@ static int identique(const char *chemin, const unsigned char *octets, size_t tai
     return ok;
 }
 
+int ecrire_relu(const char *chemin, const void *octets, size_t taille)
+{
+    return ecrire_fichier(chemin, octets, taille) || !identique(chemin, octets, taille) ? -1 : 0;
+}
+
 int remplacer_fichier(const char *chemin, const void *octets, size_t taille)
 {
     char tmp[700];
     snprintf(tmp, sizeof tmp, "%s.tmp", chemin);
-    if (ecrire_fichier(tmp, octets, taille) || !identique(tmp, octets, taille)) {
+    if (ecrire_relu(tmp, octets, taille)) {
         remove(tmp);
         return -1;
     }
     remove(chemin); /* rename() refuse d'écraser sur la SD */
-    return rename(tmp, chemin) || !identique(chemin, octets, taille) ? -1 : 0;
+    return rename(tmp, chemin) || !identique(chemin, octets, taille) ? -2 : 0;
 }
 
 int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int supprimer_src)
@@ -67,7 +72,7 @@ int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int
     if ((f = fopen(dst, "rb"))) { /* dst existe : copie de sécurité d'abord */
         fclose(f);
         if (lire_fichier(dst, &ancien, &n)) goto fin;
-        r = ecrire_fichier(copie, ancien, n) || !identique(copie, ancien, n) ? -1 : 0;
+        r = ecrire_relu(copie, ancien, n);
         free(ancien);
         if (r) goto fin;
         r = -1;
@@ -88,4 +93,10 @@ int chemin_sauvegarde(const char *roms, const char *saves, const char *dossier, 
     else if (!strncasecmp(saves, roms, l) && !strcasecmp(saves + l, "/saves")) r = snprintf(out, n, "%s/saves/%s.sav", dossier, nom);
     else r = snprintf(out, n, "%s/%s.sav", saves, nom);
     return r < 0 || (size_t)r >= n ? -1 : 0;
+}
+
+int meme_sauvegarde(systeme_t a, const char *nom_a, const char *sav_a, systeme_t b, const char *nom_b, const char *sav_b)
+{
+    int forwarder = (a == SYS_GB || a == SYS_GBA) && (b == SYS_GB || b == SYS_GBA);
+    return !strcasecmp(sav_a, sav_b) || (forwarder && !strcasecmp(nom_a, nom_b));
 }

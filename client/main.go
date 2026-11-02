@@ -265,7 +265,10 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if nonLu && commande == nil && len(e.Coeurs) > 0 && e.Coeurs[systeme] == "" {
 		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom) // RetroArch : quel cœur ?
 	}
-	cle, pourquoi := s.cleDeRom(systeme, cle, nom, rom)
+	var pourquoi string
+	if !nonLu { // format non lu : pas de Clé, donc pas d'alias non plus
+		cle, pourquoi = s.cleDeRom(systeme, cle, nom)
+	}
 	if s.refus(e, cle, nom) {
 		return 1, nil
 	}
@@ -274,9 +277,19 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if commande == nil {
 		commande = e.commande(p, systeme, rom, dossier)
 	}
+	var j *Jeu
+	if pourquoi == "" && cle != "" && dossier != "" {
+		if p.NomInterne && interne != "" {
+			nom = interne
+		}
+		j = &Jeu{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}
+		if systeme != "3DS" { // Azahar range la Sauvegarde par title ID : deux ROM d'un jeu 3DS ont la même
+			pourquoi = s.romAutre(j, rom, true)
+		}
+	}
 	var jeux []*Jeu
 	switch {
-	case pourquoi != "": // ROM hack sous la Clé d'un autre jeu, ou alias invalide (ADR 0014)
+	case pourquoi != "": // ROM hack sous la Clé d'un autre jeu, Clé déjà synchronisée sans ROM retenue, alias invalide (ADR 0014)
 		s.journal("sans synchronisation : " + pourquoi)
 		notifier(tr("Jeu lancé sans synchronisation : ", "Game started without sync: ") + pourquoi)
 	case cle == "": // homebrew, ou 3DS hors des 8 Pokémon
@@ -288,10 +301,7 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	case dossier == "":
 		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable : indiquez-le dans « 3dssavesync réglages »", "%s save folder of %s not found: set it in \"3dssavesync settings\""), systeme, s.profil)
 	default:
-		if p.NomInterne && interne != "" {
-			nom = interne
-		}
-		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}}
+		jeux = []*Jeu{j}
 	}
 	if nonLu {
 		notifier(fmt.Sprintf(tr("Jeu lancé sans synchronisation : format de ROM non lu (%s). Utilisez une ROM .zip ou non compressée.",
@@ -439,17 +449,29 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 			return nil
 		})
 	}
-	// Plusieurs ROM pour une Clé : aucune n'est synchronisée, comme le Doublon de la 3DS (ADR 0005, 0014).
-	var doublons []string
-	for cle, l := range parCle {
-		if len(l) > 1 {
+	// Plusieurs ROM pour une Clé, ou pour un fichier de sauvegarde (dossier des sauvegardes commun et même nom dans deux
+	// sous-dossiers) : aucune n'est synchronisée, comme le Doublon de la 3DS (ADR 0005, 0014, 0015).
+	parFichier := map[string]int{}
+	for _, l := range parCle {
+		for _, j := range l {
+			parFichier[strings.ToLower(j.Fichier)]++
+		}
+	}
+	var doublons, partages []string
+	for _, l := range parCle {
+		switch {
+		case len(l) > 1:
 			for _, j := range l {
 				doublons = append(doublons, filepath.Base(roms[j]))
 			}
-		} else if pourquoi := s.romAutre(cle, roms[l[0]]); pourquoi != "" {
-			refus = append(refus, pourquoi)
-		} else {
-			jeux = append(jeux, l[0])
+		case parFichier[strings.ToLower(l[0].Fichier)] > 1:
+			partages = append(partages, filepath.Base(roms[l[0]]))
+		default:
+			if pourquoi := s.romAutre(l[0], roms[l[0]], false); pourquoi != "" {
+				refus = append(refus, pourquoi)
+			} else {
+				jeux = append(jeux, l[0])
+			}
 		}
 	}
 	if len(doublons) > 0 {
@@ -457,6 +479,12 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 		s.journal("Doublons : " + strings.Join(doublons, ", "))
 		refus = append(refus, fmt.Sprintf(tr("ces ROM sont vues comme le même jeu : %s. Gardez-en une, ou ajoutez un alias dans config.json.",
 			"these ROMs are seen as the same game: %s. Keep only one, or add an alias in config.json."), strings.Join(doublons, ", ")))
+	}
+	if len(partages) > 0 {
+		sort.Strings(partages)
+		s.journal("même fichier de sauvegarde : " + strings.Join(partages, ", "))
+		refus = append(refus, fmt.Sprintf(tr("ces ROM utiliseraient le même fichier de sauvegarde : %s. Renommez-en une.",
+			"these ROMs would use the same save file: %s. Rename one of them."), strings.Join(partages, ", ")))
 	}
 	if len(refus) > 0 {
 		notifier(tr("Non synchronisé : ", "Not synced: ") + strings.Join(refus, "\n"))
@@ -520,18 +548,23 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 	}
 	echecs = nil
 	s.listeLue = false
+	var nonEnvoyes []*Jeu // repris au prochain lancement d'un jeu (D5), quelle que soit l'erreur
 	for i, j := range jeux {
 		if _, err := s.syncJeu(j, true); err != nil {
 			s.journal(j.Cle + " après : " + err.Error())
 			if echecs = echec(echecs, j, err); fin(err) {
-				s.mettreEnAttente(jeux[i:]) // repris au prochain lancement d'un jeu (D5)
+				nonEnvoyes = append(nonEnvoyes, jeux[i:]...)
 				break
 			}
+			nonEnvoyes = append(nonEnvoyes, j)
 		}
 	}
 	if len(echecs) > 0 { // le plus important d'abord : la notification est coupée à 255 caractères
-		notifier(tr("Envoi impossible : la sauvegarde reste sur le PC et partira au prochain lancement d'un jeu.\n", "Upload failed: the save stays on the PC and will be sent at the next game launch.\n") +
-			strings.Join(echecs, "\n"))
+		texte := tr("Envoi impossible : la sauvegarde reste sur le PC et partira au prochain lancement d'un jeu.\n", "Upload failed: the save stays on the PC and will be sent at the next game launch.\n")
+		if s.mettreEnAttente(nonEnvoyes) != nil {
+			texte = tr("Envoi impossible : la sauvegarde reste sur le PC. Relancez ce jeu pour l'envoyer.\n", "Upload failed: the save stays on the PC. Start this game again to upload it.\n")
+		}
+		notifier(texte + strings.Join(echecs, "\n"))
 	}
 	return 0, nil
 }

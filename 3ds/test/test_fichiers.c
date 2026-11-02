@@ -75,8 +75,29 @@ int main(void)
              "remplacement : fait, sans .tmp restant");
     verifier(remplacer_fichier("dossier-absent/base.ini", "x", 1) != 0, "remplacement impossible : échec signalé");
     mkdir("test-dst.sav.tmp", 0777); /* .tmp impossible à écrire */
-    verifier(remplacer_fichier(dst, "nouveau", 7) != 0 && contient(dst, "IRBF=ab\n"), ".tmp impossible : l'ancien reste intact");
+    verifier(remplacer_fichier(dst, "nouveau", 7) == -1 && contient(dst, "IRBF=ab\n"), ".tmp impossible : -1, l'ancien reste intact");
     remove(src), remove(dst), remove(copie), remove("test-dst.sav.tmp");
+    /* Renommage impossible (cible = dossier non vide) : -2, le .tmp vérifié reste */
+    mkdir("test-dossier.sav", 0777);
+    ecrire("test-dossier.sav/x", "x");
+    verifier(remplacer_fichier("test-dossier.sav", "recu", 4) == -2 && contient("test-dossier.sav.tmp", "recu"), "renommage impossible : -2, .tmp gardé");
+    remove("test-dossier.sav.tmp"), remove("test-dossier.sav/x"), remove("test-dossier.sav");
+
+    /* Copie de sécurité relue (recuperer) */
+    verifier(ecrire_relu(copie, "partie", 6) == 0 && contient(copie, "partie"), "écriture relue : faite");
+    verifier(ecrire_relu("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");
+    remove(copie);
+
+    /* Deux ROM, un fichier de Sauvegarde : Doublon (forwarder mGBA nommé comme la ROM, quel que soit le dossier) */
+    verifier(meme_sauvegarde(SYS_GBA, "Pokemon", "sdmc:/roms/gba/USA/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/EUR/Pokemon.sav"),
+             "GBA, même nom dans deux dossiers : forwarder partagé");
+    verifier(meme_sauvegarde(SYS_GB, "Tetris", "sdmc:/roms/gb/Tetris.sav", SYS_GBA, "TETRIS", "sdmc:/roms/gba/TETRIS.sav"),
+             "GB et GBA de même nom (casse ignorée) : forwarder partagé");
+    verifier(meme_sauvegarde(SYS_DS, "A", "sdmc:/saves/A.sav", SYS_DS, "a", "sdmc:/saves/a.sav"), "DS, même .sav");
+    verifier(!meme_sauvegarde(SYS_DS, "Pokemon", "sdmc:/roms/nds/USA/Pokemon.sav", SYS_DS, "Pokemon", "sdmc:/roms/nds/EUR/Pokemon.sav"),
+             "DS, même nom dans deux dossiers à côté de la ROM : deux .sav");
+    verifier(!meme_sauvegarde(SYS_DS, "Pokemon", "sdmc:/roms/nds/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/Pokemon.sav"),
+             "DS et GBA de même nom : pas de forwarder pour la DS");
 
     /* Sauvegarde d'une ROM en sous-dossier (ADR 0015) */
     {

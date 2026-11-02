@@ -3,10 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Forme d'une Clé par Système (ADR 0007) : celle que le serveur accepte. Un alias doit l'avoir (ADR 0014).
@@ -32,26 +34,77 @@ func (c *Config) cleAlias(systeme, nom, cle string) (string, error) {
 	return a, nil
 }
 
-// ROM de chaque Clé synchronisée par ce Client, à côté de sa Base (ADR 0014). Absent (avant le lot D) : aucune ROM retenue.
-func (s *Session) cheminRoms() string {
-	return filepath.Join(s.dossier, "bases", "roms", s.profil+".json")
+// ROM de chaque Clé synchronisée sur ce PC, tous émulateurs ensemble (ADR 0014) : la Version courante du serveur est
+// la même pour tous. Hors de bases/ : la Base d'un émulateur nommé « roms » serait bases/roms.json.
+func (s *Session) cheminRoms() string { return filepath.Join(s.dossier, "roms.json") }
+
+// romsRetenues : roms.json, complété par les anciens fichiers par émulateur (bases/roms/<profil>.json, lus seulement ;
+// à Clé égale, le premier émulateur par ordre alphabétique). Ils sont repris dans roms.json à sa prochaine écriture.
+func (s *Session) romsRetenues() (map[string]string, error) {
+	m := map[string]string{}
+	err := lireJSON(s.cheminRoms(), &m)
+	if errors.Is(err, fs.ErrNotExist) {
+		err = nil
+	}
+	anciens, _ := filepath.Glob(filepath.Join(s.dossier, "bases", "roms", "*.json"))
+	for _, f := range anciens {
+		a := map[string]string{}
+		lireJSON(f, &a)
+		for cle, rom := range a {
+			if m[cle] == "" {
+				m[cle] = rom
+			}
+		}
+	}
+	return m, err
 }
 
-// romAutre : texte du refus si une autre ROM, qui existe encore, est déjà synchronisée sous cette Clé (ROM hack qui
-// garde la Clé du jeu d'origine). Sinon "" et cette ROM est retenue pour la prochaine Base (fixerBase).
-// Une ROM retenue qui n'existe plus (renommée, déplacée, extraite dans un dossier temporaire) laisse la place.
-func (s *Session) romAutre(cle, rom string) string {
-	if cle == "" || rom == "" {
+// baseConnue : un émulateur de ce PC a une Base pour cette Clé (ou une Base illisible : dans le doute, oui).
+func (s *Session) baseConnue(cle string) bool {
+	fichiers, _ := filepath.Glob(filepath.Join(s.dossier, "bases", "*.json"))
+	for _, f := range fichiers {
+		m := map[string]string{}
+		if lireJSON(f, &m) != nil || m[cle] != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// romAutre : texte du refus si cette ROM ne doit pas se synchroniser sous la Clé de j, sinon "" et la ROM est retenue
+// pour la prochaine Base (fixerBase). Refus :
+//   - une autre ROM, qui existe encore, est déjà synchronisée sous cette Clé (ROM hack qui garde la Clé du jeu
+//     d'origine). Une ROM retenue qui n'existe plus (renommée, déplacée, extraite dans un dossier temporaire) laisse la place ;
+//   - aucune ROM retenue, mais une Base de cette Clé sur ce PC (synchronisée avant que les ROM soient retenues), et pas de
+//     sauvegarde pour cette ROM : la Récupération donnerait à un éventuel ROM hack la partie du jeu d'origine, que son
+//     prochain Envoi remplacerait. Avec question (run), l'utilisateur confirme que c'est le même jeu.
+func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
+	if j.Cle == "" || rom == "" {
 		return ""
 	}
-	m := map[string]string{}
-	lireJSON(s.cheminRoms(), &m)
-	if a, err := os.Stat(m[cle]); err == nil {
+	m, _ := s.romsRetenues()
+	if a, err := os.Stat(m[j.Cle]); err == nil {
 		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) {
-			s.journal(fmt.Sprintf("même Clé %s que %s : %s", cle, m[cle], rom))
+			s.journal(fmt.Sprintf("même Clé %s que %s : %s", j.Cle, m[j.Cle], rom))
 			return fmt.Sprintf(tr("%s est vu comme le même jeu que %s, déjà synchronisé (ROM hack ?). Pour le synchroniser à part, ajoutez un alias dans config.json.",
 				"%s is seen as the same game as %s, already synced (ROM hack?). To sync it separately, add an alias in config.json."),
-				filepath.Base(rom), filepath.Base(m[cle]))
+				filepath.Base(rom), filepath.Base(m[j.Cle]))
+		}
+	} else if m[j.Cle] == "" && s.baseConnue(j.Cle) {
+		if l, err := lireLocal(j, nil); err == nil && (l == nil || l.Vide) {
+			s.journal(fmt.Sprintf("Clé %s déjà synchronisée, aucune ROM retenue, pas de sauvegarde : %s", j.Cle, rom))
+			oui := tr("Synchroniser", "Sync")
+			if !question || demander(fmt.Sprintf(tr("%s : cette ROM n'a pas de sauvegarde dans cet émulateur, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
+				"Si c'est un ROM hack, il recevrait la partie du jeu d'origine : ajoutez-lui plutôt un alias dans config.json.\n\n"+
+				"Synchroniser cette ROM avec la sauvegarde du serveur ?",
+				"%s: this ROM has no save in this emulator, and this game was already synced on this PC, maybe with another ROM.\n\n"+
+					"If it is a ROM hack, it would get the game of the original: add an alias for it in config.json instead.\n\n"+
+					"Sync this ROM with the server save?"), filepath.Base(rom)),
+				[]string{oui, tr("Jouer sans synchroniser", "Play without sync")}) != oui {
+				return fmt.Sprintf(tr("%s n'a pas de sauvegarde ici, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM (ROM hack ?). Lancez ce jeu seul et confirmez que c'est le même jeu, ou ajoutez un alias dans config.json.",
+					"%s has no save here, and this game was already synced on this PC, maybe with another ROM (ROM hack?). Start this game alone and confirm it is the same game, or add an alias in config.json."),
+					filepath.Base(rom))
+			}
 		}
 	}
 	if abs, err := filepath.Abs(rom); err == nil {
@@ -60,7 +113,7 @@ func (s *Session) romAutre(cle, rom string) string {
 	if s.romDe == nil {
 		s.romDe = map[string]string{}
 	}
-	s.romDe[cle] = rom
+	s.romDe[j.Cle] = rom
 	return ""
 }
 
@@ -70,8 +123,8 @@ func (s *Session) retenirRom(cle string) error {
 	if rom == "" {
 		return nil
 	}
-	m := map[string]string{}
-	if err := lireJSON(s.cheminRoms(), &m); err != nil && !errors.Is(err, os.ErrNotExist) {
+	m, err := s.romsRetenues()
+	if err != nil {
 		s.journal("ROM retenues illisibles, remplacées : " + err.Error())
 	}
 	if m[cle] == rom {
@@ -82,16 +135,13 @@ func (s *Session) retenirRom(cle string) error {
 }
 
 // cleDeRom (run) : Clé de la ROM pour ce Client, alias compris. pourquoi non vide = jeu lancé sans Synchronisation.
-func (s *Session) cleDeRom(systeme, cle, nom, rom string) (string, string) {
+func (s *Session) cleDeRom(systeme, cle, nom string) (string, string) {
 	if systeme == "3DS" { // Azahar range la Sauvegarde par title ID : deux ROM d'un jeu 3DS ont la même
 		return cle, ""
 	}
 	cle, err := s.cfg.cleAlias(systeme, nom, cle)
 	if err != nil {
 		return "", err.Error()
-	}
-	if pourquoi := s.romAutre(cle, rom); pourquoi != "" {
-		return "", pourquoi
 	}
 	return cle, ""
 }
@@ -105,19 +155,56 @@ type enAttente struct {
 
 func (s *Session) cheminAttente() string { return filepath.Join(s.dossier, "en-attente.json") }
 
-// modifierAttente : relit la liste, la change, la réécrit (deux Lanceurs peuvent tourner ensemble).
-// ponytail: pas de verrou de fichier ; deux écritures à la même milliseconde peuvent perdre un Envoi en attente, qui
-// partira alors au prochain lancement de son jeu (comportement d'avant le lot D).
-func (s *Session) modifierAttente(f func([]enAttente) []enAttente) {
-	var l []enAttente
-	lireJSON(s.cheminAttente(), &l)
-	if err := ecrireJSON(s.cheminAttente(), f(l), true); err != nil {
-		s.journal("en-attente.json : " + err.Error())
+// verrouAttente : un seul Lanceur à la fois relit et réécrit la liste (deux Lanceurs peuvent tourner ensemble).
+// Un verrou de plus de 30 s vient d'un Lanceur arrêté : retiré. La fonction rendue retire le verrou.
+func (s *Session) verrouAttente() func() {
+	v := s.cheminAttente() + ".verrou"
+	os.MkdirAll(s.dossier, 0o755)
+	for essai := 0; essai < 50; essai++ {
+		f, err := os.OpenFile(v, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			f.Close()
+			return func() { os.Remove(v) }
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			break
+		}
+		if i, err := os.Stat(v); err == nil && time.Since(i.ModTime()) > 30*time.Second {
+			os.Remove(v)
+			continue
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
+	s.journal("en-attente.json : verrou impossible, liste modifiée sans verrou")
+	return func() {}
 }
 
-// mettreEnAttente : les jeux dont la Sauvegarde locale a changé depuis la Base (ceux à envoyer).
-func (s *Session) mettreEnAttente(jeux []*Jeu) {
+// modifierAttente : relit la liste, la change, la réécrit (fichier temporaire vérifié puis renommé, ecrireJSON).
+// Liste illisible : mise de côté (en-attente.json.illisible-<date>), jamais remplacée sans copie.
+func (s *Session) modifierAttente(f func([]enAttente) []enAttente) error {
+	defer s.verrouAttente()()
+	var l []enAttente
+	if err := lireJSON(s.cheminAttente(), &l); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		cote := s.cheminAttente() + ".illisible-" + time.Now().Format("20060102-150405")
+		if e := os.Rename(s.cheminAttente(), cote); e != nil {
+			s.journal("en-attente.json illisible, et impossible à mettre de côté : " + err.Error() + " ; " + e.Error())
+			return e
+		}
+		s.journal("en-attente.json illisible, mis de côté dans " + cote + " : " + err.Error())
+		notifier(fmt.Sprintf(tr("La liste des envois en attente était illisible. Elle est gardée dans %s. Ses jeux partiront à leur prochain lancement.",
+			"The list of pending uploads could not be read. It is kept in %s. Its games will be sent at their next launch."), cote))
+		l = nil
+	}
+	err := ecrireJSON(s.cheminAttente(), f(l), true)
+	if err != nil {
+		s.journal("en-attente.json : " + err.Error())
+	}
+	return err
+}
+
+// mettreEnAttente : les jeux dont la Sauvegarde locale a changé depuis la Base (ceux à envoyer). Erreur : la liste
+// n'a pas pu être écrite.
+func (s *Session) mettreEnAttente(jeux []*Jeu) error {
 	b, _ := s.bases()
 	var neufs []enAttente
 	for _, j := range jeux {
@@ -129,9 +216,9 @@ func (s *Session) mettreEnAttente(jeux []*Jeu) {
 		neufs = append(neufs, enAttente{s.profil, *j})
 	}
 	if len(neufs) == 0 {
-		return
+		return nil
 	}
-	s.modifierAttente(func(l []enAttente) []enAttente {
+	return s.modifierAttente(func(l []enAttente) []enAttente {
 		for _, n := range neufs {
 			l = append(retirer(l, n), n)
 		}

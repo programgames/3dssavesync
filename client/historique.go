@@ -283,10 +283,10 @@ func commandeRestore(config string, args []string, oui bool, q *Questions) (int,
 	}
 	q.dire("%s\n%s", ligne(lignes[i]), tr("Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n"+
 		"Chaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde.\n"+
-		"Un appareil avec une partie pas encore envoyée affiche un conflit, et vous choisissez.",
+		"Synchronisez d'abord les autres appareils : une partie pas encore envoyée peut sinon remplacer cette version, ou afficher un conflit.",
 		"This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n"+
 			"Each device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save.\n"+
-			"A device with a game not yet uploaded shows a conflict, and you choose."))
+			"Sync the other devices first: otherwise a game not yet uploaded can replace this version, or show a conflict."))
 	if !oui && !q.oui(tr("Restaurer cette version ?", "Restore this version?"), false) {
 		q.dire(tr("Rien n'est changé.", "Nothing is changed."))
 		return 0, nil
@@ -319,6 +319,7 @@ func (a *AssistantWeb) jeuxWeb() map[string]any {
 	return map[string]any{"Jeux": jeux}
 }
 
+// versionsWeb, restaurerWeb : sans le verrou de la page (jusqu'à 30 lectures sur le réseau), ServeHTTP le rend avant.
 func (a *AssistantWeb) versionsWeb(cle string) map[string]any {
 	s, err := sessionRestauration(a.config)
 	if err == nil {

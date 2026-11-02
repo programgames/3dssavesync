@@ -301,7 +301,10 @@ func (s *Session) api(methode, chemin string, corps []byte, entetes map[string]s
 		return 0, nil, &erreurHTTP{methode + " " + chemin, 401}
 	}
 	octets, err := io.ReadAll(rep.Body)
-	return rep.StatusCode, octets, err
+	if err != nil { // réponse coupée : le réseau est en cause, comme une requête sans réponse (classer)
+		return 0, nil, &neturl.Error{Op: methode, URL: chemin, Err: err}
+	}
+	return rep.StatusCode, octets, nil
 }
 
 // Réponse du serveur autre que celle attendue. Error() garde le détail technique, pour le journal.
@@ -417,8 +420,11 @@ func (s *Session) lireListe() ([]Version, error) {
 		return nil, &erreurHTTP{"GET /saves", st}
 	}
 	var liste []Version
-	err = json.Unmarshal(o, &liste)
-	return liste, err
+	if err := json.Unmarshal(o, &liste); err != nil { // page d'un portail Wi-Fi, mauvaise adresse : réponse inattendue
+		s.journal("GET /saves illisible : " + err.Error())
+		return nil, &erreurHTTP{"GET /saves", st}
+	}
+	return liste, nil
 }
 
 // Bases : un fichier par émulateur (Q17), Clé -> Hash de la dernière Synchronisation.

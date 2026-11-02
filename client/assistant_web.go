@@ -218,11 +218,15 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "api/versions", "api/restaurer":
 		var x struct{ Cle, Fichier, Courant string }
 		json.NewDecoder(r.Body).Decode(&x)
-		if chemin == "api/versions" {
-			reponse = a.versionsWeb(x.Cle)
-		} else {
-			reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
-		}
+		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
+			a.verrou.Unlock()
+			defer a.verrou.Lock()
+			if chemin == "api/versions" {
+				reponse = a.versionsWeb(x.Cle)
+			} else {
+				reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
+			}
+		}()
 	case "api/terminer":
 		close(a.fin)
 		reponse = true

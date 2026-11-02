@@ -46,6 +46,7 @@ typedef struct {
     char nom[256];  /* nom de la ROM sans extension = nom du .sav */
     char court[48]; /* pour l'affichage seulement : "Pokemon Diamant" */
     int nb_roms;
+    int partage;    /* Doublon : ROM de Clés différentes qui partagent un fichier de Sauvegarde (meme_sauvegarde) */
     obs_t local, serveur;
     char hash_local[65], hash_serveur[65], date[17], client[17];
     long age; /* secondes depuis la Version courante (horloge du serveur), -1 si inconnu */
@@ -290,7 +291,7 @@ static int est_dossier(const struct dirent *e, const char *chemin)
 }
 
 /* Une source de ROM, sous-dossiers compris (ADR 0015) : Clé lue dans l'en-tête (ou alias), Sauvegarde nommée comme la
- * ROM (chemin_sauvegarde). Deux ROM de même Clé, ou de même fichier de Sauvegarde : Doublon. */
+ * ROM (chemin_sauvegarde). Deux ROM de même Clé, ou de même fichier de Sauvegarde (forwarder mGBA compris) : Doublon. */
 #define PROFONDEUR 4 /* niveaux de sous-dossiers lus */
 static int ignorees; /* ROM au-delà de MAX_JEUX */
 
@@ -331,9 +332,10 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves, co
         } else if (cle_rom(s, entete, cle)) continue; /* homebrew ou en-tête illisible */
 
         for (i = 0; i < nb_jeux; i++)
-            if (!strcmp(jeux[i].cle, cle) || !strcasecmp(jeux[i].sav_rom, sav)) j = &jeux[i];
+            if (!strcmp(jeux[i].cle, cle) || meme_sauvegarde(jeux[i].systeme, jeux[i].nom, jeux[i].sav_rom, s, nom, sav)) j = &jeux[i];
         if (j) {
             j->nb_roms++;
+            j->partage |= strcmp(j->cle, cle) != 0;
             continue;
         }
         if (nb_jeux == MAX_JEUX) {
@@ -568,6 +570,17 @@ static int envoyer(jeu_t *j)
     return statut == 200;
 }
 
+/* Crée le dossier qui contient chemin s'il manque (dossier des sauvegardes d'un premier jeu). */
+static void creer_dossier_de(const char *chemin)
+{
+    char d[600], *fin;
+    snprintf(d, sizeof d, "%s", chemin);
+    if ((fin = strrchr(d, '/'))) {
+        *fin = '\0';
+        mkdir(d, 0777);
+    }
+}
+
 /* Récupération (design §4) : Copie de sécurité d'abord, puis
  *  - fichier (DS, GB, GBA) : SRAM reçue + Trailer d'horloge local (ADR 0008) dans un .tmp, puis remplacement ;
  *  - 3DS : réécriture de /main avec commit et secure value (ADR 0009).
@@ -579,7 +592,7 @@ static int recuperer(jeu_t *j)
     unsigned char *ancien = NULL, *nouveau;
     size_t taille, n = 0, sram;
     long statut;
-    int existe = j->systeme == SYS_3DS || access(j->sav, F_OK) == 0;
+    int echec, existe = j->systeme == SYS_3DS || access(j->sav, F_OK) == 0;
     time_t t = time(NULL);
 
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->cle);
@@ -598,14 +611,13 @@ static int recuperer(jeu_t *j)
     }
     /* Copie dès que la Sauvegarde existe, même si le scan n'a pas pu la lire : jamais d'écrasement sans copie. */
     if (existe) {
-        int echec;
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(DOSSIER "/copies", 0777);
         snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.%s", j->nom, date, j->systeme == SYS_3DS ? "main" : "sav");
         if (access(copie, F_OK) == 0) /* même nom de ROM dans deux sous-dossiers, la même seconde : la Clé les sépare */
             snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s-%s.%s", j->nom, date, j->cle, j->systeme == SYS_3DS ? "main" : "sav");
         echec = lire_sauvegarde(j, &ancien, &n);
-        if (!echec) echec = ecrire_fichier(copie, ancien, n);
+        if (!echec) echec = ecrire_relu(copie, ancien, n); /* relue : une copie abîmée ne protège rien */
         if (echec) {
             free(ancien);
             free(corps);
@@ -615,7 +627,7 @@ static int recuperer(jeu_t *j)
     }
 
     if (j->systeme == SYS_3DS) {
-        int echec = titre_ecrire(j->titre, j->media, corps, taille);
+        echec = titre_ecrire(j->titre, j->media, corps, taille);
         free(ancien);
         free(corps);
         if (echec) {
@@ -637,25 +649,21 @@ static int recuperer(jeu_t *j)
         if (n > sram) memcpy(nouveau + taille, ancien + sram, n - sram);
         free(ancien);
         free(recu);
-        {   /* dossier des sauvegardes absent (premier jeu) : créé */
-            char d[600], *fin;
-            snprintf(d, sizeof d, "%s", j->sav);
-            if ((fin = strrchr(d, '/'))) {
-                *fin = '\0';
-                mkdir(d, 0777);
-            }
-        }
-        snprintf(tmp, sizeof tmp, "%s.tmp", j->sav);
-        if (ecrire_fichier(tmp, nouveau, taille + (n - sram))) {
-            free(nouveau);
-            remove(tmp);
+        creer_dossier_de(j->sav); /* dossier des sauvegardes absent (premier jeu) */
+        /* .tmp écrit et relu, puis l'ancienne (déjà copiée) retirée, le .tmp renommé et relu (fichiers.h). */
+        echec = remplacer_fichier(j->sav, nouveau, taille + (n - sram));
+        free(nouveau);
+        if (echec == -1) {
             snprintf(message, sizeof message, T("%s : écriture impossible, sauvegarde de la 3DS intacte.", "%s: write failed, 3DS save intact."), j->court);
             return 0;
         }
-        free(nouveau);
-        /* rename() refuse d'écraser sur la SD : on retire l'ancienne (déjà copiée) juste avant. */
-        remove(j->sav);
-        if (rename(tmp, j->sav)) {
+        snprintf(tmp, sizeof tmp, "%s.tmp", j->sav);
+        if (echec && access(tmp, F_OK)) { /* renommée, mais relue différente : pas de Base sur ce fichier */
+            snprintf(message, sizeof message, T("%s : sauvegarde écrite abîmée. Vérifiez la carte SD, puis récupérez de nouveau.%s", "%s: written save damaged. Check the SD card, then download again.%s"),
+                     j->court, existe ? T(" Ancienne copiée dans /3ds/3dssavesync/copies.", " Old one copied to /3ds/3dssavesync/copies.") : "");
+            return 0;
+        }
+        if (echec) {
             const char *b = strrchr(j->sav, '/') ? strrchr(j->sav, '/') + 1 : j->sav, *ext = strrchr(b, '.');
             int l = (int)strlen(b), coupe = l > 60; /* écran du bas : nom raccourci, extension gardée */
             snprintf(message, sizeof message, T("%s : renommage impossible. Sauvegarde reçue : %.*s%s%s.tmp%s", "%s: rename failed. Downloaded save: %.*s%s%s.tmp%s"),
@@ -933,7 +941,9 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
     case CONFLIT: return T("Conflit : la 3DS et le serveur ont changé depuis la dernière synchronisation. \xEE\x80\x80 permet de choisir la version à garder.",
                            "Conflict: the 3DS and the server both changed since the last sync. \xEE\x80\x80 lets you choose the version to keep.");
     case DOUBLON:
-        snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%d ROMs hold this game: keep only one, or give the others an alias (alias.ini)."), j->nb_roms);
+        if (j->partage) snprintf(t, n, T("%d ROM ont ce nom de fichier : elles partageraient une sauvegarde (forwarder mGBA ou dossier des sauvegardes). Renommez-en une.",
+                                         "%d ROMs have this file name: they would share one save (mGBA forwarder or saves folder). Rename one."), j->nb_roms);
+        else snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%d ROMs hold this game: keep only one, or give the others an alias (alias.ini)."), j->nb_roms);
         return t;
     case HORS_LIGNE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     }
@@ -1397,8 +1407,10 @@ static int agir(jeu_t *j)
         break;
     }
     case DOUBLON:
-        snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%s: %d ROMs hold this game. Keep only one, or give the others an alias (alias.ini)."),
-                 j->court, j->nb_roms);
+        if (j->partage) snprintf(message, sizeof message, T("%s : %d ROM ont ce nom de fichier et partageraient une sauvegarde. Renommez-en une.",
+                                                            "%s: %d ROMs have this file name and would share one save. Rename one."), j->court, j->nb_roms);
+        else snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%s: %d ROMs hold this game. Keep only one, or give the others an alias (alias.ini)."),
+                      j->court, j->nb_roms);
         break;
     case HORS_LIGNE:
         snprintf(message, sizeof message, T("%s : serveur non lu. Appuyez sur \xEE\x80\x83 pour réessayer.", "%s: server not read. Press \xEE\x80\x83 to try again."), j->court);
@@ -1410,22 +1422,21 @@ static int agir(jeu_t *j)
     return fait;
 }
 
-/* X sur un Jeu GB/GBA : sa Sauvegarde passe du forwarder mGBA au .sav à côté de la ROM (open_agb_firm,
- * TWiLight), ou l'inverse. Le fichier du forwarder prime dès qu'il existe (scanner_dossier) : le retirer
+/* X sur un Jeu GB/GBA : sa Sauvegarde passe du forwarder mGBA à celle de la ROM (open_agb_firm, TWiLight), ou
+ * l'inverse. Celle de la ROM est sav_rom, le fichier que lire_local lit sans forwarder (dossier des sauvegardes réglé,
+ * ou saves/ du sous-dossier, ADR 0015). Le fichier du forwarder prime dès qu'il existe (lire_local) : le retirer
  * suffit à revenir côté ROM. Copie de sécurité du fichier remplacé (fichiers.h). */
 static int basculer(jeu_t *j)
 {
-    char rom_sav[600], fwd[600], copie[700], date[20], q[700], action[64];
-    const char *ext = strrchr(j->rom, '.');
+    char fwd[600], copie[700], date[20], q[700], action[64];
     const char *autre = j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++";
     int vers_rom;
     time_t t = time(NULL);
 
-    if ((j->systeme != SYS_GB && j->systeme != SYS_GBA) || !ext) {
+    if (j->systeme != SYS_GB && j->systeme != SYS_GBA) {
         snprintf(message, sizeof message, "%s", T("X : seulement pour les jeux GB et GBA.", "X: GB and GBA games only."));
         return 0;
     }
-    snprintf(rom_sav, sizeof rom_sav, "%.*s.sav", (int)(ext - j->rom), j->rom);
     snprintf(fwd, sizeof fwd, FORWARDERS "/%s.sav", j->nom);
     vers_rom = !strcmp(j->sav, fwd);
     snprintf(q, sizeof q,
@@ -1444,7 +1455,8 @@ static int basculer(jeu_t *j)
     snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.sav", j->nom, date);
     mkdir("sdmc:/mGBA", 0777);
     mkdir(FORWARDERS, 0777);
-    if (deplacer_sauvegarde(j->sav, vers_rom ? rom_sav : fwd, copie, vers_rom))
+    creer_dossier_de(j->sav_rom);
+    if (deplacer_sauvegarde(j->sav, vers_rom ? j->sav_rom : fwd, copie, vers_rom))
         snprintf(message, sizeof message, T("%s : changement impossible, rien n'est perdu.", "%s: switch failed, nothing lost."), j->court);
     else
         snprintf(message, sizeof message, T("%s : se joue maintenant avec %s.", "%s: now played with %s."), j->court, vers_rom ? autre : T("le forwarder mGBA", "the mGBA forwarder"));

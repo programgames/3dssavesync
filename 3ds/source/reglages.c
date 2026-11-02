@@ -79,9 +79,14 @@ int migrer_dossier(const char *ancien, const char *nouveau)
     size_t taille;
     int i;
 
-    snprintf(dst, sizeof dst, "%s/config.ini", nouveau);
     snprintf(src, sizeof src, "%s/config.ini", ancien);
-    if (existe(dst) || !existe(src)) return 0;
+    if (!existe(src)) return 0;
+    /* Un seul fichier du nouveau dossier, ou son .tmp (coupure pendant remplacer_fichier) : installation déjà faite,
+     * jamais remplacée par les anciens fichiers. */
+    for (i = 0; i < 6; i++) {
+        snprintf(dst, sizeof dst, "%s/%s%s", nouveau, FICHIERS[i / 2], i % 2 ? ".tmp" : "");
+        if (existe(dst)) return 0;
+    }
     mkdir(nouveau, 0777);
     for (i = 0; i < 3; i++) {
         snprintf(src, sizeof src, "%s/%s", ancien, FICHIERS[i]);

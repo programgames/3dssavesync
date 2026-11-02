@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -69,7 +70,7 @@ func TestRomHackEtAlias(t *testing.T) {
 	ecrire(t, savRR, r1)
 	retenue := func() string {
 		m := map[string]string{}
-		lireJSON(filepath.Join(tmp, "cfg", "bases", "roms", "mgba.json"), &m)
+		lireJSON(filepath.Join(tmp, "cfg", "roms.json"), &m)
 		return m["GBA-BPRE"]
 	}
 
@@ -277,5 +278,150 @@ func TestUneListeParPasse(t *testing.T) {
 	launch()
 	if r.essais != 1 || len(questions) != 1 || joue {
 		t.Errorf("%d requêtes, questions %q", r.essais, questions)
+	}
+}
+
+// Lot E : ROM retenue pour tous les émulateurs du PC, et Clé déjà synchronisée sans ROM retenue (ADR 0014).
+func TestRomRetenueGlobale(t *testing.T) {
+	tmp = t.TempDir()
+	maisonFactice(t)
+	demarrerServeur(t)
+	gba, gba2, roms := filepath.Join(tmp, "gba"), filepath.Join(tmp, "gba2"), filepath.Join(tmp, "roms-gba")
+	config := ecrireConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Jeton: "jeton-test", Copies: filepath.Join(tmp, "copies"),
+		Emulateurs: map[string]*Emulateur{
+			"mgba":  {Exe: "mgba.exe", Sauvegardes: map[string]string{"GBA": gba}},
+			"autre": {Profil: "mgba", Exe: "autre.exe", Sauvegardes: map[string]string{"GBA": gba2}},
+		}})
+	run := func(emu, rom string) int {
+		return principal([]string{"run", "--config", config, "--emulator", emu, rom})
+	}
+	rf, rr := filepath.Join(roms, "Pokemon Rouge Feu.gba"), filepath.Join(roms, "Pokemon Radical Red.gba")
+	ecrire(t, rf, enteteGBA("BPRE"))
+	ecrire(t, rr, enteteGBA("BPRE"))
+	f1 := aleatoire(131072, 1)
+	ecrire(t, filepath.Join(gba, "Pokemon Rouge Feu.sav"), f1)
+	reinitialiser()
+	run("mgba", rf)
+
+	t.Log("Le hack dans un autre émulateur, sans sauvegarde : refusé, la ROM d'origine est retenue pour tout le PC")
+	reinitialiser()
+	run("autre", rr)
+	if !joue || !contient(notifications, "est vu comme le même jeu que Pokemon Rouge Feu.gba") || existe(filepath.Join(gba2, "Pokemon Radical Red.sav")) ||
+		len(historique("GBA-BPRE")) != 1 {
+		t.Errorf("notifications %q, le hack ne doit pas recevoir la partie d'origine", notifications)
+	}
+
+	t.Log("Aucune ROM retenue (Base d'avant), pas de sauvegarde ici : une question ; refus = rien n'est écrit")
+	os.Remove(filepath.Join(tmp, "cfg", "roms.json"))
+	reinitialiser()
+	reponses = []string{"Jouer sans synchroniser"}
+	run("autre", rr)
+	if len(questions) != 1 || !strings.Contains(questions[0], "peut-être avec une autre ROM") || existe(filepath.Join(gba2, "Pokemon Radical Red.sav")) || !joue {
+		t.Errorf("questions %q", questions)
+	}
+
+	t.Log("Même jeu confirmé : Récupération, ROM retenue, plus de question ensuite")
+	reinitialiser()
+	reponses = []string{"Synchroniser"}
+	run("autre", rf)
+	if hachage(lire(filepath.Join(gba2, "Pokemon Rouge Feu.sav"))) != hachage(f1) || len(questions) != 1 {
+		t.Errorf("Récupération attendue, questions %q", questions)
+	}
+	reinitialiser()
+	run("autre", rr)
+	if len(questions) != 0 || !contient(notifications, "est vu comme le même jeu") {
+		t.Errorf("questions %q, notifications %q", questions, notifications)
+	}
+}
+
+// Lot E : deux ROM de Clés différentes, un seul fichier de sauvegarde (dossier commun) : aucune synchronisée.
+func TestLaunchMemeFichier(t *testing.T) {
+	tmp = t.TempDir()
+	maisonFactice(t)
+	demarrerServeur(t)
+	saves, roms := filepath.Join(tmp, "saves"), filepath.Join(tmp, "roms")
+	config := ecrireConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Jeton: "jeton-test",
+		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "melon.exe", Sauvegardes: map[string]string{"DS": saves}, Roms: map[string]string{"DS": roms}}}})
+	romDS(t, filepath.Join("USA", "Jeu"), "AAAE")
+	romDS(t, filepath.Join("EUR", "Jeu"), "AAAP")
+	romDS(t, "Autre", "CPUF")
+	ecrire(t, filepath.Join(saves, "Jeu.sav"), suite(1, 200))
+	ecrire(t, filepath.Join(saves, "Autre.sav"), suite(2, 201))
+	reinitialiser()
+	principal([]string{"launch", "--config", config, "melonds"})
+	if codes() != "CPUF" || !contient(notifications, "même fichier de sauvegarde : Jeu.nds, Jeu.nds") {
+		t.Errorf("serveur %s, notifications %q", codes(), notifications)
+	}
+}
+
+// Transport qui refuse les Envois (400) ou répond par la page d'un portail Wi-Fi à la liste.
+type panne struct{ refus, portail bool }
+
+func (p *panne) RoundTrip(q *http.Request) (*http.Response, error) {
+	if p.refus && q.Method == "PUT" || p.portail && q.Method == "GET" && q.URL.Path == "/saves" {
+		st, corps := 400, ""
+		if p.portail {
+			st, corps = 200, "<html>Connexion au Wi-Fi</html>"
+		}
+		return &http.Response{StatusCode: st, Body: io.NopCloser(strings.NewReader(corps)), Header: http.Header{}, Request: q}, nil
+	}
+	return http.DefaultTransport.RoundTrip(q)
+}
+
+// Lot E : tout Envoi raté après la partie est mis en attente ; liste en attente illisible gardée à part.
+func TestEchecsEnAttente(t *testing.T) {
+	tmp = t.TempDir()
+	maisonFactice(t)
+	demarrerServeur(t)
+	p := &panne{}
+	transport = p
+	t.Cleanup(func() { transport = http.DefaultTransport })
+	saves := filepath.Join(tmp, "saves")
+	config := ecrireConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Jeton: "jeton-test", Copies: filepath.Join(tmp, "copies"),
+		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "melon.exe", Sauvegardes: map[string]string{"DS": saves}}}})
+	run := func(rom string) int { return principal([]string{"run", "--config", config, rom}) }
+	noire, sav := romDS(t, "Pokemon Noire", "IRBF"), filepath.Join(saves, "Pokemon Noire.sav")
+	liste := filepath.Join(tmp, "cfg", "en-attente.json")
+	attente := func() (l []enAttente) { lireJSON(liste, &l); return }
+	ecrire(t, sav, suite(1, 200))
+	run(noire)
+
+	t.Log("Envoi refusé par le serveur (400) : en attente, comme la notification le dit")
+	reinitialiser()
+	partie = func() { ecrire(t, sav, suite(2, 201)); p.refus = true }
+	run(noire)
+	p.refus = false
+	if !contient(notifications, "partira au prochain lancement") || len(attente()) != 1 {
+		t.Errorf("attente %+v, notifications %q", attente(), notifications)
+	}
+
+	t.Log("Portail Wi-Fi (page HTML à la place de la liste) et liste en attente illisible : copie gardée, jeu en attente")
+	ecrire(t, liste, []byte("{pas du json"))
+	reinitialiser()
+	partie = func() { ecrire(t, sav, suite(3, 202)); p.portail = true }
+	run(noire)
+	p.portail = false
+	cote := nomsDans(filepath.Join(tmp, "cfg"), "en-attente.json.illisible-*")
+	if len(cote) != 1 || string(lire(cote[0])) != "{pas du json" || len(attente()) != 1 || !contient(notifications, "Réponse inattendue du serveur") ||
+		!contient(notifications, "était illisible") {
+		t.Errorf("copie %q, attente %+v, notifications %q", cote, attente(), notifications)
+	}
+}
+
+// Lot E : ROM au format non lu (.7z) avec un alias : jamais synchronisée, comme la notification le dit.
+func TestFormatNonLuAlias(t *testing.T) {
+	tmp = t.TempDir()
+	maisonFactice(t)
+	demarrerServeur(t)
+	saves := filepath.Join(tmp, "saves")
+	config := ecrireConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Jeton: "jeton-test", Alias: map[string]string{"Jeu": "0RAD"},
+		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "melon.exe", Sauvegardes: map[string]string{"DS": saves}}}})
+	rom := filepath.Join(tmp, "roms", "Jeu.7z")
+	ecrire(t, rom, []byte("7z"))
+	ecrire(t, filepath.Join(saves, "Jeu.sav"), suite(1, 200))
+	reinitialiser()
+	principal([]string{"run", "--config", config, "--emulator", "melonds", rom})
+	if !joue || codes() != "" || !contient(notifications, "format de ROM non lu") {
+		t.Errorf("serveur %q, notifications %q", codes(), notifications)
 	}
 }
