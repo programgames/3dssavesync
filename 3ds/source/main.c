@@ -1246,6 +1246,7 @@ int main(void)
         } while (!k && aptMainLoop());
 
         if (k & KEY_B) break;
+        if (k & (KEY_UP | KEY_DOWN)) message[0] = '\0'; /* le message parle du jeu qu'on quitte */
         if (k & KEY_DOWN && curseur + 1 < nb_visibles) curseur++;
         if (k & KEY_UP && curseur > 0) curseur--;
         if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT)) {
