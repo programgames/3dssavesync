@@ -203,6 +203,9 @@ func lireLocal(j *Jeu, srv *Version) (*Local, error) {
 	if (j.Systeme == "GB" || j.Systeme == "GBA") && len(brut) > r && (r == 16 || r == 44 || r == 48) {
 		sram = brut[:len(brut)-r]
 	}
+	if estMBC2(j.Systeme, len(sram)) { // forme du serveur (mbc2.go)
+		sram = normaliserMBC2(sram)
+	}
 	if strings.EqualFold(filepath.Ext(j.Fichier), ".dsv") { // DeSmuME : pied de page retiré (dsv.go)
 		if sram, err = sramDSV(brut); err != nil {
 			return nil, fmt.Errorf("%s : %w", j.Fichier, err)
@@ -480,6 +483,13 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		if contenu, err = dsv(o, ancien); err != nil {
 			return err
 		}
+	}
+	if estMBC2(j.Systeme, len(o)) { // MBC2 : à la taille du fichier existant, sinon à celle de l'émulateur (mbc2.go)
+		n := s.tailleMBC2(j)
+		if l != nil && estMBC2(j.Systeme, len(l.Brut)) {
+			n = len(l.Brut)
+		}
+		contenu = fichierMBC2(normaliserMBC2(o), n)
 	}
 	if srmFixes[j.Coeur] > 0 { // gpSP, Beetle GBA : SRAM reçue dans un .srm de taille fixe (srm.go)
 		if contenu, err = srm(j.Coeur, o); err != nil {

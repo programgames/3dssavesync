@@ -20,4 +20,17 @@ size_t sram_taille(systeme_t s, size_t taille_fichier);
 /* 1 si la SRAM est vierge (que des 0x00 ou que des 0xFF) : comptée comme absente. Jamais pour la 3DS. */
 int sauvegarde_vide(systeme_t s, const unsigned char *sram, size_t taille);
 
+/* GBA à EEPROM (512 o ou 8 Kio) écrite par open_agb_firm : chaque bloc de 8 octets est à l'envers de l'ordre de mGBA,
+ * celui du serveur (ADR 0012). L'opération est son propre inverse. 1 si la taille est celle d'une EEPROM (et inversée). */
+int eeprom_inverser(unsigned char *sram, size_t taille);
+
+/* GB à MBC2 (octet 0x147 de la ROM : 0x05 ou 0x06) : 512 valeurs de 4 bits. Forme du serveur : 512 octets, une valeur
+ * par octet, quartet haut à 0 (ADR 0012). */
+#define MBC2_SERVEUR 512
+int rom_mbc2(const unsigned char *entete);
+/* Fichier de 256 o (mGBA), 512 o (SameBoy, VBA-M, BGB) ou 8 Kio (GameYob, TWiLight Menu++) -> forme du serveur. 0 si fait. */
+int mbc2_normaliser(const unsigned char *fichier, size_t taille, unsigned char serveur[MBC2_SERVEUR]);
+/* Forme du serveur -> fichier de taille octets (256, 512 ou 8 Kio). 0 si fait. */
+int mbc2_fichier(const unsigned char serveur[MBC2_SERVEUR], unsigned char *fichier, size_t taille);
+
 #endif

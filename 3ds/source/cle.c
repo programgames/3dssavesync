@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "cle.h"
 
 static int alnum_maj(unsigned char c)
@@ -52,6 +53,43 @@ size_t sram_taille(systeme_t s, size_t t)
     size_t r = t % 512; /* Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010) */
     if ((s == SYS_GB || s == SYS_GBA) && t > r && (r == 16 || r == 44 || r == 48)) return t - r;
     return t;
+}
+
+int eeprom_inverser(unsigned char *o, size_t t)
+{
+    size_t i, k;
+    if (t != 512 && t != 8192) return 0; /* SRAM 32 Kio, Flash 64 ou 128 Kio : pas une EEPROM */
+    for (i = 0; i < t; i += 8)
+        for (k = 0; k < 4; k++) {
+            unsigned char c = o[i + k];
+            o[i + k] = o[i + 7 - k];
+            o[i + 7 - k] = c;
+        }
+    return 1;
+}
+
+int rom_mbc2(const unsigned char *e) { return e[0x147] == 0x05 || e[0x147] == 0x06; }
+
+/* docs/research-eeprom-mbc2.md : mGBA, deux valeurs par octet, adresse paire dans le quartet bas ; SameBoy, VBA-M, BGB,
+ * une valeur par octet (quartet haut sans valeur) ; GameYob, les 512 premiers octets d'un fichier de 8 Kio. */
+int mbc2_normaliser(const unsigned char *f, size_t t, unsigned char s[MBC2_SERVEUR])
+{
+    size_t i;
+    if (t != 256 && t != 512 && t != 8192) return -1;
+    for (i = 0; i < MBC2_SERVEUR; i++) s[i] = (t == 256 ? f[i / 2] >> (i % 2 * 4) : f[i]) & 0x0F;
+    return 0;
+}
+
+int mbc2_fichier(const unsigned char s[MBC2_SERVEUR], unsigned char *f, size_t t)
+{
+    size_t i;
+    if (t != 256 && t != 512 && t != 8192) return -1;
+    memset(f, 0, t);
+    for (i = 0; i < MBC2_SERVEUR; i++) {
+        if (t == 256) f[i / 2] |= (unsigned char)((s[i] & 0x0F) << (i % 2 * 4));
+        else f[i] = (unsigned char)((s[i] & 0x0F) | (t == 512 ? 0xF0 : 0)); /* VBA-M écrit 0xF, GameYob 0 */
+    }
+    return 0;
 }
 
 int sauvegarde_vide(systeme_t s, const unsigned char *o, size_t t)
