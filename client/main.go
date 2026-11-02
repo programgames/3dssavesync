@@ -91,7 +91,11 @@ func lancerCommande(commande []string) error {
 	return nil
 }
 
-func main() { os.Exit(principal(os.Args[1:])) }
+func main() {
+	code := principal(os.Args[1:])
+	attendreNotifications()
+	os.Exit(code)
+}
 
 func principal(args []string) int {
 	// Un frontend qui arrête le programme (Lutris, Steam) ne doit pas couper l'envoi :

@@ -116,6 +116,8 @@ func notifierSysteme(texte string) {
 	}
 }
 
+func attendreNotifications() {} // notify-send et osascript rendent la main une fois la notification affichée
+
 // L'assistant se lance dans un terminal : rien à ouvrir.
 func ouvrirConsole() {}
 

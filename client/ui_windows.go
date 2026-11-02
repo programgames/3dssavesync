@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -127,9 +128,22 @@ type notifyIconData struct {
 	HBalloonIcon     uintptr
 }
 
-// notifierSysteme : notification Windows, rien à valider. Le programme se termine juste après :
-// on attend que la notification s'affiche, sinon Windows la retire avec l'icône.
+var notifsEnCours sync.WaitGroup
+
+// notifierSysteme : notification Windows, rien à valider, affichée sans retarder le jeu. Windows la retire avec
+// l'icône : main attend la fin des notifications (8 s chacune) avant de terminer le programme.
 func notifierSysteme(texte string) {
+	notifsEnCours.Add(1)
+	go func() {
+		defer notifsEnCours.Done()
+		runtime.LockOSThread() // la fenêtre de l'icône appartient à ce thread
+		notification(texte)
+	}()
+}
+
+func attendreNotifications() { notifsEnCours.Wait() }
+
+func notification(texte string) {
 	hwnd, _, _ := user32.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(u16("STATIC"))),
 		uintptr(unsafe.Pointer(u16("3dssavesync"))), 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if hwnd == 0 {
