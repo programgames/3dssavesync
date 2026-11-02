@@ -4,7 +4,7 @@ Relevé du 2026-11-01 : sur la 3DS, le GBA tourne déjà sous open_agb_firm (`us
 
 Le seul écart de format est l'horloge temps réel : mGBA ajoute un Trailer d'horloge à la fin du `.sav` (48 octets GB MBC3+TIMER, 16 octets GBA), open_agb_firm prend l'horloge de la 3DS, TWiLight n'en écrit pas. Règle :
 
-- la SRAM est la partie « jeu » : `taille - (taille mod 1024)` (les trailers font moins de 1 Kio) ;
+- la SRAM est la partie « jeu » : `taille - (taille mod 1024)` (les trailers font moins de 1 Kio) ; remplacé par l'ADR 0010 (reste modulo 512) ;
 - le Hash, la taille comparée et la Version envoyée portent **sur la SRAM seule** ;
 - à la Récupération, le Client écrit la SRAM reçue **puis remet son propre Trailer d'horloge** s'il en avait un : chaque machine garde son horloge.
 

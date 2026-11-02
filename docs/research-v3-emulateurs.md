@@ -13,7 +13,7 @@ Légende :
 - **SRAM brute, sans conversion** : melonDS, melonDS DS, mGBA (Trailer RTC déjà géré), SameBoy, VBA-M, BGB, SkyEmu, NanoBoyAdvance, Azahar (`main`).
 - **Conversion obligatoire** : DeSmuME (pied de page `.dsv` de 122 octets), NO$GBA (en-tête `NocashGbaBackupMediaSavDataFile`, compression possible), gpSP (`.srm` toujours de 128 Kio), Beetle GBA (taille devinée par heuristique), Panda3DS (sauvegarde rangée par nom de fichier ROM, pas par title ID).
 - **Deux écarts de format découverts, qui touchent l'ADR 0008 :**
-  1. La règle `taille - (taille mod 1024)` donne **0** pour les sauvegardes de 512 octets (GBA EEPROM 4 Kbit, GB MBC2). Voir §8.
+  1. La règle `taille - (taille mod 1024)` donne **0** pour les sauvegardes de 512 octets (GBA EEPROM 4 Kbit, GB MBC2). Voir §8. Décidé : ADR 0010.
   2. **GBA EEPROM** : open_agb_firm attend un autre ordre d'octets que les émulateurs PC (inversion des 8 octets de chaque bloc). Les Pokémon GBA (Flash) ne sont pas touchés.
 - **Savestate chargé au lancement, activé par défaut** : mGBA (`autoload=1`, slot 0). EmuDeck livre aussi `autoload=1` pour mGBA. RetroArch : `savestate_auto_load=false` par défaut, mais l'option « AutoSave » d'EmuDeck le met à `true`.
 - **Statut 3DS** : Azahar est le seul émulateur 3DS actif. Citra est retiré (dépôt `citra-emu/citra` en 404). Le dépôt GitHub de Lime3DS redirige vers Azahar. Azahar a maintenant un cœur libretro dans son propre dépôt.
@@ -543,7 +543,7 @@ Sources : `RD config/retrodeck/retrodeck.json#L3-L8` ; `RDC melonds/component_fu
 - Pour une sauvegarde de 512 octets, cette règle donne **0**. Cas réels :
   - GBA EEPROM 4 Kbit = 512 octets (`GBA_SIZE_EEPROM512 = 0x200` chez mGBA ; `SIZE_EEPROM_512` chez VBA-M ; 512 chez SkyEmu).
   - GB MBC2 = 512 octets chez SameBoy, VBA-M et BGB.
-- Proposition (à décider en ADR) : retirer un trailer seulement si `taille mod 512 ∈ {16, 44, 48}`, sinon garder le fichier entier.
+- Décidé (ADR 0010) : retirer un trailer seulement si `taille mod 512 ∈ {16, 44, 48}`, sinon garder le fichier entier.
 
 ### 8.2 GB MBC2 : trois tailles différentes
 

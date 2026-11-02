@@ -1,4 +1,4 @@
-/* Vérifie cle_rom, cle_3ds et sram_taille (ADR 0007, 0008). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
+/* Vérifie cle_rom, cle_3ds et sram_taille (ADR 0007, 0008, 0010). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
  * Compilé sur PC : gcc -I source source/cle.c test/test_cle.c -o test_cle && ./test_cle */
 #include <stdio.h>
 #include <string.h>
@@ -45,7 +45,13 @@ int main(void)
     verifier(sram_taille(SYS_GB, 32816) == 32768, "GB 32816 -> 32768 (trailer mGBA 48 o)");
     verifier(sram_taille(SYS_GB, 32768) == 32768, "GB 32768 inchangé");
     verifier(sram_taille(SYS_GBA, 131088) == 131072, "GBA 131088 -> 131072 (trailer mGBA 16 o)");
-    verifier(sram_taille(SYS_GB, 512) == 512, "GB 512 inchangé (moins de 1 Kio)");
+    verifier(sram_taille(SYS_GB, 32812) == 32768, "GB 32812 -> 32768 (trailer VBA 44 o)");
+    verifier(sram_taille(SYS_GB, 512) == 512, "GB 512 inchangé (MBC2)");
+    verifier(sram_taille(SYS_GBA, 528) == 512, "GBA 528 -> 512 (EEPROM 4 Kbit + trailer 16 o)");
+    verifier(sram_taille(SYS_GB, 560) == 512, "GB 560 -> 512 (trailer 48 o)");
+    verifier(sram_taille(SYS_GBA, 8208) == 8192, "GBA 8208 -> 8192 (EEPROM 64 Kbit + trailer 16 o)");
+    verifier(sram_taille(SYS_GB, 1536) == 1536, "GB 1536 inchangé (pas un trailer)");
+    verifier(sram_taille(SYS_GB, 48) == 48, "GB 48 inchangé (pas de SRAM)");
     verifier(sram_taille(SYS_DS, 524298) == 524298, "DS jamais coupé");
 
     {

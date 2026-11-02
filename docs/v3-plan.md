@@ -80,6 +80,6 @@ Fait : émulateur personnalisé dans la page, arguments en plus, aperçu de la c
 
 ## Points connus à trancher plus tard (ADR)
 
-- SRAM de 512 octets avec trailer d'horloge (GB MBC2, GBA EEPROM 4 Kbit) : la règle `taille - taille % 1024` garde le trailer. Rare ; les Pokémon ne sont pas concernés.
+- ~~SRAM de 512 octets avec trailer d'horloge (GB MBC2, GBA EEPROM 4 Kbit)~~ : tranché par l'ADR 0010 (reste modulo 512).
 - GB MBC2 : tailles différentes selon l'émulateur ; GBA EEPROM : ordre des octets propre à open_agb_firm.
 - Gamescope (Steam Deck, mode Jeu) : affichage des fenêtres non vérifié.

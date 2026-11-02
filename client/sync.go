@@ -197,9 +197,9 @@ func lireLocal(j *Jeu) (*Local, error) {
 		return nil, err
 	}
 	sram := brut
-	n := len(brut) - len(brut)%1024 // les trailers font moins de 1 Kio
-	if (j.Systeme == "GB" || j.Systeme == "GBA") && n > 0 && n < len(brut) {
-		sram = brut[:n]
+	r := len(brut) % 512 // Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010)
+	if (j.Systeme == "GB" || j.Systeme == "GBA") && len(brut) > r && (r == 16 || r == 44 || r == 48) {
+		sram = brut[:len(brut)-r]
 	}
 	vide := j.Systeme != "3DS"
 	for _, c := range sram {
