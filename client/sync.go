@@ -201,6 +201,11 @@ func lireLocal(j *Jeu) (*Local, error) {
 	if (j.Systeme == "GB" || j.Systeme == "GBA") && len(brut) > r && (r == 16 || r == 44 || r == 48) {
 		sram = brut[:len(brut)-r]
 	}
+	if strings.EqualFold(filepath.Ext(j.Fichier), ".dsv") { // DeSmuME : pied de page retiré (dsv.go)
+		if sram, err = sramDSV(brut); err != nil {
+			return nil, fmt.Errorf("%s : %w", j.Fichier, err)
+		}
+	}
 	vide := j.Systeme != "3DS"
 	for _, c := range sram {
 		if c != sram[0] || c != 0 && c != 0xFF {
@@ -465,6 +470,15 @@ func (s *Session) recuperer(j *Jeu, l *Local, srv *Version) error {
 		}
 		if len(l.Brut) > len(l.SRAM) { // GB/GBA : on remet le Trailer d'horloge de ce PC après la SRAM reçue
 			contenu = append(append([]byte{}, o...), l.Brut[len(l.SRAM):]...)
+		}
+	}
+	if strings.EqualFold(filepath.Ext(j.Fichier), ".dsv") { // DeSmuME : SRAM reçue + pied de page (dsv.go)
+		var ancien []byte
+		if l != nil {
+			ancien = l.Brut
+		}
+		if contenu, err = dsv(o, ancien); err != nil {
+			return err
 		}
 	}
 	os.Remove(tmp) // reste d'un arrêt brutal

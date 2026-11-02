@@ -5,7 +5,7 @@ L'assistant (`3dssavesync setup`) configure seul **LaunchBox**, **ES-DE** et les
 Règles communes :
 
 - `<exe>` = le chemin du Lanceur installé : `%LOCALAPPDATA%\Programs\3dssavesync\3dssavesync.exe` (Windows), `~/.local/bin/3dssavesync` (Linux), `~/Applications/3dssavesync/3dssavesync` (macOS).
-- `<nom>` = le nom de l'émulateur dans `config.json` : `melonds`, `mgba`, `azahar`, `retroarch`, `vbam`, `sameboy`.
+- `<nom>` = le nom de l'émulateur dans `config.json` : `melonds`, `mgba`, `azahar`, `retroarch`, `vbam`, `sameboy`, `desmume`.
 - Mettez toujours `--emulator <nom>` **avant** la ROM.
 - Désactivez la synchronisation propre au frontend pour DS, GB, GBA et 3DS (CloudSync d'EmuDeck, par exemple) : deux outils enverraient les mêmes sauvegardes.
 - Après une mise à jour ou une réinitialisation d'un frontend, ouvrez « 3dssavesync réglages » et choisissez **Réparer**.

@@ -57,14 +57,14 @@ Other frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pega
 | | |
 |---|---|
 | **3DS apps** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), mGBA forwarders (GB/GBC/GBA), native 3DS games (any game whose save is a single `main` file; default: the 8 Pokémon) |
-| **PC emulators** | melonDS, mGBA, Azahar, RetroArch (cores melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, and any emulator with a custom command line (raw save files) |
+| **PC emulators** | melonDS, mGBA, Azahar, RetroArch (cores melonDS DS, mGBA, Gambatte, SameBoy, VBA-M), VBA-M, SameBoy, DeSmuME (`.dsv`), and any emulator with a custom command line (raw save files) |
 | **Set up automatically** | LaunchBox / BigBox, ES-DE, desktop shortcuts (`.lnk`, `.desktop`, `.app`) |
 | **Guides** | Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode |
 | **Systems** | Windows, Linux, macOS (amd64 and arm64) |
 | **Languages** | English, French (system language) |
 
 **Tested on real hardware**: New 3DS XL (Luma3DS, TWiLight Menu++, open_agb_firm, mGBA forwarders), Windows 11 with LaunchBox, melonDS, mGBA and Azahar, personal Docker server.
-**Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, ES-DE, the 3DS talking to the local server. Reports are welcome.
+**Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, DeSmuME, ES-DE, the 3DS talking to the local server. Reports are welcome.
 
 ## Known pitfalls
 
