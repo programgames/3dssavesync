@@ -68,9 +68,10 @@ func demarrerServeur(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		py = "python"
 	}
-	// Le vrai serveur, mais sur 127.0.0.1 comme server/test_server.py : sur 0.0.0.0, le pare-feu
-	// des machines macOS de la CI laisse les connexions sans réponse ~70 s (2026-11-02).
-	c := exec.Command(py, "-c", "import server; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
+	// Le vrai serveur, mais sur 127.0.0.1 comme server/test_server.py, et sans socket.getfqdn
+	// (appelé par HTTPServer.server_bind) : sur les machines macOS de la CI, ces recherches de nom
+	// retardaient le démarrage de ~35 s par adresse (~70 s sur 0.0.0.0, 2026-11-02).
+	c := exec.Command(py, "-c", "import socket, server; socket.getfqdn = lambda nom='': nom; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
 	c.Dir = filepath.Join("..", "server")
 	sortie, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
 	if err != nil {
