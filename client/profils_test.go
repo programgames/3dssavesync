@@ -98,9 +98,10 @@ func TestProfils(t *testing.T) {
 	if _, err := (&Emulateur{Profil: "retroarch"}).profil("retroarch"); err == nil {
 		t.Error("RetroArch sans cœur : erreur attendue")
 	}
-	if _, err := (&Emulateur{Coeurs: map[string]string{"GBA": "gpsp_libretro.dll"}}).profil("retroarch"); err == nil {
-		t.Error("cœur non géré (gpSP) : erreur attendue")
+	if _, err := (&Emulateur{Coeurs: map[string]string{"GBA": "gearboy_libretro.dll"}}).profil("retroarch"); err == nil {
+		t.Error("cœur non géré (Gearboy) : erreur attendue")
 	}
+	egal(bibliotheque("cores/gpsp_libretro.dll")+"|"+bibliotheque("mednafen_gba_libretro.so"), "gpSP|Beetle GBA", "cœurs gpSP et Beetle GBA gérés (srm.go)")
 	if !e.gere(p, "DS") || e.gere(p, "3DS") {
 		t.Error("RetroArch gère les Systèmes de ses cœurs, et eux seuls")
 	}

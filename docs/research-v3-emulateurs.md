@@ -11,7 +11,7 @@ Légende :
 
 - **Profil RetroArch unique, paramétré par cœur.** Le dossier final est `savefile_directory` + `<library_name du cœur>` (car `sort_savefiles_enable` vaut `true` par défaut). Le nom est `<nom de la ROM>.srm`, plus `<nom de la ROM>.rtc` pour l'horloge GB. Les cœurs GB/GBC (Gambatte, SameBoy, mGBA, VBA-M, Gearboy, TGB Dual) écrivent la SRAM brute dans `.srm` et l'horloge à part. C'est le format le plus simple pour la 3DS.
 - **SRAM brute, sans conversion** : melonDS, melonDS DS, mGBA (Trailer RTC déjà géré), SameBoy, VBA-M, BGB, SkyEmu, NanoBoyAdvance, Azahar (`main`).
-- **Conversion obligatoire** : DeSmuME (pied de page `.dsv` de 122 octets), NO$GBA (en-tête `NocashGbaBackupMediaSavDataFile`, compression possible), gpSP (`.srm` toujours de 128 Kio), Beetle GBA (taille devinée par heuristique), Panda3DS (sauvegarde rangée par nom de fichier ROM, pas par title ID).
+- **Conversion obligatoire** : DeSmuME (pied de page `.dsv` de 122 octets), NO$GBA (en-tête `NocashGbaBackupMediaSavDataFile`, compression possible), gpSP (`.srm` toujours de 128 Kio), Beetle GBA (`.srm` toujours de 0x22000 octets, EEPROM à 0x20000), Panda3DS (sauvegarde rangée par nom de fichier ROM, pas par title ID).
 - **Deux écarts de format découverts, qui touchent l'ADR 0008 :**
   1. La règle `taille - (taille mod 1024)` donne **0** pour les sauvegardes de 512 octets (GBA EEPROM 4 Kbit, GB MBC2). Voir §8. Décidé : ADR 0010.
   2. **GBA EEPROM** : open_agb_firm attend un autre ordre d'octets que les émulateurs PC (inversion des 8 octets de chaque bloc). Les Pokémon GBA (Flash) ne sont pas touchés.
@@ -398,9 +398,10 @@ Voir §2.6.
 - **mGBA** : voir §4.1.
 - **VBA-M** : taille exacte.
 - **gpSP** : `retro_get_memory_size(SAVE_RAM)` renvoie **toujours `0x20000`** (128 Kio). Le `.srm` fait 131072 octets quel que soit le jeu. Les données utiles sont au début. Un fichier rempli de `0x00` est remplacé par `0xFF`.
-- **Beetle GBA** : tampon de `0x22000` octets. Après le chargement, la taille est devinée par le contenu (512 o, 8 Kio, 64 Kio, 128 Kio). Option `gba_use_mednafen_save_method` (défaut : méthode libretro).
+- **Beetle GBA** : tampon de `0x22000` octets : Flash et SRAM à 0 (`flashSaveMemory`), EEPROM à `0x20000` (`eepromData`). La fonction `adjust_save_ram` devinerait la taille par le contenu (512 o, 8 Kio, 64 Kio, 128 Kio), mais elle n'est jamais appelée : le `.srm` fait toujours 139264 octets (vérifié au 2026-11-02, même commit). Option `gba_use_mednafen_save_method` (défaut : méthode libretro ; avec `mednafen`, pas de `.srm`).
+- **Conversion** (ticket #4, ADR 0011) : SRAM à la taille de la Version du serveur à l'Envoi, `.srm` complet (0xFF) à la Récupération.
 
-Sources : `GPSP libretro/libretro.c#L1358-L1366` ; `GPSP gba_memory.c#L359-L360` , `#L3065-L3083` ; `BGBA libretro.cpp#L51-L55` , `#L92-L127` , `#L234-L241` , `#L655-L680`.
+Sources : `GPSP libretro/libretro.c#L1358-L1366` ; `GPSP gba_memory.c#L359-L360` , `#L3065-L3083` ; `BGBA libretro.cpp#L51-L55` , `#L92-L127` , `#L234-L241` , `#L655-L680` ; `BGBA mednafen/gba/flash.cpp#L37` ; `BGBA mednafen/gba/eeprom.cpp#L36`.
 
 ### 4.7 Ordre des octets de l'EEPROM GBA
 

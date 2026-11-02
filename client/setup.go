@@ -471,7 +471,7 @@ func coeursRetroArch(exe string) map[string]string {
 			}
 		}
 	}
-	preferes := map[string][]string{"DS": {"melonDS DS"}, "GB": {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, "GBA": {"mGBA", "VBA-M"}}
+	preferes := map[string][]string{"DS": {"melonDS DS"}, "GB": {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, "GBA": {"mGBA", "VBA-M", "gpSP", "Beetle GBA"}}
 	coeurs := map[string]string{}
 	for s, l := range preferes {
 		for _, b := range l {
@@ -552,8 +552,8 @@ func ajouterEmulateur(q *Questions, cfg *Config, t Trouve, remplacer bool) {
 	if nom == "retroarch" && len(e.Coeurs) == 0 {
 		e.Coeurs = coeursRetroArch(t.Exe)
 		if len(e.Coeurs) == 0 {
-			q.dire("%s", tr("Aucun cœur géré trouvé (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M) : installe-les dans RetroArch, puis relance l'assistant.",
-				"No supported core found (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M): install them in RetroArch, then run the assistant again."))
+			q.dire("%s", tr("Aucun cœur géré trouvé (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA) : installe-les dans RetroArch, puis relance l'assistant.",
+				"No supported core found (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA): install them in RetroArch, then run the assistant again."))
 			return
 		}
 	}

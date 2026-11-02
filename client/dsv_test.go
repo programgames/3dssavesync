@@ -30,7 +30,7 @@ func TestDSV(t *testing.T) {
 	// .dsv -> SRAM : le Hash porte sur la SRAM seule.
 	j := &Jeu{Systeme: "DS", Cle: "IPKF", Nom: "Pokemon HG", Fichier: filepath.Join(dir, "Pokemon HG.dsv")}
 	ecrire(t, j.Fichier, brut)
-	l, err := lireLocal(j)
+	l, err := lireLocal(j, nil)
 	if err != nil || !bytes.Equal(l.SRAM, sram) || l.Hash != hachage(sram) || l.Taille != 512<<10 || l.Vide {
 		t.Fatalf("lireLocal : err=%v taille=%d", err, len(l.SRAM))
 	}
@@ -62,14 +62,14 @@ func TestDSV(t *testing.T) {
 	// .dsv vide (jeu lancé sans sauvegarde) : SRAM vide, vierge. Sans pied valide : refus.
 	vide, casse := filepath.Join(dir, "vide.dsv"), filepath.Join(dir, "casse.dsv")
 	ecrire(t, vide, nil)
-	if l, err := lireLocal(&Jeu{Systeme: "DS", Fichier: vide}); err != nil || len(l.SRAM) != 0 || !l.Vide {
+	if l, err := lireLocal(&Jeu{Systeme: "DS", Fichier: vide}, nil); err != nil || len(l.SRAM) != 0 || !l.Vide {
 		t.Fatalf(".dsv vide : err=%v", err)
 	}
 	faux := append([]byte{}, brut...)
 	binary.LittleEndian.PutUint32(faux[len(sram)+86:], 1234) // taille remplie fausse
 	for _, b := range [][]byte{sram, faux, brut[:100]} {
 		ecrire(t, casse, b)
-		if _, err := lireLocal(&Jeu{Systeme: "DS", Fichier: casse}); err == nil {
+		if _, err := lireLocal(&Jeu{Systeme: "DS", Fichier: casse}, nil); err == nil {
 			t.Fatal("pied absent ou faux accepté")
 		}
 		os.Remove(casse)
