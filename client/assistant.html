@@ -62,6 +62,13 @@ button:disabled { opacity: .6; cursor: default; }
 
   <section id="resultat" class="masque" aria-live="polite"></section>
 
+  <section id="sectionOuvrir" class="masque">
+    <h2>{{t "Ouvrir un émulateur" "Open an emulator"}}</h2>
+    <p class="aide">{{t "Sans jeu : ses jeux sont synchronisés avant, puis envoyés à sa fermeture." "Without a game: its games are synced first, then uploaded when it closes."}}</p>
+    <p class="ligne" id="ouvrir"></p>
+    <p id="ouvert" role="status"></p>
+  </section>
+
   <section>
     <h2>1. {{t "Serveur" "Server"}}</h2>
     <label class="choix"><input type="radio" name="type" value="perso"> <span><b>{{t "Serveur personnel" "Personal server"}}</b> — {{t "Docker, adresse https://… : synchronisation partout." "Docker, https://… address: sync anywhere."}}</span></label>
@@ -294,6 +301,19 @@ async function charger() {
   $("esdeChemin").textContent = etat.EsDe || "";
   $("esde").checked = etat.EsDeActif;
   $("raccourcis").checked = !etat.Existe;
+  $("sectionOuvrir").classList.toggle("masque", !(etat.Configures || []).length);
+  $("ouvrir").replaceChildren(...(etat.Configures || []).map(nom => {
+    const b = texte("button", nom);
+    b.type = "button";
+    b.onclick = async () => {
+      $("ouvert").textContent = T.attente; $("ouvert").className = "";
+      try {
+        const r = await api("ouvrir", {Nom: nom});
+        $("ouvert").textContent = r.Message; $("ouvert").className = r.Ok ? "ok" : "erreur";
+      } catch (e) { $("ouvert").textContent = T.erreur + e.message; $("ouvert").className = "erreur"; }
+    };
+    return b;
+  }));
   basculer();
 }
 

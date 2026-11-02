@@ -387,6 +387,11 @@ var connus = map[string]struct {
 	"vbam":      {[]string{"visualboyadvance-m"}, []string{"VisualBoyAdvance-M", "visualboyadvance-m"}, "", "visualboyadvance-m", nil, "visualboyadvance-m"},
 	"sameboy":   {[]string{"sameboy"}, []string{"SameBoy"}, "io.github.sameboy.SameBoy", "SameBoy", nil, "sameboy"},
 	"desmume":   {[]string{"desmume", "DeSmuME_0.9.13_x64"}, []string{"DeSmuME"}, "org.desmume.DeSmuME", "", nil, "desmume"},
+
+	// Ticket #3 (bgb64 : nom de l'exe de bgbw64.zip NON VÉRIFIÉ)
+	"skyemu":         {[]string{"SkyEmu", "SkyEmu-v5-Windows"}, []string{"SkyEmu"}, "", "SkyEmu", nil, "SkyEmu"},
+	"nanoboyadvance": {[]string{"NanoBoyAdvance"}, []string{"NanoBoyAdvance"}, "", "NanoBoyAdvance", []string{"NanoBoyAdvance*.AppImage"}, "NanoBoyAdvance"},
+	"bgb":            {[]string{"bgb", "bgb64"}, []string{"bgb"}, "", "", nil, "bgb"},
 }
 
 // Détection : PATH, dossiers usuels, Flatpak, AppImage, applications macOS, émulateurs de LaunchBox.

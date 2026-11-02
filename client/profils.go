@@ -136,6 +136,28 @@ var profils = map[string]Profil{
 		Systemes: []string{"GB"},
 		Args:     func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) },
 	},
+	"skyemu": { // .sav brut, sans Trailer d'horloge (main.c se_write_save_to_disk)
+		Systemes: []string{"DS", "GB", "GBA"},
+		Args:     func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) },
+		Dossier:  dossierSkyEmu,
+	},
+	"nanoboyadvance": { // .sav brut ; horloge prise sur le PC, jamais écrite (rtc.cc)
+		Systemes: []string{"GBA"},
+		// ponytail: la ROM doit rester argv[1] (main.cc) ; args_en_plus casse le lancement, champ args si besoin.
+		Args: func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) },
+		Dossier: func(e *Emulateur, _, _ string) string {
+			// Windows, Linux : config.toml dans le dossier courant, celui de l'exe quand une ROM est donnée (main.cc, PORTABLE_MODE forcé)
+			f := premier(pres(e, "config.toml"), maison("Library", "Application Support", "org.github.fleroviux.NanoBoyAdvance", "config.toml"))
+			if d := reglage(f, "general", "save_folder"); existe(d) { // vide ou absent : à côté de la ROM (main_window.cc GetSavePath)
+				return d
+			}
+			return ""
+		},
+	},
+	"bgb": { // .sav + Trailer d'horloge de 48 octets ; clé du réglage « Save files » non documentée : champ sauvegardes
+		Systemes: []string{"GB"},
+		Args:     func(_ *Emulateur, _, rom, _ string) []string { return seul(rom) }, // « [-rom] <fichier> » : -rom facultatif
+	},
 }
 
 // library_name des cœurs RetroArch gérés : nom du sous-dossier quand sort_savefiles_enable est actif.
@@ -344,6 +366,28 @@ func configVBAM(e *Emulateur) string {
 	return premier(pres(e, "vbam.ini"), env("APPDATA", "visualboyadvance-m", "vbam.ini"), env("LOCALAPPDATA", "visualboyadvance-m", "vbam.ini"),
 		maison(".vbam", "vbam.ini"), xdgConfig("visualboyadvance-m", "vbam.ini"),
 		maison("Library", "Application Support", "visualboyadvance-m", "vbam.ini"))
+}
+
+// SkyEmu (main.c se_load_rom) : <ROM>.sav à côté de la ROM s'il existe ; sinon le dossier « Save File/State Path »
+// si le .sav y est déjà ou si « Create new files in paths » est coché. Réglages binaires dans SDL_GetPrefPath("Sky", "SkyEmu") :
+// search_paths.bin commence par ce dossier (texte fini par 0) ; save_to_path est le 21e uint32 de user_settings.bin
+// (structure figée, « keep alignment and ordering the same »).
+func dossierSkyEmu(_ *Emulateur, _, rom string) string {
+	if rom == "" {
+		return ""
+	}
+	sav := strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom)) + ".sav"
+	pref := premier(env("APPDATA", "Sky", "SkyEmu"), xdgData("Sky", "SkyEmu"), maison("Library", "Application Support", "Sky", "SkyEmu"))
+	p, _ := os.ReadFile(rejoindre(pref, "search_paths.bin"))
+	d, _, _ := strings.Cut(string(p), "\x00")
+	if existe(filepath.Join(filepath.Dir(rom), sav)) || !filepath.IsAbs(d) { // vide = "./" (dossier courant) : ignoré
+		return ""
+	}
+	r, _ := os.ReadFile(rejoindre(pref, "user_settings.bin"))
+	if existe(filepath.Join(d, sav)) || len(r) >= 84 && r[80]|r[81]|r[82]|r[83] != 0 {
+		return filepath.Clean(d)
+	}
+	return ""
 }
 
 // lire1 : valeur brute d'une clé (INI, TOML ou retroarch.cfg). section "" = pas de section.
