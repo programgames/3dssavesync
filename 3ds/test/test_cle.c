@@ -1,4 +1,4 @@
-/* Vérifie cle_rom, cle_3ds et sram_taille (ADR 0007, 0008, 0010). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
+/* Vérifie cle_rom, cle_3ds, sram_taille, EEPROM et MBC2 (ADR 0007, 0008, 0010, 0012). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
  * Compilé sur PC : gcc -I source source/cle.c test/test_cle.c -o test_cle && ./test_cle */
 #include <stdio.h>
 #include <string.h>
@@ -65,6 +65,36 @@ int main(void)
         memset(s, 0x42, sizeof s);
         verifier(!sauvegarde_vide(SYS_DS, s, sizeof s), "DS que des 0x42 : pas vierge");
         verifier(sauvegarde_vide(SYS_DS, s, 0), "fichier vide : vierge");
+    }
+
+    { /* EEPROM (ADR 0012) : open_agb_firm 01..08 = mGBA 08..01 */
+        static unsigned char e[8192];
+        static const unsigned char agb[8] = { 1, 2, 3, 4, 5, 6, 7, 8 }, mgba[8] = { 8, 7, 6, 5, 4, 3, 2, 1 };
+        memcpy(e, agb, 8);
+        memcpy(e + 8184, agb, 8);
+        verifier(eeprom_inverser(e, 512) && !memcmp(e, mgba, 8), "EEPROM 512 o : bloc inversé");
+        verifier(!memcmp(e + 8184, agb, 8), "EEPROM 512 o : rien après 512 o");
+        verifier(eeprom_inverser(e, 512) && !memcmp(e, agb, 8), "EEPROM : son propre inverse");
+        verifier(eeprom_inverser(e, 8192) && !memcmp(e + 8184, mgba, 8), "EEPROM 8 Kio : dernier bloc inversé");
+        verifier(!eeprom_inverser(e, 32768), "SRAM 32 Kio : pas une EEPROM");
+    }
+
+    { /* MBC2 (ADR 0012) : forme du serveur = 512 o, quartet haut à 0 */
+        static unsigned char f[8192], s[MBC2_SERVEUR], g[8192];
+        unsigned char e[0x200] = { 0 };
+        e[0x147] = 0x06;
+        verifier(rom_mbc2(e), "0x147 = 0x06 : MBC2 + pile");
+        e[0x147] = 0x03;
+        verifier(!rom_mbc2(e), "0x147 = 0x03 : MBC1, pas MBC2");
+
+        f[0] = 0x21; f[255] = 0xA5; /* mGBA : adresse paire dans le quartet bas */
+        verifier(!mbc2_normaliser(f, 256, s) && s[0] == 1 && s[1] == 2 && s[510] == 5 && s[511] == 0xA, "MBC2 mGBA 256 o -> serveur");
+        verifier(!mbc2_fichier(s, g, 256) && !memcmp(f, g, 256), "MBC2 serveur -> mGBA 256 o");
+        verifier(!mbc2_fichier(s, g, 512) && g[0] == 0xF1 && g[1] == 0xF2 && g[511] == 0xFA, "MBC2 serveur -> 512 o (quartet haut 0xF, VBA-M)");
+        verifier(!mbc2_normaliser(g, 512, f) && !memcmp(f, s, MBC2_SERVEUR), "MBC2 512 o -> serveur");
+        verifier(!mbc2_fichier(s, g, 8192) && g[0] == 1 && g[511] == 0xA && g[512] == 0 && g[8191] == 0, "MBC2 serveur -> GameYob 8 Kio");
+        verifier(!mbc2_normaliser(g, 8192, f) && !memcmp(f, s, MBC2_SERVEUR), "MBC2 GameYob 8 Kio -> serveur");
+        verifier(mbc2_normaliser(g, 1024, f) && mbc2_fichier(s, g, 32768), "MBC2 : autre taille refusée");
     }
 
     printf("%s\n", echecs ? "ECHECS" : "cle : OK");

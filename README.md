@@ -76,7 +76,8 @@ Other frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pega
 - **Save states**: loading a state replaces the save with an older one. mGBA reloads a state at start by default (`autoload`); the launcher warns you after a download if this setting (or RetroArch's, VBA-M's) is on.
 - **Blank save** (only `0x00` or `0xFF`): counted as absent, never uploaded.
 - **Gold / Silver / Crystal clock**: each machine keeps its own clock.
-- **Not supported yet**: DeSmuME (`.dsv`), NO$GBA, gpSP, Beetle GBA (formats to convert), GBA games with EEPROM saves, GB MBC2 games.
+- **Not supported yet**: NO$GBA.
+- **GBA EEPROM and GB MBC2**: converted between emulators ([ADR 0012](docs/adr/0012-eeprom-et-mbc2-forme-du-serveur.md)). An EEPROM uploaded from open_agb_firm before v3.5 is in the wrong order on the server: upload it from the 3DS first, then download it on the PC.
 
 ## How sync decides
 

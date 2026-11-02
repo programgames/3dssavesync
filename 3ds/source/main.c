@@ -51,6 +51,7 @@ typedef struct {
     int vide; /* SRAM locale vierge : comptée comme absente (cle.h) */
     time_t modif;   /* DS, GB, GBA : date du fichier (horloge de la 3DS) ; 0 si inconnue */
     int a_partie;   /* Pokémon : temps de jeu et dresseur lus (pokemon.h) */
+    int mbc2;       /* GB : cartouche MBC2, octet 0x147 de la ROM (ADR 0012) */
     partie_t partie;
     int etat;
 } jeu_t;
@@ -196,6 +197,40 @@ static int lire_sauvegarde(jeu_t *j, unsigned char **octets, size_t *taille)
     return lire_fichier(j->sav, octets, taille);
 }
 
+static int forwarder(const jeu_t *j) { return !strncmp(j->sav, FORWARDERS "/", sizeof FORWARDERS); }
+
+/* SRAM du fichier local -> forme du serveur (ADR 0012) : EEPROM d'open_agb_firm remise dans l'ordre de mGBA, MBC2 en
+ * 512 octets. Les copies de sécurité gardent les octets du fichier. */
+static void vers_serveur(const jeu_t *j, unsigned char **octets, size_t *taille)
+{
+    unsigned char *s;
+    if (j->systeme == SYS_GBA && !forwarder(j)) eeprom_inverser(*octets, *taille);
+    if (!j->mbc2 || !(s = malloc(MBC2_SERVEUR))) return;
+    if (mbc2_normaliser(*octets, *taille, s)) { /* taille inconnue : telle quelle */
+        free(s);
+        return;
+    }
+    free(*octets);
+    *octets = s;
+    *taille = MBC2_SERVEUR;
+}
+
+/* Forme du serveur -> SRAM du fichier local : l'inverse de vers_serveur. MBC2 à la taille du fichier existant (cible),
+ * sinon 256 octets pour le forwarder mGBA et 8 Kio pour TWiLight Menu++. 0 si fait. */
+static int vers_fichier(const jeu_t *j, unsigned char **octets, size_t *taille, size_t cible)
+{
+    unsigned char s[MBC2_SERVEUR], *f;
+    if (j->systeme == SYS_GBA && !forwarder(j)) eeprom_inverser(*octets, *taille);
+    if (!j->mbc2 || mbc2_normaliser(*octets, *taille, s)) return 0;
+    if (cible != 256 && cible != 512 && cible != 8192) cible = forwarder(j) ? 256 : 8192;
+    if (!(f = malloc(cible))) return -1;
+    mbc2_fichier(s, f, cible);
+    free(*octets);
+    *octets = f;
+    *taille = cible;
+    return 0;
+}
+
 /* Une source de ROM (racine seulement, Q10) : Clé lue dans l'en-tête, .sav nommé comme la ROM dans le dossier saves. */
 static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
 {
@@ -233,6 +268,7 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves)
         snprintf(j->sav_rom, sizeof j->sav_rom, "%s/%.*s.sav", saves, (int)(ext - e->d_name), e->d_name);
         nom_court(j->nom, j->court, sizeof j->court);
         j->nb_roms = 1;
+        j->mbc2 = s == SYS_GB && rom_mbc2(entete);
         if (nb_jeux % 10 == 0) progression(0, 0, T("Lecture des ROM : %d jeu(x)…", "Reading ROMs: %d game(s)…"), nb_jeux);
     }
     if (d) closedir(d);
@@ -258,6 +294,7 @@ static void lire_local(jeu_t *j)
     if (j->nb_roms != 1 || lire_sauvegarde(j, &octets, &taille)) return;
     if (j->systeme != SYS_3DS) {
         taille = sram_taille(j->systeme, taille);
+        vers_serveur(j, &octets, &taille);
         j->vide = sauvegarde_vide(j->systeme, octets, taille);
         /* stat() ne donne pas la date sur la SD. archive_getmtime la convertit en temps UNIX ; un horodatage 0 (Azahar)
          * devient le 1er janvier 2000 : date inconnue. */
@@ -424,6 +461,7 @@ static int envoyer(jeu_t *j)
         return 0;
     }
     taille = sram_taille(j->systeme, taille);
+    vers_serveur(j, &octets, &taille);
     hash_hex(octets, taille, hash);
     if (j->a_serveur) snprintf(condition, sizeof condition, "If-Match: \"%s\"", j->hash_serveur);
     else snprintf(condition, sizeof condition, "If-None-Match: *");
@@ -495,19 +533,20 @@ static int recuperer(jeu_t *j)
             return 0;
         }
     } else {
-        /* SRAM reçue + Trailer d'horloge local (ce qui dépasse la SRAM de l'ancien fichier). */
+        /* SRAM reçue (forme du fichier) + Trailer d'horloge local (ce qui dépasse la SRAM de l'ancien fichier). */
+        unsigned char *recu = (unsigned char *)corps;
         sram = existe ? sram_taille(j->systeme, n) : n;
-        nouveau = malloc(taille + (n - sram) + 1);
+        nouveau = vers_fichier(j, &recu, &taille, sram) ? NULL : malloc(taille + (n - sram) + 1);
         if (!nouveau) {
             free(ancien);
-            free(corps);
+            free(recu);
             snprintf(message, sizeof message, T("%s : mémoire insuffisante, rien n'est écrit.", "%s: out of memory, nothing written."), j->court);
             return 0;
         }
-        memcpy(nouveau, corps, taille);
+        memcpy(nouveau, recu, taille);
         if (n > sram) memcpy(nouveau + taille, ancien + sram, n - sram);
         free(ancien);
-        free(corps);
+        free(recu);
         {   /* dossier des sauvegardes absent (premier jeu) : créé */
             char d[600], *fin;
             snprintf(d, sizeof d, "%s", j->sav);

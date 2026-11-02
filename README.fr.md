@@ -77,7 +77,8 @@ Autres frontends (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Peg
 - **Savestates** : charger un état remplace la sauvegarde par une ancienne. mGBA recharge un état au lancement par défaut (`autoload`) ; le Lanceur avertit après une Récupération si ce réglage (ou celui de RetroArch, VBA-M) est actif.
 - **Sauvegarde vierge** (que des `0x00` ou `0xFF`) : comptée comme absente, jamais envoyée.
 - **Horloge d'Or / Argent / Cristal** : chaque machine garde sa propre horloge ([ADR 0008](docs/adr/0008-gb-gba-par-fichiers-sram-seule.md)).
-- **Pas encore géré** : DeSmuME (`.dsv`), NO$GBA, gpSP, Beetle GBA (formats à convertir), jeux GBA à EEPROM, jeux GB MBC2.
+- **Pas encore géré** : NO$GBA.
+- **EEPROM GBA et MBC2 GB** : convertis entre émulateurs ([ADR 0012](docs/adr/0012-eeprom-et-mbc2-forme-du-serveur.md)). Une EEPROM envoyée depuis open_agb_firm avant la v3.5 est dans le mauvais ordre sur le serveur : envoie-la d'abord depuis la 3DS, puis récupère-la sur le PC.
 
 ## Comment la synchronisation décide
 
