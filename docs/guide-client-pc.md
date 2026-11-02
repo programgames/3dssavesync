@@ -138,6 +138,7 @@ ES-DE doit être fermé.
 - **Conflit** : trois boutons nommés avant la partie (« Prendre le serveur », « Garder le PC », « Ne pas jouer »), deux après. Fermer la fenêtre = le dernier bouton, le plus prudent.
 - **État rechargé au lancement**, après une Récupération : « Jouer quand même », « Ne pas jouer ».
 - **Information** (émulateur déjà lancé, envoi impossible) : une notification, rien à valider.
+- **Deux jeux en même temps** (un échange entre Pokémon X et Y, par exemple) : possible si les deux sont lancés par 3dssavesync. Chaque Lanceur pose un verrou (`en-cours\` dans le dossier de configuration). Refus seulement si le même jeu tourne déjà, ou si l'émulateur a été ouvert hors de 3dssavesync (son jeu est alors inconnu). Le même jeu deux fois (X et X) demande une seconde copie de l'émulateur, avec son propre dossier de sauvegardes.
 - **Outils** : Windows : fenêtre et notification natives. macOS : `osascript` (fourni avec le système). Linux : `zenity` ou `kdialog` (celui de KDE en premier sous KDE), notifications par `notify-send`.
 - **Sans fenêtre possible** (aucun outil, aucun écran, par exemple en SSH) : un Conflit ne remplace rien, la partie utilise la Sauvegarde du PC, et le message part en notification et dans la sortie d'erreur.
 - **Langue** : français si le système est en français, sinon anglais (Windows : langue de l'interface ; Linux et macOS : `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG`, puis la langue de macOS). Le journal reste en français.

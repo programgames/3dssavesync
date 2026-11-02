@@ -23,7 +23,9 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -72,7 +74,9 @@ var (
 	demander       = demanderSysteme // texte, boutons -> bouton choisi ; "" si aucune fenêtre possible
 	notifier       = notifierSysteme
 	lancer         = lancerCommande
-	emulateurActif = processusActif
+	emulateurActif = func(nom string) bool { return instances(nom) > 0 }
+	instances      = compterProcessus // processus de ce nom en cours
+	vivant         = processusVivant  // ce pid tourne encore
 	transport      = http.DefaultTransport
 )
 
@@ -222,9 +226,10 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if s.refus(e) {
+	if s.refus(e, cle, nom) {
 		return 1, nil
 	}
+	defer s.verrouiller(e.processus(), cle)()
 	dossier := e.dossier(p, systeme, rom)
 	if commande == nil {
 		commande = e.commande(p, systeme, rom, dossier)
@@ -267,9 +272,10 @@ func commandeLaunch(config, nom string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if s.refus(e) {
+	if s.refus(e, "*", "") { // sans jeu : l'émulateur peut ouvrir n'importe quel jeu
 		return 1, nil
 	}
+	defer s.verrouiller(e.processus(), "*")()
 	// mGBA sans jeu : un seul savegamePath possible, donc seulement si GB et GBA partagent le dossier.
 	var dossier string
 	for i, sys := range e.systemes(p) {
@@ -283,15 +289,58 @@ func commandeLaunch(config, nom string) (int, error) {
 	return s.jouer(s.jeuxDe(e, p), e.commande(p, "", "", dossier), conseil(e, p))
 }
 
-// L'émulateur tourne déjà : synchroniser maintenant écraserait ou enverrait une partie en cours.
-func (s *Session) refus(e *Emulateur) bool {
+// L'émulateur tourne déjà. Refus si son jeu est inconnu (instance ouverte hors de 3dssavesync, ou lancée sans jeu)
+// ou si c'est ce jeu : synchroniser écraserait ou enverrait une partie en cours. Deux jeux différents lancés par
+// 3dssavesync peuvent tourner ensemble (un échange entre X et Y). cle « * » : lancement sans jeu (launch).
+func (s *Session) refus(e *Emulateur, cle, jeu string) bool {
 	nom := e.processus()
-	if !emulateurActif(nom) {
+	n := instances(nom)
+	if n == 0 {
 		return false
 	}
-	s.journal("refus : " + nom + " tourne déjà")
-	notifier(nom + tr(" tourne déjà. Ferme-le avant de lancer un jeu.", " is already running. Close it before starting a game."))
+	en := s.verrous(nom)
+	var texte string
+	switch {
+	case cle == "*" || slices.Contains(en, "*"):
+		texte = nom + tr(" tourne déjà. Ferme-le avant de lancer un jeu.", " is already running. Close it before starting a game.")
+	case n > len(en):
+		texte = nom + tr(" est ouvert hors de 3dssavesync : son jeu est inconnu. Ferme-le avant de lancer un jeu.",
+			" was opened outside 3dssavesync: its game is unknown. Close it before starting a game.")
+	case cle != "" && slices.Contains(en, cle):
+		texte = fmt.Sprintf(tr("%s est déjà en cours dans %s. Ferme-le avant de le relancer.", "%s is already running in %s. Close it before starting it again."), jeu, nom)
+	default:
+		return false
+	}
+	s.journal("refus : " + texte)
+	notifier(texte)
 	return true
+}
+
+// Verrous des parties en cours : un fichier en-cours/<processus>.<pid> par Lanceur actif, qui contient la Clé de son
+// jeu. Clés des Lanceurs encore vivants pour cet émulateur ; un verrou d'un Lanceur disparu (plantage) est retiré.
+// ponytail: un pid réutilisé par un autre programme garde le verrou ; il disparaît au prochain redémarrage du PC.
+func (s *Session) verrous(processus string) (cles []string) {
+	fichiers, _ := filepath.Glob(filepath.Join(s.dossier, "en-cours", processus+".*"))
+	for _, f := range fichiers {
+		pid, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(f), processus+"."))
+		if err != nil || !vivant(pid) {
+			os.Remove(f)
+			continue
+		}
+		if o, err := os.ReadFile(f); err == nil {
+			cles = append(cles, string(o))
+		}
+	}
+	return cles
+}
+
+// Pose le verrou de ce Lanceur ; la fonction rendue le retire (après l'envoi).
+func (s *Session) verrouiller(processus, cle string) func() {
+	f := filepath.Join(s.dossier, "en-cours", fmt.Sprintf("%s.%d", processus, os.Getpid()))
+	if os.MkdirAll(filepath.Dir(f), 0o755) != nil || os.WriteFile(f, []byte(cle), 0o644) != nil {
+		s.journal("verrou impossible : " + f)
+	}
+	return func() { os.Remove(f) }
 }
 
 // Jeux d'un émulateur pour launch : les ROM de ses dossiers roms, et les Pokémon 3DS déjà vus par Azahar.

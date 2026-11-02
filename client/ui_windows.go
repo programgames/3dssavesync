@@ -189,20 +189,32 @@ func langueSysteme() string {
 	return "en"
 }
 
-func processusActif(nom string) bool {
+// Nombre de processus de ce nom (sans .exe).
+func compterProcessus(nom string) (n int) {
 	s, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		return false
+		return 0
 	}
 	defer syscall.CloseHandle(s)
 	var e syscall.ProcessEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
 	for err = syscall.Process32First(s, &e); err == nil; err = syscall.Process32Next(s, &e) {
 		if strings.EqualFold(strings.TrimSuffix(strings.ToLower(syscall.UTF16ToString(e.ExeFile[:])), ".exe"), nom) {
-			return true
+			n++
 		}
 	}
-	return false
+	return n
+}
+
+// Le processus pid tourne encore.
+func processusVivant(pid int) bool {
+	h, err := syscall.OpenProcess(0x1000, false, uint32(pid)) // PROCESS_QUERY_LIMITED_INFORMATION
+	if err != nil {
+		return false
+	}
+	defer syscall.CloseHandle(h)
+	var code uint32
+	return syscall.GetExitCodeProcess(h, &code) == nil && code == 259 // STILL_ACTIVE
 }
 
 // Processus indépendant de la console de l'assistant (l'exe est une application GUI : aucune console héritée).
