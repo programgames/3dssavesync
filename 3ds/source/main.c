@@ -17,6 +17,7 @@
 #include "etat.h"
 #include "fichiers.h"
 #include "net.h"
+#include "pokemon.h"
 #include "reglages.h"
 #include "titres3ds.h"
 
@@ -48,6 +49,9 @@ typedef struct {
     long age; /* secondes depuis la Version courante (horloge du serveur), -1 si inconnu */
     int a_local, a_serveur;
     int vide; /* SRAM locale vierge : comptée comme absente (cle.h) */
+    time_t modif;   /* DS, GB, GBA : date du fichier (horloge de la 3DS) ; 0 si inconnue */
+    int a_partie;   /* Pokémon 3DS : temps de jeu et dresseur lus (pokemon.h) */
+    partie_t partie;
     int etat;
 } jeu_t;
 
@@ -240,7 +244,9 @@ static void lire_local(jeu_t *j)
 {
     unsigned char *octets;
     size_t taille;
-    j->a_local = j->vide = 0;
+    u64 mtime;
+    j->a_local = j->vide = j->a_partie = 0;
+    j->modif = 0;
     j->local.taille = 0;
     j->hash_local[0] = '\0';
     if (j->systeme == SYS_DS) snprintf(j->sav, sizeof j->sav, "%s", j->sav_rom);
@@ -253,6 +259,11 @@ static void lire_local(jeu_t *j)
     if (j->systeme != SYS_3DS) {
         taille = sram_taille(j->systeme, taille);
         j->vide = sauvegarde_vide(j->systeme, octets, taille);
+        /* stat() ne donne pas la date sur la SD. archive_getmtime la convertit en temps UNIX ; un horodatage 0 (Azahar)
+         * devient le 1er janvier 2000 : date inconnue. */
+        if (R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modif = (time_t)mtime;
+    } else {
+        j->a_partie = pokemon_partie(octets, taille, &j->partie) == 0;
     }
     hash_hex(octets, taille, j->hash_local);
     j->local.taille = taille;
@@ -561,6 +572,54 @@ static int icone_ds(const jeu_t *j, u16 *pixels)
     return 0;
 }
 
+/* ---------------------------------------------------------------- comparer deux Versions */
+
+/* « 152 h 30 · Julien », ou partie jamais commencée. */
+static void texte_partie(const partie_t *p, char *out, size_t n)
+{
+    if (p->dresseur[0]) snprintf(out, n, "%d h %02d \xC2\xB7 %s", p->heures, p->minutes, p->dresseur);
+    else snprintf(out, n, T("%d h %02d \xC2\xB7 partie jamais commencée", "%d h %02d \xC2\xB7 game never started"), p->heures, p->minutes);
+}
+
+/* Sauvegarde de la 3DS : temps de jeu (Pokémon 3DS), sinon date du fichier si l'horloge la rend crédible. */
+static void texte_local(const jeu_t *j, char *out, size_t n)
+{
+    time_t maintenant = time(NULL);
+    if (!j->a_local) snprintf(out, n, "%s", T("aucune sauvegarde", "no save"));
+    else if (j->vide) snprintf(out, n, "%s", T("sauvegarde vierge", "blank save"));
+    else if (j->a_partie) texte_partie(&j->partie, out, n);
+    else if (j->modif && maintenant >= j->modif) {
+        char age[24];
+        format_age((long)(maintenant - j->modif), age, sizeof age);
+        snprintf(out, n, T("modifiée %s", "modified %s"), age);
+    } else snprintf(out, n, "%s", T("sauvegarde présente", "save present"));
+}
+
+/* Version du serveur : qui l'a envoyée et quand ; avec lire, pour un Pokémon 3DS, son temps de jeu (téléchargée). */
+static void texte_serveur(const jeu_t *j, int lire, char *out, size_t n)
+{
+    char age[24], url[300], *corps;
+    size_t taille;
+    long statut;
+    partie_t p;
+    if (!j->a_serveur) {
+        snprintf(out, n, "%s", T("aucune version", "no version"));
+        return;
+    }
+    format_age(j->age, age, sizeof age);
+    snprintf(out, n, T("envoyée par %s, %s", "sent by %s, %s"), j->client[0] ? j->client : "?", age);
+    if (!lire || !j->a_partie) return; /* seulement si la 3DS a un Pokémon 3DS reconnu */
+    progression(0, 0, "%s", T("Lecture de la version du serveur…", "Reading the server version…"));
+    snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->cle);
+    statut = net_get(url, cfg.jeton, &corps, &taille);
+    if (statut == 200 && pokemon_partie((unsigned char *)corps, taille, &p) == 0) {
+        char t[80];
+        texte_partie(&p, t, sizeof t);
+        snprintf(out + strlen(out), n - strlen(out), "\n%s", t);
+    }
+    if (statut > 0) free(corps);
+}
+
 /* ---------------------------------------------------------------- écran principal (citro2d, issue #21) */
 
 #define BLANC RGB(0xE8EAED)
@@ -644,10 +703,10 @@ static void ligne_touches(const touche_t *t, int n, float y, float ecart)
     }
 }
 
-/* Carte de choix de l'écran de Conflit (152 × 78), touchable : touche, action, explication. */
+/* Carte de choix de l'écran de Conflit (152 × 92), touchable : touche, action, explication. */
 static void carte(float x, float y, u32 touche, const char *action, const char *texte)
 {
-    ecran_rect(x, y, 152, 78, RGB(0x2A313B));
+    ecran_rect(x, y, 152, 92, RGB(0x2A313B));
     ecran_texte(x + 6, y + 4, 0.55f, touche == KEY_A ? RGB(0xE04848) : RGB(0x4080F0), 0, glyphe(touche));
     ecran_texte(x + 24, y + 5, 0.45f, BLANC, 122, action);
     ecran_paragraphe(x + 6, y + 24, 0.4f, GRIS_C, 140, texte);
@@ -655,7 +714,7 @@ static void carte(float x, float y, u32 touche, const char *action, const char *
         boutons[nb_boutons].x = x;
         boutons[nb_boutons].y = y;
         boutons[nb_boutons].l = 152;
-        boutons[nb_boutons].h = 78;
+        boutons[nb_boutons].h = 92;
         boutons[nb_boutons++].touche = touche;
     }
 }
@@ -747,7 +806,7 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
 
 static void dessiner_bas(const jeu_t *j)
 {
-    char t[600], age[24];
+    char t[600];
     float y = 6;
     int action = 0, gb = 0;
 
@@ -764,10 +823,10 @@ static void dessiner_bas(const jeu_t *j)
         y = y + 14 < 58 ? 62 : y + 18; /* sous l'icône */
 
         y += ecran_paragraphe(8, y, 0.5f, j->etat == A_JOUR ? C_VERT : couleur_etat(j->etat), 304, phrase_etat(j, t, sizeof t)) + 6;
-        y = detail(y, "3DS", !j->a_local ? T("aucune sauvegarde", "no save") : j->vide ? T("sauvegarde vierge", "blank save") : T("sauvegarde présente", "save present"));
-        format_age(j->age, age, sizeof age);
-        if (j->a_serveur) snprintf(t, sizeof t, T("envoyée par %s, %s", "sent by %s, %s"), j->client[0] ? j->client : "?", age);
-        y = detail(y, T("Serveur", "Server"), j->a_serveur ? t : T("aucune version", "no version"));
+        texte_local(j, t, sizeof t);
+        y = detail(y, "3DS", t);
+        texte_serveur(j, 0, t, sizeof t);
+        y = detail(y, T("Serveur", "Server"), t);
         y = detail(y, T("Dernière synchro", "Last sync"),
                    !b ? T("jamais", "never")
                    : !strcmp(b, j->hash_local) && !strcmp(b, j->hash_serveur) ? T("identique aux deux", "same as both")
@@ -1127,7 +1186,7 @@ static int reglages(int premier)
 /* A sur un Jeu : son action, avec confirmation avant tout écrasement (Q5). 1 si une action a été tentée. */
 static int agir(jeu_t *j)
 {
-    char q[300];
+    char q[500], srv[200], loc[120];
     int fait = 0;
     switch (j->etat) {
     case A_ENVOYER:
@@ -1135,18 +1194,20 @@ static int agir(jeu_t *j)
         fait = 1;
         break;
     case A_RECUPERER:
-        snprintf(q, sizeof q, T("Récupérer la version du serveur (envoyée par %s) ?%s", "Download the server version (sent by %s)?%s"), j->client[0] ? j->client : "?",
-                 j->a_local ? T(" La sauvegarde de la 3DS sera remplacée. Une copie de sécurité est faite avant.",
-                                " The 3DS save will be replaced. A backup copy is made first.") : "");
+        texte_serveur(j, 1, srv, sizeof srv);
+        texte_local(j, loc, sizeof loc);
+        snprintf(q, sizeof q, T("Récupérer la version du serveur ?\n\nServeur : %s\n3DS : %s%s", "Download the server version?\n\nServer: %s\n3DS: %s%s"), srv, loc,
+                 j->a_local ? T("\n\nLa sauvegarde de la 3DS sera remplacée. Une copie de sécurité est faite avant.",
+                                "\n\nThe 3DS save will be replaced. A backup copy is made first.") : "");
         if ((fait = confirmer(j->court, q, T("Récupérer", "Download")))) recuperer(j);
         break;
     case CONFLIT: {
-        char age[24];
         u32 k;
         const touche_t b = { KEY_B, T("Ne rien faire", "Do nothing"), 1 };
-        format_age(j->age, age, sizeof age);
-        snprintf(q, sizeof q, T("Envoyée par %s, %s. Une copie de sécurité de la 3DS est faite avant.", "Sent by %s, %s. A backup copy of the 3DS save is made first."),
-                 j->client[0] ? j->client : "?", age);
+        texte_serveur(j, 1, srv, sizeof srv);
+        texte_local(j, loc, sizeof loc);
+        snprintf(q, sizeof q, T("%s\nCopie de la 3DS faite avant.", "%s\nBackup of the 3DS made first."), srv);
+        snprintf(srv, sizeof srv, T("Cette console : %s\nEnvoyée ensuite au serveur.", "This console: %s\nThen uploaded to the server."), loc);
         do {
             float y = 6;
             ecran_debut();
@@ -1160,9 +1221,9 @@ static int agir(jeu_t *j)
             y = y < 58 ? 60 : y + 4;
             y += ecran_paragraphe(8, y, 0.45f, BLANC, 304, T("La 3DS et le serveur ont changé depuis la dernière synchronisation. Choisis la version à garder :",
                                                             "The 3DS and the server both changed since the last sync. Choose the version to keep:")) + 6;
-            carte(6, y, KEY_A, T("Garder la 3DS", "Keep the 3DS"), T("Sauvegarde de cette console, envoyée ensuite au serveur.", "This console's save, then uploaded to the server."));
+            carte(6, y, KEY_A, T("Garder la 3DS", "Keep the 3DS"), srv);
             carte(162, y, KEY_X, T("Prendre le serveur", "Take the server"), q);
-            ecran_paragraphe(8, y + 84, 0.4f, GRIS_C, 304, T("L'autre version reste dans l'historique du serveur.", "The other version stays in the server history."));
+            ecran_paragraphe(8, y + 96, 0.4f, GRIS_C, 304, T("L'autre version reste dans l'historique du serveur.", "The other version stays in the server history."));
             fond_barre(1);
             ligne_touches(&b, 1, 240 - HAUTEUR_TOUCHE - 4, 0);
             ecran_finir();
@@ -1244,6 +1305,11 @@ static int tout_synchroniser(void)
         jeu_t *j = &jeux[visibles[i]];
         if (j->etat == A_RECUPERER && j->a_local && ecrase++ < 8) {
             strncat(q, j->court, 40);
+            if (j->a_partie) {
+                char t[80];
+                texte_partie(&j->partie, t, sizeof t);
+                snprintf(q + strlen(q), sizeof q - strlen(q), " (%s)", t);
+            }
             strcat(q, "\n");
         }
     }

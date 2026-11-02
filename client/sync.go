@@ -498,16 +498,28 @@ func formatAge(age *int64) string {
 }
 
 // Choix de l'utilisateur sur un Conflit (Q5). Sans fenêtre possible (Q16) : rien n'est remplacé.
-func resoudreConflit(j *Jeu, l *Local, srv *Version, apres bool) string {
+// distant : contenu de la Version du serveur s'il a été lu (Pokémon 3DS), pour montrer son temps de jeu.
+func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool) string {
+	pc := tr("sauvegarde présente", "save present")
+	if i, err := os.Stat(j.Fichier); err == nil {
+		pc = fmt.Sprintf(tr("modifiée le %s", "modified on %s"), i.ModTime().Format("02/01/2006 15:04"))
+	}
+	if p, ok := partiePokemon(l.SRAM); ok {
+		pc += " · " + p
+	}
+	enLigne := fmt.Sprintf(tr("envoyée par %s %s", "sent by %s %s"), srv.Client, formatAge(srv.Age))
+	if p, ok := partiePokemon(distant); ok {
+		enLigne += " · " + p
+	}
 	texte := fmt.Sprintf(tr("Conflit : %s\n\n"+
 		"La Sauvegarde du PC et celle du serveur ont toutes deux changé depuis la dernière Synchronisation.\n\n"+
-		"PC : %d octets (%s)\nServeur : %d octets (%s), envoyée par %s %s\n\n"+
+		"PC : %s\nServeur : %s\n\n"+
 		"L'autre version reste dans l'Historique du serveur.",
 		"Conflict: %s\n\n"+
 			"The PC save and the server save have both changed since the last sync.\n\n"+
-			"PC: %d bytes (%s)\nServer: %d bytes (%s), sent by %s %s\n\n"+
+			"PC: %s\nServer: %s\n\n"+
 			"The other version stays in the server history."),
-		j.Nom, l.Taille, l.Hash[:8], srv.Taille, srv.Hash[:8], srv.Client, formatAge(srv.Age))
+		j.Nom, pc, enLigne)
 	serveur, pc := tr("Prendre le serveur", "Take the server"), tr("Garder le PC", "Keep the PC")
 	pasJouer := tr("Ne pas jouer", "Don't play")
 	var choix string
@@ -555,7 +567,13 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 		}
 		action := etat(vu, srv, b[j.Cle])
 		if action == conflit {
-			action = resoudreConflit(j, l, srv, apres)
+			var distant []byte // Pokémon 3DS : la Version du serveur est lue pour comparer les temps de jeu
+			if _, ok := formatsPokemon[len(l.SRAM)]; ok && j.Systeme == "3DS" {
+				if st, o, err := s.api("GET", "/saves/"+j.Cle, nil, nil); err == nil && st == 200 {
+					distant = o
+				}
+			}
+			action = resoudreConflit(j, l, srv, distant, apres)
 		}
 		switch action {
 		case aJour:

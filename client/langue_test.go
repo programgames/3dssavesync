@@ -12,7 +12,7 @@ func TestAnglais(t *testing.T) {
 	reponses = []string{"Keep the PC"}
 	srv := &Version{Hash: strings.Repeat("b", 64), Client: "3ds", Age: new(int64)}
 	*srv.Age = 7200
-	choix := resoudreConflit(&Jeu{Nom: "Pokemon X"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}}, srv, false)
+	choix := resoudreConflit(&Jeu{Nom: "Pokemon X"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}}, srv, nil, false)
 	if choix != forcer {
 		t.Errorf("« Keep the PC » : %s, attendu %s", choix, forcer)
 	}
