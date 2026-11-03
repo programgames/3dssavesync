@@ -61,7 +61,7 @@ chmod +x 3dssavesync-linux-amd64
 
 3dssavesync could not open your browser. Copy the address into your browser by hand.
 
-No browser on this machine (SSH, Steam Deck in Game mode)? Run `3dssavesync setup --sans-navigateur` to print the address, or `3dssavesync setup --texte` to answer the same questions in the terminal.
+No browser on this machine (SSH, Steam Deck in Game mode)? Run `3dssavesync setup --no-browser` to print the address, or `3dssavesync setup --text` to answer the same questions in the terminal.
 
 ### The icon near the clock does not show
 

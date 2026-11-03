@@ -94,7 +94,7 @@ A frontend calls `3dssavesync run [--emulator <name>] "<rom>"` instead of the em
 
 1. If the same game already runs, or the emulator was opened outside 3dssavesync → message, stop.
 2. Read the Key of the ROM (ADR 0007), or its Alias (ADR 0014). Unknown ROM → a notification, and the emulator starts without sync.
-3. Local save = the file the emulator profile names for this ROM (`client/profils.go`).
+3. Local save = the file the emulator profile names for this ROM (`client/profiles.go`).
 4. **Before the game**: `GET /saves`, then `etat`.
    - `A_RECUPERER` → Backup copy (if the file exists), download into a temporary file, Hash check, rename.
    - `A_ENVOYER` → Upload.
@@ -103,7 +103,7 @@ A frontend calls `3dssavesync run [--emulator <name>] "<rom>"` instead of the em
 5. Start the emulator and wait for its process to end.
 6. **After the game**: read the Local save again, `etat` with the Base. `A_ENVOYER` → Upload with `If-Match` = Base. `412` → `etat` again with the new Current version; `CONFLIT` → **Keep PC save** / **Do nothing**. Network error → the save is written to `en-attente.json` and uploaded first at the next `run` or `launch`.
 
-Backup copies: `<copies>/<emulator>/<name>-<date>`. The Go tests (`client/lanceur_test.go`) run this flow against the real `server/server.py` in a temporary folder.
+Backup copies: `<copies>/<emulator>/<name>-<date>`. The Go tests (`client/launcher_test.go`) run this flow against the real `server/server.py` in a temporary folder.
 
 ## 4. 3DS homebrew: `3ds/`
 

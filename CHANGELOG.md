@@ -23,6 +23,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - **Redesigned 3DS app**: one word per game state, clearer details ("Same version as the server", "5 h ago · from pc"), side-by-side cards for a conflict, a progress bar, and a footer that shows when the server list was last read.
 - Messages on the PC, in the settings page and on the 3DS are rewritten in plainer French and English. Errors say what to do, then give the technical detail on its own line.
 - A Scoop install of an emulator shows once, with its real program, instead of twice.
+- Command-line flags have English names: `setup --text`, `setup --no-browser`, `restore --yes`, `uninstall --yes`. The French names (`--texte`, `--sans-navigateur`, `--oui`) still work.
 
 ### Fixed
 

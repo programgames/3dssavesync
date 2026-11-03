@@ -2,7 +2,7 @@
 
 ADR 0008 computes the SRAM as `size - (size mod 1024)`. For a 512-byte SRAM (GBA EEPROM 4 Kbit, GB MBC2 in SameBoy, VBA-M, BGB), the rule gives 0: the code then keeps the whole file, Clock trailer included. A 4 Kbit EEPROM with the mGBA Trailer (528 bytes) therefore does not have the same Hash as the same SRAM without Trailer (512 bytes) on the other machine. Conversely, a 1536-byte file without a Trailer would be cut to 1024. Ticket #6, `docs/notes/research-v3-emulateurs.md` §8.1 (French).
 
-All known GB/GBA SRAMs are multiples of 512 bytes. Known Trailers are 16 bytes (mGBA GBA), 44 bytes (old VBA format) and 48 bytes (mGBA, VBA-M, BGB, GB MBC3+TIMER). Rule, the same on the 3DS (`sram_taille`, `3ds/source/cle.c`) and on the PC (`lireLocal`, `client/sync.go`):
+All known GB/GBA SRAMs are multiples of 512 bytes. Known Trailers are 16 bytes (mGBA GBA), 44 bytes (old VBA format) and 48 bytes (mGBA, VBA-M, BGB, GB MBC3+TIMER). Rule, the same on the 3DS (`sram_taille`, `3ds/source/cle.c`) and on the PC (`readLocal`, `client/sync.go`):
 
 - `r = size mod 512`;
 - if `r` is 16, 44 or 48 and `size > r`, the SRAM is `size - r`;
