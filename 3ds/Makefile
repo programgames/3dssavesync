@@ -35,6 +35,7 @@ TARGET		:=	3dssavesync
 APP_TITLE	:=	3dssavesync
 APP_DESCRIPTION	:=	Synchronisation des sauvegardes DS, GB, GBA, 3DS
 APP_AUTHOR	:=	3dssavesync
+ICON		:=	meta/icon.png
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data

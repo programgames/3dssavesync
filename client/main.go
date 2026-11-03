@@ -12,6 +12,9 @@
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
 package main
 
+// Icône de l'exe Windows (rsrc_windows_*.syso, ignorés hors Windows) depuis icone/icone.ico (assets/generer.py) :
+//go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64,arm64 --manifest none --icon icone/icone.ico
+
 import (
 	"bytes"
 	"encoding/json"
