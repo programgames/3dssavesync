@@ -42,6 +42,25 @@ func TestDefaireLaunchBox(t *testing.T) {
 	}
 }
 
+// Apostrophe et guillemets (dossier « Jeux d'enfance », titre LaunchBox) : echapperXML écrit &#39; et &#34;, LaunchBox
+// les écrit tels quels. La désinstallation compare les textes décodés.
+func TestDefaireLaunchBoxApostrophe(t *testing.T) {
+	lb := filepath.Join("C:", "Jeux d'enfance", "LaunchBox")
+	lanceur := filepath.Join("C:", "Jeux d'enfance", "3dssavesync", "3dssavesync.exe")
+	avant := strings.Replace(emulatorsXML, "<Title>MelonDS &amp; co</Title>", `<Title>Jeu d'enfance "DS"</Title>`, 1)
+	installe, _ := launchbox(avant, lb, lanceur, []EntreeLB{{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}}})
+	if !strings.Contains(installe, "<Title>Jeu d&#39;enfance &#34;DS&#34; (3dssavesync)</Title>") {
+		t.Fatalf("copie « (3dssavesync) » attendue :\n%s", installe)
+	}
+	defait, rapport := defaireLaunchbox(installe, lb, lanceur, &Config{})
+	if defait != avant {
+		t.Errorf("Emulators.xml doit revenir à l'identique (émulateur d'origine de nouveau par défaut) :\n%s", defait)
+	}
+	if len(rapport) != 1 || !strings.Contains(rapport[0], `Jeu d'enfance "DS" (3dssavesync)`) {
+		t.Errorf("rapport : %q", rapport)
+	}
+}
+
 func TestDefaireESDE(t *testing.T) {
 	emus := map[string]string{"DS": "melonds", "3DS": "azahar"}
 	emudeck := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <fullname>Nintendo DS</fullname>\n" +

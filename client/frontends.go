@@ -66,6 +66,9 @@ func echapperXML(s string) string {
 	return b.String()
 }
 
+// Inverse d'echapperXML (&#39;, &#34;) et des textes de LaunchBox (&apos;, &quot;, ou ' et " tels quels) : toutes les entités.
+func desechapperXML(s string) string { return html.UnescapeString(s) }
+
 func nouvelID() string {
 	o := make([]byte, 16)
 	rand.Read(o)
@@ -149,7 +152,7 @@ type EntreeLB struct {
 // Rien n'est fait si un émulateur passe déjà par 3dssavesync pour cette entrée.
 func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []string) {
 	var rapport []string
-	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
+	unescape := desechapperXML
 	chemin := func(app string) string { return cheminLB(dossierLB, app) }
 	for _, e := range entrees {
 		emus := blocEmulateurLB.FindAllString(texte, -1)

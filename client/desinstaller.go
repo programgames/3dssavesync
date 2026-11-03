@@ -39,7 +39,7 @@ var retirerRaccourcis, retirerProgramme = retirerRaccourcisSysteme, retirerProgr
 func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []string) {
 	var rapport []string
 	surPlace := map[string]bool{} // ID des émulateurs modifiés sur place
-	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
+	unescape := desechapperXML
 	notre := func(b string) bool {
 		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(champ(b, "ApplicationPath")), `\`, "/")), filepath.Base(lanceur))
 	}
@@ -108,7 +108,7 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 		id, titre := champ(b, "ID"), strings.TrimSuffix(champ(b, "Title"), " (3dssavesync)")
 		idOrig := ""
 		for _, o := range emus {
-			if !notre(o) && champ(o, "Title") == titre {
+			if !notre(o) && unescape(champ(o, "Title")) == unescape(titre) { // &#39; (echapperXML) contre ' (LaunchBox)
 				idOrig = champ(o, "ID")
 			}
 		}
