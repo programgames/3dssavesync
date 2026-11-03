@@ -11,6 +11,10 @@
 |---|---|
 | ![3DS app: game list and details](docs/images/homebrew-en-1.png) | ![3DS app: conflict screen](docs/images/homebrew-en-2.png) |
 
+**On the PC: one settings page** (server status, emulators, history, ROM hacks)
+
+![PC settings page: server status, emulators and their consoles](docs/images/settings-en.png)
+
 - **DS, Game Boy, Game Boy Color, GBA** and native **3DS** games (the 8 Pokémon games by default, X to Ultra Moon).
 - **On the PC**, your game starts as usual from LaunchBox, ES-DE or a shortcut. 3dssavesync gets the newest save first, then sends it back when you quit.
 - **On the 3DS**, open the 3dssavesync app and press START: every game is synced.
