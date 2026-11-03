@@ -10,7 +10,7 @@ import (
 )
 
 // trailer returns the length of the Clock trailer after the SRAM of a GB or GBA file: 16, 44 or 48 bytes, 0 if none.
-func trailer(system string, raw []byte) int {
+func trailer(system System, raw []byte) int {
 	r := len(raw) % 512
 	if (system == "GB" || system == "GBA") && len(raw) > r && (r == 16 || r == 44 || r == 48) {
 		return r

@@ -1,11 +1,9 @@
 package main
 
 import (
-	"archive/zip"
 	"bytes"
 	"crypto/sha256"
 	"crypto/tls"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,27 +14,12 @@ import (
 	"net/http"
 	neturl "net/url"
 	"os"
-	"path"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 )
-
-// extensions maps a ROM extension to its System (ADR 0007).
-var extensions = map[string]string{
-	".nds": "DS", ".gb": "GB", ".gbc": "GB", ".gba": "GBA", ".3ds": "3DS", ".cci": "3DS", ".cxi": "3DS",
-}
-
-// titles3DS lists the 8 synced 3DS Pokémon games (ADR 0009): one title ID per game, all regions.
-var titles3DS = map[string]string{
-	"0004000000055D00": "Pokemon X", "0004000000055E00": "Pokemon Y",
-	"000400000011C400": "Pokemon Rubis Omega", "000400000011C500": "Pokemon Saphir Alpha",
-	"0004000000164800": "Pokemon Soleil", "0004000000175E00": "Pokemon Lune",
-	"00040000001B5000": "Pokemon Ultra-Soleil", "00040000001B5100": "Pokemon Ultra-Lune",
-}
 
 // formats3DS holds the Save archive format of a 3DS game: Azahar's 00000001.metadata (ArchiveFormatInfo:
 // total_size, directory count, file count as u32 LE, duplicate_data, 3 padding bytes). With it, the Launcher creates
@@ -54,7 +37,7 @@ var formats3DS = func() map[string][]byte {
 
 // Game is a Key and its matching save file in an emulator.
 type Game struct {
-	System string `json:"Systeme"`
+	System System `json:"Systeme"`
 	Key    string `json:"Cle"`
 	Name   string `json:"Nom"`
 	File   string `json:"Fichier"`
@@ -62,113 +45,8 @@ type Game struct {
 	MBC2   int    `json:"-"`     // size of a new MBC2 file for this emulator (Config.mbc2Size); 0 = 512
 }
 
-var code4 = regexp.MustCompile(`^[A-Z0-9]{4}$`)
-
-// readRom returns the System, the Key and the possible save names of a ROM (file or .zip).
-// Empty System = unknown extension; empty Key = out of scope (homebrew, unlisted 3DS game).
-// name: the ROM or the zip (mGBA, RetroArch); internal: the file inside the zip (melonDS), "" outside a zip.
-func readRom(rom string) (system, key, name, internal string, err error) {
-	ext := strings.ToLower(filepath.Ext(rom))
-	name = strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom))
-	if ext != ".zip" && extensions[ext] == "" {
-		return "", "", name, "", nil
-	}
-	header := make([]byte, 0x200)
-	if ext == ".zip" {
-		z, err := zip.OpenReader(rom)
-		if err != nil {
-			return "", "", name, "", err
-		}
-		defer z.Close()
-		for _, f := range z.File {
-			e := strings.ToLower(path.Ext(f.Name))
-			if s := extensions[e]; s == "DS" || s == "GB" || s == "GBA" {
-				r, err := f.Open()
-				if err != nil {
-					return "", "", name, "", err
-				}
-				io.ReadFull(r, header) // a ROM shorter than the header keeps zeros
-				r.Close()
-				ext = e
-				internal = strings.TrimSuffix(path.Base(f.Name), path.Ext(f.Name))
-				break
-			}
-		}
-	} else {
-		f, err := os.Open(rom)
-		if err != nil {
-			return "", "", name, "", err
-		}
-		io.ReadFull(f, header)
-		f.Close()
-	}
-	system = extensions[ext]
-	switch system {
-	case "DS":
-		if c := string(header[0x0C:0x10]); code4.MatchString(c) {
-			key = c
-		}
-	case "GBA":
-		if c := string(header[0xAC:0xB0]); code4.MatchString(c) {
-			key = "GBA-" + c
-		}
-	case "GB":
-		title := header[0x134:0x143]
-		if i := bytes.IndexByte(title, 0); i >= 0 {
-			title = title[:i]
-		}
-		clean := make([]byte, len(title))
-		for i, c := range title { // byte by byte like key.c: bytes.ToUpper would change the length (byte >= 0x80)
-			if c >= 'a' && c <= 'z' {
-				c -= 'a' - 'A'
-			}
-			if (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
-				c = '_'
-			}
-			clean[i] = c
-		}
-		if len(clean) > 0 {
-			key = fmt.Sprintf("GB-%s-%02X%02X", clean, header[0x14E], header[0x14F])
-		}
-	case "3DS":
-		id, err := titleID3DS(rom)
-		if err != nil {
-			return "", "", name, "", err
-		}
-		if t, ok := titles3DS[id]; ok {
-			key, name = "3DS-"+id, t
-		}
-	}
-	return system, key, name, internal, nil
-}
-
-// titleID3DS returns the title ID of a 3DS ROM: NCSD (.3ds/.cci) -> partition 0 at u32@0x120 × 0x200, or direct
-// NCCH (.cxi); program_id at NCCH + 0x118.
-func titleID3DS(rom string) (string, error) {
-	f, err := os.Open(rom)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	o := make([]byte, 0x200)
-	io.ReadFull(f, o)
-	var ncch int64
-	switch string(o[0x100:0x104]) {
-	case "NCSD":
-		ncch = int64(binary.LittleEndian.Uint32(o[0x120:])) * 0x200
-	case "NCCH":
-	default:
-		return "", nil
-	}
-	id := make([]byte, 8)
-	if _, err := f.ReadAt(id, ncch+0x118); err != nil {
-		return "", nil
-	}
-	return fmt.Sprintf("%016X", binary.LittleEndian.Uint64(id)), nil
-}
-
 // savePath returns the save file of a Game in an emulator's folder. 3DS: folder = Azahar's sdmc.
-func savePath(dir, system, key, name, ext string) string {
+func savePath(dir string, system System, key, name, ext string) string {
 	if system == "3DS" {
 		id, z := strings.ToLower(key[4:]), strings.Repeat("0", 32)
 		return filepath.Join(dir, "Nintendo 3DS", z, z, "title", id[:8], id[8:], "data", "00000001", "main")

@@ -51,8 +51,6 @@ const (
 
 var reVersion = regexp.MustCompile(`^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\.sav$`)
 
-func validKey(key string) bool { return reCode.MatchString("/saves/" + key) }
-
 // serverGames returns the server's games, with the known name (3DS titles, ROM found by romNames, or name given to the
 // server by a Client: ADR 0018).
 func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
@@ -90,8 +88,8 @@ func romNames(cfg *Config) map[string]string {
 		for _, root := range e.Roms {
 			filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 				if err == nil && !d.IsDir() {
-					if _, key, name, _, err := readRom(path); err == nil && key != "" && m[key] == "" {
-						m[key] = name
+					if r, err := readRom(path); err == nil && r.Key != "" && m[r.Key] == "" {
+						m[r.Key] = r.Name
 					}
 				}
 				return nil

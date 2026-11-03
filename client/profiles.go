@@ -13,19 +13,19 @@ import (
 )
 
 type Profile struct {
-	Systems      []string                                            // nil: the ones of the configuration (RetroArch cores, folders of a custom Profile)
-	Ext          string                                              // extension of the Save; default .sav
-	InternalName bool                                                // ROM in an archive: Save named after the inner file (melonDS), else after the archive
-	Args         func(e *Emulator, system, rom, dir string) []string // empty rom: emulator with no game (launch)
-	Dir          func(e *Emulator, system, rom string) string        // setting of the emulator; "" = unknown
-	Autoload     func(e *Emulator) string                            // hint if a save state is reloaded at start
+	Systems      []System                                                   // nil: the ones of the configuration (RetroArch cores, folders of a custom Profile)
+	Ext          string                                                     // extension of the Save; default .sav
+	InternalName bool                                                       // ROM in an archive: Save named after the inner file (melonDS), else after the archive
+	Args         func(e *Emulator, system System, rom, dir string) []string // empty rom: emulator with no game (launch)
+	Dir          func(e *Emulator, system System, rom string) string        // setting of the emulator; "" = unknown
+	Autoload     func(e *Emulator) string                                   // hint if a save state is reloaded at start
 }
 
 var profiles = map[string]Profile{
 	"melonds": {
-		Systems: []string{"DS"}, InternalName: true,
-		Args: func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
-		Dir: func(e *Emulator, _, _ string) string {
+		Systems: []System{"DS"}, InternalName: true,
+		Args: func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
+		Dir: func(e *Emulator, _ System, _ string) string {
 			f := first(nextTo(e, "melonDS.toml"), nextTo(e, "portable", "melonDS.toml"), env("LOCALAPPDATA", "melonDS", "melonDS.toml"),
 				xdgConfig("melonDS", "melonDS.toml"), home("Library", "Preferences", "melonDS", "melonDS.toml"),
 				home(".var", "app", "net.kuribo64.melonDS", "config", "melonDS", "melonDS.toml"),
@@ -34,14 +34,16 @@ var profiles = map[string]Profile{
 		},
 	},
 	"mgba": {
-		Systems: []string{"GB", "GBA"},
-		Args: func(_ *Emulator, _, rom, dir string) []string {
+		Systems: []System{"GB", "GBA"},
+		Args: func(_ *Emulator, _ System, rom, dir string) []string {
 			if dir == "" {
 				return romArgs(rom)
 			}
 			return append([]string{"-C", "savegamePath=" + dir}, romArgs(rom)...) // never --config (mGBA quits)
 		},
-		Dir: func(e *Emulator, _, _ string) string { return setting(configMGBA(e), "ports.qt", "savegamePath") },
+		Dir: func(e *Emulator, _ System, _ string) string {
+			return setting(configMGBA(e), "ports.qt", "savegamePath")
+		},
 		Autoload: func(e *Emulator) string {
 			f := configMGBA(e)
 			if f != "" && read1(f, "ports.qt", "autoload") != "0" { // absent = on (mGBA default)
@@ -51,14 +53,14 @@ var profiles = map[string]Profile{
 		},
 	},
 	"azahar": {
-		Systems: []string{"3DS"},
-		Args: func(_ *Emulator, _, rom, _ string) []string {
+		Systems: []System{"3DS"},
+		Args: func(_ *Emulator, _ System, rom, _ string) []string {
 			if rom == "" {
 				return nil
 			}
 			return []string{"-f", rom}
 		},
-		Dir: func(e *Emulator, _, _ string) string {
+		Dir: func(e *Emulator, _ System, _ string) string {
 			user := first(nextTo(e, "user"), env("APPDATA", "Azahar"), xdgData("azahar-emu"), home("Library", "Application Support", "Azahar"),
 				home(".var", "app", "org.azahar_emu.Azahar", "data", "azahar-emu"))
 			f := first(joinPath(user, "config", "qt-config.ini"), xdgConfig("azahar-emu", "qt-config.ini"),
@@ -74,7 +76,7 @@ var profiles = map[string]Profile{
 	},
 	"retroarch": {
 		Ext: ".srm",
-		Args: func(e *Emulator, system, rom, _ string) []string {
+		Args: func(e *Emulator, system System, rom, _ string) []string {
 			if rom == "" {
 				return nil
 			}
@@ -89,9 +91,9 @@ var profiles = map[string]Profile{
 		},
 	},
 	"vbam": {
-		Systems: []string{"GB", "GBA"},
-		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
-		Dir: func(e *Emulator, system, _ string) string {
+		Systems: []System{"GB", "GBA"},
+		Args:    func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
+		Dir: func(e *Emulator, system System, _ string) string {
 			d := setting(configVBAM(e), "General", "BatteryDir")
 			if d == "" {
 				return ""
@@ -114,9 +116,9 @@ var profiles = map[string]Profile{
 		},
 	},
 	"desmume": { // .dsv: SRAM + footer (dsv.go)
-		Systems: []string{"DS"}, Ext: ".dsv", InternalName: true,
-		Args: func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
-		Dir: func(e *Emulator, _, _ string) string {
+		Systems: []System{"DS"}, Ext: ".dsv", InternalName: true,
+		Args: func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
+		Dir: func(e *Emulator, _ System, _ string) string {
 			switch runtime.GOOS {
 			case "windows": // desmume.ini next to the exe; no Battery = .\Battery (path.cpp, winutil.cpp)
 				if d := setting(nextTo(e, "desmume.ini"), "PathSettings", "Battery"); d != "" {
@@ -133,19 +135,19 @@ var profiles = map[string]Profile{
 		},
 	},
 	"sameboy": { // .sav always next to the ROM
-		Systems: []string{"GB"},
-		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
+		Systems: []System{"GB"},
+		Args:    func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
 	},
 	"skyemu": { // raw .sav, no Clock trailer (main.c se_write_save_to_disk)
-		Systems: []string{"DS", "GB", "GBA"},
-		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
+		Systems: []System{"DS", "GB", "GBA"},
+		Args:    func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
 		Dir:     skyEmuDir,
 	},
 	"nanoboyadvance": { // raw .sav; clock taken from the PC, never written (rtc.cc)
-		Systems: []string{"GBA"},
+		Systems: []System{"GBA"},
 		// ponytail: the ROM must stay argv[1] (main.cc); args_en_plus breaks the start, use the args field if needed.
-		Args: func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
-		Dir: func(e *Emulator, _, _ string) string {
+		Args: func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) },
+		Dir: func(e *Emulator, _ System, _ string) string {
 			// Windows, Linux: config.toml in the current folder, which is the exe folder when a ROM is given
 			// (main.cc, PORTABLE_MODE forced)
 			f := first(nextTo(e, "config.toml"), home("Library", "Application Support", "org.github.fleroviux.NanoBoyAdvance", "config.toml"))
@@ -156,8 +158,8 @@ var profiles = map[string]Profile{
 		},
 	},
 	"bgb": { // .sav + 48-byte Clock trailer; the key of the "Save files" setting is undocumented: use the sauvegardes field
-		Systems: []string{"GB"},
-		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) }, // "[-rom] <file>": -rom is optional
+		Systems: []System{"GB"},
+		Args:    func(_ *Emulator, _ System, rom, _ string) []string { return romArgs(rom) }, // "[-rom] <file>": -rom is optional
 	},
 }
 
@@ -201,7 +203,7 @@ func (e *Emulator) profile(name string) (Profile, error) {
 	if e.Args == nil {
 		return Profile{}, fmt.Errorf(tr("profil d'émulateur inconnu : %s. Un profil personnalisé a besoin du champ args.", "unknown emulator profile: %s. A custom profile needs the args field."), p)
 	}
-	return Profile{Ext: e.Extension, InternalName: e.InternalName, Args: func(e *Emulator, _, rom, dir string) []string {
+	return Profile{Ext: e.Extension, InternalName: e.InternalName, Args: func(e *Emulator, _ System, rom, dir string) []string {
 		var a []string
 		for _, x := range e.Args {
 			if strings.Contains(x, "{rom}") && rom == "" {
@@ -214,7 +216,7 @@ func (e *Emulator) profile(name string) (Profile, error) {
 }
 
 // command returns the full command: exe, Profile arguments, and ExtraArgs just before the ROM (at the end with no ROM).
-func (e *Emulator) command(p Profile, system, rom, dir string) []string {
+func (e *Emulator) command(p Profile, system System, rom, dir string) []string {
 	a := p.Args(e, system, rom, dir)
 	if n := len(a); rom != "" && n > 0 && a[n-1] == rom {
 		a = append(append(append([]string{}, a[:n-1]...), e.ExtraArgs...), rom)
@@ -266,15 +268,15 @@ func joinArgs(a []string) string {
 }
 
 // handles reports a handled System: the ones of the configuration if any, else the ones of the Profile.
-func (e *Emulator) handles(p Profile, system string) bool {
+func (e *Emulator) handles(p Profile, system System) bool {
 	if len(e.Saves) > 0 || len(e.Cores) > 0 {
 		return e.Saves[system] != "" || e.Cores[system] != ""
 	}
 	return slices.Contains(p.Systems, system)
 }
 
-func (e *Emulator) systems(p Profile) (s []string) {
-	for _, x := range []string{"DS", "GB", "GBA", "3DS"} {
+func (e *Emulator) systems(p Profile) (s []System) {
+	for _, x := range []System{DS, GB, GBA, N3DS} {
 		if e.handles(p, x) {
 			s = append(s, x)
 		}
@@ -284,7 +286,7 @@ func (e *Emulator) systems(p Profile) (s []string) {
 
 // dir returns the Save folder: config.json, else the emulator setting, else next to the ROM
 // (never for the 3DS: with no known sdmc, "").
-func (e *Emulator) dir(p Profile, system, rom string) string {
+func (e *Emulator) dir(p Profile, system System, rom string) string {
 	if d := e.Saves[system]; d != "" {
 		return d
 	}
@@ -312,7 +314,7 @@ func (e *Emulator) process() string {
 }
 
 // retroArchDir returns savefile_directory, then the content and core subfolders as the sort options say.
-func retroArchDir(e *Emulator, system, rom string) string {
+func retroArchDir(e *Emulator, system System, rom string) string {
 	f := configRetroArch(e)
 	if read1(f, "", "savefiles_in_content_dir") == "true" {
 		return ""
@@ -374,7 +376,7 @@ func configVBAM(e *Emulator) string {
 // if the .sav is already there or if "Create new files in paths" is ticked. Binary settings in
 // SDL_GetPrefPath("Sky", "SkyEmu"): search_paths.bin starts with this folder (text ended by 0); save_to_path is the
 // 21st uint32 of user_settings.bin (frozen struct, "keep alignment and ordering the same").
-func skyEmuDir(_ *Emulator, _, rom string) string {
+func skyEmuDir(_ *Emulator, _ System, rom string) string {
 	if rom == "" {
 		return ""
 	}

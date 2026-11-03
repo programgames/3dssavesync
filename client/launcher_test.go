@@ -289,9 +289,9 @@ func TestLauncher(t *testing.T) {
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{
 		URL: url, Token: "jeton-test", Copies: copies,
 		Emulators: map[string]*Emulator{
-			"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": saves}},
-			"mgba":    {Exe: "inutilise.exe", Saves: map[string]string{"GB": filepath.Join(tmp, "gb"), "GBA": filepath.Join(tmp, "gba")}},
-			"azahar":  {Exe: "inutilise.exe", Saves: map[string]string{"3DS": filepath.Join(tmp, "azahar")}},
+			"melonds": {Exe: "inutilise.exe", Saves: map[System]string{"DS": saves}},
+			"mgba":    {Exe: "inutilise.exe", Saves: map[System]string{"GB": filepath.Join(tmp, "gb"), "GBA": filepath.Join(tmp, "gba")}},
+			"azahar":  {Exe: "inutilise.exe", Saves: map[System]string{"3DS": filepath.Join(tmp, "azahar")}},
 		},
 	})
 	run := func(args ...string) int { return realMain(append([]string{"run", "--config", config}, args...)) }
@@ -492,7 +492,7 @@ func TestLauncher(t *testing.T) {
 	t.Log("Serveur injoignable avant la partie, Non : pas de partie")
 	reset()
 	outside := writeConfig(t, filepath.Join(tmp, "cfg-hors", "config.json"), Config{URL: "http://127.0.0.1:1", Token: "x",
-		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": saves}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[System]string{"DS": saves}}}})
 	responses = []string{"Non"}
 	realMain([]string{"run", "--config", outside, rom})
 	verify(strings.Contains(strings.Join(questions, ""), "Le serveur refuse la connexion") && !strings.Contains(strings.Join(questions, ""), "dial tcp"),
@@ -514,7 +514,7 @@ func TestLauncher(t *testing.T) {
 	blocked := filepath.Join(tmp, "copies-impossibles")
 	write(t, blocked, []byte("un fichier, pas un dossier"))
 	cfg2 := writeConfig(t, filepath.Join(tmp, "cfg2", "config.json"), Config{URL: url, Token: "jeton-test", Copies: blocked,
-		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": filepath.Join(tmp, "saves2")}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[System]string{"DS": filepath.Join(tmp, "saves2")}}}})
 	platinum := romDS(t, "Pokemon Platine", "CPUF")
 	p1, p2 := byteRange(30, 229), byteRange(31, 230)
 	write(t, filepath.Join(tmp, "saves2", "Pokemon Platine.sav"), p1)
@@ -665,8 +665,8 @@ func TestLauncher(t *testing.T) {
 	reset()
 	double := writeConfig(t, filepath.Join(tmp, "cfg-double", "config.json"), Config{URL: url, Token: "jeton-test",
 		Emulators: map[string]*Emulator{
-			"melonds":  {Exe: "a.exe", Saves: map[string]string{"DS": saves}},
-			"portable": {Profile: "melonds", Exe: "b.exe", Saves: map[string]string{"DS": filepath.Join(tmp, "saves-portable")}},
+			"melonds":  {Exe: "a.exe", Saves: map[System]string{"DS": saves}},
+			"portable": {Profile: "melonds", Exe: "b.exe", Saves: map[System]string{"DS": filepath.Join(tmp, "saves-portable")}},
 		}})
 	responses = []string{"OK"}
 	verify(realMain([]string{"run", "--config", double, rom}) == 1, "code de sortie 1")
@@ -681,7 +681,7 @@ func TestLauncher(t *testing.T) {
 	reset()
 	savesL, romsL := filepath.Join(tmp, "saves-launch"), filepath.Join(tmp, "roms-launch")
 	cfgL := writeConfig(t, filepath.Join(tmp, "cfg-launch", "config.json"), Config{URL: url, Token: "jeton-test",
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": savesL}, Roms: map[string]string{"DS": romsL}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": savesL}, Roms: map[System]string{"DS": romsL}}}})
 	for name, code := range map[string]string{"Pokemon Diamant": "ADAF", "Pokemon HeartGold": "IPKF"} {
 		o := make([]byte, 0x200)
 		copy(o[0x0C:], code)
@@ -708,7 +708,7 @@ func TestLauncher(t *testing.T) {
 	ra := filepath.Join(tmp, "retroarch")
 	write(t, filepath.Join(ra, "retroarch.cfg"), []byte("savefile_directory = \""+filepath.ToSlash(filepath.Join(tmp, "ra-saves"))+"\"\n"))
 	cfgRA := writeConfig(t, filepath.Join(tmp, "cfg-ra", "config.json"), Config{URL: url, Token: "jeton-test",
-		Emulators: map[string]*Emulator{"retroarch": {Exe: filepath.Join(ra, "retroarch.exe"), Cores: map[string]string{"GB": "gambatte_libretro.dll"}}}})
+		Emulators: map[string]*Emulator{"retroarch": {Exe: filepath.Join(ra, "retroarch.exe"), Cores: map[System]string{"GB": "gambatte_libretro.dll"}}}})
 	yellow := filepath.Join(tmp, "roms-ra", "Pokemon Jaune.gb")
 	write(t, yellow, gbHeader("POKEMON YELLOW", 0x1234))
 	sj := random(32768, 50)
@@ -724,7 +724,7 @@ func TestLauncher(t *testing.T) {
 	write(t, filepath.Join(mg, "portable.ini"), nil)
 	write(t, filepath.Join(mg, "config.ini"), []byte("[ports.qt]\nautoload=1\n"))
 	cfgA := writeConfig(t, filepath.Join(tmp, "cfg-auto", "config.json"), Config{URL: url, Token: "jeton-test",
-		Emulators: map[string]*Emulator{"mgba": {Exe: filepath.Join(mg, "mGBA.exe"), Saves: map[string]string{"GBA": filepath.Join(tmp, "gba-auto")}}}})
+		Emulators: map[string]*Emulator{"mgba": {Exe: filepath.Join(mg, "mGBA.exe"), Saves: map[System]string{"GBA": filepath.Join(tmp, "gba-auto")}}}})
 	sapphire := filepath.Join(tmp, "roms-auto", "Pokemon Saphir.gba")
 	write(t, sapphire, gbaHeader("AXPF"))
 	upload3ds("GBA-AXPF", random(131072, 51), nil)
@@ -742,7 +742,7 @@ func TestLauncher(t *testing.T) {
 	savesP := filepath.Join(tmp, "saves-perso")
 	cfgP := writeConfig(t, filepath.Join(tmp, "cfg-perso", "config.json"), Config{URL: url, Token: "jeton-test",
 		Emulators: map[string]*Emulator{"perso": {Exe: "perso.exe", Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".srm",
-			Saves: map[string]string{"GBA": savesP}}}})
+			Saves: map[System]string{"GBA": savesP}}}})
 	ruby := filepath.Join(tmp, "roms-perso", "Pokemon Rubis.gba")
 	write(t, ruby, gbaHeader("AXVF"))
 	realMain([]string{"run", "--config", cfgP, ruby})
@@ -760,7 +760,7 @@ func TestLauncher(t *testing.T) {
 // TestSRAM uses the same sizes as sram_size in 3ds/test/test_key.c (ADR 0010).
 func TestSRAM(t *testing.T) {
 	for _, c := range []struct {
-		system     string
+		system     System
 		size, sram int
 	}{
 		{"GB", 32816, 32768}, {"GB", 32812, 32768}, {"GB", 32768, 32768}, {"GBA", 131088, 131072},

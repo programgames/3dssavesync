@@ -27,12 +27,10 @@ import (
 	"unicode/utf8"
 )
 
-const serverKey = `([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})`
-
 var (
-	reCode    = regexp.MustCompile(`^/saves/` + serverKey + `$`)
-	reHistory = regexp.MustCompile(`^/saves/` + serverKey + `/history(/.*)?$`)
-	reName    = regexp.MustCompile(`^/saves/` + serverKey + `/name$`)
+	reCode    = regexp.MustCompile(`^/saves/` + keyPattern + `$`)
+	reHistory = regexp.MustCompile(`^/saves/` + keyPattern + `/history(/.*)?$`)
+	reName    = regexp.MustCompile(`^/saves/` + keyPattern + `/name$`)
 	reClient  = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 )
 

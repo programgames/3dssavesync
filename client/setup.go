@@ -558,7 +558,7 @@ func shimTarget(exe string) string {
 }
 
 // retroArchCores finds RetroArch cores next to the exe or in the configuration folder: System -> preferred core.
-func retroArchCores(exe string) map[string]string {
+func retroArchCores(exe string) map[System]string {
 	var dirs []string
 	if exe != "" {
 		dirs = append(dirs, filepath.Join(filepath.Dir(exe), "cores"))
@@ -576,8 +576,8 @@ func retroArchCores(exe string) map[string]string {
 			}
 		}
 	}
-	preferred := map[string][]string{"DS": {"melonDS DS"}, "GB": {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, "GBA": {"mGBA", "VBA-M", "gpSP", "Beetle GBA"}}
-	cores := map[string]string{}
+	preferred := map[System][]string{DS: {"melonDS DS"}, GB: {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, GBA: {"mGBA", "VBA-M", "gpSP", "Beetle GBA"}}
+	cores := map[System]string{}
 	for s, l := range preferred {
 		for _, b := range l {
 			if f := foundList[b]; f != "" {
@@ -678,14 +678,14 @@ func addEmulator(q *Questions, cfg *Config, t Found, replace bool) {
 		}
 		if r := q.text(fmt.Sprintf(tr("Sauvegardes %s", "%s saves"), s), shown); r != shown && r != "" {
 			if e.Saves == nil {
-				e.Saves = map[string]string{}
+				e.Saves = map[System]string{}
 			}
 			e.Saves[s] = r
 		}
 		if s != "3DS" {
 			if r := q.text(fmt.Sprintf(tr("Dossier des ROM %s, pour la commande launch (Entrée pour passer)", "%s ROM folder, for the launch command (Enter to skip)"), s), e.Roms[s]); r != "" {
 				if e.Roms == nil {
-					e.Roms = map[string]string{}
+					e.Roms = map[System]string{}
 				}
 				e.Roms[s] = r
 			}
@@ -760,7 +760,7 @@ func createShortcuts(q *Questions, cfg *Config) {
 	sort.Strings(names)
 	for _, n := range names {
 		e := cfg.Emulators[n]
-		if p, err := e.profile(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systems(p), []string{"3DS"}) {
+		if p, err := e.profile(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systems(p), []System{N3DS}) {
 			noRoms = append(noRoms, e.process())
 			continue
 		}

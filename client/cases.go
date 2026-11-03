@@ -7,25 +7,18 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
 
-// keyShapes holds the Key shape of each System (ADR 0007), as the server accepts it. An Alias must have it (ADR 0014).
-var keyShapes = map[string]*regexp.Regexp{
-	"DS":  code4,
-	"GBA": regexp.MustCompile(`^GBA-[A-Z0-9]{4}$`),
-	"GB":  regexp.MustCompile(`^GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}$`),
-}
-
-var keyExamples = map[string]string{"DS": "0RAD", "GBA": "GBA-0RAD", "GB": "GB-MONHACK-0001"}
+// keyExamples: the Systems that have Aliases (a 3DS Save follows the title ID), with a Key for the help text.
+var keyExamples = map[System]string{DS: "0RAD", GBA: "GBA-0RAD", GB: "GB-MONHACK-0001"}
 
 // aliasKey returns the Key chosen in "alias" for this ROM (file name without extension), otherwise the header Key.
 // A malformed Alias is an error: the ROM does not sync under the header Key (the one of the original game).
-func (c *Config) aliasKey(system, name, key string) (string, error) {
+func (c *Config) aliasKey(system System, name, key string) (string, error) {
 	a, ok := c.Alias[name]
-	if !ok || keyShapes[system] == nil {
+	if !ok || keyExamples[system] == "" {
 		return key, nil
 	}
 	if a = strings.ToUpper(strings.TrimSpace(a)); !keyShapes[system].MatchString(a) {
@@ -144,7 +137,7 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 }
 
 // createAlias returns the Alias of the ROM name, created if missing and written to config.json (dated copy first).
-func (s *Session) createAlias(system, name string) (string, error) {
+func (s *Session) createAlias(system System, name string) (string, error) {
 	var cfg Config
 	if err := readConfig(s.config, &cfg); err != nil { // read again: the settings page may have written it since
 		return "", err
@@ -170,8 +163,8 @@ func writeConfigCopy(path string, cfg *Config) error {
 
 // addAlias returns the Alias of the ROM name in cfg, created if missing (ADR 0014). The Key comes from the name: the
 // same ROM gets the same Key on each PC; a Key already taken by another Alias gives another one.
-func addAlias(cfg *Config, system, name string) (string, error) {
-	if keyShapes[system] == nil {
+func addAlias(cfg *Config, system System, name string) (string, error) {
+	if keyExamples[system] == "" {
 		return "", fmt.Errorf(tr("Les jeux %s n'ont pas d'alias.", "%s games don't use aliases."), system)
 	}
 	if strings.TrimSpace(name) == "" || strings.ContainsAny(name, "=\r\n") {
@@ -195,12 +188,12 @@ func addAlias(cfg *Config, system, name string) (string, error) {
 }
 
 // newKey returns a Key with the shape of the System that starts with a digit (never a commercial Game code).
-func newKey(system, name string, taken map[string]bool) string {
+func newKey(system System, name string, taken map[string]bool) string {
 	const signs = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i := 0; ; i++ {
 		h := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", name, i)))
 		suffix := string([]byte{signs[h[0]%36], signs[h[1]%36], signs[h[2]%36]})
-		key := map[string]string{"DS": "0" + suffix, "GBA": "GBA-0" + suffix, "GB": fmt.Sprintf("GB-ALIAS-%02X%02X", h[0], h[1])}[system]
+		key := map[System]string{DS: "0" + suffix, GBA: "GBA-0" + suffix, GB: fmt.Sprintf("GB-ALIAS-%02X%02X", h[0], h[1])}[system]
 		if !taken[key] {
 			return key
 		}
@@ -225,7 +218,7 @@ func (s *Session) keepRom(key string) error {
 }
 
 // romKey (run) returns the Key of the ROM for this Client, Alias included, or a reason to start without Sync.
-func (s *Session) romKey(system, key, name string) (string, string) {
+func (s *Session) romKey(system System, key, name string) (string, string) {
 	if system == "3DS" { // Azahar stores the Save by title ID: two ROMs of a 3DS game share it
 		return key, ""
 	}

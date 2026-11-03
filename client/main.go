@@ -60,9 +60,9 @@ type LocalServer struct {
 type Emulator struct {
 	Profile string            `json:"profil,omitempty"` // built-in Profile (profiles.go); default: the entry name
 	Exe     string            `json:"exe"`
-	Saves   map[string]string `json:"sauvegardes,omitempty"` // System -> folder (3DS: sdmc); default: emulator setting
-	Roms    map[string]string `json:"roms,omitempty"`        // System -> ROM folder (launch command)
-	Cores   map[string]string `json:"coeurs,omitempty"`      // RetroArch: System -> core file
+	Saves   map[System]string `json:"sauvegardes,omitempty"` // System -> folder (3DS: sdmc); default: emulator setting
+	Roms    map[System]string `json:"roms,omitempty"`        // System -> ROM folder (launch command)
+	Cores   map[System]string `json:"coeurs,omitempty"`      // RetroArch: System -> core file
 	Process string            `json:"processus,omitempty"`   // default: name of the executable
 	// Custom Profile: arguments ({rom}, {sauvegardes}), extension (default .sav), name of the file inside an archive.
 	Args         []string `json:"args,omitempty"`
@@ -217,7 +217,7 @@ func newSession(path string) (*Session, error) {
 }
 
 // emulatorFor returns the configured emulator that handles this System: the one asked for, or the only possible one.
-func (c *Config) emulatorFor(system, asked string) (string, error) {
+func (c *Config) emulatorFor(system System, asked string) (string, error) {
 	handles := func(name string) bool {
 		e := c.Emulators[name]
 		if e == nil {
@@ -262,7 +262,8 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	system, key, name, internal, err := readRom(rom)
+	r, err := readRom(rom)
+	system, key, name, internal := r.System, r.Key, r.Name, r.Internal
 	s.log(fmt.Sprintf("lancement %s %s : %s", system, key, rom))
 	if err != nil {
 		return 1, err
@@ -455,23 +456,24 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 		}
 		root := e.Roms[system]
 		if root == "" {
-			s.log("pas de dossier roms pour " + system + " : ses jeux ne sont pas synchronisés")
-			noRoms = append(noRoms, system)
+			s.log("pas de dossier roms pour " + string(system) + " : ses jeux ne sont pas synchronisés")
+			noRoms = append(noRoms, string(system))
 			continue
 		}
 		filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return nil
 			}
-			sys, key, name, internal, err := readRom(path)
+			r, err := readRom(path)
+			sys, name := r.System, r.Name
 			if err != nil || sys != system {
 				return nil
 			}
-			if key, err = s.cfg.aliasKey(sys, name, key); err != nil {
+			if key, err := s.cfg.aliasKey(sys, name, r.Key); err != nil {
 				refusal = append(refusal, err.Error())
 			} else if key != "" {
-				if p.InternalName && internal != "" {
-					name = internal
+				if p.InternalName && r.Internal != "" {
+					name = r.Internal
 				}
 				core := library(e.Cores[sys])
 				byKey[key] = append(byKey[key], &Game{sys, key, name, savePath(e.dir(p, sys, path), sys, key, name, p.Ext), core, s.cfg.mbc2Size(s.profile, core)})

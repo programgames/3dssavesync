@@ -17,7 +17,10 @@ import (
 func TestAliasKey(t *testing.T) {
 	c := &Config{Alias: map[string]string{"Hack DS": "0rad", "Hack GBA": " GBA-0RAD ", "Hack GB": "GB-MONHACK-0001",
 		"Trop long": "GBA-BPRE-RADICALRED", "Mauvais Système": "0RAD"}}
-	for _, k := range []struct{ system, name, key, expected string }{
+	for _, k := range []struct {
+		system              System
+		name, key, expected string
+	}{
 		{"DS", "Hack DS", "ADAF", "0RAD"},
 		{"GBA", "Hack GBA", "GBA-BPRE", "GBA-0RAD"},
 		{"GB", "Hack GB", "GB-POKEMON_RED-91E6", "GB-MONHACK-0001"},
@@ -59,7 +62,7 @@ func TestRomHackAndAlias(t *testing.T) {
 	startTestServer(t)
 	gba, roms := filepath.Join(tmp, "gba"), filepath.Join(tmp, "roms-gba")
 	cfg := Config{URL: url, Token: "jeton-test", Copies: filepath.Join(tmp, "copies"),
-		Emulators: map[string]*Emulator{"mgba": {Exe: "inutilise.exe", Saves: map[string]string{"GBA": gba}, Roms: map[string]string{"GBA": roms}}}}
+		Emulators: map[string]*Emulator{"mgba": {Exe: "inutilise.exe", Saves: map[System]string{"GBA": gba}, Roms: map[System]string{"GBA": roms}}}}
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), cfg)
 	run := func(rom string) int { return realMain([]string{"run", "--config", config, rom}) }
 	rf, rr := filepath.Join(roms, "Pokemon Rouge Feu.gba"), filepath.Join(roms, "Pokemon Radical Red.gba")
@@ -183,8 +186,8 @@ func TestPendingUploads(t *testing.T) {
 	saves, gba := filepath.Join(tmp, "saves"), filepath.Join(tmp, "gba")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test", Copies: filepath.Join(tmp, "copies"),
 		Emulators: map[string]*Emulator{
-			"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": saves}},
-			"mgba":    {Exe: "mgba.exe", Saves: map[string]string{"GBA": gba}},
+			"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": saves}},
+			"mgba":    {Exe: "mgba.exe", Saves: map[System]string{"GBA": gba}},
 		}})
 	run := func(rom string) int { return realMain([]string{"run", "--config", config, rom}) }
 	black, savBlack := romDS(t, "Pokemon Noire", "IRBF"), filepath.Join(saves, "Pokemon Noire.sav")
@@ -273,7 +276,7 @@ func TestOneListPerPass(t *testing.T) {
 	t.Cleanup(func() { transport = http.DefaultTransport })
 	saves, roms := filepath.Join(tmp, "saves"), filepath.Join(tmp, "roms")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test",
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": saves}, Roms: map[string]string{"DS": roms}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": saves}, Roms: map[System]string{"DS": roms}}}})
 	for i, code := range []string{"ADAF", "APAF", "CPUF"} {
 		romDS(t, code, code)
 		write(t, filepath.Join(saves, code+".sav"), byteRange(i, 100+i))
@@ -313,8 +316,8 @@ func TestGlobalKeptRom(t *testing.T) {
 	gba, gba2, roms := filepath.Join(tmp, "gba"), filepath.Join(tmp, "gba2"), filepath.Join(tmp, "roms-gba")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test", Copies: filepath.Join(tmp, "copies"),
 		Emulators: map[string]*Emulator{
-			"mgba":  {Exe: "mgba.exe", Saves: map[string]string{"GBA": gba}},
-			"autre": {Profile: "mgba", Exe: "autre.exe", Saves: map[string]string{"GBA": gba2}},
+			"mgba":  {Exe: "mgba.exe", Saves: map[System]string{"GBA": gba}},
+			"autre": {Profile: "mgba", Exe: "autre.exe", Saves: map[System]string{"GBA": gba2}},
 		}})
 	run := func(emu, rom string) int {
 		return realMain([]string{"run", "--config", config, "--emulator", emu, rom})
@@ -365,7 +368,7 @@ func TestLaunchSameFile(t *testing.T) {
 	startTestServer(t)
 	saves, roms := filepath.Join(tmp, "saves"), filepath.Join(tmp, "roms")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test",
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": saves}, Roms: map[string]string{"DS": roms}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": saves}, Roms: map[System]string{"DS": roms}}}})
 	romDS(t, filepath.Join("USA", "Jeu"), "AAAE")
 	romDS(t, filepath.Join("EUR", "Jeu"), "AAAP")
 	romDS(t, "Autre", "CPUF")
@@ -402,7 +405,7 @@ func TestPendingFailures(t *testing.T) {
 	t.Cleanup(func() { transport = http.DefaultTransport })
 	saves := filepath.Join(tmp, "saves")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test", Copies: filepath.Join(tmp, "copies"),
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": saves}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": saves}}}})
 	run := func(rom string) int { return realMain([]string{"run", "--config", config, rom}) }
 	black, sav := romDS(t, "Pokemon Noire", "IRBF"), filepath.Join(saves, "Pokemon Noire.sav")
 	list := filepath.Join(tmp, "cfg", "en-attente.json")
@@ -439,7 +442,7 @@ func TestUnreadFormatAlias(t *testing.T) {
 	startTestServer(t)
 	saves := filepath.Join(tmp, "saves")
 	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{URL: url, Token: "jeton-test", Alias: map[string]string{"Jeu": "0RAD"},
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": saves}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[System]string{"DS": saves}}}})
 	rom := filepath.Join(tmp, "roms", "Jeu.7z")
 	write(t, rom, []byte("7z"))
 	write(t, filepath.Join(saves, "Jeu.sav"), byteRange(1, 200))
@@ -467,7 +470,7 @@ func TestAddAlias(t *testing.T) {
 	if b, _ := addAlias(taken, "GBA", "Radical Red (4.10)"); b == a || !keyShapes["GBA"].MatchString(b) {
 		t.Errorf("Clé déjà prise par un autre alias : %q", b)
 	}
-	for system, shape := range map[string]string{"DS": `^0[A-Z0-9]{3}$`, "GB": `^GB-ALIAS-[0-9A-F]{4}$`} {
+	for system, shape := range map[System]string{"DS": `^0[A-Z0-9]{3}$`, "GB": `^GB-ALIAS-[0-9A-F]{4}$`} {
 		if b, err := addAlias(&Config{}, system, "Hack"); err != nil || !regexp.MustCompile(shape).MatchString(b) || !keyShapes[system].MatchString(b) {
 			t.Errorf("%s : %q %v", system, b, err)
 		}

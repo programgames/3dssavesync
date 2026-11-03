@@ -4,7 +4,7 @@ package main
 // values per byte (even address in the low nibble); SameBoy, VBA-M and BGB write 512 bytes, one value per byte.
 // Server form: 512 bytes, high nibble at 0. On PC, a GB file of 256 or 512 bytes can only be MBC2.
 
-func isMBC2(system string, n int) bool { return system == "GB" && (n == 256 || n == 512) }
+func isMBC2(system System, n int) bool { return system == "GB" && (n == 256 || n == 512) }
 
 // normalizeMBC2 converts a file of 256 or 512 bytes to the server form.
 func normalizeMBC2(f []byte) []byte {

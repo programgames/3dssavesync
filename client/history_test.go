@@ -154,7 +154,7 @@ func TestWebSetupHistory(t *testing.T) {
 	copy(rom[0x0C:], "CPUF")
 	write(t, filepath.Join(roms, "Pokemon Platine.nds"), rom)
 	config := writeConfig(t, filepath.Join(t.TempDir(), "config.json"), Config{URL: srv.URL, Token: "j",
-		Emulators: map[string]*Emulator{"melonds": {Exe: "melonDS.exe", Roms: map[string]string{"DS": roms}}}})
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melonDS.exe", Roms: map[System]string{"DS": roms}}}})
 	s, _ := restoreSession(config)
 	uploadFromOther(t, s, "CPUF", []byte("un"), nil)
 	uploadFromOther(t, s, "CPUF", []byte("deux"), []byte("un"))

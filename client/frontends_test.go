@@ -36,8 +36,8 @@ func validXML(t *testing.T, name, text string) {
 func TestLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
-		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
-		{"mgba", filepath.Join("x", "mGBA.exe"), []string{"GB", "GBA"}},
+		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}},
+		{"mgba", filepath.Join("x", "mGBA.exe"), []System{"GB", "GBA"}},
 	}
 	newText, report := launchbox(emulatorsXML, lb, launcher, entries)
 	validXML(t, "Emulators.xml", newText)
@@ -81,7 +81,7 @@ func TestLaunchBox(t *testing.T) {
 }
 
 func TestESDE(t *testing.T) {
-	emus := map[string]string{"DS": "melonds", "3DS": "azahar"}
+	emus := map[System]string{"DS": "melonds", "3DS": "azahar"}
 	s, r, report := esde("", "", "/home/x/.local/bin/3dssavesync", emus)
 	validXML(t, "es_systems.xml", s)
 	validXML(t, "es_find_rules.xml", r)
@@ -100,14 +100,14 @@ func TestESDE(t *testing.T) {
 	emudeck := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <fullname>Nintendo DS</fullname>\n" +
 		"        <command label=\"melonDS (Standalone)\">%EMULATOR_MELONDS% -f %ROM%</command>\n" +
 		"        <command label=\"DeSmuME\">%EMULATOR_RETROARCH% %ROM%</command>\n    </system>\n</systemList>\n"
-	s4, _, _ := esde(emudeck, "", "x", map[string]string{"DS": "melonds"})
+	s4, _, _ := esde(emudeck, "", "x", map[System]string{"DS": "melonds"})
 	validXML(t, "es_systems.xml EmuDeck", s4)
 	i, j := strings.Index(s4, "3dssavesync (melonds)"), strings.Index(s4, "melonDS (Standalone)")
 	if i < 0 || j < i || !strings.Contains(s4, "DeSmuME") {
 		t.Errorf("bloc EmuDeck : commande 3dssavesync en premier, les autres gardées :\n%s", s4)
 	}
 	noCommand := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <extension>.nds .7z .rar</extension>\n    </system>\n</systemList>\n"
-	s5, _, _ := esde(noCommand, "", "x", map[string]string{"DS": "melonds"})
+	s5, _, _ := esde(noCommand, "", "x", map[System]string{"DS": "melonds"})
 	if !strings.Contains(s5, "<extension>.nds .7z .rar</extension>") || !strings.Contains(s5, "3dssavesync (melonds)") {
 		t.Errorf("bloc sans commande : extensions de l'utilisateur gardées :\n%s", s5)
 	}
@@ -240,26 +240,26 @@ func TestPortable(t *testing.T) {
 func TestLaunchBoxOptions(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")
-	if o := launchBoxOptions(emulatorsXML, lb, melon, []string{"DS"}); o != "-f" {
+	if o := launchBoxOptions(emulatorsXML, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("options de MelonDS : %q", o)
 	}
 	platform := strings.Replace(emulatorsXML, "<CommandLine />", "<CommandLine>--plein-ecran</CommandLine>", 1)
-	if o := launchBoxOptions(platform, lb, melon, []string{"DS"}); o != "-f --plein-ecran" {
+	if o := launchBoxOptions(platform, lb, melon, []System{"DS"}); o != "-f --plein-ecran" {
 		t.Errorf("options de l'émulateur et de la plateforme DS : %q", o)
 	}
 	core := strings.Replace(emulatorsXML, "<CommandLine />", `<CommandLine>-L &quot;cores\melonds_libretro.dll&quot;</CommandLine>`, 1)
-	if o := launchBoxOptions(core, lb, melon, []string{"DS"}); o != "-f" {
+	if o := launchBoxOptions(core, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("cœur RetroArch d'une plateforme repris : %q", o)
 	}
-	if o := launchBoxOptions(platform, lb, melon, []string{"GB"}); o != "-f" {
+	if o := launchBoxOptions(platform, lb, melon, []System{"GB"}); o != "-f" {
 		t.Errorf("plateforme d'un autre système ignorée : %q", o)
 	}
-	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", melon, []string{"DS"}}})
-	if o := launchBoxOptions(installed, lb, melon, []string{"DS"}); o != "-f" {
+	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", melon, []System{"DS"}}})
+	if o := launchBoxOptions(installed, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("après l'installation, lu dans l'émulateur d'origine : %q", o)
 	}
 	inPlace := strings.Replace(emulatorsXML, `Emulators\MelonDS\melonDS.exe`, launcher, 1)
-	if o := launchBoxOptions(inPlace, lb, melon, []string{"DS"}); o != "" {
+	if o := launchBoxOptions(inPlace, lb, melon, []System{"DS"}); o != "" {
 		t.Errorf("émulateur modifié sur place : rien à reprendre : %q", o)
 	}
 }

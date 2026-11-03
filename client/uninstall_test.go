@@ -10,8 +10,8 @@ import (
 func TestUndoLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
-		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
-		{"cemu", filepath.Join("x", "Cemu.exe"), []string{"GB"}}, // no GB platform: nothing added
+		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}},
+		{"cemu", filepath.Join("x", "Cemu.exe"), []System{"GB"}}, // no GB platform: nothing added
 	}
 	installed, _ := launchbox(emulatorsXML, lb, launcher, entries)
 	if installed == emulatorsXML {
@@ -48,7 +48,7 @@ func TestUndoLaunchBoxApostrophe(t *testing.T) {
 	lb := filepath.Join("C:", "Jeux d'enfance", "LaunchBox")
 	launcher := filepath.Join("C:", "Jeux d'enfance", "3dssavesync", "3dssavesync.exe")
 	before := strings.Replace(emulatorsXML, "<Title>MelonDS &amp; co</Title>", `<Title>Jeu d'enfance "DS"</Title>`, 1)
-	installed, _ := launchbox(before, lb, launcher, []LBEntry{{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}}})
+	installed, _ := launchbox(before, lb, launcher, []LBEntry{{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}}})
 	if !strings.Contains(installed, "<Title>Jeu d&#39;enfance &#34;DS&#34; (3dssavesync)</Title>") {
 		t.Fatalf("copie « (3dssavesync) » attendue :\n%s", installed)
 	}
@@ -62,7 +62,7 @@ func TestUndoLaunchBoxApostrophe(t *testing.T) {
 }
 
 func TestUndoESDE(t *testing.T) {
-	emus := map[string]string{"DS": "melonds", "3DS": "azahar"}
+	emus := map[System]string{"DS": "melonds", "3DS": "azahar"}
 	emudeck := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <fullname>Nintendo DS</fullname>\n" +
 		"        <command label=\"melonDS (Standalone)\">%EMULATOR_MELONDS% -f %ROM%</command>\n" +
 		"        <command label=\"DeSmuME\">%EMULATOR_RETROARCH% %ROM%</command>\n    </system>\n</systemList>\n"
@@ -96,8 +96,8 @@ func TestUninstall(t *testing.T) {
 	tmp := t.TempDir()
 	lb, es := filepath.Join(tmp, "LaunchBox"), filepath.Join(tmp, "es-de")
 	launcher := filepath.Join(tmp, "Programs", "3dssavesync.exe")
-	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}}})
-	s, r, _ := esde("", "", launcher, map[string]string{"DS": "melonds"})
+	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}}})
+	s, r, _ := esde("", "", launcher, map[System]string{"DS": "melonds"})
 	write(t, filepath.Join(lb, "Data", "Emulators.xml"), []byte(installed))
 	write(t, filepath.Join(es, "custom_systems", "es_systems.xml"), []byte(s))
 	write(t, filepath.Join(es, "custom_systems", "es_find_rules.xml"), []byte(r))
@@ -186,7 +186,7 @@ func TestUndoLaunchBoxInPlace(t *testing.T) {
 	ra := filepath.Join(tmp, "RetroArch", "retroarch.exe")
 	write(t, ra, []byte("exe"))
 	cfg := &Config{Emulators: map[string]*Emulator{"melonds": {Exe: melon}, "mgba": {Exe: mgba}, "azahar": {Exe: filepath.Join(tmp, "absent", "azahar.exe")},
-		"retroarch": {Exe: ra, Cores: map[string]string{"GBA": filepath.Join(tmp, "RetroArch", "cores", "mgba_libretro.dll")}}}}
+		"retroarch": {Exe: ra, Cores: map[System]string{"GBA": filepath.Join(tmp, "RetroArch", "cores", "mgba_libretro.dll")}}}}
 	plat := func(emu, p, cmd, def string) string {
 		c := "<CommandLine />"
 		if cmd != "" {

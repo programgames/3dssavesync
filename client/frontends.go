@@ -71,7 +71,7 @@ func newID() string {
 // --- LaunchBox -----------------------------------------------------------------------------------
 
 // lbPlatforms maps LaunchBox platforms -> System.
-var lbPlatforms = map[string]string{
+var lbPlatforms = map[string]System{
 	"Nintendo DS": "DS", "Nintendo DSi": "DS", "Nintendo Game Boy": "GB", "Nintendo Game Boy Color": "GB",
 	"Nintendo Game Boy Advance": "GBA", "Nintendo 3DS": "3DS",
 }
@@ -109,7 +109,7 @@ func lbPath(lbDir, app string) string {
 // launchBoxOptions returns the user's options in the original LaunchBox emulator of exe (its command line, then those
 // of its platforms for systems), for args_en_plus: the "(3dssavesync)" copy has an empty line.
 // An emulator changed in place by an old Launcher: its exe is the Launcher, nothing is found.
-func launchBoxOptions(text, lbDir, exe string, systems []string) string {
+func launchBoxOptions(text, lbDir, exe string, systems []System) string {
 	for _, b := range lbEmulatorBlock.FindAllString(text, -1) {
 		app := lbPath(lbDir, field(b, "ApplicationPath"))
 		if !strings.EqualFold(app, filepath.Clean(exe)) && !strings.EqualFold(filepath.Base(app), filepath.Base(exe)) {
@@ -137,7 +137,7 @@ func launchBoxOptions(text, lbDir, exe string, systems []string) string {
 type LBEntry struct {
 	Name    string
 	Exe     string // name in config.json, executable of the real emulator
-	Systems []string
+	Systems []System
 }
 
 // launchbox adds, for each entry, a new "<title> (3dssavesync)" emulator copied from the original emulator, made the
@@ -222,7 +222,7 @@ var esdeSystems = map[string][3]string{
 // in es_systems.xml (first command = default emulator). A system missing from the custom file gets a minimal block
 // (the block shipped with ES-DE can't be read inside an AppImage).
 // emus: System -> name of the config.json entry.
-func esde(systems, rules, launcher string, emus map[string]string) (string, string, []string) {
+func esde(systems, rules, launcher string, emus map[System]string) (string, string, []string) {
 	var report []string
 	rule := "  <emulator name=\"3DSSAVESYNC\">\n    <rule type=\"staticpath\">\n      <entry>" + escapeXML(launcher) + "</entry>\n    </rule>\n  </emulator>\n"
 	prev := regexp.MustCompile(`(?s)  <emulator name="3DSSAVESYNC">.*?</emulator>\r?\n`)
@@ -244,7 +244,7 @@ func esde(systems, rules, launcher string, emus map[string]string) (string, stri
 	sort.Strings(names)
 	for _, n := range names {
 		d := esdeSystems[n]
-		name := emus[d[0]]
+		name := emus[System(d[0])]
 		if name == "" {
 			continue
 		}
@@ -428,9 +428,9 @@ func repair(cfg *Config, launcher string) []string {
 }
 
 // frontendEntries returns the config.json emulators for LaunchBox, and for ES-DE the first (by name) of each System.
-func frontendEntries(cfg *Config) ([]LBEntry, map[string]string) {
+func frontendEntries(cfg *Config) ([]LBEntry, map[System]string) {
 	var lb []LBEntry
-	emus := map[string]string{}
+	emus := map[System]string{}
 	var names []string
 	for n := range cfg.Emulators {
 		names = append(names, n)
