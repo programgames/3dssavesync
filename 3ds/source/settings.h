@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include "key.h"
 
+#define APP_DIR "sdmc:/3ds/3dssavesync" /* folder of the settings files */
+
 /* "key=value" lines; a line without "=" is skipped. path missing: path.tmp (power cut between the removal of the old
  * file and the rename, replace_file: the .tmp is complete). 0 if a file was read, -1 if neither exists. */
 int read_ini(const char *path, void (*entry)(void *ctx, const char *key, const char *value), void *ctx);

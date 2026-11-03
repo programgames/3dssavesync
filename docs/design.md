@@ -113,8 +113,13 @@ C + libctru, text console, `3ds-curl` + `3ds-mbedtls`.
 |---|---|
 | `source/main.c` | configuration (`swkbd`), scan, list, actions, Backup copies |
 | `source/state.c` / `state.h` | the `sync_state` module (no libctru dependency) |
+| `source/games.c` | status of a Game in the list: State, Duplicate, Unknown, hidden, Blank save rule (no libctru dependency) |
+| `source/settings.c` | `config.ini`, `base.ini`, `alias.ini`, `titres.ini`, `maj.ini`: one INI reader, writes by `replace_file` (no libctru dependency) |
+| `source/result.c` | result of an action and its message text (no libctru dependency) |
+| `source/views.c` / `views.h` | layout, palette, button bar, message band, progress, questions |
+| `source/app_update.c` | update of the app from GitHub (ADR 0021) |
 | `source/net.c` | the 4 HTTP calls with curl, ISRG Root X1 embedded |
-| `test/test_state.c` | reads `tests/cas_etat.csv`, compiled with `gcc` on the PC |
+| `test/*.c` | host tests of the modules without libctru (`test_state.c` reads `tests/cas_etat.csv`), compiled with `gcc` on the PC |
 
 Files on the SD card, in `sd:/3ds/3dssavesync/` (before v3: `sd:/3ds/nds-save-sync/`, taken over at first start): `config.ini` (URL, token, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba`; empty saves = next to the ROM), `titres.ini` (synced 3DS games, `<title ID>=<name>`; absent = the 8 Pokémon), `base.ini` (`KEY=hash`), `alias.ini` (optional, `<ROM name>=KEY`, ADR 0014), `copies/`.
 
