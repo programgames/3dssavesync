@@ -17,6 +17,7 @@
 #include "erreurs.h"
 #include "etat.h"
 #include "fichiers.h"
+#include "maj.h"
 #include "net.h"
 #include "pokemon.h"
 #include "reglages.h"
@@ -30,6 +31,7 @@
 #define MASQUE -1   /* ni Sauvegarde locale ni Version courante : pas affiché */
 #define DOUBLON 100 /* plusieurs ROM pour une Clé (ADR 0005) */
 #define HORS_LIGNE 101 /* serveur non lu : état inconnu, aucune action proposée */
+#define GITHUB "https://api.github.com/repos/programgames/3dssavesync/releases/latest" /* mises à jour (ADR 0021) */
 
 static int anglais; /* langue de la console : français, sinon anglais */
 static u8 langue;   /* CFG_LANGUAGE_* : titre des jeux 3DS dans cette langue */
@@ -90,6 +92,13 @@ static struct { char cle[CLE_MAX], hash[65]; } bases[MAX_JEUX];
 static int nb_bases;
 static int visibles[MAX_JEUX], nb_visibles;
 static char message[512];
+/* Mise à jour (ADR 0021). VERSION vient du Makefile : "3.7.0" pour un tag, "dev" sinon (jamais de mise à jour). */
+static long maj_jour = -1;   /* jour de la dernière vérification (maj.ini) */
+static char maj_version[32]; /* dernière version vue sur GitHub (maj.ini) */
+static char maj_detail[400]; /* résultat de la dernière vérification ou installation : écran des réglages */
+static int maj_echec;        /* maj_detail décrit un échec */
+static const char *chemin_3dsx = "sdmc:/3ds/3dssavesync.3dsx"; /* lancé en .3dsx : argv[0] */
+static int quitter;          /* mise à jour installée : l'application se ferme */
 static char alerte[300]; /* problème vu pendant une lecture ou une action : ajouté au message à la fin */
 
 static void alerter(const char *texte)
@@ -1008,7 +1017,12 @@ static void dessiner_bas(const jeu_t *j)
         if (gb) y = detail(y, T("Joué avec", "Played with"), !strncmp(j->sav, FORWARDERS, strlen(FORWARDERS)) ? "forwarder mGBA" : j->systeme == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
         y += 6;
     }
-    dessiner_message(y, HAUT_BARRE - 5);
+    if (maj_plus_recente(VERSION, maj_version)) { /* au-dessus de la barre, sur son fond */
+        snprintf(t, sizeof t, T("Version %s disponible : SELECT, Mettre à jour", "Version %s available: SELECT, Update"), maj_version);
+        ecran_rect(0, HAUT_BARRE - 23, 320, 20, RGB(0x1E242C));
+        ecran_texte(8, HAUT_BARRE - 21, 0.42f, C_CYAN, 304, t);
+    }
+    dessiner_message(y, maj_plus_recente(VERSION, maj_version) ? HAUT_BARRE - 25 : HAUT_BARRE - 5);
 
     /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
      * en bas, les touches générales. */
@@ -1120,6 +1134,188 @@ static int tester_connexion(char *out, size_t n)
     if (statut > 0) free(corps);
     snprintf(out, n, "%s", statut == 200 ? T("Connexion réussie.", "Connection OK.") : texte_reseau(statut, net_wifi(), anglais));
     return statut == 200;
+}
+
+/* ---------------------------------------------------------------- mise à jour (ADR 0021) */
+
+static void cle_maj(const char *k, const char *v)
+{
+    if (!strcmp(k, "jour")) maj_jour = strtol(v, NULL, 10);
+    else if (!strcmp(k, "version")) snprintf(maj_version, sizeof maj_version, "%s", v);
+}
+
+/* Échec d'une requête à GitHub : ce qui n'est pas fait, le texte de texte_github, puis le code curl ou HTTP. */
+static void echec_github(const char *quoi, long statut)
+{
+    maj_echec = 1;
+    snprintf(maj_detail, sizeof maj_detail, "%s%s%s\n%s %ld", quoi, quoi[0] ? " " : "", texte_github(statut, net_wifi(), anglais),
+             statut < 0 ? "curl" : "HTTP", statut < 0 ? -statut : statut);
+}
+
+/* GET /releases/latest : r, maj_version, maj_detail et maj.ini à jour. 1 si une version plus récente existe. */
+static int verifier_maj(release_t *r)
+{
+    char *corps, t[80];
+    size_t taille;
+    long statut;
+    int ok;
+
+    progression(0, 0, "%s", T("Recherche d'une mise à jour…", "Looking for an update…"));
+    statut = net_github(GITHUB, NULL, &corps, &taille);
+    ok = statut == 200 && maj_release(corps, r) == 0;
+    if (statut > 0) free(corps);
+    if (ok) snprintf(maj_version, sizeof maj_version, "%s", r->version);
+    maj_jour = (long)(time(NULL) / 86400);
+    snprintf(t, sizeof t, "jour=%ld\nversion=%s\n", maj_jour, maj_version);
+    mkdir(DOSSIER, 0777);
+    remplacer_fichier(DOSSIER "/maj.ini", t, strlen(t)); /* échec : vérifié de nouveau au prochain lancement */
+    if (!ok) {
+        echec_github("", statut);
+        return 0;
+    }
+    maj_echec = 0;
+    if (maj_plus_recente(VERSION, r->version)) {
+        snprintf(maj_detail, sizeof maj_detail, T("Version %s disponible.", "Version %s available."), r->version);
+        return 1;
+    }
+    snprintf(maj_detail, sizeof maj_detail, !strcmp(VERSION, "dev") ? T("Version de développement : aucune mise à jour proposée (dernière version : %s).",
+                                                                        "Development build: no update offered (latest version: %s).")
+                                                                      : T("3dssavesync est à jour (dernière version : %s).", "3dssavesync is up to date (latest version: %s)."),
+             r->version);
+    return 0;
+}
+
+static char version_dl[32]; /* version en cours de téléchargement ou d'installation */
+
+static void avance_dl(size_t fait, size_t total)
+{
+    progression((int)(fait / 1024), (int)(total / 1024), T("Téléchargement de la version %s (Ko)", "Downloading version %s (KB)"), version_dl);
+}
+
+/* .cia par AM, comme FBI : sur tout échec, l'installation est annulée et l'ancienne version reste. */
+static Result installer_cia(const char *octets, size_t taille)
+{
+    Handle h;
+    Result r;
+    u32 ecrit = 0;
+    size_t fait;
+
+    if (R_FAILED(r = amInit())) return r;
+    if (R_SUCCEEDED(r = AM_StartCiaInstall(MEDIATYPE_SD, &h))) {
+        for (fait = 0; fait < taille && R_SUCCEEDED(r); fait += ecrit) {
+            progression((int)(fait / 1024), (int)(taille / 1024), T("Installation de la version %s (Ko)", "Installing version %s (KB)"), version_dl);
+            r = FSFILE_Write(h, &ecrit, fait, octets + fait, taille - fait < 0x20000 ? taille - fait : 0x20000, 0);
+            if (R_SUCCEEDED(r) && !ecrit) r = MAKERESULT(RL_PERMANENT, RS_INTERNAL, RM_APPLICATION, RD_NO_DATA);
+        }
+        if (R_SUCCEEDED(r)) r = AM_FinishCiaInstall(h);
+        else AM_CancelCIAInstall(h);
+    }
+    amExit();
+    return r;
+}
+
+/* Télécharge r, vérifie son SHA-256 dans SHA256SUMS, puis l'installe : .cia par AM, ou .3dsx remplacé s'il a été lancé
+ * depuis le Homebrew Launcher. Échec : maj_detail, et l'ancienne version reste. Réussite : quitter. Les Sauvegardes ne
+ * sont jamais touchées. */
+static void installer(const release_t *r)
+{
+    const int dsx = envIsHomebrew();
+    const char *nom = dsx ? "3dssavesync.3dsx" : "3dssavesync.cia", *url = dsx ? r->dsx : r->cia;
+    char *sommes = NULL, *octets = NULL, attendu[65], obtenu[65];
+    size_t taille, n;
+    long statut;
+    FS_ArchiveResource sd;
+    Result res;
+
+    maj_echec = 1;
+    snprintf(version_dl, sizeof version_dl, "%s", r->version);
+    if (!url[0] || !r->sommes[0]) {
+        snprintf(maj_detail, sizeof maj_detail, T("Version %s incomplète sur GitHub : rien n'est installé. Installez-la à la main (guide de la 3DS).\nabsent : %s",
+                                                  "Version %s incomplete on GitHub: nothing is installed. Install it by hand (3DS guide).\nmissing: %s"),
+                 r->version, url[0] ? "SHA256SUMS" : nom);
+        return;
+    }
+    statut = net_github(r->sommes, avance_dl, &sommes, &n);
+    if (statut != 200) {
+        echec_github(T("SHA256SUMS non téléchargé : rien n'est installé.", "SHA256SUMS not downloaded: nothing is installed."), statut);
+        goto fin;
+    }
+    if (maj_somme(sommes, nom, attendu)) {
+        snprintf(maj_detail, sizeof maj_detail, T("SHA256SUMS sans %s : rien n'est installé. Installez la version %s à la main (guide de la 3DS).\nSHA256SUMS : %u octets",
+                                                  "SHA256SUMS without %s: nothing is installed. Install version %s by hand (3DS guide).\nSHA256SUMS: %u bytes"),
+                 nom, r->version, (unsigned)n);
+        goto fin;
+    }
+    statut = net_github(url, avance_dl, &octets, &taille);
+    if (statut != 200) {
+        echec_github(T("Téléchargement impossible : rien n'est installé.", "Download failed: nothing is installed."), statut);
+        goto fin;
+    }
+    progression(0, 0, "%s", T("Vérification du fichier…", "Checking the file…"));
+    hash_hex((unsigned char *)octets, taille, obtenu);
+    if (strcmp(obtenu, attendu)) {
+        snprintf(maj_detail, sizeof maj_detail, T("Fichier téléchargé abîmé (somme de contrôle différente) : rien n'est installé. Réessayez.\nSHA-256 %.12s…, attendu %.12s…",
+                                                  "Downloaded file damaged (checksum differs): nothing is installed. Try again.\nSHA-256 %.12s…, expected %.12s…"),
+                 obtenu, attendu);
+        goto fin;
+    }
+    /* .cia : place du titre installé ; .3dsx : le .tmp à côté de l'ancien. Le double de la taille suffit dans les deux cas. */
+    if (R_SUCCEEDED(FSUSER_GetSdmcArchiveResource(&sd)) && (u64)sd.freeClusters * sd.clusterSize < 2 * (u64)taille) {
+        u64 libre = (u64)sd.freeClusters * sd.clusterSize;
+        snprintf(maj_detail, sizeof maj_detail, T("Pas assez de place sur la carte SD : libérez %llu Mo, puis réessayez. Rien n'est installé.\nlibre : %llu Ko, requis : %llu Ko",
+                                                  "Not enough space on the SD card: free %llu MB, then try again. Nothing is installed.\nfree: %llu KB, needed: %llu KB"),
+                 (2 * (u64)taille - libre) / 1048576 + 1, libre / 1024, 2 * (u64)taille / 1024);
+        goto fin;
+    }
+    if (dsx) {
+        int e;
+        progression(0, 0, T("Installation de la version %s…", "Installing version %s…"), version_dl);
+        if ((e = remplacer_fichier(chemin_3dsx, octets, taille))) {
+            if (e == -1) snprintf(maj_detail, sizeof maj_detail, T("Écriture sur la carte SD impossible : l'ancienne version reste. Vérifiez la carte SD, puis réessayez.\n%s",
+                                                                   "Cannot write to the SD card: the old version stays. Check the SD card, then try again.\n%s"), chemin_3dsx);
+            else snprintf(maj_detail, sizeof maj_detail, T("Nouvelle version vérifiée mais pas renommée : sur un PC, renommez %s.tmp en %s.",
+                                                           "New version checked but not renamed: on a PC, rename %s.tmp to %s."), chemin_3dsx, nom);
+            goto fin;
+        }
+    } else if (R_FAILED(res = installer_cia(octets, taille))) {
+        snprintf(maj_detail, sizeof maj_detail, T("Installation refusée par la 3DS : l'ancienne version reste. Redémarrez la 3DS, puis réessayez.\nAM 0x%08lX",
+                                                  "Installation refused by the 3DS: the old version stays. Restart the 3DS, then try again.\nAM 0x%08lX"), res);
+        goto fin;
+    }
+    maj_echec = 0;
+    quitter = 1;
+    {
+        const touche_t b = { KEY_A, T("Fermer 3dssavesync", "Close 3dssavesync"), 1 };
+        char titre[80];
+        snprintf(titre, sizeof titre, T("Mise à jour installée : version %s", "Update installed: version %s"), r->version);
+        do {
+            ecran_debut();
+            dessiner_haut(curseur_liste);
+            ecran_bas();
+            nb_boutons = 0;
+            ecran_paragraphe(8, 8 + ecran_paragraphe(8, 8, 0.55f, C_VERT, 304, titre) + 6, 0.5f, BLANC, 304,
+                             dsx ? T("3dssavesync va se fermer ; relancez-le depuis le Homebrew Launcher.", "3dssavesync will close; start it again from the Homebrew Launcher.")
+                                 : T("3dssavesync va se fermer ; relancez-le depuis le menu HOME.", "3dssavesync will close; start it again from the HOME Menu."));
+            fond_barre(1);
+            ligne_touches(&b, 1, 240 - HAUTEUR_TOUCHE - 4, 0);
+            ecran_finir();
+        } while (!(lire_touches() & (KEY_A | KEY_B)));
+    }
+fin:
+    free(sommes);
+    free(octets);
+}
+
+/* Réglages, ligne Mise à jour : vérification, puis installation si l'utilisateur la choisit. */
+static void mettre_a_jour(void)
+{
+    release_t r;
+    char t[300];
+    if (verifier_maj(&r) != 1) return;
+    snprintf(t, sizeof t, T("La version %s sera téléchargée depuis GitHub, vérifiée, puis installée à la place de la version " VERSION ". Les sauvegardes et les réglages ne changent pas.",
+                            "Version %s will be downloaded from GitHub, checked, then installed in place of version " VERSION ". Saves and settings do not change."),
+             r.version);
+    if (confirmer(T("Mettre à jour 3dssavesync ?", "Update 3dssavesync?"), t, T("Mettre à jour", "Update"))) installer(&r);
 }
 
 /* Jeux 3DS synchronisés : applications installées et cartouche, cochées si elles sont dans titres.ini.
@@ -1280,7 +1476,7 @@ static int reglages(int premier)
         { "Sauvegardes GBA", "GBA saves", "open_agb_firm (useSavesFolder=true) : sdmc:/3ds/open_agb_firm/saves. Vide = à côté de la ROM.",
           "open_agb_firm (useSavesFolder=true): sdmc:/3ds/open_agb_firm/saves. Empty = next to the ROM.", cfg.saves_gba, sizeof cfg.saves_gba },
     };
-    const int nb = (int)(sizeof l / sizeof *l), total = nb + 2;
+    const int nb = (int)(sizeof l / sizeof *l), total = nb + 3;
     int c = 0, i, change, test_ok = 0;
     char test[200] = "";
     static titre_t avant_titres[MAX_TITRES];
@@ -1295,7 +1491,9 @@ static int reglages(int premier)
         u32 k;
         float y = 30;
         /* Premier lancement : B teste d'abord la connexion ; un second B après un échec revient quand même. */
-        touche_t t[2] = { { KEY_A, c < nb ? T("Modifier", "Change") : c == nb ? T("Choisir", "Choose") : T("Tester", "Test"), 1 },
+        int maj = maj_plus_recente(VERSION, maj_version);
+        touche_t t[2] = { { KEY_A, c < nb ? T("Modifier", "Change") : c == nb ? T("Choisir", "Choose") : c == nb + 1 ? T("Tester", "Test")
+                                   : maj ? T("Mettre à jour", "Update") : T("Vérifier", "Check"), 1 },
                           { KEY_B, !premier || test_ok ? T("Enregistrer et revenir", "Save and go back")
                                    : test[0]           ? T("Revenir quand même", "Go back anyway")
                                                        : T("Tester et revenir", "Test and go back"), 1 } };
@@ -1306,15 +1504,19 @@ static int reglages(int premier)
         ecran_rect(0, 23, 400, 1, GRIS_F);
         for (i = 0; i < total; i++) {
             const char *v = i < nb ? l[i].valeur : "";
-            char nb3ds[16];
+            char nb3ds[48];
             if (i == 1 && v[0]) v = "••••••••";
             else if (i < nb && !v[0]) v = i == 0 || i == 1 ? T("(vide)", "(empty)") : T("(à côté de la ROM)", "(next to the ROM)");
             if (i == nb) {
                 snprintf(nb3ds, sizeof nb3ds, T("%d jeu(x)", "%d game(s)"), nb_titres);
                 v = nb3ds;
+            } else if (i == nb + 2) { /* version installée, et la nouvelle s'il y en a une */
+                snprintf(nb3ds, sizeof nb3ds, maj ? T("%s (%s disponible)", "%s (%s available)") : "%s", VERSION, maj_version);
+                v = nb3ds;
             }
             if (i == c) ecran_rect(0, y - 1, 400, 16, RGB(0x24508C));
-            ecran_texte(8, y, 0.48f, i == c ? BLANC : GRIS_C, 130, i < nb ? T(l[i].nom, l[i].nom_en) : i == nb ? T("Jeux 3DS", "3DS games") : T("Tester la connexion", "Test the connection"));
+            ecran_texte(8, y, 0.48f, i == c ? BLANC : GRIS_C, 130, i < nb ? T(l[i].nom, l[i].nom_en) : i == nb ? T("Jeux 3DS", "3DS games")
+                                                                       : i == nb + 1 ? T("Tester la connexion", "Test the connection") : T("Mise à jour", "Update"));
             ecran_texte(142, y, 0.48f, BLANC, 400 - 142 - 8, v);
             y += i == nb - 1 || i == 1 ? 24 : 17;
         }
@@ -1325,8 +1527,11 @@ static int reglages(int premier)
         if (premier) y += ecran_paragraphe(8, y, 0.5f, C_JAUNE, 304, T("Premier lancement : entrez au moins le serveur et le jeton.", "First start: enter at least the server and the token.")) + 8;
         y += ecran_paragraphe(8, y, 0.5f, BLANC, 304, c < nb ? T(l[c].aide, l[c].aide_en)
                                                      : c == nb ? T("Jeux 3DS natifs à synchroniser. Par défaut : les 8 Pokémon 3DS.", "Native 3DS games to sync. Default: the 8 3DS Pokémon.")
-                                                               : T("Test de l'adresse et du jeton du serveur.", "Test of the server address and token.")) + 8;
+                                                     : c == nb + 1 ? T("Test de l'adresse et du jeton du serveur.", "Test of the server address and token.")
+                                                     : T("Version installée : " VERSION ". Cherche une nouvelle version sur GitHub. Rien n'est installé sans votre accord.",
+                                                         "Installed version: " VERSION ". Looks for a new version on GitHub. Nothing is installed without your consent.")) + 8;
         if (test[0]) y += ecran_paragraphe(8, y, 0.5f, test_ok ? C_VERT : C_ROUGE, 304, test) + 6;
+        if (c == nb + 2 && maj_detail[0]) y += ecran_paragraphe(8, y, 0.5f, maj_echec ? C_ROUGE : C_VERT, 304, maj_detail) + 6;
         dessiner_message(y, 240 - HAUTEUR_TOUCHE - 9);
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
@@ -1351,8 +1556,11 @@ static int reglages(int premier)
                 while (len > 0 && l[c].valeur[len - 1] == '/') l[c].valeur[--len] = '\0'; /* "…/saves/" -> "…/saves" */
             } else if (c == nb) {
                 choisir_titres();
-            } else {
+            } else if (c == nb + 1) {
                 test_ok = tester_connexion(test, sizeof test);
+            } else {
+                mettre_a_jour();
+                if (quitter) break;
             }
         }
     }
@@ -1534,7 +1742,7 @@ static int tout_synchroniser(void)
 
 /* ---------------------------------------------------------------- boucle */
 
-int main(void)
+int main(int argc, char **argv)
 {
     int curseur = 0;
 
@@ -1555,6 +1763,8 @@ int main(void)
     lire_cles(DOSSIER "/config.ini", cle_config);
     lire_cles(DOSSIER "/base.ini", cle_base);
     nb_titres = titres_lire(DOSSIER "/titres.ini", titres, MAX_TITRES);
+    lire_cles(DOSSIER "/maj.ini", cle_maj);
+    if (argc > 0 && !strncmp(argv[0], "sdmc:/", 6) && strstr(argv[0], ".3dsx")) chemin_3dsx = argv[0]; /* Homebrew Launcher */
 
     if (net_init()) {
         const touche_t b = { KEY_B, T("Quitter", "Quit"), 1 };
@@ -1582,9 +1792,13 @@ int main(void)
         reglages(1); /* message : résultat du test de la connexion */
         snprintf(message + strlen(message), sizeof message - strlen(message), "%s%.200s", reprise[0] && message[0] ? "\n" : "", reprise);
     }
-    rafraichir();
+    if (!quitter) rafraichir();
     montrer_alerte();
-    while (aptMainLoop()) {
+    if (!quitter && strcmp(VERSION, "dev") && net_wifi() && maj_a_verifier(maj_jour, time(NULL))) {
+        release_t r;
+        verifier_maj(&r); /* échec : détail dans les réglages seulement, la synchronisation marche comme avant */
+    }
+    while (!quitter && aptMainLoop()) {
         u32 k;
         curseur_liste = curseur;
         dessiner(curseur);
@@ -1600,7 +1814,7 @@ int main(void)
             message[0] = '\0';
             /* Tout relire : Y, ou réglages modifiés. Après une action : le Jeu touché est déjà relu, le serveur seul. */
             if (k & KEY_SELECT) {
-                if (reglages(0)) rafraichir();
+                if (reglages(0) && !quitter) rafraichir();
             } else if (k & KEY_Y) {
                 rafraichir();
             } else if (k & KEY_A && nb_visibles) {

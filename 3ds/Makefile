@@ -36,6 +36,9 @@ APP_TITLE	:=	3dssavesync
 APP_DESCRIPTION	:=	Synchronisation des sauvegardes DS, GB, GBA, 3DS
 APP_AUTHOR	:=	3dssavesync
 ICON		:=	meta/icon.png
+# Version de l'application (mises à jour, ADR 0021) : la CI donne celle du tag (v3.7.0 -> 3.7.0), "dev" sinon.
+# Autre VERSION : make clean d'abord, main.o n'est pas recompilé sinon.
+VERSION		?=	dev
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
@@ -54,7 +57,7 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations \
 			-ffunction-sections \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -D__3DS__
+CFLAGS	+=	$(INCLUDE) -D__3DS__ -DVERSION=\"$(VERSION)\"
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
