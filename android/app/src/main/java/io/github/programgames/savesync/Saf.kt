@@ -88,4 +88,10 @@ class SafFile(
     }
 
     override fun modified(): Long? = known
+
+    // modifiedNow lists the folder again: the date of the listing may be old (checkClosed).
+    override fun modifiedNow(): Long? {
+        find()
+        return known
+    }
 }

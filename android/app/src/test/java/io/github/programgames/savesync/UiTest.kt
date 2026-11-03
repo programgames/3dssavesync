@@ -89,8 +89,16 @@ open class UiTest {
     }
 
     // start launches the app after a first start with these settings. entries: the game list as read, else not read.
-    private fun start(url: String = "", token: String = "", emulators: List<Emulator> = emptyList(), entries: List<Entry>? = null): ActivityScenario<MainActivity> {
+    // noReminder: "Don't show again" was chosen on the reminder to close the emulator.
+    private fun start(
+        url: String = "",
+        token: String = "",
+        emulators: List<Emulator> = emptyList(),
+        entries: List<Entry>? = null,
+        noReminder: Boolean = true,
+    ): ActivityScenario<MainActivity> {
         App.init(ctx)
+        App.settings.noReminder = noReminder
         App.settings.url = url
         App.settings.token = token
         App.saveEmulators(emulators)
@@ -365,6 +373,40 @@ open class UiTest {
         assertEquals(null, App.busy)
         assertTrue(files.values.all { it.writes == 0 })
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } })
+    }
+
+    // The reminder to close the emulator comes once per session, before the first action that may write a save on
+    // this phone; "Don't show again" is saved.
+    @Test
+    fun reminderBeforeTheFirstWrite() {
+        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu), entries = games(), noReminder = false)
+        rule.onNodeWithText(s(R.string.sync_all)).performClick()
+        rule.onNodeWithText(s(R.string.reminder_text)).assertExists()
+        fits(s(R.string.dont_show_again))
+        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists() // then the usual confirmation
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+
+        open("Mario Kart DS")
+        rule.onNodeWithText(s(R.string.download)).performScrollTo().performClick()
+        rule.onNodeWithText(s(R.string.confirm_download)).assertExists() // shown once: not again for this download
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+        back()
+        assertFalse(Settings(ctx).noReminder)
+
+        App.reminded = false // the app starts again
+        rule.onNodeWithText(s(R.string.sync_all)).performClick()
+        rule.onNodeWithText(s(R.string.dont_show_again)).performClick()
+        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+        assertTrue(Settings(ctx).noReminder)
+
+        App.reminded = false // and again: "Don't show again" holds
+        rule.onNodeWithText(s(R.string.sync_all)).performClick()
+        rule.onAllNodesWithText(s(R.string.reminder_text)).assertCountEquals(0)
+        rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists()
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+        assertTrue(files.values.all { it.writes == 0 })
     }
 }
 

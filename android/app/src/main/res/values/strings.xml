@@ -169,4 +169,8 @@
     <string name="p_format">This save file has an unexpected format, so it wasn\'t synced. Check the emulator and its core in Emulators.</string>
     <string name="p_permission">The app can no longer open this folder or file. Choose the folder again in Emulators.</string>
     <string name="p_other">Something went wrong. Try again. If it happens again, report the detail below.</string>
+    <string name="p_open">The save just changed, so the emulator may still be open. Close it, then sync again.</string>
+    <string name="reminder_title">Close the emulator</string>
+    <string name="reminder_text">Close the emulator before syncing: an open emulator would overwrite the save it receives.</string>
+    <string name="dont_show_again">Don\'t show again</string>
 </resources>

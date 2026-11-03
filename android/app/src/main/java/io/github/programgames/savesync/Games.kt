@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -55,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.programgames.savesync.core.Choice
@@ -110,6 +113,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     var filter by rememberSaveable { mutableStateOf("ALL") }
     var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf<List<Entry>?>(null) }
+    var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
     val shown = App.entries.filter { it.shown != Shown.NONE }
     val visible = shown.filter {
         when (filter) {
@@ -125,8 +129,11 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton({ App.refresh() }, enabled = App.busy == null) { Text(stringResource(R.string.refresh)) }
             Button({
-                val replaced = App.entries.filter { it.shown == Shown.TO_DOWNLOAD && it.status?.local != null }
-                if (replaced.isEmpty()) App.syncAll(emptyList()) else confirm = replaced
+                // one reminder for the whole pass, even if it only uploads: a download may come up during the pass
+                beforeWrite({ reminder = it }) {
+                    val replaced = App.entries.filter { it.shown == Shown.TO_DOWNLOAD && it.status?.local != null }
+                    if (replaced.isEmpty()) App.syncAll(emptyList()) else confirm = replaced
+                }
             }, enabled = App.busy == null && App.loaded && App.serverError == null) { Text(stringResource(R.string.sync_all)) }
         }
         App.busy?.let {
@@ -166,7 +173,38 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             dismissButton = { TextButton({ confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
+    reminder?.let { Reminder(it) { reminder = null } }
     App.summary?.let { SummaryDialog(it) }
+}
+
+// beforeWrite runs an action that may write a save on this phone, after the reminder if it is due (show).
+fun beforeWrite(show: (() -> Unit) -> Unit, action: () -> Unit) = if (App.mustRemind()) show(action) else action()
+
+// Reminder asks to close the emulator before the first write on this phone since the app started (checkClosed).
+@Composable
+fun Reminder(then: () -> Unit, close: () -> Unit) {
+    var never by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text(stringResource(R.string.reminder_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(stringResource(R.string.reminder_text))
+                Row(Modifier.toggleable(never, role = Role.Checkbox) { never = it }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(never, null)
+                    Text(stringResource(R.string.dont_show_again))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton({
+                App.remind(never)
+                close()
+                then()
+            }) { Text(stringResource(R.string.ok)) }
+        },
+        dismissButton = { TextButton(close) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable
@@ -238,6 +276,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     val play = produceState<PlayInfo?>(null, server?.hash) { value = if (server != null && e.game != null) App.serverPlayInfo(e) else null }.value
     var ask by remember { mutableStateOf<Boolean?>(null) } // Conflict choice to confirm: true = keep the phone save
     var download by remember { mutableStateOf(false) }
+    var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
     Scaffold(topBar = {
         TopAppBar(title = { Text(e.name, maxLines = 1) }, navigationIcon = {
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -276,7 +315,9 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 Text(stringResource(R.string.choose_version), style = MaterialTheme.typography.titleMedium)
                 // one card above the other: side by side, the buttons were cut on a phone 320 dp wide
                 ChoiceCard(stringResource(R.string.this_phone), phoneLines, stringResource(R.string.keep_phone), Modifier.fillMaxWidth()) { ask = true }
-                ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.fillMaxWidth()) { ask = false }
+                ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.fillMaxWidth()) {
+                    beforeWrite({ reminder = it }) { ask = false }
+                }
                 Text(stringResource(R.string.nothing_lost), style = MaterialTheme.typography.bodySmall)
             } else {
                 InfoCard(stringResource(R.string.this_phone), phoneLines)
@@ -298,12 +339,13 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 }
                 when (e.shown) {
                     Shown.TO_UPLOAD -> Button({ App.act(e) }, enabled = App.busy == null) { Text(stringResource(R.string.upload)) }
-                    Shown.TO_DOWNLOAD -> Button({ if (local != null) download = true else App.act(e) }, enabled = App.busy == null) { Text(stringResource(R.string.download)) }
+                    Shown.TO_DOWNLOAD -> Button({ beforeWrite({ reminder = it }) { if (local != null) download = true else App.act(e) } }, enabled = App.busy == null) { Text(stringResource(R.string.download)) }
                     else -> {}
                 }
             }
         }
     }
+    reminder?.let { Reminder(it) { reminder = null } }
     ask?.let { phone ->
         AlertDialog(
             onDismissRequest = { ask = null },

@@ -22,7 +22,9 @@ interface SaveFile {
 
     fun write(content: ByteArray) // creates the file, or replaces its whole content
 
-    fun modified(): Long? // last change, ms since 1970; null if unknown
+    fun modified(): Long? // last change, ms since 1970, as last listed (no storage access); null if unknown
+
+    fun modifiedNow(): Long? = modified() // last change read now from the storage; null or 0 if unknown
 }
 
 // Game is a Key and its Save file in one emulator of this phone. emulator: id of the emulator entry, which owns the
@@ -126,8 +128,27 @@ private val writeProblems = setOf(Problem.BACKUP, Problem.WRITE, Problem.RESTORE
 // Choice on a Conflict, for the Current version the user saw: if the server changed since, nothing is done.
 data class Choice(val keepPhone: Boolean, val serverHash: String)
 
-// Syncer runs the Syncs of one pass: GET /saves is read once, and again after an Upload or a 412.
-class Syncer(private val remote: Remote, private val bases: Bases, private val backups: Backups) {
+// OPEN_MS: a save changed less long ago may still be open in the emulator.
+const val OPEN_MS = 30_000L
+
+// checkClosed refuses a write while the emulator may still have the game open: it keeps the save in memory and would
+// write it back over the new one. Android can't see if another app runs, so: a save changed less than OPEN_MS ago,
+// or a save with no known date before the user saw the reminder to close the emulator. Reads stay allowed.
+fun checkClosed(f: SaveFile, now: Long, reminded: Boolean) {
+    val m = f.modifiedNow()?.takeIf { it in 1..now + OPEN_MS } // 0 (some providers) or far in the future: unknown
+    if (m != null && now - m < OPEN_MS) throw SyncException(Problem.OPEN, "${f.location}: changed ${(now - m) / 1000} s ago")
+    if (m == null && !reminded) throw SyncException(Problem.OPEN, "${f.location}: date of the last change unknown, reminder not shown")
+}
+
+// Syncer runs the Syncs of one pass: GET /saves is read once, and again after an Upload or a 412. reminded: the user saw
+// the reminder to close the emulator (checkClosed); clock: now, in ms since 1970.
+class Syncer(
+    private val remote: Remote,
+    private val bases: Bases,
+    private val backups: Backups,
+    private val reminded: () -> Boolean,
+    private val clock: () -> Long = { java.lang.System.currentTimeMillis() },
+) {
     private var list: List<Version>? = null
     private val named = mutableSetOf<String>()
 
@@ -228,6 +249,7 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
     }
 
     private fun download(g: Game, l: Local?, srv: Version) {
+        checkClosed(g.file, clock(), reminded())
         val o = remote.get(g.key)
         if (sha256(o) != srv.hash) throw SyncException(Problem.DAMAGED, "GET /saves/${g.key}: hash ${sha256(o)} instead of ${srv.hash}")
         val content = encode(g.system, g.format, o, l?.raw)

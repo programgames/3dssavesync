@@ -85,10 +85,12 @@ object App {
     var summary by mutableStateOf<Summary?>(null)
     var message by mutableStateOf<Pair<String, Throwable?>?>(null) // result of the last action on one game
     var loaded by mutableStateOf(false)
+    var reminded = false // the reminder to close the emulator was shown since the app started
 
     fun init(c: Context) {
         if (::context.isInitialized && context === c.applicationContext) return // a new Application: the UI tests
         context = c.applicationContext
+        reminded = false
         settings = Settings(context)
         emulators = settings.emulators
     }
@@ -100,6 +102,14 @@ object App {
     fun text(id: Int, vararg args: Any): String = context.getString(id, *args)
 
     fun configured() = settings.url.isNotBlank() && settings.token.isNotBlank()
+
+    // mustRemind: the reminder to close the emulator comes before the first write on this phone (checkClosed).
+    fun mustRemind() = !reminded && !settings.noReminder
+
+    fun remind(never: Boolean) {
+        reminded = true
+        if (never) settings.noReminder = true
+    }
 
     fun saveEmulators(list: List<Emulator>) {
         settings.emulators = list
@@ -133,7 +143,7 @@ object App {
         loaded = false
     }
 
-    private fun newSyncer() = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir)).also { syncer = it }
+    private fun newSyncer() = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), { !mustRemind() }).also { syncer = it }
 
     // refresh reads the ROM folders, the server list and every Local save.
     fun refresh() = run(text(R.string.reading)) {

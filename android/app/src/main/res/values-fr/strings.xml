@@ -170,4 +170,8 @@
     <string name="p_format">Ce fichier de sauvegarde a un format inattendu : il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
+    <string name="p_open">La sauvegarde vient de changer : l\'émulateur est peut-être encore ouvert. Fermez-le, puis synchronisez de nouveau.</string>
+    <string name="reminder_title">Fermez l\'émulateur</string>
+    <string name="reminder_text">Fermez l\'émulateur avant de synchroniser : s\'il reste ouvert, il écrasera la sauvegarde reçue.</string>
+    <string name="dont_show_again">Ne plus afficher</string>
 </resources>

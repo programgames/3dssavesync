@@ -85,7 +85,7 @@ class Remote(url: String, private val token: String, private val client: String 
 enum class Problem {
     TOKEN, NOT_SERVER, TOO_LARGE, REJECTED, SERVER_ERROR, UNEXPECTED, // HTTP status
     CERTIFICATE, NO_HOST, REFUSED, NO_RESPONSE, // network
-    DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, CHANGED, FORMAT, PERMISSION, OTHER, // this phone
+    DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, CHANGED, OPEN, FORMAT, PERMISSION, OTHER, // this phone
 }
 
 // problem classifies an error; global = the server or the network is at fault, so the next games would fail too.

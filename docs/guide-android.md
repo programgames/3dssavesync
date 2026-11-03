@@ -56,7 +56,12 @@ Games with no save anywhere are hidden; a line at the end of the list counts the
 
 **Sync all** syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
 
-**Close the emulator before you sync.** Android gives no way to see if an emulator is running. RetroArch writes its save every few seconds while a game runs, and would write the old progress back over a downloaded save.
+**Close the emulator before you sync.** Android gives no way to see if an emulator is running. An open emulator keeps the save in memory and writes it back later: RetroArch does it every few seconds while a game runs. It would write the old progress back over a downloaded save. So the app protects the saves it writes (Download, **Use the server save**, the downloads of Sync all):
+
+- Before the first of these actions, or the first Sync all, since the app started, it shows a reminder to close the emulator. Tick **Don't show again** to skip it from then on. Sync all shows it once for the whole pass.
+- It refuses to replace a save that changed less than 30 seconds ago: the emulator may still be open. The message says to close it, then sync again. Sync all goes on with the next games and lists the refused ones in its summary. Some folders give no date for their files: there, the app relies on the reminder only.
+
+Uploads are always allowed: reading a save while the emulator is open loses nothing.
 
 ## Conflicts
 

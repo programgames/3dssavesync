@@ -130,6 +130,7 @@ fun problemText(p: Problem) = when (p) {
     Problem.RESTORE -> R.string.p_restore
     Problem.NOT_WRITTEN -> R.string.p_not_written
     Problem.CHANGED -> R.string.p_changed
+    Problem.OPEN -> R.string.p_open
     Problem.FORMAT -> R.string.p_format
     Problem.PERMISSION -> R.string.p_permission
     Problem.OTHER -> R.string.p_other

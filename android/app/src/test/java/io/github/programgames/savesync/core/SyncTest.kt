@@ -3,6 +3,7 @@ package io.github.programgames.savesync.core
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -15,8 +16,14 @@ import java.net.ServerSocket
 import java.net.URL
 
 // MemoryFile is a fake Save file. bad: number of next writes that keep only half of the content (provider failure).
-// fail: number of next writes that throw before they touch the file (permission lost, folder gone).
-class MemoryFile(override val name: String, var content: ByteArray? = null, var bad: Int = 0, var fail: Int = 0) : SaveFile {
+// fail: number of next writes that throw before they touch the file (permission lost, folder gone). date: last change.
+class MemoryFile(
+    override val name: String,
+    var content: ByteArray? = null,
+    var bad: Int = 0,
+    var fail: Int = 0,
+    var date: Long? = null,
+) : SaveFile {
     override val location get() = "test/$name"
 
     override fun read() = content?.copyOf()
@@ -26,7 +33,40 @@ class MemoryFile(override val name: String, var content: ByteArray? = null, var 
         this.content = if (bad-- > 0) content.copyOf(content.size / 2) else content.copyOf()
     }
 
-    override fun modified(): Long? = null
+    override fun modified(): Long? = date
+}
+
+// The emulator may still be open: a save changed less than 30 s ago is never replaced, an unknown date only after the
+// reminder to close the emulator.
+class CheckClosedTest {
+    private val now = 1_800_000_000_000L
+
+    private fun refused(date: Long?, reminded: Boolean): Boolean {
+        val e = runCatching { checkClosed(MemoryFile("a.sav", date = date), now, reminded) }.exceptionOrNull() ?: return false
+        assertEquals(Problem.OPEN, (e as SyncException).problem)
+        return true
+    }
+
+    @Test
+    fun recent() {
+        assertTrue(refused(now - 1_000, reminded = true))
+        assertTrue(refused(now - 29_999, reminded = true))
+        assertTrue(refused(now + 5_000, reminded = true)) // a few seconds ahead: clocks of the provider
+    }
+
+    @Test
+    fun old() {
+        assertFalse(refused(now - 30_000, reminded = false))
+        assertFalse(refused(now - 3_600_000, reminded = false))
+    }
+
+    @Test
+    fun unknown() {
+        for (d in listOf(null, 0L, now + 3_600_000)) { // no date, 0 (some providers), far in the future
+            assertTrue("$d", refused(d, reminded = false))
+            assertFalse("$d", refused(d, reminded = true))
+        }
+    }
 }
 
 class ReplaceTest {
@@ -143,7 +183,8 @@ class PythonServerTest {
         if (::server.isInitialized) server.destroy()
     }
 
-    private fun syncer(name: String) = Syncer(Remote(url, "test-token"), Bases(File(tmp.root, "bases-$name")), Backups(File(tmp.root, "copies-$name")))
+    private fun syncer(name: String, reminded: () -> Boolean = { true }, clock: () -> Long = { java.lang.System.currentTimeMillis() }) =
+        Syncer(Remote(url, "test-token"), Bases(File(tmp.root, "bases-$name")), Backups(File(tmp.root, "copies-$name")), reminded, clock)
 
     private fun gba(emulator: String, f: MemoryFile) = Game(System.GBA, "GBA-BPEF", "Pokemon Emeraude", f, Format(), emulator)
 
@@ -260,6 +301,34 @@ class PythonServerTest {
         assertEquals(Problem.RESTORE, problem(r.failures.single().second))
         assertTrue(r.stopped)
         assertNull(b.serverVersion("GBA-AXVE"))
+    }
+
+    // Sync all refuses the downloads while the emulator may be open, and goes on with the next games.
+    @Test
+    fun emulatorOpen() {
+        assertEquals(Outcome.UPLOADED, syncer("a").sync(gba("mgba", MemoryFile("e.sav", random(32 shl 10, 1)))))
+        var now = 1_800_000_000_000L
+        var reminded = false
+        val b = syncer("b", { reminded }, { now })
+        val recent = gba("recent", MemoryFile("e.sav", ByteArray(32 shl 10), date = now - 1_000)) // blank: To download
+        val absent = gba("absent", MemoryFile("e.sav")) // no file: no date
+        val all = listOf(recent, absent)
+
+        var s = b.syncAll(all, all.toSet())
+        assertEquals(listOf(Problem.OPEN, Problem.OPEN), s.failures.map { problem(it.second) })
+        assertFalse(s.stopped)
+        assertArrayEquals(ByteArray(32 shl 10), recent.file.read())
+        assertNull(absent.file.read())
+
+        reminded = true // the reminder was shown: the unknown date is allowed, the recent change is not
+        s = b.syncAll(all, all.toSet())
+        assertEquals(1, s.downloaded)
+        assertEquals(listOf("Pokemon Emeraude" to Problem.OPEN), s.failures.map { it.first to problem(it.second) })
+        assertArrayEquals(ByteArray(32 shl 10), recent.file.read())
+
+        now += 30_000 // the emulator was closed
+        assertEquals(Outcome.DOWNLOADED, b.sync(recent, mayReplace = true))
+        assertArrayEquals(random(32 shl 10, 1), recent.file.read())
     }
 
     @Test

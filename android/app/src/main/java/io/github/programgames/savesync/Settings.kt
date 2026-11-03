@@ -45,6 +45,11 @@ class Settings(context: Context) {
         get() = p.getString("token", "") ?: ""
         set(v) = p.edit { putString("token", v.trim()) }
 
+    // noReminder: the user chose "Don't show again" on the reminder to close the emulator.
+    var noReminder: Boolean
+        get() = p.getBoolean("noReminder", false)
+        set(v) = p.edit { putBoolean("noReminder", v) }
+
     var emulators: List<Emulator>
         get() {
             val a = JSONArray(p.getString("emulators", "[]"))
