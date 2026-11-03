@@ -18,9 +18,10 @@ long net_get(const char *url, const char *token, char **body, size_t *size);
 #define NET_MAX_FILE (8 * 1024 * 1024)
 long net_github(const char *url, void (*on_progress)(size_t done, size_t total), char **body, size_t *size);
 
-/* PUT url with a binary body. condition = "If-Match: \"<hash>\"", "If-None-Match: *" or NULL (name of a game).
+/* PUT url with a binary body. client: X-Client, the device the History shows ("3ds", or "restauration" for a
+ * Restore, ADR 0016). condition = "If-Match: \"<hash>\"", "If-None-Match: *" or NULL (name of a game).
  * Returns the HTTP status (> 0) or -<curl code> (< 0). */
-long net_put(const char *url, const char *token, const char *condition, const void *bytes, size_t size);
+long net_put(const char *url, const char *token, const char *client, const char *condition, const void *bytes, size_t size);
 
 /* SHA-256 of bytes in lowercase hex: the Hash of a Save, the check of a download. */
 void hash_hex(const unsigned char *bytes, size_t size, char out[65]);

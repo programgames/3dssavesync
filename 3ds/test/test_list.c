@@ -38,7 +38,8 @@ int main(int argc, char **argv)
                  !strcmp(e.date, "20260101T120000Z") && !strcmp(e.client, "3ds") && e.age > 0 && e.has_name,
              "saves.json : jeu 3DS, nommé");
     check(next_server_entry(&p, &e) && !strcmp(e.code, "ADAF") && !strcmp(e.hash, H2) && e.size == 524288 &&
-                 !strcmp(e.date, "20260102T081011Z") && !strcmp(e.client, "pc") && e.age > 0 && !e.has_name,
+                 !strcmp(e.date, "20260102T081011Z") && !strcmp(e.client, "pc") && e.age > 0 && !e.has_name &&
+                 !strcmp(e.version, "000002-20260102T081011Z-pc-" H2 ".sav"),
              "saves.json : ADAF, sans nom (pas celui du jeu suivant)");
     check(next_server_entry(&p, &e) && !strcmp(e.code, "GBA-BPEF") && e.size == 131072 && !strcmp(e.client, "3ds") && e.has_name,
              "saves.json : GBA, nom avec } et \"");
@@ -57,6 +58,18 @@ int main(int argc, char **argv)
 
     p = "[{\"code\": \"EEEE\", \"hash\": \"ABC\", \"version\": \"x\\\"}\"}]";
     check(next_server_entry(&p, &e) && !strcmp(e.code, "EEEE") && !e.hash[0] && e.size == -1, "hash invalide : vide ; \\\" et } dans un texte");
+    /* GET /saves/<key>/history: the same objects; version goes into a URL */
+    p = "[{\"code\": \"ADAF\", \"version\": \"000001-20261103T101500Z-restauration-" H2 ".sav\", \"hash\": \"" H2 "\", \"taille\": 512, "
+        "\"date\": \"20261103T101500Z\", \"client\": \"restauration\", \"age\": 120}, "
+        "{\"code\": \"ADAF\", \"version\": \"000002-x/../" H1 ".sav\", \"hash\": \"" H1 "\"}, "
+        "{\"code\": \"ADAF\", \"version\": \"000003-20261103T101500Z-pc-" H1 ".sav\", \"hash\": \"" H2 "\"}, "
+        "{\"code\": \"ADAF\", \"version\": \"000004-20261103T101500Z-pc-" H1 ".sav?\", \"hash\": \"" H1 "\"}]";
+    check(next_server_entry(&p, &e) && !strcmp(e.version, "000001-20261103T101500Z-restauration-" H2 ".sav") && e.size == 512 &&
+                 !strcmp(e.client, "restauration") && e.age == 120,
+             "historique : version lue");
+    check(next_server_entry(&p, &e) && !e.version[0] && !strcmp(e.hash, H1), "historique : / dans la version : vide");
+    check(next_server_entry(&p, &e) && !e.version[0], "historique : version d'un autre hash : vide");
+    check(next_server_entry(&p, &e) && !e.version[0], "historique : version sans .sav à la fin : vide");
     p = "[]";
     check(!next_server_entry(&p, &e), "liste vide");
     p = "[{\"code\": \"FFFF\", \"taille\": 1";

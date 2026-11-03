@@ -4,11 +4,12 @@
 
 #include "key.h"
 
-/* One game of the list: {"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...",
- * "client": "pc", "age": 120, "nom": "..."}. Missing field: "" (text), -1 (size, age), 0 (has_name).
- * hash: 64 lowercase hex digits, else "". */
+/* One game of the list, or one Version of GET /saves/<key>/history (same objects, oldest first): {"code": "IRBF",
+ * "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc", "age": 120, "nom": "..."}.
+ * Missing field: "" (text), -1 (size, age), 0 (has_name). hash: 64 lowercase hex digits, else "". version: the file
+ * name "<seq>-<date>-<client>-<hash>.sav" ([0-9A-Za-z-] only, ends with this hash), else "": safe in a URL. */
 typedef struct {
-    char code[KEY_MAX], hash[65], date[17], client[17];
+    char code[KEY_MAX], hash[65], date[17], client[17], version[112];
     long size, age;
     int has_name;
 } entry_t;

@@ -49,6 +49,9 @@ extern int english;
 #define BAR_TOP_1 (SCREEN_HEIGHT - BUTTON_HEIGHT - 7)     /* top of the background of a one-line bar */
 #define BAR_TOP_2 (SCREEN_HEIGHT - 2 * BUTTON_HEIGHT - 7)
 
+/* Stylus only, like KEY_TOUCH: the History box of the game details. No key of the 3DS sends this bit (hid.h). */
+#define KEY_HISTORY BIT(21)
+
 /* A button of the bar: it can also be tapped with the stylus. KEY_TOUCH: a button for the stylus only (Search). */
 typedef struct {
     u32 button;

@@ -416,7 +416,7 @@ static int read_server(void)
         if (!games[i].has_server || games[i].has_name) continue;
         show_progress(i + 1, game_count, T("Envoi des noms des jeux\n%s", "Sending game names\n%s"), games[i].short_name);
         snprintf(url, sizeof url, "%s/saves/%.31s/name", cfg.url, games[i].key); /* Key: 31 characters at most (KEY_MAX) */
-        if (net_put(url, cfg.token, NULL, games[i].name, strlen(games[i].name)) != 204) break;
+        if (net_put(url, cfg.token, "3ds", NULL, games[i].name, strlen(games[i].name)) != 204) break;
         games[i].has_name = 1;
     }
     return 0;
@@ -557,7 +557,7 @@ static result_t upload_save(game_t *j)
     if (j->has_server) snprintf(condition, sizeof condition, "If-Match: \"%s\"", j->server_hash);
     else snprintf(condition, sizeof condition, "If-None-Match: *");
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
-    status = net_put(url, cfg.token, condition, bytes, size);
+    status = net_put(url, cfg.token, "3ds", condition, bytes, size);
     free(bytes);
     if (status == 412) return make_result(RESULT_UPLOAD_CONFLICT, NULL);
     if (status != 200) return network_failure(RESULT_UPLOAD_FAILED, status, url);
@@ -985,6 +985,13 @@ static void draw_bottom(const game_t *j)
         y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;
         screen_rect(8, y + 2, 3, 13, c);
         screen_text(15, y, 0.5f, c, 0, state_label(j->status));
+        { /* the server Versions of the game (history_screen): a word in a box for the stylus, like Search */
+            const char *h = T("Historique", "History");
+            float w = screen_text_width(0.42f, h) * WIDTH_MARGIN + 8, x = BOTTOM_WIDTH - 8 - w;
+            screen_rect(x, y - 1, w, 18, CARD);
+            screen_text(x + 4, y + 1, 0.42f, WHITE, 0, h);
+            touch_area(x - 4, y - 4, w + 8, 24, KEY_HISTORY);
+        }
         y += 19;
         y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
         if (j->status != STATUS_DUPLICATE) { /* a Duplicate has no save and no version to show */
@@ -1713,6 +1720,246 @@ static void sync_all(void)
     set_message(failures ? C_RED : total ? C_GREEN : WHITE, first_detail, "%s%s%s%.199s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first_text);
 }
 
+/* ---------------------------------------------------------------- History and Restore (ADR 0016) */
+
+static entry_t *versions; /* History of the open Game, newest first: versions[0] is the Current version */
+static int version_count, version_cursor;
+static const game_t *history_game;
+
+/* Device of a Version (X-Client), as the user names it. */
+static const char *client_label(const char *c)
+{
+    if (!strcmp(c, "3ds")) return "3DS";
+    if (!strcmp(c, "pc")) return "PC";
+    if (!strcmp(c, "restauration")) return T("Restauration", "Restore");
+    return c[0] ? c : "?";
+}
+
+/* "512 Kio", "100 octets". */
+static void size_text(long n, char *out, size_t l)
+{
+    if (n >= 1024) snprintf(out, l, T("%ld Kio", "%ld KiB"), (n + 512) / 1024);
+    else snprintf(out, l, T("%ld octets", "%ld bytes"), n);
+}
+
+/* Top screen of the History: one line per Version (number, age, device, size), the Current version marked in green. */
+static void draw_history_top(void)
+{
+    const int cursor = version_cursor, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+    char t[48], pos[24];
+    int i;
+    float x;
+    screen_top();
+    x = 6 + screen_text(6, 4, 0.55f, WHITE, 0, T("Historique", "History")) + 8;
+    screen_text(x, 6, 0.45f, GREY_LIGHT, TOP_WIDTH - x - 8, history_game->short_name);
+    screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
+    if (!version_count)
+        screen_paragraph(10, LIST_Y + 13, 0.5f, GREY_LIGHT, TOP_WIDTH - 20, T("Aucune version de ce jeu sur le serveur.", "No version of this game on the server."));
+    for (i = start; i < version_count && i < start + TOP_LINES; i++) {
+        const entry_t *v = &versions[i];
+        float y = LIST_Y + (i - start) * 15;
+        if (i == cursor) {
+            screen_rect(0, y - 1, TOP_WIDTH, 15, SEL);
+            screen_rect(0, y - 1, 2, 15, i ? ACCENT : C_GREEN);
+        }
+        snprintf(t, sizeof t, T("n\xC2\xB0 %d", "#%d"), atoi(v->version));
+        screen_text(8, y + 1, 0.42f, GREY_LIGHT, 0, t);
+        format_age(v->age, english, 1, t, sizeof t);
+        screen_text(56, y, 0.5f, WHITE, 0, t);
+        screen_text(156, y + 1, 0.45f, GREY_LIGHT, 0, client_label(v->client));
+        size_text(v->size, t, sizeof t);
+        screen_text(246, y + 1, 0.45f, GREY_LIGHT, 0, t);
+        if (!i) screen_text(TOP_WIDTH - 8 - screen_text_width(0.42f, T("Actuelle", "Current")), y + 1, 0.42f, C_GREEN, 0, T("Actuelle", "Current"));
+    }
+    if (version_count > TOP_LINES) { /* scroll bar */
+        float h = 15.0f * TOP_LINES * TOP_LINES / version_count;
+        screen_rect(TOP_WIDTH - 4, LIST_Y - 1 + (15.0f * TOP_LINES - h) * start / (version_count - TOP_LINES), 2, h, GREY_DARK);
+    }
+    screen_rect(0, FOOTER_Y, TOP_WIDTH, SCREEN_HEIGHT - FOOTER_Y, BAR);
+    pos[0] = '\0';
+    if (version_count) snprintf(pos, sizeof pos, "%d / %d", cursor + 1, version_count);
+    screen_text(TOP_WIDTH - 6 - screen_text_width(0.38f, pos), FOOTER_Y + 2, 0.38f, GREY_LIGHT, 0, pos);
+}
+
+/* GET /saves/<key>/history into versions, newest first. 0 if read; otherwise the failure is in the message. */
+static int read_history(const game_t *j)
+{
+    char url[340], d[200], *body;
+    const char *p;
+    size_t size;
+    long status;
+    int n = 1, i;
+
+    show_progress(0, 0, "%s", T("Lecture de l'historique…", "Reading the history…"));
+    snprintf(url, sizeof url, "%s/saves/%s/history", cfg.url, j->key);
+    status = net_get(url, cfg.token, &body, &size);
+    if (status != 200) {
+        network_detail(status, url, d, sizeof d);
+        set_message(C_RED, d, T("Historique illisible. %s", "Cannot read the history. %s"), network_text(status, net_wifi(), english));
+        if (status > 0) free(body);
+        return -1;
+    }
+    for (p = body; (p = strchr(p, '{')); p++) n++; /* one Version per object at most, + 1 for the last read */
+    free(versions);
+    version_count = version_cursor = 0;
+    if (!(versions = malloc(n * sizeof *versions))) {
+        free(body);
+        set_message(C_RED, T("malloc impossible", "malloc failed"), "%s", T("Mémoire insuffisante pour l'historique. Relancez 3dssavesync.",
+                                                                          "Not enough memory for the history. Restart 3dssavesync."));
+        return -1;
+    }
+    for (p = body; next_server_entry(&p, &versions[version_count]);) version_count += versions[version_count].version[0] != '\0';
+    free(body);
+    for (i = 0; i < version_count / 2; i++) { /* the server lists the oldest first */
+        entry_t e = versions[i];
+        versions[i] = versions[version_count - 1 - i];
+        versions[version_count - 1 - i] = e;
+    }
+    return 0;
+}
+
+/* A on an old Version: read it, check its Hash, show it (with its play time for a Pokémon game) and ask; then the
+ * conditional Upload as "restauration" (ADR 0016): it becomes the Current version, the 3DS save is not touched.
+ * 1 if restored; -1 if the Current version changed meanwhile (412: read the History again); 0 otherwise (message). */
+static int restore_version(const game_t *j, const entry_t *v)
+{
+    char url[420], d[200], q[900], hash[65], when[120], loc[200], t[80];
+    char *body;
+    size_t size;
+    long status;
+    progress_t p;
+    int has_progress, ok;
+
+    show_progress(0, 0, "%s", T("Lecture de la version…", "Reading the version…"));
+    snprintf(url, sizeof url, "%s/saves/%s/history/%s", cfg.url, j->key, v->version);
+    status = net_get(url, cfg.token, &body, &size);
+    if (status != 200) {
+        network_detail(status, url, d, sizeof d);
+        if (status == 404) set_message(C_RED, d, "%s", T("Cette version n'est plus sur le serveur. Rien n'a changé : choisissez-en une autre.",
+                                                         "This version is no longer on the server. Nothing changed: choose another one."));
+        else set_message(C_RED, d, T("Lecture de la version impossible. %s Rien n'a changé.", "Cannot read the version. %s Nothing changed."),
+                         network_text(status, net_wifi(), english));
+        if (status > 0) free(body);
+        return 0;
+    }
+    hash_hex((unsigned char *)body, size, hash);
+    if (strcmp(hash, v->hash)) {
+        snprintf(d, sizeof d, T("SHA-256 reçu %.12s\xE2\x80\xA6, attendu %.12s\xE2\x80\xA6", "SHA-256 received %.12s\xE2\x80\xA6, expected %.12s\xE2\x80\xA6"), hash, v->hash);
+        set_message(C_RED, d, "%s", T("La version reçue est abîmée : rien n'a été restauré. Réessayez.", "The version arrived damaged, so nothing was restored. Try again."));
+        free(body);
+        return 0;
+    }
+    format_age(v->age, english, 1, t, sizeof t);
+    snprintf(when, sizeof when, "%s \xC2\xB7 %s", t, client_label(v->client));
+    has_progress = j->has_progress && pokemon_progress((unsigned char *)body, size, &p) == 0; /* same check as server_progress */
+    if (has_progress) progress_text(&p, t, sizeof t);
+    local_text(j, loc, sizeof loc);
+    snprintf(q, sizeof q, "%s\t%s%s%s\n%s\t%s\n\n%s", T("Cette version", "This version"), when, has_progress ? "\n\t" : "", has_progress ? t : "",
+             T("Sur la 3DS", "On the 3DS"), loc,
+             T("Elle redevient la version actuelle du serveur. Rien n'est effacé : l'actuelle reste dans l'historique. "
+               "Ensuite, 3dssavesync propose de la récupérer sur la 3DS, après une copie de sécurité de sa sauvegarde.",
+               "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
+               "Then 3dssavesync offers to download it to the 3DS, after a backup of its save."));
+    ok = confirm(T("Restaurer cette version ?", "Restore this version?"), j->short_name, q, NULL, T("Restaurer", "Restore"));
+    if (ok) {
+        char condition[100];
+        snprintf(condition, sizeof condition, "If-Match: \"%s\"", versions[0].hash); /* the Current version the user saw */
+        snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
+        show_progress(0, 0, "%s", T("Restauration…", "Restoring…"));
+        status = net_put(url, cfg.token, "restauration", condition, body, size);
+    }
+    free(body);
+    if (!ok) return 0;
+    if (status == 412) {
+        set_message(C_RED, "HTTP 412", "%s", T("La sauvegarde vient de changer sur le serveur : un appareil l'a envoyée entre-temps. Rien n'a été restauré. "
+                                               "Voici la liste à jour : choisissez de nouveau.",
+                                               "The save just changed on the server: a device uploaded it meanwhile. Nothing was restored. "
+                                               "Here is the updated list: choose again."));
+        return -1;
+    }
+    if (status != 200) {
+        network_detail(status, url, d, sizeof d);
+        set_message(C_RED, d, T("Restauration impossible. %s", "Restore failed. %s"), network_text(status, net_wifi(), english));
+        return 0;
+    }
+    return 1;
+}
+
+/* History (stylus): the server Versions of the Game, newest first. A restores an old one (restore_version); then the
+ * normal Download brings it to the 3DS, after a Backup copy (act, ADR 0016): no other write path. */
+static void history_screen(game_t *j)
+{
+    int restored = 0;
+    char t[200], done[120];
+
+    history_game = j;
+    if (read_history(j)) return;
+    draw_current_top = draw_history_top; /* progress and questions: the History stays on top */
+    while (aptMainLoop()) {
+        const entry_t *v = version_count ? &versions[version_cursor] : NULL;
+        const int same = v && !strcmp(v->hash, versions[0].hash); /* the Current version, or the same content */
+        const button_t b[2] = { { KEY_A, T("Restaurer", "Restore"), v && !same }, { KEY_B, T("Revenir", "Back"), 1 } };
+        float y = 6;
+        u32 k;
+
+        modal_begin(draw_history_top);
+        draw_game_icon(j);
+        y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
+        screen_text(8, y + 1, 0.4f, GREY_LIGHT, ICON_X - 16, T("Versions sur le serveur", "Versions on the server"));
+        y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;
+        if (v) {
+            u32 c = version_cursor ? WHITE : C_GREEN;
+            if (version_cursor) snprintf(t, sizeof t, T("Version n\xC2\xB0 %d", "Version #%d"), atoi(v->version));
+            else snprintf(t, sizeof t, "%s", T("Version actuelle", "Current version"));
+            screen_rect(8, y + 2, 3, 13, c);
+            screen_text(15, y, 0.5f, c, 0, t);
+            y += 21;
+            format_age(v->age, english, 1, t, sizeof t);
+            y = detail(y, T("Date", "Date"), t[0] ? t : "?");
+            y = detail(y, T("Appareil", "Device"), client_label(v->client));
+            size_text(v->size, t, sizeof t);
+            y = detail(y, T("Taille", "Size"), t) + 5;
+            screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH,
+                             !version_cursor ? T("La version que les appareils récupèrent. Choisissez une version plus ancienne pour la restaurer.",
+                                                 "The version the devices download. Choose an older one to restore it.")
+                             : same ? T("Même contenu que la version actuelle : rien à restaurer.", "Same content as the current version: nothing to restore.")
+                                    : T("\xEE\x80\x80 la remet en version actuelle sur le serveur, puis propose de la récupérer sur la 3DS, après une copie de sécurité.",
+                                        "\xEE\x80\x80 makes it the current version on the server again, then offers to download it to the 3DS, after a backup."));
+        } else {
+            screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, T("Ce jeu n'a encore aucune version sur le serveur : rien à restaurer. Envoyez d'abord sa sauvegarde avec \xEE\x80\x80 dans la liste.",
+                                                               "This game has no version on the server yet, so there is nothing to restore. Upload its save first with \xEE\x80\x80 in the list."));
+        }
+        draw_message(BAR_TOP_1);
+        k = modal_end(b, 2, 18);
+
+        if (k & KEY_B) break;
+        if (k & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) clear_message();
+        version_cursor = move_cursor(k, version_cursor, version_count, TOP_LINES);
+        if (k & KEY_A && v && !same) {
+            int r;
+            clear_message();
+            snprintf(done, sizeof done, T("%s : version n\xC2\xB0 %d restaurée sur le serveur.", "%s: version #%d restored on the server."), j->short_name, atoi(v->version));
+            r = restore_version(j, v);
+            if (r > 0) {
+                restored = 1;
+                break;
+            }
+            if (r < 0 && read_history(j)) break; /* 412: the list again; a failed read goes back to the game list, with its message */
+        }
+    }
+    free(versions);
+    versions = NULL;
+    version_count = 0;
+    draw_current_top = draw_list_top;
+    if (!restored) return;
+    reread_server();
+    /* The server changed, not the 3DS: its State says what comes next. To download: the usual question and Download. */
+    set_message(C_GREEN, NULL, "%s\n%s", done, j->status == STATUS_TO_DOWNLOAD ? T("Récupérez-la sur la 3DS avec \xEE\x80\x80, après une copie de sécurité.",
+                                                                           "Download it to the 3DS with \xEE\x80\x80, after a backup.")
+                                                                         : state_sentence(j, t, sizeof t));
+    if (j->status == STATUS_TO_DOWNLOAD && act(j)) reread_server();
+}
+
 /* ---------------------------------------------------------------- loop */
 
 /* Top screen with the app name only (network not started). */
@@ -1792,7 +2039,7 @@ int main(int argc, char **argv)
             edit_search(query, sizeof query);
             cursor = refilter(cursor);
         }
-        if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT)) {
+        if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT | KEY_HISTORY)) {
             int selected = shown_count ? shown[cursor] : -1;
             clear_message();
             /* Read everything again: Y, or settings changed. After an action: the Game it touched is already read again, the server only. */
@@ -1807,6 +2054,8 @@ int main(int argc, char **argv)
                 if (switch_save_file(&games[selected])) reread_server();
             } else if (k & KEY_START) {
                 sync_all();
+            } else if (k & KEY_HISTORY && shown_count) {
+                history_screen(&games[selected]);
             }
             show_alert();
             if (index_of(shown, shown_count, selected) >= 0) cursor = index_of(shown, shown_count, selected); /* the same game, at its new place */

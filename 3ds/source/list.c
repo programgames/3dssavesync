@@ -24,9 +24,12 @@ static const char *json_string(const char *p, char *out, size_t n)
 
 /* ponytail: string or number values only (the server.py format); an object or array value stops the
  * parse, a real parser (jsmn) if one is ever needed. */
+#define VERSION_CHARS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-"
+
 int next_server_entry(const char **p, entry_t *e)
 {
     const char *q = strchr(*p, '{');
+    size_t n;
     memset(e, 0, sizeof *e);
     e->size = e->age = -1;
     if (!q) return 0;
@@ -41,6 +44,7 @@ int next_server_entry(const char **p, entry_t *e)
             else if (!strcmp(key, "hash")) q = json_string(q, e->hash, sizeof e->hash);
             else if (!strcmp(key, "date")) q = json_string(q, e->date, sizeof e->date);
             else if (!strcmp(key, "client")) q = json_string(q, e->client, sizeof e->client);
+            else if (!strcmp(key, "version")) q = json_string(q, e->version, sizeof e->version);
             else {
                 e->has_name |= !strcmp(key, "nom");
                 q = json_string(q, NULL, 0);
@@ -56,6 +60,10 @@ int next_server_entry(const char **p, entry_t *e)
         else if (*q != '}') return 0;
     }
     if (strlen(e->hash) != 64 || strspn(e->hash, "0123456789abcdef") != 64) e->hash[0] = '\0';
+    n = strlen(e->version); /* goes into a URL: "<seq>-<date>-<client>-<hash>.sav", with the hash of the entry */
+    if (!e->hash[0] || n < 69 || strspn(e->version, VERSION_CHARS) != n - 4 || strcmp(e->version + n - 4, ".sav") ||
+        e->version[n - 69] != '-' || strncmp(e->version + n - 68, e->hash, 64))
+        e->version[0] = '\0';
     *p = q + 1;
     return 1;
 }
