@@ -251,7 +251,8 @@ func (s *Serveur) nommer(w http.ResponseWriter, cle string, corps []byte) {
 	s.verrou.Lock()
 	defer s.verrou.Unlock()
 	tmp := filepath.Join(s.data, cle, "nom.txt.tmp")
-	err := os.WriteFile(tmp, []byte(nom), 0o644)
+	os.Remove(tmp)
+	err := ecrireVerifie(tmp, []byte(nom)) // écrit sur le disque et relu, comme une Version
 	if err == nil {
 		err = os.Rename(tmp, filepath.Join(s.data, cle, "nom.txt"))
 	}

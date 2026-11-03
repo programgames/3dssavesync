@@ -159,7 +159,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", "Pokémon Bleue".encode())[0], 204)
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", " Pokémon - Version Bleue ".encode())[0], 204)
         self.assertEqual({j["code"]: j for j in self.json("/saves")}[self.cle]["nom"], "Pokémon - Version Bleue")
-        for mauvais in (b"", b"   ", b"a\nb", b"\xff", "x".encode() * 201):
+        for mauvais in (b"", b"   ", b"a\nb", b"a\x7fb", b"\xff", "x".encode() * 201):
             self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", mauvais)[0], 400, mauvais)
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", b"x", jeton="faux")[0], 401)
         self.assertEqual(len(self.json(f"/saves/{self.cle}/history")), 1)  # le nom ne crée pas de Version
@@ -201,6 +201,15 @@ class ApiTest(unittest.TestCase):
         h2 = hashlib.sha256(b"v2").hexdigest()
         self.assertEqual(self.envoyer(b"v3", If_Match=f'"{h2}"')[0], 200)
         self.assertEqual(self.requete("GET", f"/saves/{self.cle}")[2], b"v3")
+
+    @unittest.skipIf(DISTANT, "accès au dossier data du serveur")
+    def test_ecriture_impossible_500(self):
+        # Disque plein, droits : une erreur 500, jamais une connexion coupée.
+        open(os.path.join(self.data.name, self.cle), "w").close()  # un fichier à la place du dossier du jeu
+        self.assertEqual(self.envoyer()[0], 500)
+        self.requete("PUT", f"/saves/{self.autre}", b"x", If_None_Match="*")
+        os.mkdir(os.path.join(self.data.name, self.autre, "nom.txt.tmp"))  # nom.txt.tmp impossible à écrire
+        self.assertEqual(self.requete("PUT", f"/saves/{self.autre}/name", b"Pokemon")[0], 500)
 
     @unittest.skipIf(DISTANT, "accès au dossier data du serveur")
     def test_liste_comme_tests_saves_json(self):

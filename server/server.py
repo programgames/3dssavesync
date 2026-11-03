@@ -73,7 +73,7 @@ def creer(adresse, data, jeton):
                 return
             if self.path == "/saves":
                 codes = sorted(os.listdir(data)) if os.path.isdir(data) else []
-                return self.json([avec_nom(c, info(c, courante(c))) for c in codes if courante(c)])
+                return self.json([avec_nom(c, info(c, v)) for c in codes if (v := courante(c))])
             m = HISTORIQUE.match(self.path)
             if m and not m[2]:
                 return self.json([info(m[1], v) for v in versions(m[1])])
@@ -123,14 +123,17 @@ def creer(adresse, data, jeton):
                 if v and hash_de(v) == h:
                     return self.repondre(200, ETag=attendu)
                 dossier = os.path.join(data, m[1])
-                os.makedirs(dossier, exist_ok=True)
                 nom = f"{int(v[:6]) + 1 if v else 1:06d}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{client}-{h}.sav"
                 tmp = os.path.join(dossier, nom + ".tmp")
-                with open(tmp, "wb") as f:
-                    f.write(corps)
-                    f.flush()
-                    os.fsync(f.fileno())  # une Version acceptée doit survivre à une coupure
-                os.replace(tmp, os.path.join(dossier, nom))
+                try:
+                    os.makedirs(dossier, exist_ok=True)
+                    with open(tmp, "wb") as f:
+                        f.write(corps)
+                        f.flush()
+                        os.fsync(f.fileno())  # une Version acceptée doit survivre à une coupure
+                    os.replace(tmp, os.path.join(dossier, nom))
+                except OSError:  # disque plein, droits : le Client reçoit une erreur, pas une connexion coupée
+                    return self.repondre(500)
             self.repondre(200, ETag=f'"{h}"')
 
         def nommer(self, code, corps):
@@ -139,15 +142,20 @@ def creer(adresse, data, jeton):
                 nom = corps.decode("utf-8").strip()
             except UnicodeDecodeError:
                 nom = ""
-            if not 0 < len(nom) <= 200 or any(c < " " or c == "" for c in nom):
+            if not 0 < len(nom) <= 200 or any(c < " " or c == "\x7f" for c in nom):
                 return self.repondre(400)
             if not courante(code):
                 return self.repondre(404)
             with VERROU:
                 tmp = os.path.join(data, code, "nom.txt.tmp")
-                with open(tmp, "w", encoding="utf-8") as f:
-                    f.write(nom)
-                os.replace(tmp, os.path.join(data, code, "nom.txt"))
+                try:
+                    with open(tmp, "w", encoding="utf-8") as f:
+                        f.write(nom)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp, os.path.join(data, code, "nom.txt"))
+                except OSError:
+                    return self.repondre(500)
             self.repondre(204)
 
     return ThreadingHTTPServer(adresse, Handler)
