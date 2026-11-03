@@ -116,6 +116,8 @@ func notifierSysteme(texte string) {
 	}
 }
 
+func attendreNotifications() {} // notify-send et osascript rendent la main une fois la notification affichée
+
 // L'assistant se lance dans un terminal : rien à ouvrir.
 func ouvrirConsole() {}
 
@@ -190,4 +192,18 @@ func demarrerDetache(exe string, args []string) error {
 		return err
 	}
 	return c.Process.Release()
+}
+
+// Volumes montés (carte SD, clé USB) : /Volumes (macOS), /media/$USER et /run/media/$USER (Linux).
+func racinesAmovibles() []string {
+	motifs := []string{"/Volumes/*"}
+	if runtime.GOOS != "darwin" {
+		motifs = []string{filepath.Join("/media", os.Getenv("USER"), "*"), filepath.Join("/run/media", os.Getenv("USER"), "*")}
+	}
+	var l []string
+	for _, m := range motifs {
+		f, _ := filepath.Glob(m)
+		l = append(l, f...)
+	}
+	return l
 }

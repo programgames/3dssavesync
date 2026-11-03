@@ -1,26 +1,26 @@
-# gpSP et Beetle GBA : la taille de la SRAM vient de la Version du serveur
+# gpSP and Beetle GBA: the SRAM size comes from the server Version
 
-Les cœurs RetroArch gpSP et Beetle GBA écrivent un `.srm` de taille fixe, quel que soit le type de sauvegarde du jeu (ticket #4, `docs/research-v3-emulateurs.md` §4.6) :
+The RetroArch cores gpSP and Beetle GBA write a fixed-size `.srm`, whatever the save type of the game (ticket #4, `docs/research-v3-emulateurs.md` §4.6, French):
 
-- gpSP : 131072 octets (128 Kio). La SRAM est au début ; le reste garde sa valeur d'origine (0xFF, ou 0x00 si le fichier chargé était tout à 0x00).
-- Beetle GBA : 139264 octets (0x22000). Flash et SRAM au début, EEPROM à 0x20000. La fonction qui devine la taille (`adjust_save_ram`) existe mais n'est jamais appelée : la taille ne change pas.
+- gpSP: 131072 bytes (128 KiB). The SRAM is at the start; the rest keeps its original value (0xFF, or 0x00 if the loaded file was all 0x00).
+- Beetle GBA: 139264 bytes (0x22000). Flash and SRAM at the start, EEPROM at 0x20000. The function that guesses the size (`adjust_save_ram`) exists but is never called: the size does not change.
 
-Le Hash doit porter sur la SRAM seule, de la même taille qu'avec mGBA ou la 3DS (ADR 0008 et 0010). Le `.srm` ne dit pas cette taille. Le contenu ne suffit pas : une partie de Pokémon Émeraude qui n'a encore écrit qu'un emplacement laisse la seconde banque de la Flash à 0xFF, et ressemble à une Flash de 64 Kio.
+The Hash must cover the SRAM only, with the same size as with mGBA or the 3DS (ADR 0008 and 0010). The `.srm` does not tell this size. The content is not enough: a Pokémon Emerald game that has written only one slot so far leaves the second Flash bank at 0xFF, and looks like a 64 KiB Flash.
 
-Règle :
+Rule:
 
-- **Envoi** : la taille est celle de la Version courante du serveur. Le Lanceur prend ces octets (à 0x20000 pour une EEPROM chez Beetle GBA). Si un seul octet hors de cette zone n'est pas vierge (tout 0xFF ou tout 0x00), il refuse : rien n'est coupé.
-- **Sans Version sur le serveur** : taille inconnue, le Lanceur refuse avec un message (« synchronise d'abord ce jeu depuis mGBA ou la 3DS »). Un `.srm` tout vierge compte comme absent, comme toute Sauvegarde vierge.
-- **Récupération** : Copie de sécurité du `.srm`, puis un `.srm` de taille fixe, 0xFF partout et la SRAM reçue à sa place.
+- **Upload**: the size is that of the server Current version. The Launcher takes these bytes (at 0x20000 for an EEPROM in Beetle GBA). If a single byte outside this zone is not blank (all 0xFF or all 0x00), it refuses: nothing is cut.
+- **No Version on the server**: size unknown, the Launcher refuses with a message ("sync this game first from mGBA or the 3DS"). An all-blank `.srm` counts as absent, like any Blank save.
+- **Download**: Backup copy of the `.srm`, then a fixed-size `.srm`, 0xFF everywhere and the received SRAM in its place.
 
-## Options écartées
+## Rejected options
 
-- **Deviner la taille par le contenu** (dernier octet non vierge) : faux pour une Flash de 128 Kio à moitié écrite. Faux Conflit (tailles différentes), ou pire, une Version de 64 Kio envoyée pour un jeu de 128 Kio.
-- **Lire le type dans la ROM** (chaînes `FLASH1M_V`, `SRAM_V`, `EEPROM_V` du kit Nintendo) : lecture de toute la ROM à chaque Synchronisation, chaînes parfois fausses (gpSP garde une base de corrections), et une EEPROM de 512 octets ou de 8 Kio porte la même chaîne.
-- **Envoyer le `.srm` entier** : un Hash différent de mGBA et de la 3DS pour chaque jeu, donc des Conflits partout.
+- **Guess the size from the content** (last non-blank byte): wrong for a half-written 128 KiB Flash. False Conflict (different sizes), or worse, a 64 KiB Version uploaded for a 128 KiB game.
+- **Read the type in the ROM** (Nintendo SDK strings `FLASH1M_V`, `SRAM_V`, `EEPROM_V`): reads the whole ROM at each sync, strings sometimes wrong (gpSP keeps a database of fixes), and a 512-byte or 8 KiB EEPROM carries the same string.
+- **Upload the whole `.srm`**: a Hash different from mGBA and the 3DS for each game, so Conflicts everywhere.
 
-## Conséquences
+## Consequences
 
-- Aucune perte possible : le Lanceur ne coupe que des octets vierges, et fait toujours une Copie de sécurité avant d'écrire.
-- Un premier Envoi depuis gpSP ou Beetle GBA est impossible : le jeu doit déjà être sur le serveur.
-- Beetle GBA avec l'option `gba_use_mednafen_save_method` (pas de `.srm`) : non géré.
+- No loss possible: the Launcher only cuts blank bytes, and always makes a Backup copy before writing.
+- A first Upload from gpSP or Beetle GBA is impossible: the game must already be on the server.
+- Beetle GBA with the `gba_use_mednafen_save_method` option (no `.srm`): not supported.

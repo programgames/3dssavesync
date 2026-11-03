@@ -106,6 +106,11 @@ func TestESDE(t *testing.T) {
 	if i < 0 || j < i || !strings.Contains(s4, "DeSmuME") {
 		t.Errorf("bloc EmuDeck : commande 3dssavesync en premier, les autres gardées :\n%s", s4)
 	}
+	sansCommande := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <extension>.nds .7z .rar</extension>\n    </system>\n</systemList>\n"
+	s5, _, _ := esde(sansCommande, "", "x", map[string]string{"DS": "melonds"})
+	if !strings.Contains(s5, "<extension>.nds .7z .rar</extension>") || !strings.Contains(s5, "3dssavesync (melonds)") {
+		t.Errorf("bloc sans commande : extensions de l'utilisateur gardées :\n%s", s5)
+	}
 }
 
 func TestDesktop(t *testing.T) {
@@ -138,7 +143,7 @@ func TestAssistant(t *testing.T) {
 		os.MkdirAll(filepath.Join(m, "USERPROFILE", "ES-DE"), 0o755)
 	}
 	saves, roms := filepath.Join(tmp, "saves"), filepath.Join(tmp, "roms")
-	reponses := []string{"", url, "mauvais-jeton", "", "", "jeton-test", "", "", saves, roms, ""}
+	reponses := []string{"1", url, "mauvais-jeton", "", "", "jeton-test", "", "", saves, roms, ""}
 	if runtime.GOOS == "windows" {
 		reponses = append(reponses, lb)
 	}
@@ -152,7 +157,7 @@ func TestAssistant(t *testing.T) {
 	if strings.Contains(sortie.String(), "jeton-test") {
 		t.Error("le jeton ne doit jamais s'afficher")
 	}
-	if !strings.Contains(sortie.String(), "401") || !strings.Contains(sortie.String(), "Connexion réussie") {
+	if !strings.Contains(sortie.String(), "refuse ce jeton") || !strings.Contains(sortie.String(), "Connexion réussie") {
 		t.Errorf("mauvais jeton refusé, puis connexion réussie attendus :\n%s", sortie.String())
 	}
 	var cfg Config

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -32,6 +33,8 @@ type AssistantWeb struct {
 	verrou               sync.Mutex
 	vu                   time.Time // dernier signe de vie de la page
 	fin                  chan struct{}
+	noms                 map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
+	nomsLus              sync.Once
 }
 
 // Émulateur tel que la page l'affiche et le renvoie.
@@ -59,6 +62,7 @@ type SysWeb struct {
 type EtatWeb struct {
 	Anglais, Windows, Existe, JetonPresent, Local bool
 	URL, Courant, Installe, LaunchBox, EsDe       string
+	Adresse3DS                                    string // écrite sur la carte SD de la 3DS
 	Port                                          int
 	EsDeActif                                     bool
 	Emulateurs                                    []EmuWeb
@@ -93,7 +97,7 @@ func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
 		fmt.Println(adresse)
 	} else if err := ouvrirNavigateur(adresse); err != nil {
 		fmt.Println(adresse)
-		notifier(tr("Ouvre cette adresse dans ton navigateur : ", "Open this address in your browser: ") + adresse)
+		notifier(tr("Ouvrez cette adresse dans le navigateur : ", "Open this address in the browser: ") + adresse)
 	}
 	// Fin : bouton « Terminer », ou plus de signe de vie de la page (onglet fermé) pendant 2 minutes.
 	for {
@@ -139,6 +143,19 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.Execute(w, map[string]any{"Langue": tr("fr", "en")})
 		return
 	}
+	if chemin == "config.ini" && r.Method == "GET" { // à copier par FTP sur la 3DS
+		var cfg Config
+		lireJSON(a.config, &cfg)
+		url, _ := adresse3DS(&cfg)
+		if url == "" || cfg.Jeton == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="config.ini"`)
+		io.WriteString(w, configIni("", url, cfg.Jeton))
+		return
+	}
 	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // une autre page ne peut pas envoyer ce type sans CORS
 		http.Error(w, "", 405)
 		return
@@ -165,11 +182,31 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var c ChoixWeb
 		json.NewDecoder(r.Body).Decode(&c)
 		lignes, err := a.appliquer(c)
-		reponse = map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		x := map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		var cfg Config
+		if err == nil && lireJSON(a.config, &cfg) == nil && cfg.ServeurLocal != nil { // cadre « à entrer sur la 3DS »
+			x["Adresse"], x["Autres"] = adresse3DS(&cfg)
+			x["Jeton"] = cfg.Jeton
+		}
+		reponse = x
+	case "api/cartes":
+		reponse = map[string]any{"Cartes": detecterCartes()}
+	case "api/preparer":
+		var x struct{ Racine string }
+		json.NewDecoder(r.Body).Decode(&x)
+		var cfg Config
+		lireJSON(a.config, &cfg)
+		url, _ := adresse3DS(&cfg)
+		if f, err := preparerCarte(x.Racine, url, cfg.Jeton, cfg.Alias); err != nil {
+			reponse = map[string]any{"Ok": false, "Message": texteErreur(err)}
+		} else {
+			reponse = map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("Carte SD prête (%s). Remettez-la dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
+				"SD card ready (%s). Put it back in the 3DS, then start 3dssavesync: it connects without typing anything."), f)}
+		}
 	case "api/reparer":
 		var cfg Config
-		if err := lireJSON(a.config, &cfg); err != nil {
-			reponse = map[string]any{"Erreur": err.Error()}
+		if err := lireConfig(a.config, &cfg); err != nil {
+			reponse = map[string]any{"Erreur": texteErreur(err)}
 		} else {
 			reponse = map[string]any{"Lignes": reparer(&cfg, lanceurDe(&cfg))}
 		}
@@ -177,6 +214,28 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var x struct{ Nom string }
 		json.NewDecoder(r.Body).Decode(&x)
 		reponse = a.ouvrir(x.Nom)
+	case "api/alias":
+		var x struct {
+			Nom, Systeme string
+			Retirer      bool
+		}
+		json.NewDecoder(r.Body).Decode(&x)
+		reponse = a.aliasWeb(x.Nom, x.Systeme, x.Retirer)
+	case "api/jeux", "api/versions", "api/restaurer":
+		var x struct{ Cle, Fichier, Courant string }
+		json.NewDecoder(r.Body).Decode(&x)
+		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
+			a.verrou.Unlock()
+			defer a.verrou.Lock()
+			switch chemin {
+			case "api/jeux":
+				reponse = a.jeuxWeb()
+			case "api/versions":
+				reponse = a.versionsWeb(x.Cle)
+			default:
+				reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
+			}
+		}()
 	case "api/terminer":
 		close(a.fin)
 		reponse = true
@@ -188,11 +247,36 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(reponse)
 }
 
-func texteErreur(err error) string {
-	if err == nil {
-		return ""
+// aliasWeb : les ROM hacks qui ont leur propre Clé (ADR 0014). Nom non vide : ajout (Clé créée par ajouterAlias) ou
+// retrait, écrit dans config.json avec une copie datée.
+func (a *AssistantWeb) aliasWeb(nom, systeme string, retirer bool) map[string]any {
+	var cfg Config
+	if err := lireConfig(a.config, &cfg); err != nil {
+		return map[string]any{"Erreur": texteErreur(err)}
 	}
-	return err.Error()
+	var err error
+	if nom = strings.TrimSpace(nom); nom != "" {
+		_, existe := cfg.Alias[nom]
+		switch {
+		case retirer && existe:
+			delete(cfg.Alias, nom)
+			err = ecrireConfigCopie(a.config, &cfg)
+		case !retirer && !existe:
+			if _, err = ajouterAlias(&cfg, systeme, nom); err == nil {
+				err = ecrireConfigCopie(a.config, &cfg)
+			}
+		}
+	}
+	noms := []string{}
+	for n := range cfg.Alias {
+		noms = append(noms, n)
+	}
+	sort.Slice(noms, func(i, j int) bool { return strings.ToLower(noms[i]) < strings.ToLower(noms[j]) })
+	x := map[string]any{"Noms": noms}
+	if err != nil {
+		x["Erreur"] = texteErreur(err)
+	}
+	return x
 }
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
@@ -248,7 +332,7 @@ func emulateurDe(x EmuWeb) (*Emulateur, error) {
 		return nil, fmt.Errorf(tr("%s : la ligne de commande doit contenir {rom}", "%s: the command line must contain {rom}"), x.Nom)
 	}
 	if len(x.Systemes) == 0 {
-		return nil, fmt.Errorf(tr("%s : coche au moins un Système", "%s: tick at least one system"), x.Nom)
+		return nil, fmt.Errorf(tr("%s : cochez au moins un système", "%s: tick at least one system"), x.Nom)
 	}
 	e.Extension = strings.TrimSpace(x.Extension)
 	if e.Extension != "" && !strings.HasPrefix(e.Extension, ".") {
@@ -262,7 +346,7 @@ func emulateurDe(x EmuWeb) (*Emulateur, error) {
 func apercu(x EmuWeb) map[string]string {
 	e, err := emulateurDe(x)
 	if err == nil && len(x.Systemes) == 0 {
-		err = fmt.Errorf("%s", tr("aucun Système", "no system"))
+		err = fmt.Errorf("%s", tr("aucun système", "no system"))
 	}
 	if err != nil {
 		return map[string]string{"Erreur": err.Error()}
@@ -292,7 +376,10 @@ func (a *AssistantWeb) etat() EtatWeb {
 	var cfg Config
 	existeCfg := lireJSON(a.config, &cfg) == nil
 	e := EtatWeb{Anglais: anglais, Windows: runtime.GOOS == "windows", Existe: existeCfg, JetonPresent: cfg.Jeton != "",
-		Local: cfg.ServeurLocal != nil, URL: cfg.URL, Courant: executable(), Installe: emplacementInstalle(), Port: 8765}
+		Local: cfg.ServeurLocal != nil || !existeCfg, URL: cfg.URL, Courant: executable(), Installe: emplacementInstalle(), Port: 8765}
+	if cfg.Jeton != "" {
+		e.Adresse3DS, _ = adresse3DS(&cfg)
+	}
 	if cfg.ServeurLocal != nil {
 		e.Port = cfg.ServeurLocal.Port
 		e.URL = ""
@@ -335,7 +422,7 @@ func (a *AssistantWeb) ouvrir(nom string) map[string]any {
 		return map[string]any{"Ok": false, "Message": tr("Émulateur absent de la configuration : ", "Emulator missing from the configuration: ") + nom}
 	}
 	if err := ouvrirDetache(lanceurDe(&cfg), []string{"launch", "--config", a.config, nom}); err != nil {
-		return map[string]any{"Ok": false, "Message": err.Error()}
+		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
 	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre : ses jeux sont synchronisés avant, puis envoyés à sa fermeture.",
 		"%s is opening: its games are synced first, then uploaded when it closes."), nom)}
@@ -348,11 +435,8 @@ func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
 	if c.Jeton != "" {
 		cfg.Jeton = c.Jeton
 	}
-	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
-		return map[string]any{"Ok": false, "Message": tr("Entre l'adresse du serveur (https://…).", "Enter the server address (https://…).")}
-	}
 	if err := testerServeur(&cfg); err != nil {
-		return map[string]any{"Ok": false, "Message": tr("Connexion impossible : ", "Cannot connect: ") + err.Error()}
+		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
 	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connection OK.")}
 }
@@ -385,7 +469,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			cfg.Jeton = c.Jeton
 		}
 		if err := testerServeur(&cfg); err != nil {
-			return nil, fmt.Errorf(tr("serveur injoignable (%v) : rien n'est écrit", "server unreachable (%v): nothing is written"), err)
+			return nil, fmt.Errorf("%s %s", texteErreur(err), tr("Rien n'est écrit.", "Nothing is written."))
 		}
 	}
 
@@ -395,7 +479,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			continue
 		}
 		if emus[x.Nom] != nil {
-			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : garde-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
+			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : gardez-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
 		}
 		e, err := emulateurDe(x)
 		if err != nil {

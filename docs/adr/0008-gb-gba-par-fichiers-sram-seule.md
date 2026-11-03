@@ -1,20 +1,20 @@
-# GB, GBC et GBA : synchroniser la SRAM seule, garder les lanceurs déjà utilisés
+# GB, GBC and GBA: sync the SRAM only, keep the launchers already in use
 
-Relevé du 2026-11-01 : sur la 3DS, le GBA tourne déjà sous open_agb_firm (`useSavesFolder=false`, donc `.sav` brut à côté de la ROM dans `sd:/roms/gba/`) et le GB/GBC sous TWiLight (`.sav` à côté de la ROM dans `sd:/roms/gb/`). Sur le PC, mGBA. Ce sont des fichiers ordinaires, comme le `.sav` DS : la v2 les synchronise de la même façon, sans changer d'émulateur.
+Survey of 2026-11-01: on the 3DS, GBA already runs under open_agb_firm (`useSavesFolder=false`, so a raw `.sav` next to the ROM in `sd:/roms/gba/`) and GB/GBC under TWiLight (`.sav` next to the ROM in `sd:/roms/gb/`). On the PC, mGBA. These are ordinary files, like the DS `.sav`: v2 syncs them the same way, without changing emulator.
 
-Le seul écart de format est l'horloge temps réel : mGBA ajoute un Trailer d'horloge à la fin du `.sav` (48 octets GB MBC3+TIMER, 16 octets GBA), open_agb_firm prend l'horloge de la 3DS, TWiLight n'en écrit pas. Règle :
+The only format difference is the real-time clock: mGBA adds a Clock trailer at the end of the `.sav` (48 bytes GB MBC3+TIMER, 16 bytes GBA), open_agb_firm takes the clock of the 3DS, TWiLight writes none. Rule:
 
-- la SRAM est la partie « jeu » : `taille - (taille mod 1024)` (les trailers font moins de 1 Kio) ; remplacé par l'ADR 0010 (reste modulo 512) ;
-- le Hash, la taille comparée et la Version envoyée portent **sur la SRAM seule** ;
-- à la Récupération, le Client écrit la SRAM reçue **puis remet son propre Trailer d'horloge** s'il en avait un : chaque machine garde son horloge.
+- the SRAM is the "game" part: `size - (size mod 1024)` (trailers are smaller than 1 KiB); replaced by ADR 0010 (remainder modulo 512);
+- the Hash, the compared size and the uploaded Version cover **the SRAM only**;
+- at Download, the Client writes the received SRAM **then puts back its own Clock trailer** if it had one: each machine keeps its clock.
 
-## Options écartées
+## Rejected options
 
-- **mGBA 3DS partout** (forwarders avec icône HOME) : fichiers identiques au PC, mais change l'émulateur de la 3DS, cache la ROM dans chaque CIA (pas de Clé lisible) et demande mGBA 0.11-dev. Gardé comme étape facultative.
-- **Convertir les trailers entre émulateurs** : formats différents (GameYob ne met pas à jour les champs que mGBA lit), gain faible, risque réel. Chaque machine garde son horloge à la place.
-- **Injects Virtual Console** : sauvegarde GBA dans la NAND (AGBSAVE), extractible seulement avec GodMode9.
+- **mGBA 3DS everywhere** (forwarders with a HOME icon): files identical to the PC, but changes the 3DS emulator, hides the ROM in each CIA (no readable Key) and requires mGBA 0.11-dev. Kept as an optional step.
+- **Convert the trailers between emulators**: different formats (GameYob does not update the fields mGBA reads), small gain, real risk. Each machine keeps its clock instead.
+- **Virtual Console injects**: GBA save in the NAND (AGBSAVE), extractable only with GodMode9.
 
-## Conséquences
+## Consequences
 
-- Or, Argent, Cristal (horloge) : l'heure du jeu peut différer d'une machine à l'autre ; la partie, elle, est la même.
-- open_agb_firm n'écrit le `.sav` qu'à l'extinction par POWER : synchroniser au démarrage suivant.
+- Gold, Silver, Crystal (clock): the in-game time can differ from one machine to the other; the game progress itself is the same.
+- open_agb_firm writes the `.sav` only at power-off with POWER: sync at the next start.

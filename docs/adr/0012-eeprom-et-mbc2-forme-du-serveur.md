@@ -1,26 +1,26 @@
-# EEPROM GBA et MBC2 GB : une forme unique sur le serveur
+# GBA EEPROM and GB MBC2: one single form on the server
 
-Deux types de sauvegarde ont un fichier différent selon l'émulateur, pour les mêmes données (tickets #7 et #8, `docs/research-eeprom-mbc2.md`). Le Hash porte sur la SRAM (ADR 0008) : sans conversion, la 3DS et le PC voient deux versions, donc un Conflit, et un fichier recopié tel quel donne une partie illisible.
+Two save types have a different file depending on the emulator, for the same data (tickets #7 and #8, `docs/research-eeprom-mbc2.md`, French). The Hash covers the SRAM (ADR 0008): without conversion, the 3DS and the PC see two versions, so a Conflict, and a file copied as is gives an unreadable game.
 
-- **EEPROM GBA** (512 octets ou 8 Kio) : open_agb_firm écrit les octets dans l'ordre du matériel ; mGBA inverse chaque bloc de 8 octets.
-- **MBC2 GB** (512 valeurs de 4 bits) : mGBA écrit 256 octets, deux valeurs par octet (adresse paire dans le quartet bas) ; SameBoy, VBA-M et BGB 512 octets, une valeur par octet ; GameYob (TWiLight Menu++) 8 Kio, les 512 premiers octets utiles.
+- **GBA EEPROM** (512 bytes or 8 KiB): open_agb_firm writes the bytes in hardware order; mGBA reverses each 8-byte block.
+- **GB MBC2** (512 4-bit values): mGBA writes 256 bytes, two values per byte (even address in the low nibble); SameBoy, VBA-M and BGB 512 bytes, one value per byte; GameYob (TWiLight Menu++) 8 KiB, the first 512 bytes used.
 
-Règle :
+Rule:
 
-- **EEPROM** : le serveur garde l'ordre de mGBA. La 3DS inverse chaque bloc de 8 octets pour une sauvegarde GBA de 512 octets ou 8 Kio qui n'est pas celle d'un forwarder mGBA (donc open_agb_firm), à l'Envoi comme à la Récupération. Sur GBA, ces deux tailles ne viennent que d'une EEPROM. Le PC ne convertit rien.
-- **MBC2** : le serveur garde 512 octets, une valeur par octet, quartet haut à 0.
-  - 3DS : jeu MBC2 reconnu par l'octet `0x147` de la ROM (0x05 ou 0x06), car 8 Kio est aussi la taille d'autres jeux GB. À la Récupération : taille du fichier existant ; sinon 256 octets pour un forwarder mGBA et 8 Kio pour TWiLight Menu++.
-  - PC : un fichier GB de 256 ou 512 octets ne peut être que MBC2. À la Récupération : taille du fichier existant ; sinon 256 octets chez mGBA (application ou cœur RetroArch) et 512 octets (quartet haut à 0xF, lu par VBA-M) ailleurs.
-- **Copies de sécurité** : toujours les octets du fichier, sans conversion.
+- **EEPROM**: the server keeps the mGBA order. The 3DS reverses each 8-byte block for a 512-byte or 8 KiB GBA save that is not an mGBA forwarder save (so open_agb_firm), at Upload and at Download. On GBA, these two sizes only come from an EEPROM. The PC converts nothing.
+- **MBC2**: the server keeps 512 bytes, one value per byte, high nibble at 0.
+  - 3DS: MBC2 game recognized by byte `0x147` of the ROM (0x05 or 0x06), because 8 KiB is also the size of other GB games. At Download: size of the existing file; otherwise 256 bytes for an mGBA forwarder and 8 KiB for TWiLight Menu++.
+  - PC: a 256- or 512-byte GB file can only be MBC2. At Download: size of the existing file; otherwise 256 bytes in mGBA (app or RetroArch core) and 512 bytes (high nibble at 0xF, read by VBA-M) elsewhere.
+- **Backup copies**: always the bytes of the file, without conversion.
 
-## Options écartées
+## Rejected options
 
-- **Garder le fichier de chaque émulateur sur le serveur** : un Hash par émulateur, donc des Conflits à chaque changement de machine.
-- **Forme open_agb_firm pour l'EEPROM** : chaque émulateur PC aurait besoin d'une conversion ; mGBA est l'émulateur par défaut du PC et des forwarders.
-- **Forme mGBA (256 octets) pour MBC2** : la forme à 512 octets est la plus simple à lire et à écrire pour les trois autres formats.
+- **Keep the file of each emulator on the server**: one Hash per emulator, so Conflicts at each machine change.
+- **open_agb_firm form for the EEPROM**: each PC emulator would need a conversion; mGBA is the default emulator of the PC and of the forwarders.
+- **mGBA form (256 bytes) for MBC2**: the 512-byte form is the simplest to read and write for the three other formats.
 
-## Conséquences
+## Consequences
 
-- Une EEPROM envoyée par une version antérieure depuis open_agb_firm est sur le serveur dans le mauvais ordre. Avec cette version, la 3DS calcule un autre Hash pour le même fichier : elle propose un Envoi, dans le bon ordre. Ne récupère pas ce jeu sur le PC avant cet Envoi.
-- Un fichier MBC2 de 8 Kio envoyé par une version antérieure reste tel quel sur le PC (8 Kio n'y est pas reconnu comme MBC2). La 3DS le convertit à la Récupération.
-- Le format EEPROM interne d'autres émulateurs PC (VBA-M, SkyEmu, NanoBoyAdvance) n'est pas vérifié : ordre de mGBA supposé.
+- An EEPROM uploaded by an earlier version from open_agb_firm is on the server in the wrong order. With this version, the 3DS computes another Hash for the same file: it offers an Upload, in the right order. Do not download this game on the PC before this Upload.
+- An 8 KiB MBC2 file uploaded by an earlier version stays as is on the PC (8 KiB is not recognized as MBC2 there). The 3DS converts it at Download.
+- The internal EEPROM format of other PC emulators (VBA-M, SkyEmu, NanoBoyAdvance) is not verified: mGBA order assumed.

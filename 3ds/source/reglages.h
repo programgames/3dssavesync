@@ -24,8 +24,8 @@ int titres_ecrire(const char *chemin, const titre_t *t, int n);
 /* Index de id dans t, ou -1. */
 int titres_index(const titre_t *t, int n, unsigned long long id);
 
-/* Reprise d'une installation sous l'ancien nom : si nouveau/config.ini manque et ancien/config.ini existe,
- * copie config.ini et base.ini (l'ancien dossier reste intact). 1 si copié, 0 si rien à faire, -1 si échec. */
+/* Reprise d'une installation sous l'ancien nom : si le nouveau dossier n'a ni config.ini, ni base.ini, ni titres.ini (ni leur
+ * .tmp) et ancien/config.ini existe, copie config.ini, base.ini et titres.ini (l'ancien dossier reste intact). 1 si copié, 0 si rien à faire, -1 si échec. */
 int migrer_dossier(const char *ancien, const char *nouveau);
 
 #endif

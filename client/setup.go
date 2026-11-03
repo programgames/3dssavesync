@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -95,10 +96,10 @@ func commandeSetup(config string, texte, sansNavigateur bool) (int, error) {
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout, terminal: true}
 	err := assistant(q, config)
 	if err != nil {
-		q.dire("\n%s%s", tr("Erreur : ", "Error: "), err)
+		q.dire("\n%s%s", tr("Erreur : ", "Error: "), texteErreur(err))
 	}
 	if consolePropre {
-		q.dire("\n%s", tr("Appuie sur Entrée pour fermer.", "Press Enter to close."))
+		q.dire("\n%s", tr("Appuyez sur Entrée pour fermer.", "Press Enter to close."))
 		q.ligne()
 	}
 	if err != nil {
@@ -111,14 +112,14 @@ func commandeRepair(config string) (int, error) {
 	ouvrirConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}
 	var cfg Config
-	if err := lireJSON(config, &cfg); err != nil {
+	if err := lireConfig(config, &cfg); err != nil {
 		return 1, err
 	}
 	for _, l := range reparer(&cfg, lanceurDe(&cfg)) {
 		q.dire("- %s", l)
 	}
 	if consolePropre {
-		q.dire("\n%s", tr("Appuie sur Entrée pour fermer.", "Press Enter to close."))
+		q.dire("\n%s", tr("Appuyez sur Entrée pour fermer.", "Press Enter to close."))
 		q.ligne()
 	}
 	return 0, nil
@@ -193,6 +194,10 @@ func assistant(q *Questions, config string) error {
 		if err := serveurLocal(q, &cfg, config); err != nil {
 			return err
 		}
+		dire3DS(q, &cfg)
+	}
+	if slices.Contains(etapes, "serveur") {
+		etapeCarteSD(q, &cfg)
 	}
 	q.dire("\n%s", tr("Terminé.", "Done."))
 	return nil
@@ -211,34 +216,43 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 	}
 	f, err := autostart(tr("3dssavesync serveur", "3dssavesync server"), lanceur, args)
 	if err != nil {
-		q.dire("%s %s", tr("Démarrage automatique impossible :", "Autostart failed:"), err)
+		q.dire("%s %s", tr("Démarrage automatique impossible :", "Autostart failed:"), texteErreur(err))
 	} else {
 		q.dire("%s %s", tr("Démarrage automatique :", "Autostart:"), f)
 	}
 	if testerServeur(cfg) != nil {
 		if runtime.GOOS == "windows" {
-			q.dire("%s", tr("Windows peut demander d'autoriser 3dssavesync sur le réseau : accepte pour les réseaux privés.",
+			q.dire("%s", tr("Windows peut demander d'autoriser 3dssavesync sur le réseau : acceptez pour les réseaux privés.",
 				"Windows may ask to allow 3dssavesync on the network: accept for private networks."))
 		}
 		if err := lancerServeur(lanceur, args); err != nil {
-			return fmt.Errorf(tr("lancement du serveur local : %w", "cannot start the local server: %w"), err)
+			return fmt.Errorf(tr("lancement du serveur local impossible : %s", "cannot start the local server: %s"), texteErreur(err))
 		}
 		for i := 0; i < 20 && testerServeur(cfg) != nil; i++ {
 			time.Sleep(250 * time.Millisecond)
 		}
 	}
 	if err := testerServeur(cfg); err != nil {
-		return fmt.Errorf(tr("le serveur local ne répond pas : %w", "the local server does not answer: %w"), err)
+		return fmt.Errorf(tr("le serveur local ne répond pas. %s", "the local server does not answer. %s"), texteErreur(err))
 	}
 	q.dire("%s", tr("Serveur local en marche.", "Local server running."))
-	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
-	for _, ip := range adressesLocales() {
-		q.dire("  %s http://%s:%d", tr("Serveur :", "Server:"), ip, cfg.ServeurLocal.Port)
-	}
-	q.dire("  %s %s", tr("Jeton :", "Token:"), cfg.Jeton)
-	q.dire("%s", tr("Garde ce jeton pour toi. N'ouvre jamais ce port sur Internet (box, routeur).",
-		"Keep this token private. Never open this port on the Internet (router)."))
 	return nil
+}
+
+// Console : l'adresse et le jeton à entrer sur la 3DS (la page web les montre dans un cadre à part).
+func dire3DS(q *Questions, cfg *Config) {
+	url, autres := adresse3DS(cfg)
+	if url == "" {
+		url = tr("adresse du PC introuvable : vérifiez que le PC est relié à la box", "PC address not found: check that the PC is connected to the router")
+	}
+	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
+	q.dire("  %s %s", tr("Serveur :", "Server:"), url)
+	q.dire("  %s %s", tr("Jeton :", "Token:"), cfg.Jeton)
+	if len(autres) > 0 {
+		q.dire("  %s %s", tr("Autres adresses, si la 3DS ne se connecte pas :", "Other addresses, if the 3DS does not connect:"), strings.Join(autres, ", "))
+	}
+	q.dire("%s", tr("Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur).",
+		"Keep this token private. Never open this port on the Internet (router)."))
 }
 
 // config.json : copie datée de l'ancien, puis écriture vérifiée. Rien si rien n'a changé.
@@ -266,7 +280,7 @@ func etapeServeur(q *Questions, cfg *Config) error {
 	q.dire("  2. %s", tr("Serveur local sur ce PC : à la maison, PC allumé, rien d'autre à installer",
 		"Local server on this PC: at home, PC on, nothing else to install"))
 	defaut := "1"
-	if cfg.ServeurLocal != nil {
+	if cfg.ServeurLocal != nil || cfg.URL == "" { // premier lancement : serveur local, rien d'autre à installer
 		defaut = "2"
 	}
 	if q.texte(tr("Choix", "Choice"), defaut) == "2" {
@@ -307,7 +321,7 @@ func etapeServeur(q *Questions, cfg *Config) error {
 			q.dire("%s", tr("Connexion réussie.", "Connection OK."))
 			return nil
 		}
-		q.dire("%s %s", tr("Connexion impossible :", "Cannot connect:"), err)
+		q.dire("%s", texteErreur(err))
 		if !q.oui(tr("Réessayer ?", "Try again?"), true) {
 			return fmt.Errorf("%s", tr("serveur injoignable : rien n'est écrit", "server unreachable: nothing is written"))
 		}
@@ -316,9 +330,13 @@ func etapeServeur(q *Questions, cfg *Config) error {
 
 func testerServeur(cfg *Config) error {
 	s := &Session{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}, profil: "setup"}
+	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
+		return errors.New(tr("Entrez l'adresse du serveur, avec https:// (ou http:// pour le serveur local).",
+			"Enter the server address, with https:// (or http:// for the local server)."))
+	}
 	st, _, err := s.api("GET", "/saves", nil, nil)
 	if err == nil && st != 200 {
-		err = fmt.Errorf("GET /saves : %d", st)
+		err = &erreurHTTP{"GET /saves", st}
 	}
 	return err
 }
@@ -360,7 +378,7 @@ func installerExe(cfg *Config) string {
 		}
 	}
 	if err != nil {
-		return tr("Copie impossible (le programme tourne peut-être) : ", "Copy failed (the program may be running): ") + err.Error()
+		return tr("Copie du programme impossible (il tourne peut-être) : ", "Copying the program failed (it may be running): ") + texteErreur(err)
 	}
 	cfg.Lanceur = cible
 	return tr("Programme copié : ", "Program copied: ") + cible
@@ -557,7 +575,7 @@ func ajouterEmulateur(q *Questions, cfg *Config, t Trouve, remplacer bool) {
 	if nom == "retroarch" && len(e.Coeurs) == 0 {
 		e.Coeurs = coeursRetroArch(t.Exe)
 		if len(e.Coeurs) == 0 {
-			q.dire("%s", tr("Aucun cœur géré trouvé (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA) : installe-les dans RetroArch, puis relance l'assistant.",
+			q.dire("%s", tr("Aucun cœur géré trouvé (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA) : installez-les dans RetroArch, puis relancez l'assistant.",
 				"No supported core found (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA): install them in RetroArch, then run the assistant again."))
 			return
 		}
@@ -638,7 +656,7 @@ func etapeFrontends(q *Questions, cfg *Config) {
 		if !lb && !es {
 			break
 		}
-		q.texte(tr("Ferme LaunchBox, BigBox et ES-DE, puis appuie sur Entrée", "Close LaunchBox, BigBox and ES-DE, then press Enter"), "")
+		q.texte(tr("Fermez LaunchBox, BigBox et ES-DE, puis appuyez sur Entrée", "Close LaunchBox, BigBox and ES-DE, then press Enter"), "")
 	}
 	for _, l := range reparer(cfg, lanceurDe(cfg)) {
 		q.dire("- %s", l)
@@ -649,38 +667,35 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	creerRaccourcis(q, cfg)
 }
 
-// Un raccourci par émulateur (launch) et un pour les réglages.
+// Un raccourci par émulateur (launch) et un pour les réglages. Sans dossier des ROM (hors 3DS), le raccourci ne
+// synchroniserait rien : pas de raccourci, les jeux se lancent depuis le frontend.
 func creerRaccourcis(q *Questions, cfg *Config) {
 	lanceur := lanceurDe(cfg)
-	var noms []string
+	var noms, sansRoms []string
 	for n := range cfg.Emulateurs {
 		noms = append(noms, n)
 	}
 	sort.Strings(noms)
 	for _, n := range noms {
+		e := cfg.Emulateurs[n]
+		if p, err := e.profil(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systemes(p), []string{"3DS"}) {
+			sansRoms = append(sansRoms, e.processus())
+			continue
+		}
 		f, err := creerRaccourci("3dssavesync "+n, lanceur, []string{"launch", n}, false)
 		afficherRaccourci(q, f, err)
 	}
 	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, false)
 	afficherRaccourci(q, f, err)
-	var sansRoms []string
-	for _, n := range noms {
-		e := cfg.Emulateurs[n]
-		if p, err := e.profil(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systemes(p), []string{"3DS"}) {
-			sansRoms = append(sansRoms, n)
-		}
-	}
 	if len(sansRoms) > 0 {
-		q.dire(tr("Note : %s n'ont pas de dossier des ROM : leur raccourci lance l'émulateur sans rien synchroniser. "+
-			"Pour en ajouter un : « 3dssavesync réglages », dossier des ROM de l'émulateur.",
-			"Note: %s have no ROM folder: their shortcut starts the emulator without syncing anything. "+
-				"To add one: \"3dssavesync settings\", the emulator ROM folder."), strings.Join(sansRoms, ", "))
+		q.dire(tr("Pas de raccourci pour %s : sans dossier de jeux, il ne synchroniserait rien. Lancez ces jeux depuis votre frontend (LaunchBox…).",
+			"No shortcut for %s: without a games folder, it would sync nothing. Start these games from your frontend (LaunchBox…)."), strings.Join(sansRoms, ", "))
 	}
 }
 
 func afficherRaccourci(q *Questions, f string, err error) {
 	if err != nil {
-		q.dire("- %s %s", tr("Raccourci impossible :", "Shortcut failed:"), err)
+		q.dire("- %s %s", tr("Raccourci impossible :", "Shortcut failed:"), texteErreur(err))
 		return
 	}
 	q.dire("- %s %s", tr("Raccourci :", "Shortcut:"), f)

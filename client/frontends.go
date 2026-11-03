@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +22,8 @@ import (
 	"time"
 )
 
-// Copie datée d'un fichier avant de le modifier ; rien si le fichier n'existe pas.
+// Copie datée d'un fichier avant de le modifier ; rien si le fichier n'existe pas. Deux changements dans la même
+// seconde (ajout puis retrait d'un alias) : -1, -2… en plus, jamais d'écrasement d'une copie.
 func copieAvant(chemin string) error {
 	o, err := os.ReadFile(chemin)
 	if os.IsNotExist(err) {
@@ -29,7 +32,14 @@ func copieAvant(chemin string) error {
 	if err != nil {
 		return err
 	}
-	return ecrireVerifie(chemin+".avant-3dssavesync-"+time.Now().Format("20060102-150405"), o)
+	nom := chemin + ".avant-3dssavesync-" + time.Now().Format("20060102-150405")
+	for i := 1; ; i++ {
+		err = ecrireVerifie(nom, o)
+		if !errors.Is(err, fs.ErrExist) || i == 10 {
+			return err
+		}
+		nom = fmt.Sprintf("%s.avant-3dssavesync-%s-%d", chemin, time.Now().Format("20060102-150405"), i)
+	}
 }
 
 // Remplacement d'un fichier de frontend : copie datée, fichier temporaire vérifié, puis renommage.
@@ -130,7 +140,7 @@ func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []
 			rapport = append(rapport, fmt.Sprintf(tr("%s : déjà en place", "%s: already set up"), e.Nom))
 			continue
 		case original == "":
-			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox (ajoute-le dans LaunchBox, puis relance la réparation)",
+			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox (ajoutez-le dans LaunchBox, puis relancez la réparation)",
 				"%s: emulator not in LaunchBox (add it in LaunchBox, then run the repair again)"), e.Nom))
 			continue
 		}
@@ -220,11 +230,15 @@ func esde(systems, regles, lanceur string, emus map[string]string) (string, stri
 			systems = strings.Replace(systems, bloc, bloc[:i]+commande+"\n        "+bloc[i:], 1)
 			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : commande ajoutée en premier", "ES-DE %s: command added first"), n))
 		default:
+			ext := d[2]
 			if bloc != "" {
+				if e := champ(bloc, "extension"); e != "" { // liste de l'utilisateur gardée, jamais réduite
+					ext = e
+				}
 				systems = strings.Replace(systems, bloc, "", 1)
 			}
 			nouveau := "    <system>\n        <name>" + n + "</name>\n        <fullname>" + d[1] + "</fullname>\n        <path>%ROMPATH%/" + n +
-				"</path>\n        <extension>" + d[2] + "</extension>\n        " + commande + "\n        <platform>" + n +
+				"</path>\n        <extension>" + ext + "</extension>\n        " + commande + "\n        <platform>" + n +
 				"</platform>\n        <theme>" + n + "</theme>\n    </system>\n"
 			systems = strings.Replace(systems, "</systemList>", nouveau+"</systemList>", 1)
 			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : système ajouté (seulement la commande 3dssavesync)", "ES-DE %s: system added (3dssavesync command only)"), n))
@@ -365,16 +379,16 @@ func reparer(cfg *Config, lanceur string) []string {
 		o, err := os.ReadFile(f)
 		switch {
 		case emulateurActif("LaunchBox") || emulateurActif("BigBox"):
-			rapport = append(rapport, tr("LaunchBox : ouvert, rien n'est fait. Ferme LaunchBox et BigBox, puis relance la réparation.",
+			rapport = append(rapport, tr("LaunchBox : ouvert, rien n'est fait. Fermez LaunchBox et BigBox, puis relancez la réparation.",
 				"LaunchBox: open, nothing done. Close LaunchBox and BigBox, then run the repair again."))
 		case err != nil:
-			rapport = append(rapport, "LaunchBox : "+err.Error())
+			rapport = append(rapport, "LaunchBox : "+texteErreur(err))
 		default:
 			nouveau, r := launchbox(string(o), d, lanceur, lb)
 			rapport = append(rapport, prefixer("LaunchBox", r)...)
 			if nouveau != string(o) {
 				if err := remplacerFichier(f, []byte(nouveau)); err != nil {
-					rapport = append(rapport, "LaunchBox : "+err.Error())
+					rapport = append(rapport, "LaunchBox : "+texteErreur(err))
 				}
 			}
 		}
@@ -384,7 +398,7 @@ func reparer(cfg *Config, lanceur string) []string {
 		s, _ := os.ReadFile(fs)
 		r, _ := os.ReadFile(fr)
 		if emulateurActif("ES-DE") {
-			rapport = append(rapport, tr("ES-DE : ouvert, rien n'est fait. Ferme ES-DE, puis relance la réparation.",
+			rapport = append(rapport, tr("ES-DE : ouvert, rien n'est fait. Fermez ES-DE, puis relancez la réparation.",
 				"ES-DE: open, nothing done. Close ES-DE, then run the repair again."))
 		} else {
 			ns, nr, rap := esde(string(s), string(r), lanceur, emus)
@@ -392,7 +406,7 @@ func reparer(cfg *Config, lanceur string) []string {
 			for f, c := range map[string][2]string{fs: {string(s), ns}, fr: {string(r), nr}} {
 				if c[0] != c[1] {
 					if err := remplacerFichier(f, []byte(c[1])); err != nil {
-						rapport = append(rapport, "ES-DE : "+err.Error())
+						rapport = append(rapport, "ES-DE : "+texteErreur(err))
 					}
 				}
 			}
@@ -415,7 +429,7 @@ func prefixer(p string, l []string) []string {
 func avertissementEmuDeck() string {
 	o, err := os.ReadFile(maison("emudeck", "settings.sh"))
 	if err == nil && regexp.MustCompile(`(?m)^cloud_sync_status="?true"?`).Match(o) {
-		return tr("EmuDeck : CloudSync semble actif. Désactive-le pour DS, GB, GBA et 3DS : deux outils enverraient les mêmes sauvegardes.",
+		return tr("EmuDeck : CloudSync semble actif. Désactivez-le pour DS, GB, GBA et 3DS : deux outils enverraient les mêmes sauvegardes.",
 			"EmuDeck: CloudSync seems active. Turn it off for DS, GB, GBA and 3DS: two tools would upload the same saves.")
 	}
 	return ""

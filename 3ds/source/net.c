@@ -17,6 +17,7 @@ int net_init(void)
     soc_tampon = memalign(0x1000, SOC_TAILLE);
     if (!soc_tampon || R_FAILED(socInit(soc_tampon, SOC_TAILLE))) return -1;
     if (R_FAILED(sslcInit(0))) return -2;
+    acInit(); /* état du Wi-Fi (net_wifi) ; sans lui, le Wi-Fi est supposé présent */
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return -3;
     return (c = curl_easy_init()) ? 0 : -4;
 }
@@ -25,6 +26,7 @@ void net_fin(void)
 {
     curl_easy_cleanup(c);
     curl_global_cleanup();
+    acExit();
     sslcExit();
     socExit();
     free(soc_tampon);
@@ -62,7 +64,7 @@ static long requete(const char *url, const char *jeton, const char *condition,
     entetes = curl_slist_append(NULL, auth);
     entetes = curl_slist_append(entetes, "X-Client: 3ds");
     if (envoi) {
-        entetes = curl_slist_append(entetes, condition);
+        if (condition) entetes = curl_slist_append(entetes, condition);
         entetes = curl_slist_append(entetes, "Content-Type: application/octet-stream");
         entetes = curl_slist_append(entetes, "Expect:");
         curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "PUT");
@@ -111,7 +113,13 @@ long net_put(const char *url, const char *jeton, const char *condition, const vo
     return statut;
 }
 
-const char *net_erreur(long statut)
+/* erreurs.c lit les codes curl sans curl.h : mêmes valeurs. */
+_Static_assert(CURLE_COULDNT_RESOLVE_HOST == 6 && CURLE_COULDNT_CONNECT == 7 && CURLE_OPERATION_TIMEDOUT == 28 &&
+               CURLE_SSL_CONNECT_ERROR == 35 && CURLE_PEER_FAILED_VERIFICATION == 60 && CURLE_RECV_ERROR == 56,
+               "codes curl de erreurs.c");
+
+int net_wifi(void)
 {
-    return curl_easy_strerror((CURLcode)-statut);
+    u32 statut;
+    return R_FAILED(ACU_GetStatus(&statut)) || statut != 1; /* 1 : aucun point d'accès */
 }

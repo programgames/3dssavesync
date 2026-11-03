@@ -11,6 +11,10 @@ typedef enum { SYS_DS, SYS_GB, SYS_GBA, SYS_3DS } systeme_t;
 /* Clé lue dans les 0x200 premiers octets d'une ROM DS, GB/GBC ou GBA. 0 si valide, -1 sinon. */
 int cle_rom(systeme_t s, const unsigned char *entete, char cle[CLE_MAX]);
 
+/* Alias d'une ROM (alias.ini, ADR 0014) : valeur sans espaces autour, en majuscules, de la forme d'une Clé du Système
+ * (DS "0RAD", GBA "GBA-0RAD", GB "GB-MONHACK-0001"). 0 si valide (Clé dans cle), -1 sinon. Même règle que client/cas.go. */
+int cle_alias(systeme_t s, const char *valeur, char cle[CLE_MAX]);
+
 /* "3DS-00040000001B5000" */
 void cle_3ds(unsigned long long title_id, char cle[CLE_MAX]);
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -127,9 +128,22 @@ type notifyIconData struct {
 	HBalloonIcon     uintptr
 }
 
-// notifierSysteme : notification Windows, rien à valider. Le programme se termine juste après :
-// on attend que la notification s'affiche, sinon Windows la retire avec l'icône.
+var notifsEnCours sync.WaitGroup
+
+// notifierSysteme : notification Windows, rien à valider, affichée sans retarder le jeu. Windows la retire avec
+// l'icône : main attend la fin des notifications (8 s chacune) avant de terminer le programme.
 func notifierSysteme(texte string) {
+	notifsEnCours.Add(1)
+	go func() {
+		defer notifsEnCours.Done()
+		runtime.LockOSThread() // la fenêtre de l'icône appartient à ce thread
+		notification(texte)
+	}()
+}
+
+func attendreNotifications() { notifsEnCours.Wait() }
+
+func notification(texte string) {
 	hwnd, _, _ := user32.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(u16("STATIC"))),
 		uintptr(unsafe.Pointer(u16("3dssavesync"))), 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	if hwnd == 0 {
@@ -142,8 +156,12 @@ func notifierSysteme(texte string) {
 	copy(n.SzTip[:127], syscall.StringToUTF16("3dssavesync"))
 	copy(n.SzInfoTitle[:63], syscall.StringToUTF16("3dssavesync"))
 	info := syscall.StringToUTF16(texte)
-	if len(info) > 255 {
-		info = append(info[:254], 0)
+	if len(info) > 256 { // 255 caractères au plus : coupé avec « … », jamais au milieu d'une paire UTF-16
+		n := 254
+		if info[n-1] >= 0xD800 && info[n-1] < 0xDC00 {
+			n--
+		}
+		info = append(info[:n], '…', 0)
 	}
 	copy(n.SzInfo[:], info)
 	notif := shell32.NewProc("Shell_NotifyIconW")
@@ -224,4 +242,20 @@ func demarrerDetache(exe string, args []string) error {
 		return err
 	}
 	return c.Process.Release()
+}
+
+// Lecteurs amovibles (carte SD, clé USB) : E:\, F:\…
+func racinesAmovibles() []string {
+	var l []string
+	masque, _, _ := kernel32.NewProc("GetLogicalDrives").Call()
+	for i := 0; i < 26; i++ {
+		r := string(rune('A'+i)) + `:\`
+		if masque&(1<<i) == 0 {
+			continue
+		}
+		if t, _, _ := kernel32.NewProc("GetDriveTypeW").Call(uintptr(unsafe.Pointer(u16(r)))); t == 2 { // DRIVE_REMOVABLE
+			l = append(l, r)
+		}
+	}
+	return l
 }

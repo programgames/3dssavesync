@@ -52,5 +52,5 @@ func dsv(sram, ancien []byte) ([]byte, error) {
 			return append(o, cookieDSV...), nil
 		}
 	}
-	return nil, fmt.Errorf(tr("taille de Sauvegarde inconnue de DeSmuME : %d octets", "save size unknown to DeSmuME: %d bytes"), len(sram))
+	return nil, fmt.Errorf(tr("taille de sauvegarde inconnue de DeSmuME : %d octets", "save size unknown to DeSmuME: %d bytes"), len(sram))
 }

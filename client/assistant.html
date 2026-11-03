@@ -8,18 +8,48 @@
 :root {
   --fond: #f4f5f7; --carte: #ffffff; --texte: #1d2129; --doux: #5d6573; --bord: #d9dde3;
   --accent: #2f6fdf; --accent-texte: #ffffff; --ok: #1f7a43; --alerte: #a15c00; --erreur: #b3261e;
-  --champ: #ffffff;
+  --champ: #ffffff; --accent-doux: #e8f0fd;
+  --ds: #6d4fc2; --ds-fond: #eeebfb; --gb: #3b7d23; --gb-fond: #e9f3df; --gba: #0f6e6e; --gba-fond: #ddf2f1; --n3ds: #b3261e; --n3ds-fond: #fbe9e8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --fond: #15171c; --carte: #1e2128; --texte: #e6e8ec; --doux: #9aa2b1; --bord: #343944;
     --accent: #6a9cf5; --accent-texte: #0d1117; --ok: #5fc48b; --alerte: #e0a24a; --erreur: #f2847b;
-    --champ: #15171c;
+    --champ: #15171c; --accent-doux: #1d2a42;
+    --ds: #b9a8f2; --ds-fond: #2e2647; --gb: #a5d27f; --gb-fond: #23331b; --gba: #7fd6d1; --gba-fond: #173434; --n3ds: #f2847b; --n3ds-fond: #3d1f1d;
   }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-main { max-width: 860px; margin: 0 auto; padding: 24px 16px 96px; }
+.page { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; max-width: 1280px; margin: 0 auto; padding: 24px 16px 96px; }
+main { min-width: 0; }
+#menu { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
+#menu .titre { font-weight: 700; font-size: 17px; padding: 4px 10px 12px; }
+#menu button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; color: var(--texte); }
+#menu button:hover { background: var(--accent-doux); }
+#menu button.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
+#menu button.attention::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--alerte); vertical-align: middle; }
+.cachee { display: none !important; }
+.bandeau { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.case { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 12px 14px; }
+.case span { display: block; color: var(--doux); font-size: 13px; }
+.case b { font-size: 18px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.badge.DS { color: var(--ds); background: var(--ds-fond); }
+.badge.GB { color: var(--gb); background: var(--gb-fond); }
+.badge.GBA { color: var(--gba); background: var(--gba-fond); }
+.badge.n3DS { color: var(--n3ds); background: var(--n3ds-fond); }
+.histo { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 16px; margin-top: 12px; }
+#listeJeux { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; margin-top: 8px; }
+#listeJeux button { text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 6px; }
+#listeJeux button:hover { background: var(--accent-doux); }
+#listeJeux button.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) {
+  .page { grid-template-columns: 1fr; }
+  #menu { position: static; flex-direction: row; flex-wrap: wrap; }
+  #menu .titre { width: 100%; }
+  .histo { grid-template-columns: 1fr; }
+}
 h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { font-size: 17px; margin: 0 0 12px; }
 p.sous { color: var(--doux); margin: 0 0 20px; }
@@ -41,36 +71,66 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); cursor: pointer; }
 button.principal { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); font-weight: 600; }
 button:disabled { opacity: .6; cursor: default; }
-.emu { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; margin: 10px 0; }
-.emu.inactif .details { display: none; }
+#emulateurs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.emu { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; }
+.emu.ouverte { grid-column: 1 / -1; }
+.emu:not(.ouverte) .details { display: none; }
+.emu.inactif { opacity: .75; }
 .emu .tete { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.emu .resume { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.emu .resume .regler { margin-left: auto; }
 .emu .tete strong { font-size: 15px; }
 .emu .chemin { color: var(--doux); font-size: 13px; word-break: break-all; }
 .systeme { display: grid; grid-template-columns: 52px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; }
 .systeme span { font-weight: 600; }
 .masque { display: none !important; }
 .barre { position: fixed; left: 0; right: 0; bottom: 0; background: var(--carte); border-top: 1px solid var(--bord); padding: 12px 16px; }
-.barre div { max-width: 860px; margin: 0 auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.barre div { max-width: 1280px; margin: 0 auto; display: flex; gap: 8px; flex-wrap: wrap; }
 #resultat ul { margin: 0; padding-left: 20px; }
+summary { cursor: pointer; }
+.tableau { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
+.cadre { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
+.cadre h3 { font-size: 15px; margin: 0 0 8px; }
+.cadre .valeur { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.cadre .valeur b { min-width: 70px; }
+.cadre .valeur code { font-size: 16px; }
 @media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
+<div class="page">
+<nav id="menu" aria-label="{{t "Sections" "Sections"}}">
+  <div class="titre">3dssavesync</div>
+  <button type="button" data-page="emulateurs">{{t "Émulateurs" "Emulators"}}</button>
+  <button type="button" data-page="serveur">{{t "Serveur" "Server"}}</button>
+  <button type="button" data-page="carte">{{t "Carte SD 3DS" "3DS SD card"}}</button>
+  <button type="button" data-page="frontends">{{t "Frontends et installation" "Frontends and install"}}</button>
+  <button type="button" data-page="historique">{{t "Historique" "History"}}</button>
+  <button type="button" data-page="hacks">{{t "ROM hacks" "ROM hacks"}}</button>
+</nav>
 <main>
   <h1>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</h1>
   <p class="sous">{{t "Synchronise les sauvegardes DS, GB, GBA et 3DS entre la 3DS et ce PC. Rien n'est écrit avant le bouton « Enregistrer » ; chaque fichier modifié est copié avant." "Syncs DS, GB, GBA and 3DS saves between the 3DS and this PC. Nothing is written before the \"Save\" button; every changed file is copied first."}}</p>
 
+  <div class="bandeau">
+    <div class="case"><span>{{t "Serveur" "Server"}}</span><b id="etatServeur">…</b></div>
+    <div class="case"><span>{{t "Émulateurs prêts" "Emulators ready"}}</span><b id="etatEmus">…</b></div>
+    <div class="case"><span>{{t "Jeux sur le serveur" "Games on the server"}}</span><b id="etatJeux">…</b></div>
+  </div>
+
   <section id="resultat" class="masque" aria-live="polite"></section>
 
-  <section id="sectionOuvrir" class="masque">
+  <section id="sectionOuvrir" class="masque" data-page="emulateurs">
     <h2>{{t "Ouvrir un émulateur" "Open an emulator"}}</h2>
     <p class="aide">{{t "Sans jeu : ses jeux sont synchronisés avant, puis envoyés à sa fermeture." "Without a game: its games are synced first, then uploaded when it closes."}}</p>
     <p class="ligne" id="ouvrir"></p>
     <p id="ouvert" role="status"></p>
   </section>
 
-  <section>
-    <h2>1. {{t "Serveur" "Server"}}</h2>
+  <section data-page="serveur">
+    <h2>{{t "Serveur" "Server"}}</h2>
     <label class="choix"><input type="radio" name="type" value="perso"> <span><b>{{t "Serveur personnel" "Personal server"}}</b> — {{t "Docker, adresse https://… : synchronisation partout." "Docker, https://… address: sync anywhere."}}</span></label>
     <label class="choix"><input type="radio" name="type" value="local"> <span><b>{{t "Serveur local sur ce PC" "Local server on this PC"}}</b> — {{t "rien d'autre à installer ; synchronisation à la maison, PC allumé." "nothing else to install; sync at home, PC on."}}</span></label>
     <div id="perso">
@@ -83,19 +143,33 @@ button:disabled { opacity: .6; cursor: default; }
     <div id="local" class="masque">
       <label for="port">Port</label>
       <input type="number" id="port" min="1" max="65535">
-      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton à entrer sur la 3DS (3dssavesync, SELECT)." "The token is created or kept. After saving, this page shows the address and token to enter on the 3DS (3dssavesync, SELECT)."}}</p>
+      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton pour la 3DS, et peut les écrire sur sa carte SD." "The token is created or kept. After saving, this page shows the address and token for the 3DS, and can write them to its SD card."}}</p>
       <p class="aide alerte">{{t "N'ouvrez jamais ce port sur Internet (box, routeur) : il n'est pas chiffré." "Never open this port on the Internet (router): it is not encrypted."}}</p>
     </div>
   </section>
 
-  <section id="sectionProgramme">
-    <h2>2. {{t "Programme" "Program"}}</h2>
+  <section id="sectionCarte" class="masque" data-page="carte">
+    <h2>{{t "Carte SD de la 3DS" "3DS SD card"}}</h2>
+    <p class="aide">{{t "Mettez la carte SD de la 3DS dans ce PC. Le fichier 3ds/3dssavesync/config.ini reçoit l'adresse et le jeton (l'ancien est copié avant, le reste de la carte n'est pas touché) : la 3DS se connecte sans rien taper." "Put the 3DS SD card in this PC. The file 3ds/3dssavesync/config.ini gets the address and token (the old one is copied first, the rest of the card is not touched): the 3DS connects without typing anything."}}</p>
+    <p class="aide">{{t "Adresse écrite :" "Address written:"}} <code id="adresseCarte"></code></p>
+    <div class="ligne">
+      <div><label for="carte">{{t "Carte SD trouvée" "SD card found"}}</label><select id="carte"></select></div>
+      <button type="button" id="chercher">{{t "Chercher à nouveau" "Search again"}}</button>
+    </div>
+    <label for="carteChemin">{{t "Ou dossier de la carte SD (facultatif)" "Or SD card folder (optional)"}}</label>
+    <input type="text" id="carteChemin" autocomplete="off">
+    <p class="ligne" style="margin-top:10px"><button type="button" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button> <span id="carteEtat" role="status"></span></p>
+    <p class="aide"><a href="config.ini" download>{{t "Télécharger config.ini" "Download config.ini"}}</a> : {{t "pour le copier par FTP dans sdmc:/3ds/3dssavesync/. Ce fichier remet les dossiers de la 3DS à leur valeur par défaut ; avec la carte SD, ils sont gardés." "to copy it by FTP to sdmc:/3ds/3dssavesync/. This file resets the 3DS folders to their default value; with the SD card, they are kept."}}</p>
+  </section>
+
+  <section id="sectionProgramme" data-page="frontends">
+    <h2>{{t "Programme" "Program"}}</h2>
     <label class="choix"><input type="checkbox" id="installer"> <span>{{t "Copier le programme dans" "Copy the program to"}} <code id="installe"></code></span></label>
     <p class="aide">{{t "Les frontends et les raccourcis pointent vers cet emplacement fixe." "Frontends and shortcuts point to this fixed location."}}</p>
   </section>
 
-  <section>
-    <h2>3. {{t "Émulateurs" "Emulators"}}</h2>
+  <section data-page="emulateurs">
+    <h2>{{t "Émulateurs" "Emulators"}}</h2>
     <p class="aide">{{t "Sauvegardes : vide ou valeur proposée = le réglage de l'émulateur. ROM : seulement pour les raccourcis (synchroniser tous les jeux)." "Saves: empty or suggested value = the emulator setting. ROMs: only for shortcuts (sync all games)."}}</p>
     <div id="emulateurs"></div>
     <details style="margin-top:12px">
@@ -109,8 +183,8 @@ button:disabled { opacity: .6; cursor: default; }
     </details>
   </section>
 
-  <section>
-    <h2>4. {{t "Frontends et raccourcis" "Frontends and shortcuts"}}</h2>
+  <section data-page="frontends">
+    <h2>{{t "Frontends et raccourcis" "Frontends and shortcuts"}}</h2>
     <div id="lb" class="masque">
       <label for="launchbox">{{t "Dossier de LaunchBox (vide = pas de LaunchBox)" "LaunchBox folder (empty = no LaunchBox)"}}</label>
       <input type="text" id="launchbox">
@@ -119,7 +193,34 @@ button:disabled { opacity: .6; cursor: default; }
     <label class="choix masque" id="esdeLigne"><input type="checkbox" id="esde"> <span>{{t "Configurer ES-DE" "Set up ES-DE"}} (<code id="esdeChemin"></code>)</span></label>
     <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
   </section>
+
+  <section id="sectionHistorique" class="masque" data-page="historique">
+      <h2>{{t "Historique : restaurer une ancienne version" "History: restore an old version"}}</h2>
+      <p class="aide">{{t "Le serveur garde chaque version reçue. Restaurer une version en fait la version actuelle du serveur ; chaque appareil la reçoit ensuite à sa prochaine synchronisation, après une copie de sécurité. Rien n'est écrit sur ce PC maintenant." "The server keeps every version it receives. Restoring a version makes it the current server version; each device then gets it at its next sync, after a backup copy. Nothing is written on this PC now."}}</p>
+      <p id="histoEtat" role="status"></p>
+      <div class="histo">
+        <div>
+          <label for="chercheJeu">{{t "Chercher un jeu" "Search a game"}}</label>
+          <input type="text" id="chercheJeu" autocomplete="off" placeholder="Pokemon">
+          <div id="listeJeux"></div>
+        </div>
+        <div id="versions" class="tableau"></div>
+      </div>
+  </section>
+
+  <section id="sectionHacks" class="masque" data-page="hacks">
+      <h2>{{t "ROM hacks : une sauvegarde à part" "ROM hacks: a separate save"}}</h2>
+      <p class="aide">{{t "Un ROM hack garde souvent le code du jeu d'origine : 3dssavesync le prendrait pour ce jeu, et lui donnerait sa partie. Choisissez ici la ROM du hack : elle reçoit sa propre sauvegarde. Pour la 3DS, préparez ensuite de nouveau sa carte SD." "A ROM hack often keeps the code of the original game: 3dssavesync would take it for that game, and give it its save. Choose the hack ROM here: it gets its own save. For the 3DS, then prepare its SD card again."}}</p>
+      <div class="ligne">
+        <div><label for="hackRom">{{t "ROM du hack" "Hack ROM"}}</label><input type="file" id="hackRom" accept=".gba,.gb,.gbc,.nds,.zip"></div>
+        <div><label for="hackSysteme">{{t "Console" "Console"}}</label><select id="hackSysteme"><option value="GBA">GBA</option><option value="GB">GB / GBC</option><option value="DS">DS</option></select></div>
+        <button type="button" id="hackAjouter">{{t "Ajouter" "Add"}}</button>
+      </div>
+      <p id="hackEtat" role="status"></p>
+      <div id="listeHacks"></div>
+  </section>
 </main>
+</div>
 
 <div class="barre"><div>
   <button type="button" class="principal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
@@ -132,13 +233,14 @@ const T = {
   rom: {{t "à côté de la ROM" "next to the ROM"}},
   roms: {{t "dossier des ROM (facultatif)" "ROM folder (optional)"}},
   inchange: {{t "inchangé" "unchanged"}},
-  attente: {{t "Patiente…" "Please wait…"}},
+  attente: {{t "Patientez…" "Please wait…"}},
   fini: {{t "Terminé." "Done."}},
-  ferme: {{t "Tu peux fermer cet onglet." "You can close this tab."}},
+  ferme: {{t "Fermez cet onglet." "Close this tab."}},
+  arrete: {{t "Le programme 3dssavesync s'est arrêté. Relancez-le." "The 3dssavesync program has stopped. Start it again."}},
   erreur: {{t "Erreur : " "Error: "}},
   coche: {{t "Utiliser" "Use"}},
   ligne: {{t "Ligne de commande" "Command line"}},
-  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du Système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
+  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
   extension: {{t "Extension de la sauvegarde" "Save extension"}},
   processus: {{t "Nom du processus (facultatif)" "Process name (optional)"}},
   processusAide: {{t "défaut : nom de l'exécutable" "default: executable name"}},
@@ -147,15 +249,44 @@ const T = {
   enPlus: {{t "Arguments en plus (avant la ROM)" "Extra arguments (before the ROM)"}},
   commande: {{t "Commande : " "Command: "}},
   manuel: {{t "ajouté à la main" "added by hand"}},
-  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}}
+  perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}},
+  choisirJeu: {{t "Choisissez un jeu" "Choose a game"}},
+  aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
+  colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
+  sur3DS: {{t "À entrer sur la 3DS (3dssavesync, SELECT), ou à écrire sur sa carte SD plus bas" "To enter on the 3DS (3dssavesync, SELECT), or to write to its SD card below"}},
+  adresse: {{t "Serveur" "Server"}},
+  jeton: {{t "Jeton" "Token"}},
+  copier: {{t "Copier" "Copy"}},
+  copie: {{t "Copié." "Copied."}},
+  autres: {{t "Autres adresses, si la 3DS ne se connecte pas" "Other addresses, if the 3DS does not connect"}},
+  secret: {{t "Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur)." "Keep this token private. Never open this port on the Internet (router)."}},
+  introuvable: {{t "Adresse du PC introuvable : vérifiez que le PC est relié à la box." "PC address not found: check that the PC is connected to the router."}},
+  aucuneCarte: {{t "Aucune carte SD de 3DS trouvée" "No 3DS SD card found"}},
+  actuelle: {{t "Version actuelle" "Current version"}},
+  restaurer: {{t "Restaurer cette version" "Restore this version"}},
+  confirmer: {{t "Restaurer la version du %s ?" "Restore the version of %s?"}},
+  retirer: {{t "Retirer" "Remove"}},
+  pret: {{t "Prêt" "Ready"}},
+  aVerifier: {{t "À vérifier" "To check"}},
+  nonUtilise: {{t "Non utilisé" "Not used"}},
+  regler: {{t "Régler" "Settings"}},
+  fermer: {{t "Fermer" "Close"}},
+  joignable: {{t "Joignable" "Reachable"}},
+  injoignable: {{t "Injoignable" "Unreachable"}},
+  pasEnregistre: {{t "Pas encore enregistré" "Not saved yet"}},
+  sur: {{t "sur" "of"}},
+  retirerHack: {{t "Retirer %s ? Ce hack serait de nouveau vu comme le jeu d'origine : 3dssavesync le lancerait sans synchronisation, ou poserait une question." "Remove %s? This hack would again be seen as the original game: 3dssavesync would start it without sync, or ask a question."}},
+  aucunHack: {{t "Aucun ROM hack." "No ROM hack."}},
+  explication: {{t "Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde. Synchronisez d'abord les autres appareils : une partie pas encore envoyée peut sinon remplacer cette version, ou afficher un conflit." "This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n\nEach device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save. Sync the other devices first: otherwise a game not yet uploaded can replace this version, or show a conflict."}}
 };
 const racine = location.pathname;
 const $ = id => document.getElementById(id);
 let etat;
 
 async function api(chemin, corps) {
-  const r = await fetch(racine + "api/" + chemin, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps || {})});
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  // Programme arrêté (onglet resté ouvert) : « Failed to fetch » ou 404, remplacés par ce qu'il faut faire.
+  const r = await fetch(racine + "api/" + chemin, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corps || {})}).catch(() => null);
+  if (!r || !r.ok) throw new Error(T.arrete);
   return r.json();
 }
 
@@ -174,9 +305,17 @@ function carte(x) {
   tete.className = "tete";
   const c = document.createElement("input");
   c.type = "checkbox"; c.checked = x.Actif; c.setAttribute("aria-label", T.coche + " " + x.Nom);
-  c.onchange = () => { x.Actif = c.checked; d.classList.toggle("inactif", !c.checked); };
+  c.onchange = () => { x.Actif = c.checked; d.classList.toggle("inactif", !c.checked); d.replaceWith(carte(x)); bandeauEmus(); };
   tete.append(c, texte("strong", x.Nom), texte("span", "(" + x.Source + ")", "aide"));
-  d.append(tete, texte("div", x.Exe, "chemin"));
+  const resume = document.createElement("div");
+  resume.className = "resume";
+  for (const s of x.Systemes || []) resume.append(texte("span", s.Systeme, "badge " + (s.Systeme === "3DS" ? "n3DS" : s.Systeme)));
+  const [classe, mot] = etatEmu(x);
+  const regler = texte("button", T.regler, "regler");
+  regler.type = "button";
+  regler.onclick = () => { regler.textContent = d.classList.toggle("ouverte") ? T.fermer : T.regler; };
+  resume.append(texte("span", mot, classe), regler);
+  d.append(tete, texte("div", x.Exe, "chemin"), resume);
   const details = document.createElement("div");
   details.className = "details";
   if (x.Erreur) details.append(texte("p", x.Erreur, "erreur"));
@@ -230,6 +369,55 @@ function carte(x) {
   return d;
 }
 
+// État affiché sur la carte : [classe, mot].
+function etatEmu(x) {
+  if (!x.Actif) return ["aide", T.nonUtilise];
+  if (x.Erreur || x.Conseil) return ["alerte", T.aVerifier];
+  return ["ok", T.pret];
+}
+
+function bandeauEmus() {
+  const l = [...$("emulateurs").children].map(d => d.emu);
+  const actifs = l.filter(x => x.Actif);
+  $("etatEmus").textContent = actifs.filter(x => etatEmu(x)[1] === T.pret).length + " " + T.sur + " " + actifs.length;
+  $("menu").querySelector('[data-page="emulateurs"]').classList.toggle("attention", actifs.some(x => etatEmu(x)[1] !== T.pret));
+}
+
+// Serveur et nombre de jeux : une lecture de la liste du serveur (api/jeux), gardée pour l'historique.
+async function bandeauServeur() {
+  listeJeux = null;
+  $("etatJeux").textContent = "…";
+  if (!etat.Existe) {
+    $("etatServeur").textContent = T.pasEnregistre; $("etatServeur").className = "aide"; $("etatJeux").textContent = "—";
+    return;
+  }
+  $("etatServeur").textContent = "…"; $("etatServeur").className = "";
+  const r = await api("jeux").catch(e => ({Erreur: e.message}));
+  const ok = !r.Erreur;
+  $("etatServeur").textContent = ok ? T.joignable : T.injoignable;
+  $("etatServeur").className = ok ? "ok" : "erreur";
+  $("etatServeur").title = r.Erreur || "";
+  $("etatJeux").textContent = ok ? r.Jeux.length : "—";
+  $("menu").querySelector('[data-page="serveur"]').classList.toggle("attention", !ok);
+  if (ok) listeJeux = r.Jeux;
+  if (page === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
+}
+
+// Une page à la fois ; le menu montre seulement les pages qui ont une section disponible.
+let page = "";
+function montrer(p) {
+  page = p;
+  document.querySelectorAll("main section[data-page]").forEach(s => s.classList.toggle("cachee", s.dataset.page !== p));
+  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("actif", b.dataset.page === p));
+  if (p === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
+  if (p === "hacks") hacks().catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
+}
+function menu() {
+  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("masque",
+    ![...document.querySelectorAll(`main section[data-page="${b.dataset.page}"]`)].some(s => !s.classList.contains("masque"))));
+}
+document.querySelectorAll("#menu button").forEach(b => b.onclick = () => { montrer(b.dataset.page); window.scrollTo(0, 0); });
+
 function champ(etiquette, valeur, exemple, changer) {
   const l = document.createElement("label");
   const i = document.createElement("input");
@@ -246,10 +434,35 @@ async function apercu(x, ligne) {
   ligne.className = r.Erreur ? "aide erreur" : "aide";
 }
 
-function afficher(titre, lignes, erreur) {
+// Cadre après l'enregistrement du serveur local : adresse et jeton pour la 3DS, chacun avec « Copier ».
+function cadre3DS(r) {
+  const d = document.createElement("div");
+  d.className = "cadre";
+  d.append(texte("h3", T.sur3DS));
+  for (const [nom, valeur] of [[T.adresse, r.Adresse], [T.jeton, r.Jeton]]) {
+    const l = document.createElement("div");
+    l.className = "valeur";
+    if (!valeur) { l.append(texte("b", nom), texte("span", T.introuvable, "erreur")); d.append(l); continue; }
+    const b = texte("button", T.copier);
+    b.type = "button";
+    b.onclick = () => navigator.clipboard.writeText(valeur).then(() => { b.textContent = T.copie; }).catch(() => {});
+    l.append(texte("b", nom), texte("code", valeur), b);
+    d.append(l);
+  }
+  if (r.Autres && r.Autres.length) {
+    const autres = document.createElement("details");
+    autres.append(texte("summary", T.autres), ...r.Autres.map(a => texte("div", a, "aide")));
+    d.append(autres);
+  }
+  d.append(texte("p", T.secret, "aide alerte"));
+  return d;
+}
+
+function afficher(titre, lignes, erreur, cadre) {
   const r = $("resultat");
   r.replaceChildren(texte("h2", titre));
   if (erreur) r.append(texte("p", T.erreur + erreur, "erreur"));
+  if (cadre) r.append(cadre);
   if (lignes && lignes.length) {
     const ul = document.createElement("ul");
     for (const l of lignes) ul.append(texte("li", l));
@@ -315,6 +528,86 @@ async function charger() {
     return b;
   }));
   basculer();
+  $("sectionHistorique").classList.toggle("masque", !etat.Existe);
+  $("sectionHacks").classList.toggle("masque", !etat.Existe);
+  const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
+  $("sectionCarte").classList.toggle("masque", !sd);
+  $("adresseCarte").textContent = etat.Adresse3DS || "";
+  $("carteChemin").placeholder = etat.Windows ? "E:\\" : "/media/…";
+  menu();
+  montrer(page && !document.querySelector(`#menu button[data-page="${page}"]`).classList.contains("masque") ? page : (etat.Existe ? "emulateurs" : "serveur"));
+  bandeauEmus();
+  bandeauServeur();
+  if (sd) await cartes();
+}
+
+// Cartes SD de 3DS branchées sur le PC (racine avec un dossier « Nintendo 3DS »).
+async function cartes() {
+  const r = await api("cartes");
+  const l = r.Cartes || [];
+  $("carte").replaceChildren(...(l.length ? l.map(c => texte("option", c)) : [texte("option", T.aucuneCarte)]));
+  $("carte").disabled = !l.length;
+}
+
+function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = classe || ""; }
+
+// Historique : les jeux du serveur (lus une fois avec le bandeau), filtrés par la recherche, puis les versions du jeu choisi.
+let listeJeux = null, jeuChoisi = "";
+async function jeux() {
+  if (!listeJeux) {
+    statut(T.attente);
+    const r = await api("jeux");
+    if (r.Erreur) return statut(T.erreur + r.Erreur, "erreur");
+    listeJeux = r.Jeux;
+  }
+  if (!listeJeux.length) return statut(T.aucunJeu);
+  if ($("histoEtat").textContent === T.attente) statut("");
+  filtrer();
+}
+function filtrer() {
+  const q = $("chercheJeu").value.trim().toLowerCase();
+  $("listeJeux").replaceChildren(...(listeJeux || []).filter(j => (j.Nom + " " + j.Cle).toLowerCase().includes(q)).map(j => {
+    const b = texte("button", j.Nom || j.Cle, j.Cle === jeuChoisi ? "actif" : ""); // la Clé seulement si aucun nom n'est connu
+    b.type = "button";
+    b.onclick = () => { jeuChoisi = j.Cle; filtrer(); versions(j.Cle).catch(e => statut(T.erreur + e.message, "erreur")); };
+    return b;
+  }));
+}
+$("chercheJeu").oninput = filtrer;
+
+async function versions(cle, message, classe) {
+  $("versions").replaceChildren();
+  if (!cle) return statut("");
+  statut(T.attente);
+  const r = await api("versions", {Cle: cle});
+  if (r.Erreur) return statut(T.erreur + r.Erreur, "erreur");
+  const table = document.createElement("table");
+  const tete = document.createElement("tr");
+  tete.append(...T.colonnes.map(c => texte("th", c)));
+  table.append(tete);
+  for (const v of r.Versions) {
+    const ligne = document.createElement("tr");
+    ligne.append(texte("td", v.Date), texte("td", v.Client), texte("td", v.Taille), texte("td", v.Partie));
+    const action = document.createElement("td");
+    if (v.Courante) action.append(texte("span", T.actuelle, "ok"));
+    else {
+      const b = texte("button", T.restaurer);
+      b.type = "button";
+      b.onclick = () => restaurer(cle, v, r.Versions[0].Hash).catch(e => statut(T.erreur + e.message, "erreur"));
+      action.append(b);
+    }
+    ligne.append(action);
+    table.append(ligne);
+  }
+  $("versions").append(table);
+  statut(message || "", classe);
+}
+
+async function restaurer(cle, v, courant) {
+  if (!confirm(T.confirmer.replace("%s", v.Date + (v.Partie ? " (" + v.Partie + ")" : "")) + "\n\n" + T.explication)) return;
+  statut(T.attente);
+  const r = await api("restaurer", {Cle: cle, Fichier: v.Fichier, Courant: courant});
+  await versions(cle, r.Message, r.Ok ? "ok" : "erreur");
 }
 
 function basculer() {
@@ -330,19 +623,55 @@ $("tester").onclick = async () => {
     $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
   } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
 };
-$("profil").onchange = () => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
+$("chercher").onclick = () => cartes().catch(e => { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; });
+$("preparer").onclick = async () => {
+  $("carteEtat").textContent = T.attente; $("carteEtat").className = "";
+  try {
+    const r = await api("preparer", {Racine: $("carteChemin").value.trim() || ($("carte").disabled ? "" : $("carte").value)});
+    $("carteEtat").textContent = r.Message; $("carteEtat").className = r.Ok ? "ok" : "erreur";
+  } catch (e) { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; }
+};
+// ROM hacks : la liste, puis un ajout ou un retrait (api/alias).
+async function hacks(corps) {
+  const r = await api("alias", corps);
+  $("hackEtat").textContent = r.Erreur ? T.erreur + r.Erreur : ""; $("hackEtat").className = r.Erreur ? "erreur" : "";
+  $("listeHacks").replaceChildren(...(r.Noms || []).map(nom => {
+    const d = texte("div", nom + " ");
+    const b = texte("button", T.retirer);
+    b.type = "button";
+    b.onclick = () => confirm(T.retirerHack.replace("%s", nom)) && hacks({Nom: nom, Retirer: true}).catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
+    d.append(b);
+    return d;
+  }));
+  if (!(r.Noms || []).length) $("listeHacks").append(texte("p", T.aucunHack, "aide"));
+}
+$("hackRom").onchange = () => {
+  const f = $("hackRom").files[0];
+  const s = f && {gba: "GBA", gb: "GB", gbc: "GB", nds: "DS"}[f.name.split(".").pop().toLowerCase()];
+  if (s) $("hackSysteme").value = s;
+};
+$("hackAjouter").onclick = () => {
+  const f = $("hackRom").files[0];
+  if (!f) return;
+  hacks({Nom: f.name.replace(/\.[^.]*$/, ""), Systeme: $("hackSysteme").value}).catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
+  $("hackRom").value = "";
+};
+$("profil").onchange =() => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
 $("ajouter").onclick = async () => {
   const exe = $("exe").value.trim(), nom = $("nom").value.trim().toLowerCase();
   if (!exe || ($("profil").value === "" && !nom)) return;
   const x = $("profil").value === ""
     ? {Nom: nom, Profil: nom, Exe: exe, Source: T.manuel, Actif: true, Personnalise: true, Commande: "{rom}", Extension: ".sav", Systemes: []}
     : await api("emulateur", {Profil: $("profil").value, Exe: exe});
-  $("emulateurs").append(carte(x));
+  const nouvelle = carte(x);
+  nouvelle.classList.add("ouverte");
+  $("emulateurs").append(nouvelle);
+  bandeauEmus();
   $("exe").value = ""; $("nom").value = "";
 };
 $("enregistrer").onclick = e => action(e.target, async () => {
   const r = await api("appliquer", choix());
-  afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur);
+  afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur, r.Jeton ? cadre3DS(r) : null);
   if (!r.Erreur) { $("jeton").value = ""; await charger(); }
 });
 $("reparer").onclick = e => action(e.target, async titre => {

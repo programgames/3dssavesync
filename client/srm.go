@@ -42,13 +42,13 @@ func sramSRM(coeur string, brut []byte, srv *Version) ([]byte, error) {
 		if vierge(brut) {
 			return brut, nil
 		}
-		return nil, fmt.Errorf(tr("%s : taille de la sauvegarde inconnue tant que le serveur n'a pas ce jeu. Synchronise-le d'abord depuis mGBA ou la 3DS",
+		return nil, fmt.Errorf(tr("%s : taille de la sauvegarde inconnue tant que le serveur n'a pas ce jeu. Synchronisez-le d'abord depuis mGBA ou la 3DS",
 			"%s: save size unknown while the server does not have this game. Sync it first from mGBA or the 3DS"), coeur)
 	}
 	n := int(srv.Taille)
 	d := zoneSRM(coeur, n)
 	if n <= 0 || n > 0x20000 || !vierge(brut[:d]) || !vierge(brut[d+n:]) {
-		return nil, fmt.Errorf(tr("%s : le .srm a des données hors des %d octets de la Version du serveur. Synchronisation refusée",
+		return nil, fmt.Errorf(tr("%s : le .srm a des données hors des %d octets de la version du serveur. Synchronisation refusée",
 			"%s: the .srm has data outside the %d bytes of the server version. Sync refused"), coeur, n)
 	}
 	return brut[d : d+n], nil
@@ -57,7 +57,7 @@ func sramSRM(coeur string, brut []byte, srv *Version) ([]byte, error) {
 // srm : le .srm à écrire pour une SRAM reçue : 0xFF partout (valeur d'origine des deux cœurs), SRAM à sa place.
 func srm(coeur string, sram []byte) ([]byte, error) {
 	if len(sram) == 0 || len(sram) > 0x20000 {
-		return nil, errors.New(tr("taille de Sauvegarde GBA inconnue", "unknown GBA save size"))
+		return nil, errors.New(tr("taille de sauvegarde GBA inconnue", "unknown GBA save size"))
 	}
 	o := bytes.Repeat([]byte{0xFF}, srmFixes[coeur])
 	copy(o[zoneSRM(coeur, len(sram)):], sram)

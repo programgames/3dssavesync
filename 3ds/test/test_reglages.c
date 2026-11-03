@@ -70,6 +70,25 @@ int main(void)
     verifier(migrer_dossier("test-ancien", "test-nouveau") == 0 && contient("test-nouveau/config.ini", "url=https://nouveau\n"),
              "nouveau dossier déjà configuré : rien n'est remplacé");
 
+    /* Coupure pendant un remplacement (remplacer_fichier) : seul config.ini.tmp reste ; base.ini et titres.ini sont récents */
+    remove("test-nouveau/config.ini");
+    ecrire("test-nouveau/config.ini.tmp", "url=https://nouveau\n");
+    ecrire("test-nouveau/base.ini", "CPUF=recent\n");
+    verifier(migrer_dossier("test-ancien", "test-nouveau") == 0 && contient("test-nouveau/base.ini", "CPUF=recent\n"),
+             "config.ini.tmp présent : rien n'est remplacé");
+    remove("test-nouveau/config.ini.tmp");
+    verifier(migrer_dossier("test-ancien", "test-nouveau") == 0 && contient("test-nouveau/base.ini", "CPUF=recent\n"),
+             "base.ini présent sans config.ini : rien n'est remplacé");
+    remove("test-nouveau/base.ini");
+    ecrire("test-nouveau/base.ini.tmp", "CPUF=recent\n");
+    verifier(migrer_dossier("test-ancien", "test-nouveau") == 0 && contient("test-nouveau/base.ini.tmp", "CPUF=recent\n"),
+             "base.ini.tmp présent : rien n'est remplacé");
+    remove("test-nouveau/base.ini.tmp");
+    ecrire("test-nouveau/titres.ini", "00040000000EC300=Jeu a moi\n");
+    verifier(migrer_dossier("test-ancien", "test-nouveau") == 0 && contient("test-nouveau/titres.ini", "00040000000EC300=Jeu a moi\n"),
+             "titres.ini présent : rien n'est remplacé");
+    remove("test-nouveau/titres.ini");
+
     remove("test-titres.ini");
     remove("test-ancien/config.ini"), remove("test-ancien/base.ini"), remove("test-nouveau/config.ini"), remove("test-nouveau/base.ini");
     remove("test-ancien"), remove("test-nouveau"); /* remove() retire aussi un dossier vide */

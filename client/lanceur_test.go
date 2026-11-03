@@ -7,18 +7,24 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -300,6 +306,8 @@ func TestLanceur(t *testing.T) {
 	verifier(run(rom) == 0, "code de sortie 0")
 	verifier(joue, "melonDS lancé")
 	verifier(hachage(courante("IRBF")) == hachage(v1), "le serveur a la Sauvegarde du PC")
+	_, o := api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"nom": "Pokemon Noire"`), "premier Envoi : le serveur connaît aussi le nom du jeu (ADR 0018)")
 	verifier(len(questions) == 0, "aucune question")
 	verifier(strings.Join(commandeLancee, "|") == "inutilise.exe|"+rom, "melonDS reçoit la ROM")
 
@@ -310,6 +318,9 @@ func TestLanceur(t *testing.T) {
 	run(rom)
 	verifier(hachage(courante("IRBF")) == hachage(v2), "le serveur a la Sauvegarde jouée")
 	verifier(len(historique("IRBF")) == 2, "l'Historique garde les 2 Versions")
+	_, o = api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"code": "IRBF"`) && strings.Contains(string(o), `"nom": "Pokemon Noire"`),
+		"le serveur connaît le nom du jeu (ADR 0018)")
 
 	t.Log("La 3DS a joué : Récupération avec Copie de sécurité")
 	reinitialiser()
@@ -456,6 +467,17 @@ func TestLanceur(t *testing.T) {
 	verifier(joue, "melonDS lancé")
 	verifier(codes() == avant && len(questions) == 0, "rien envoyé, aucune question")
 
+	t.Log("ROM en .7z (LaunchBox, AutoExtract désactivé) : partie sans Synchronisation, une notification")
+	reinitialiser()
+	sept := filepath.Join(tmp, "roms", "Pokemon Noire.7z")
+	ecrire(t, sept, []byte("7z\xbc\xaf\x27\x1c"))
+	avant = codes()
+	verifier(run("--emulator", "melonds", sept) == 0 && joue && commandeLancee[len(commandeLancee)-1] == sept, "melonDS lancé avec le .7z")
+	verifier(codes() == avant && len(questions) == 0 && len(notifications) == 1 &&
+		contient(notifications, "format de ROM non lu (.7z)"), "rien envoyé, une seule notification")
+	reinitialiser()
+	verifier(run(sept) == 1 && !joue, "sans --emulator et plusieurs émulateurs : refus")
+
 	t.Log("ROM en .zip : Code jeu et nom lus dans l'archive")
 	reinitialiser()
 	nds := make([]byte, 0x200)
@@ -472,6 +494,8 @@ func TestLanceur(t *testing.T) {
 		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "inutilise.exe", Sauvegardes: map[string]string{"DS": saves}}}})
 	reponses = []string{"Non"}
 	principal([]string{"run", "--config", hors, rom})
+	verifier(strings.Contains(strings.Join(questions, ""), "Le serveur refuse la connexion") && !strings.Contains(strings.Join(questions, ""), "dial tcp"),
+		"message clair, sans le texte de Go : "+strings.Join(questions, ""))
 	verifier(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
 	verifier(!joue, "melonDS non lancé")
 
@@ -536,6 +560,14 @@ func TestLanceur(t *testing.T) {
 	ecrire(t, filepath.Join(tmp, "gba", nomEm+".sav"), append(append([]byte{}, g1...), suite(1, 16)...))
 	run(emeraude)
 	verifier(hachage(courante("GBA-BPEF")) == hachage(g1), "le serveur a la SRAM d'Émeraude sous GBA-BPEF")
+
+	t.Log("Jeu neuf, sauvegarde créée pendant la partie : le premier Envoi donne aussi le nom (ADR 0018)")
+	reinitialiser()
+	neuf := romZip(t, "Radical Red", "Radical Red.gba", enteteGBA("ZZRR"))
+	partie = func() { ecrire(t, filepath.Join(tmp, "gba", "Radical Red.sav"), aleatoire(131072, 43)) }
+	run(neuf)
+	_, o = api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"code": "GBA-ZZRR"`) && strings.Contains(string(o), `"nom": "Radical Red"`), "le serveur connaît le nom du jeu neuf")
 
 	// --- 3DS (ADR 0009) -------------------------------------------------------------------
 	t.Log("3DS : Clé et dossier Azahar lus dans la ROM")
@@ -763,5 +795,53 @@ func TestSRAM(t *testing.T) {
 		if err != nil || len(l.SRAM) != c.sram || len(l.Brut) != c.taille {
 			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.systeme, c.taille, c.sram, l, err)
 		}
+	}
+}
+
+// Erreurs du réseau, du serveur et des fichiers -> texte pour l'utilisateur ; global = un seul message pour la passe.
+func TestClasser(t *testing.T) {
+	type cas struct {
+		err    error
+		texte  string
+		global bool
+	}
+	transport := func(err error) error { return &neturl.Error{Op: "Get", URL: "https://x/saves", Err: err} }
+	l := []cas{
+		{&erreurHTTP{"GET /saves", 401}, "Le serveur répond, mais refuse ce jeton. Copiez le jeton exact du serveur.", true},
+		{&erreurHTTP{"GET /saves", 404}, "Cette adresse ne mène pas à un serveur 3dssavesync. Vérifiez l'adresse.", true},
+		{&erreurHTTP{"PUT /saves/IRBF", 413}, "sauvegarde trop grande pour le serveur", false},
+		{&erreurHTTP{"PUT /saves/IRBF", 400}, "le serveur refuse cette sauvegarde", false},
+		{&erreurHTTP{"GET /saves", 502}, "Le serveur a un problème interne.", true},
+		{&erreurHTTP{"GET /saves", 418}, "Réponse inattendue du serveur.", true},
+		{transport(&net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}), "Adresse du serveur introuvable", true},
+		{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}), "Le serveur refuse la connexion", true},
+		{transport(os.ErrDeadlineExceeded), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
+		{transport(io.ErrUnexpectedEOF), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
+		{transport(&tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}), "certificat du serveur invalide", true},
+		{fmt.Errorf("copie de sécurité impossible : %w", &fs.PathError{Op: "write", Path: "c.sav", Err: syscall.ENOSPC}), "disque plein", false},
+		{&fs.PathError{Op: "open", Path: "x/a.sav", Err: fs.ErrPermission}, "accès refusé à x/a.sav", false},
+		{errors.New("jeu jamais lancé dans Azahar"), "jeu jamais lancé dans Azahar", false},
+	}
+	if runtime.GOOS == "windows" {
+		l = append(l,
+			cas{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier : fermez l'émulateur", false},
+			cas{&os.LinkError{Op: "rename", Old: "a.tmp", New: "a.sav", Err: syscall.Errno(112)}, "disque plein", false},
+			cas{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connectex", syscall.Errno(10061))}), "Le serveur refuse la connexion", true})
+	}
+	for _, c := range l {
+		if texte, global := classer(c.err); !strings.Contains(texte, c.texte) || global != c.global {
+			t.Errorf("%v : %q (global %v), attendu %q (global %v)", c.err, texte, global, c.texte, c.global)
+		}
+	}
+	if texteErreur(nil) != "" {
+		t.Error("sans erreur : texte vide attendu")
+	}
+
+	// Frontend qui lance un jeu avant l'assistant : pas de « The system cannot find the file specified ».
+	reinitialiser()
+	principal([]string{"run", "--config", filepath.Join(t.TempDir(), "absent", "config.json"), "x.nds"})
+	if len(questions) != 1 || !strings.Contains(questions[0], "3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync »") ||
+		!strings.Contains(questions[0], pageAide) {
+		t.Errorf("configuration absente : %q", questions)
 	}
 }

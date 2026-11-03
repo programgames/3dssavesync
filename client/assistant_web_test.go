@@ -55,7 +55,7 @@ func TestAssistantWeb(t *testing.T) {
 
 	var test map[string]any
 	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/tester", `{"URL":"`+serveur.URL+`","Jeton":"faux"}`).Body.Bytes(), &test)
-	if test["Ok"] != false || !strings.Contains(test["Message"].(string), "401") {
+	if test["Ok"] != false || !strings.Contains(test["Message"].(string), "refuse ce jeton") {
 		t.Errorf("mauvais jeton : %v", test)
 	}
 
@@ -149,5 +149,32 @@ func TestAssistantWebPersonnalise(t *testing.T) {
 	var etat EtatWeb = a.etat()
 	if len(etat.Emulateurs) != 1 || !etat.Emulateurs[0].Personnalise || etat.Emulateurs[0].Commande != `-rom {rom} -batt {sauvegardes}` {
 		t.Errorf("relu par la page : %+v", etat.Emulateurs)
+	}
+}
+
+// Section ROM hacks : ajout (Clé créée, copie de config.json avant), liste, retrait.
+func TestAliasWeb(t *testing.T) {
+	config := filepath.Join(t.TempDir(), "config.json")
+	if err := ecrireJSON(config, &Config{URL: "http://192.0.2.5", Jeton: "j"}, true); err != nil {
+		t.Fatal(err)
+	}
+	a := &AssistantWeb{config: config}
+	r := a.aliasWeb("Radical Red (4.10)", "GBA", false)
+	var cfg Config
+	lireJSON(config, &cfg)
+	if r["Erreur"] != nil || !formesCle["GBA"].MatchString(cfg.Alias["Radical Red (4.10)"]) || strings.Join(r["Noms"].([]string), "|") != "Radical Red (4.10)" {
+		t.Errorf("ajout : %v, %v", r, cfg.Alias)
+	}
+	if c, _ := filepath.Glob(config + ".avant-3dssavesync-*"); len(c) != 1 {
+		t.Errorf("copie de config.json avant l'ajout : %v", c)
+	}
+	if r := a.aliasWeb("a=b", "GBA", false); r["Erreur"] == nil {
+		t.Error("nom invalide accepté")
+	}
+	a.aliasWeb("Radical Red (4.10)", "", true)
+	cfg = Config{}
+	lireJSON(config, &cfg)
+	if len(cfg.Alias) != 0 || cfg.Jeton != "j" {
+		t.Errorf("retrait : %+v", cfg)
 	}
 }

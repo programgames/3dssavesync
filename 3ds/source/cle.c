@@ -43,6 +43,44 @@ int cle_rom(systeme_t s, const unsigned char *e, char cle[CLE_MAX])
     }
 }
 
+static int hex4(const char *p)
+{
+    int i;
+    for (i = 0; i < 4; i++)
+        if (!((p[i] >= '0' && p[i] <= '9') || (p[i] >= 'A' && p[i] <= 'F'))) return 0;
+    return 1;
+}
+
+int cle_alias(systeme_t s, const char *v, char cle[CLE_MAX])
+{
+    char t[CLE_MAX];
+    size_t n = 0, i;
+    int ok = 0;
+
+    while (*v == ' ' || *v == '\t') v++;
+    for (; v[n] && n < CLE_MAX - 1; n++) t[n] = v[n] >= 'a' && v[n] <= 'z' ? (char)(v[n] - ('a' - 'A')) : v[n];
+    if (v[n]) return -1; /* trop long pour une Clé */
+    while (n && (t[n - 1] == ' ' || t[n - 1] == '\t')) n--;
+    t[n] = '\0';
+    switch (s) {
+    case SYS_DS:
+        ok = n == 4 && code4((const unsigned char *)t);
+        break;
+    case SYS_GBA:
+        ok = n == 8 && !strncmp(t, "GBA-", 4) && code4((const unsigned char *)t + 4);
+        break;
+    case SYS_GB: /* GB-<titre de 1 à 15 [A-Z0-9_]>-<4 hexa> */
+        ok = n >= 9 && n <= 23 && !strncmp(t, "GB-", 3) && t[n - 5] == '-' && hex4(t + n - 4);
+        for (i = 3; ok && i < n - 5; i++) ok = alnum_maj((unsigned char)t[i]) || t[i] == '_';
+        break;
+    default:
+        break;
+    }
+    if (!ok) return -1;
+    memcpy(cle, t, n + 1);
+    return 0;
+}
+
 void cle_3ds(unsigned long long title_id, char cle[CLE_MAX])
 {
     snprintf(cle, CLE_MAX, "3DS-%016llX", title_id);

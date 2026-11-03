@@ -7,6 +7,7 @@
 //	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
 //	3dssavesync repair                                   refait la configuration des frontends
 //	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
+//	3dssavesync restore [--oui] [<clé> [<n°>]]           remet une ancienne Version comme Version courante
 //
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
 package main
@@ -39,6 +40,7 @@ type Config struct {
 	Lanceur    string                `json:"lanceur,omitempty"`    // exe installé, vers lequel pointent les frontends
 	Frontends  map[string]string     `json:"frontends,omitempty"`  // launchbox, esde -> dossier (réparation)
 	Titres3DS  map[string]string     `json:"titres_3ds,omitempty"` // jeux 3DS en plus des 8 Pokémon : title ID -> nom
+	Alias      map[string]string     `json:"alias,omitempty"`      // nom de la ROM sans extension -> Clé choisie (ADR 0014)
 	// Serveur local (3dssavesync serve) : même jeton ; url = http://127.0.0.1:<port> pour ce PC.
 	ServeurLocal *ServeurLocal `json:"serveur_local,omitempty"`
 }
@@ -91,7 +93,11 @@ func lancerCommande(commande []string) error {
 	return nil
 }
 
-func main() { os.Exit(principal(os.Args[1:])) }
+func main() {
+	code := principal(os.Args[1:])
+	attendreNotifications()
+	os.Exit(code)
+}
 
 func principal(args []string) int {
 	// Un frontend qui arrête le programme (Lutris, Steam) ne doit pas couper l'envoi :
@@ -107,6 +113,7 @@ func principal(args []string) int {
 	rom := fl.String("rom", "", "ROM, avec une commande après --")
 	texte := fl.Bool("texte", false, "setup : assistant en texte dans une console, sans navigateur")
 	sansNavigateur := fl.Bool("sans-navigateur", false, "setup : affiche l'adresse de la page au lieu d'ouvrir le navigateur (SSH)")
+	oui := fl.Bool("oui", false, "restore : sans question de confirmation")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -128,6 +135,8 @@ func principal(args []string) int {
 		code, err = commandeRepair(*config)
 	case "serve":
 		code, err = commandeServe(*config)
+	case "restore":
+		code = commandeRestoreConsole(*config, fl.Args(), *oui)
 	case "migrate-v2":
 		if fl.NArg() != 1 {
 			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))
@@ -139,8 +148,12 @@ func principal(args []string) int {
 	}
 	if err != nil {
 		(&Session{dossier: dossier}).journal("erreur : " + err.Error() + " (" + strings.Join(args, " ") + ")")
-		fmt.Fprintln(os.Stderr, err)
-		demander(tr("Erreur de 3dssavesync : ", "3dssavesync error: ")+err.Error(), []string{"OK"})
+		texte := texteErreur(err)
+		fmt.Fprintln(os.Stderr, texte)
+		if j := filepath.Join(dossier, "3dssavesync.log"); existe(j) {
+			texte += "\n\n" + tr("Détails dans le journal : ", "Details in the log: ") + j
+		}
+		demander(tr("Erreur de 3dssavesync : ", "3dssavesync error: ")+texte+"\n"+tr("Aide : ", "Help: ")+pageAide, []string{"OK"})
 		return 1
 	}
 	return code
@@ -153,15 +166,25 @@ func configDefaut() string {
 	return "config.json"
 }
 
+// lireConfig : config.json absent = assistant jamais terminé ; le message dit quoi faire.
+func lireConfig(chemin string, cfg *Config) error {
+	err := lireJSON(chemin, cfg)
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.New(tr("3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync » pour choisir le serveur et les émulateurs.",
+			"3dssavesync is not set up yet. Open \"3dssavesync\" to choose the server and the emulators."))
+	}
+	return err
+}
+
 func nouvelleSession(chemin string) (*Session, error) {
 	var cfg Config
-	if err := lireJSON(chemin, &cfg); err != nil {
+	if err := lireConfig(chemin, &cfg); err != nil {
 		return nil, err
 	}
 	for id, nom := range cfg.Titres3DS { // même liste que titres.ini de la 3DS (seulement des jeux à un seul fichier /main)
 		titres3DS[strings.ToUpper(id)] = nom
 	}
-	return &Session{cfg: &cfg, dossier: filepath.Dir(chemin), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
+	return &Session{cfg: &cfg, config: chemin, dossier: filepath.Dir(chemin), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
 }
 
 // Émulateur de la configuration qui gère ce Système : celui demandé, ou le seul possible.
@@ -176,7 +199,7 @@ func (c *Config) emulateurPour(systeme, demande string) (string, error) {
 	}
 	if demande != "" {
 		if !gere(demande) {
-			return "", fmt.Errorf(tr("l'émulateur %s ne gère pas le Système %s", "emulator %s does not handle the %s system"), demande, systeme)
+			return "", fmt.Errorf(tr("l'émulateur %s ne gère pas le système %s", "emulator %s does not handle the %s system"), demande, systeme)
 		}
 		return demande, nil
 	}
@@ -193,7 +216,7 @@ func (c *Config) emulateurPour(systeme, demande string) (string, error) {
 	case 1:
 		return noms[0], nil
 	}
-	return "", fmt.Errorf(tr("plusieurs émulateurs pour %s (%s) : précise --emulator", "several emulators for %s (%s): use --emulator"), systeme, strings.Join(noms, ", "))
+	return "", fmt.Errorf(tr("plusieurs émulateurs pour %s (%s) : précisez --emulator", "several emulators for %s (%s): use --emulator"), systeme, strings.Join(noms, ", "))
 }
 
 func commandeRun(config, demande, rom string, reste []string) (int, error) {
@@ -215,16 +238,36 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if systeme == "" {
-		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom)
-	}
-	if s.profil, err = s.cfg.emulateurPour(systeme, demande); err != nil {
+	// Format non lu (.7z, .rar, .cia…) : le jeu démarre quand même, sans Synchronisation, avec l'émulateur demandé
+	// (LaunchBox, ES-DE) ou le seul de la configuration.
+	nonLu := systeme == ""
+	if nonLu {
+		if demande == "" && len(s.cfg.Emulateurs) == 1 {
+			for n := range s.cfg.Emulateurs {
+				demande = n
+			}
+		}
+		if s.cfg.Emulateurs[demande] == nil {
+			return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom)
+		}
+		s.profil = demande
+	} else if s.profil, err = s.cfg.emulateurPour(systeme, demande); err != nil {
 		return 1, err
 	}
 	e := s.cfg.Emulateurs[s.profil]
 	p, err := e.profil(s.profil)
 	if err != nil {
 		return 1, err
+	}
+	if l := e.systemes(p); nonLu && len(l) == 1 {
+		systeme = l[0] // pour la commande (cœur RetroArch)
+	}
+	if nonLu && commande == nil && len(e.Coeurs) > 0 && e.Coeurs[systeme] == "" {
+		return 1, fmt.Errorf(tr("ROM non reconnue (extension) : %s", "unknown ROM (extension): %s"), rom) // RetroArch : quel cœur ?
+	}
+	var pourquoi string
+	if !nonLu { // format non lu : pas de Clé, donc pas d'alias non plus
+		cle, pourquoi = s.cleDeRom(systeme, cle, nom)
 	}
 	if s.refus(e, cle, nom) {
 		return 1, nil
@@ -234,17 +277,35 @@ func commandeRun(config, demande, rom string, reste []string) (int, error) {
 	if commande == nil {
 		commande = e.commande(p, systeme, rom, dossier)
 	}
-	var jeux []*Jeu
-	switch {
-	case cle == "": // homebrew, ou 3DS hors des 8 Pokémon
-		s.journal("sans synchronisation : Clé illisible ou jeu hors périmètre")
-	case dossier == "":
-		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable : précise-le dans sauvegardes", "%s save folder of %s not found: set it in sauvegardes"), systeme, s.profil)
-	default:
+	var j *Jeu
+	if pourquoi == "" && cle != "" && dossier != "" {
 		if p.NomInterne && interne != "" {
 			nom = interne
 		}
-		jeux = []*Jeu{{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}}
+		j = &Jeu{systeme, cle, nom, fichierSauvegarde(dossier, systeme, cle, nom, p.Ext), bibliotheque(e.Coeurs[systeme])}
+		if systeme != "3DS" { // Azahar range la Sauvegarde par title ID : deux ROM d'un jeu 3DS ont la même
+			pourquoi = s.romAutre(j, rom, true)
+		}
+	}
+	var jeux []*Jeu
+	switch {
+	case pourquoi != "": // ROM hack sous la Clé d'un autre jeu, Clé déjà synchronisée sans ROM retenue, alias invalide (ADR 0014)
+		s.journal("sans synchronisation : " + pourquoi)
+		notifier(tr("Jeu lancé sans synchronisation : ", "Game started without sync: ") + pourquoi)
+	case cle == "": // homebrew, ou 3DS hors des 8 Pokémon
+		s.journal("sans synchronisation : Clé illisible ou jeu hors périmètre")
+		if !nonLu {
+			notifier(tr("Jeu lancé sans synchronisation : 3dssavesync ne reconnaît pas ce jeu (homebrew, ou jeu 3DS non pris en charge). Sa sauvegarde reste sur ce PC.",
+				"Game started without sync: 3dssavesync does not recognize this game (homebrew, or unsupported 3DS game). Its save stays on this PC."))
+		}
+	case dossier == "":
+		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable : indiquez-le dans « 3dssavesync réglages »", "%s save folder of %s not found: set it in \"3dssavesync settings\""), systeme, s.profil)
+	default:
+		jeux = []*Jeu{j}
+	}
+	if nonLu {
+		notifier(fmt.Sprintf(tr("Jeu lancé sans synchronisation : format de ROM non lu (%s). Utilisez une ROM .zip ou non compressée.",
+			"Game started without sync: ROM format not read (%s). Use a .zip or uncompressed ROM."), strings.ToLower(filepath.Ext(rom))))
 	}
 	return s.jouer(jeux, commande, conseil(e, p))
 }
@@ -302,12 +363,12 @@ func (s *Session) refus(e *Emulateur, cle, jeu string) bool {
 	var texte string
 	switch {
 	case cle == "*" || slices.Contains(en, "*"):
-		texte = nom + tr(" tourne déjà. Ferme-le avant de lancer un jeu.", " is already running. Close it before starting a game.")
+		texte = nom + tr(" tourne déjà. Fermez-le avant de lancer un jeu.", " is already running. Close it before starting a game.")
 	case n > len(en):
-		texte = nom + tr(" est ouvert hors de 3dssavesync : son jeu est inconnu. Ferme-le avant de lancer un jeu.",
+		texte = nom + tr(" est ouvert hors de 3dssavesync : son jeu est inconnu. Fermez-le avant de lancer un jeu.",
 			" was opened outside 3dssavesync: its game is unknown. Close it before starting a game.")
 	case cle != "" && slices.Contains(en, cle):
-		texte = fmt.Sprintf(tr("%s est déjà en cours dans %s. Ferme-le avant de le relancer.", "%s is already running in %s. Close it before starting it again."), jeu, nom)
+		texte = fmt.Sprintf(tr("%s est déjà en cours dans %s. Fermez-le avant de le relancer.", "%s is already running in %s. Close it before starting it again."), jeu, nom)
 	default:
 		return false
 	}
@@ -339,6 +400,8 @@ func (s *Session) verrouiller(processus, cle string) func() {
 	f := filepath.Join(s.dossier, "en-cours", fmt.Sprintf("%s.%d", processus, os.Getpid()))
 	if os.MkdirAll(filepath.Dir(f), 0o755) != nil || os.WriteFile(f, []byte(cle), 0o644) != nil {
 		s.journal("verrou impossible : " + f)
+		notifier(fmt.Sprintf(tr("Le jeu démarre, mais 3dssavesync ne peut pas écrire dans %s. Ne relancez pas ce jeu avant de l'avoir fermé.",
+			"The game starts, but 3dssavesync cannot write to %s. Do not start this game again before closing it."), filepath.Dir(f)))
 	}
 	return func() { os.Remove(f) }
 }
@@ -346,7 +409,8 @@ func (s *Session) verrouiller(processus, cle string) func() {
 // Jeux d'un émulateur pour launch : les ROM de ses dossiers roms, et les Pokémon 3DS déjà vus par Azahar.
 func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 	var jeux []*Jeu
-	vus := map[string]bool{}
+	var sansRoms, refus []string
+	parCle, roms := map[string][]*Jeu{}, map[*Jeu]string{} // roms : chemin de la ROM de chaque Jeu
 	for _, systeme := range e.systemes(p) {
 		if systeme == "3DS" {
 			dossier := e.dossier(p, systeme, "")
@@ -362,6 +426,7 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 		racine := e.Roms[systeme]
 		if racine == "" {
 			s.journal("pas de dossier roms pour " + systeme + " : ses jeux ne sont pas synchronisés")
+			sansRoms = append(sansRoms, systeme)
 			continue
 		}
 		filepath.WalkDir(racine, func(chemin string, d fs.DirEntry, err error) error {
@@ -369,23 +434,74 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 				return nil
 			}
 			sys, cle, nom, interne, err := lireRom(chemin)
-			if err == nil && sys == systeme && cle != "" && !vus[cle] {
-				vus[cle] = true
+			if err != nil || sys != systeme {
+				return nil
+			}
+			if cle, err = s.cfg.cleAlias(sys, nom, cle); err != nil {
+				refus = append(refus, err.Error())
+			} else if cle != "" {
 				if p.NomInterne && interne != "" {
 					nom = interne
 				}
-				jeux = append(jeux, &Jeu{sys, cle, nom, fichierSauvegarde(e.dossier(p, sys, chemin), sys, cle, nom, p.Ext), bibliotheque(e.Coeurs[sys])})
+				parCle[cle] = append(parCle[cle], &Jeu{sys, cle, nom, fichierSauvegarde(e.dossier(p, sys, chemin), sys, cle, nom, p.Ext), bibliotheque(e.Coeurs[sys])})
+				roms[parCle[cle][len(parCle[cle])-1]] = chemin
 			}
 			return nil
 		})
+	}
+	// Plusieurs ROM pour une Clé, ou pour un fichier de sauvegarde (dossier des sauvegardes commun et même nom dans deux
+	// sous-dossiers) : aucune n'est synchronisée, comme le Doublon de la 3DS (ADR 0005, 0014, 0015).
+	parFichier := map[string]int{}
+	for _, l := range parCle {
+		for _, j := range l {
+			parFichier[strings.ToLower(j.Fichier)]++
+		}
+	}
+	var doublons, partages []string
+	for _, l := range parCle {
+		switch {
+		case len(l) > 1:
+			for _, j := range l {
+				doublons = append(doublons, filepath.Base(roms[j]))
+			}
+		case parFichier[strings.ToLower(l[0].Fichier)] > 1:
+			partages = append(partages, filepath.Base(roms[l[0]]))
+		default:
+			if pourquoi := s.romAutre(l[0], roms[l[0]], false); pourquoi != "" {
+				refus = append(refus, pourquoi)
+			} else {
+				jeux = append(jeux, l[0])
+			}
+		}
+	}
+	if len(doublons) > 0 {
+		sort.Strings(doublons)
+		s.journal("Doublons : " + strings.Join(doublons, ", "))
+		refus = append(refus, fmt.Sprintf(tr("ces ROM sont vues comme le même jeu : %s. Gardez-en une, ou ajoutez les autres dans « 3dssavesync réglages », section ROM hacks.",
+			"these ROMs are seen as the same game: %s. Keep only one, or add the others in \"3dssavesync settings\", ROM hacks section."), strings.Join(doublons, ", ")))
+	}
+	if len(partages) > 0 {
+		sort.Strings(partages)
+		s.journal("même fichier de sauvegarde : " + strings.Join(partages, ", "))
+		refus = append(refus, fmt.Sprintf(tr("ces ROM utiliseraient le même fichier de sauvegarde : %s. Renommez-en une.",
+			"these ROMs would use the same save file: %s. Rename one of them."), strings.Join(partages, ", ")))
+	}
+	if len(refus) > 0 {
+		notifier(tr("Non synchronisé : ", "Not synced: ") + strings.Join(refus, "\n"))
+	}
+	if len(sansRoms) > 0 {
+		notifier(fmt.Sprintf(tr("%s est ouvert sans synchronisation : 3dssavesync ne connaît pas votre dossier de jeux %s. "+
+			"Lancez vos jeux depuis LaunchBox, ou ajoutez ce dossier dans « 3dssavesync réglages ».",
+			"%s is open without sync: 3dssavesync does not know your %s games folder. "+
+				"Start your games from LaunchBox, or add this folder in \"3dssavesync settings\"."), e.processus(), strings.Join(sansRoms, ", ")))
 	}
 	sort.Slice(jeux, func(a, b int) bool { return jeux[a].Nom < jeux[b].Nom })
 	return jeux
 }
 
-// Synchronisation avant, partie, Synchronisation après.
-// ponytail: une requête GET /saves par Jeu et par passe ; une seule liste par passe si launch devient lent.
+// Envois en attente, Synchronisation avant, partie, Synchronisation après. Une lecture de la liste du serveur par passe.
 func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, error) {
+	s.reprendre() // même passe que l'avant-partie : réseau coupé = un seul délai d'attente
 	var echecs []string
 	for _, j := range jeux {
 		annule, err := s.syncJeu(j, false)
@@ -394,20 +510,22 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 		}
 		if err != nil {
 			s.journal(j.Cle + " avant : " + err.Error())
-			echecs = append(echecs, j.Nom+" : "+err.Error())
+			if echecs = echec(echecs, j, err); fin(err) {
+				break
+			}
 		}
 	}
 	if len(echecs) > 0 {
 		non := tr("Non", "No")
-		r := demander(tr("Synchronisation impossible", "Sync failed")+"\n\n"+strings.Join(echecs, "\n")+"\n\n"+
-			tr("Jouer avec la Sauvegarde locale ?", "Play with the local save?"), []string{tr("Oui", "Yes"), non})
+		r := demander(tr("Synchronisation impossible", "Sync failed")+"\n\n"+strings.Join(echecs, "\n")+"\n"+tr("Aide : ", "Help: ")+pageAide+"\n\n"+
+			tr("Jouer avec la sauvegarde du PC ? Elle partira au prochain lancement.", "Play with the PC save? It will be sent at the next launch."), []string{tr("Oui", "Yes"), non})
 		if r == non {
 			return 0, nil
 		}
 	}
 	if conseil != "" && s.recupere {
 		pasJouer := tr("Ne pas jouer", "Don't play")
-		r := demander(tr("Une Sauvegarde vient d'arriver du serveur.", "A save just came from the server.")+"\n\n"+conseil+"\n\n"+
+		r := demander(tr("Une sauvegarde vient d'arriver du serveur.", "A save just came from the server.")+"\n\n"+conseil+"\n\n"+
 			tr("Sinon, une sauvegarde en jeu peut la remplacer par une partie plus ancienne.", "Otherwise, an in-game save can replace it with an older game."),
 			[]string{tr("Jouer quand même", "Play anyway"), pasJouer})
 		if r == pasJouer {
@@ -427,20 +545,46 @@ func (s *Session) jouer(jeux []*Jeu, commande []string, conseil string) (int, er
 	}
 	if sansSauvegarde && !existe(jeux[0].Fichier) {
 		s.journal("aucune sauvegarde après la partie : " + jeux[0].Fichier)
-		notifier(fmt.Sprintf(tr("Aucune sauvegarde après la partie : %s\nSi tu as sauvegardé en jeu, vérifie le dossier des sauvegardes et l'extension de %s.",
-			"No save after the game: %s\nIf you saved in game, check the save folder and the extension of %s."), jeux[0].Fichier, s.profil))
+		notifier(fmt.Sprintf(tr("Aucune sauvegarde après la partie : %s\nAprès une sauvegarde en jeu, vérifiez le dossier des sauvegardes et l'extension de %s.",
+			"No save after the game: %s\nAfter saving in game, check the save folder and the extension of %s."), jeux[0].Fichier, s.profil))
 	}
 	echecs = nil
-	for _, j := range jeux {
+	s.listeLue = false
+	var nonEnvoyes []*Jeu // repris au prochain lancement d'un jeu (D5), quelle que soit l'erreur
+	for i, j := range jeux {
 		if _, err := s.syncJeu(j, true); err != nil {
 			s.journal(j.Cle + " après : " + err.Error())
-			echecs = append(echecs, j.Nom+" : "+err.Error())
+			if echecs = echec(echecs, j, err); fin(err) {
+				nonEnvoyes = append(nonEnvoyes, jeux[i:]...)
+				break
+			}
+			nonEnvoyes = append(nonEnvoyes, j)
 		}
 	}
-	if len(echecs) > 0 {
-		notifier(tr("Envoi impossible (", "Upload failed (") + strings.Join(echecs, " ; ") + tr(").\nLa Sauvegarde reste sur le PC ; elle partira au prochain lancement.", ").\nThe save stays on the PC; it will be sent at the next launch."))
+	if len(echecs) > 0 { // le plus important d'abord : la notification est coupée à 255 caractères
+		texte := tr("Envoi impossible : la sauvegarde reste sur le PC et partira au prochain lancement d'un jeu.\n", "Upload failed: the save stays on the PC and will be sent at the next game launch.\n")
+		if s.mettreEnAttente(nonEnvoyes) != nil {
+			texte = tr("Envoi impossible : la sauvegarde reste sur le PC. Relancez ce jeu pour l'envoyer.\n", "Upload failed: the save stays on the PC. Start this game again to upload it.\n")
+		}
+		notifier(texte + strings.Join(echecs, "\n"))
 	}
 	return 0, nil
+}
+
+// Une ligne d'échec pour l'utilisateur : le nom du jeu, sauf quand le serveur ou le réseau est en cause (un seul
+// message pour toute la passe).
+func echec(echecs []string, j *Jeu, err error) []string {
+	texte, global := classer(err)
+	if !global {
+		texte = j.Nom + " : " + texte
+	}
+	return append(echecs, texte)
+}
+
+// fin : le serveur ou le réseau est en cause, les jeux suivants échoueraient pareil (et attendraient chacun le délai).
+func fin(err error) bool {
+	_, global := classer(err)
+	return global
 }
 
 // migrerV2 : sync.config.json et base.json de sync.ps1 -> config.json et bases/ de 3dssavesync.
