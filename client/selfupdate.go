@@ -5,7 +5,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,7 +13,6 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	neturl "net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -115,20 +113,17 @@ const releasesPage = "https://github.com/programgames/3dssavesync/releases/lates
 
 // gitHubError: the check or the download failed; says what happened and what to do, then the detail.
 func gitHubError(err error) string {
-	var h *httpError
-	var cert *tls.CertificateVerificationError
-	var dns *net.DNSError
 	var network net.Error
-	var ue *neturl.Error
 	var t string
+	cause, code := netFailure(err)
 	switch {
-	case errors.As(err, &h) && (h.code == 403 || h.code == 429):
+	case cause == httpStatus && (code == 403 || code == 429):
 		t = tr("GitHub limite pour l'instant les demandes venant de votre connexion. Réessayez dans une heure.",
 			"GitHub is limiting requests from your connection for now. Try again in an hour.")
-	case errors.As(err, &h) && h.code == 404:
+	case cause == httpStatus && code == 404:
 		t = fmt.Sprintf(tr("Il manque un fichier dans cette version sur GitHub, la mise à jour n'a pas été faite. Téléchargez-la vous-même sur %s.",
 			"A file is missing from this version on GitHub, so the update wasn't installed. Download it yourself from %s."), releasesPage)
-	case errors.As(err, &h):
+	case cause == httpStatus:
 		t = tr("GitHub rencontre un problème. Réessayez plus tard.",
 			"GitHub is having problems. Try again later.")
 	case errors.Is(err, errTooBig):
@@ -137,10 +132,10 @@ func gitHubError(err error) string {
 	case errors.Is(err, errUnreadable):
 		t = fmt.Sprintf(tr("GitHub a envoyé une réponse illisible. Réessayez plus tard. Si le problème continue, téléchargez la version vous-même sur %s.",
 			"GitHub sent a response that couldn't be read. Try again later. If it keeps happening, download the version yourself from %s."), releasesPage)
-	case errors.As(err, &cert):
+	case cause == badCertificate:
 		t = tr("Impossible d'établir une connexion sécurisée avec GitHub. Vérifiez la date et l'heure du PC et réessayez.",
 			"Couldn't make a secure connection to GitHub. Check the PC's date and time and try again.")
-	case errors.As(err, &dns), errors.As(err, &network), errors.As(err, &ue):
+	case cause != notNetwork, errors.As(err, &network): // network: a connection cut while reading
 		t = tr("GitHub ne répond pas. Vérifiez votre connexion Internet et réessayez.",
 			"GitHub isn't responding. Check your Internet connection and try again.")
 	default:
@@ -316,7 +311,7 @@ func (a *WebSetup) selfUpdateWeb() map[string]any {
 	if err != nil {
 		return map[string]any{"Ok": false, "Message": err.Error()}
 	}
-	(&Session{dir: dir}).log("mise à jour : " + version + " -> " + r.Tag + ", ancien exe : " + cp)
+	logTo(dir, "mise à jour : "+version+" -> "+r.Tag+", ancien exe : "+cp)
 	lines := []string{fmt.Sprintf(tr("Mise à jour vers %s terminée. Les réglages se rouvrent dans un nouvel onglet, vous pouvez fermer celui-ci.",
 		"Updated to %s. The settings page reopens in a new tab, so you can close this one."), strings.TrimPrefix(r.Tag, "v")),
 		tr("Ancienne version conservée : ", "Previous version kept: ") + cp}

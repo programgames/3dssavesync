@@ -14,8 +14,8 @@ import (
 func TestMissingLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
-		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
-		{"mgba", filepath.Join("x", "mGBA.exe"), []string{"GB", "GBA"}},
+		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}},
+		{"mgba", filepath.Join("x", "mGBA.exe"), []System{"GB", "GBA"}},
 	}
 	if m := missingLaunchBox(emulatorsXML, launcher, entries); !slices.Equal(m, []string{"melonds"}) {
 		t.Errorf("avant la réparation : %v", m)
@@ -55,8 +55,8 @@ func TestChecks(t *testing.T) {
 	os.MkdirAll(saves, 0o755)
 	esde := filepath.Join(m, "ES-DE")
 	cfg := Config{URL: server.URL, Token: "faux", Emulators: map[string]*Emulator{
-		"melonds": {Exe: filepath.Join(m, "melonDS.exe"), Saves: map[string]string{"DS": saves}},
-		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Saves: map[string]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
+		"melonds": {Exe: filepath.Join(m, "melonDS.exe"), Saves: map[System]string{"DS": saves}},
+		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Saves: map[System]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
 	}, Frontends: map[string]string{"esde": esde}}
 	writeJSON(config, &cfg, true)
 	l, _ := checks(config)

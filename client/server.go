@@ -27,12 +27,10 @@ import (
 	"unicode/utf8"
 )
 
-const serverKey = `([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})`
-
 var (
-	reCode    = regexp.MustCompile(`^/saves/` + serverKey + `$`)
-	reHistory = regexp.MustCompile(`^/saves/` + serverKey + `/history(/.*)?$`)
-	reName    = regexp.MustCompile(`^/saves/` + serverKey + `/name$`)
+	reCode    = regexp.MustCompile(`^/saves/` + keyPattern + `$`)
+	reHistory = regexp.MustCompile(`^/saves/` + keyPattern + `/history(/.*)?$`)
+	reName    = regexp.MustCompile(`^/saves/` + keyPattern + `/name$`)
 	reClient  = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 )
 
@@ -220,16 +218,8 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := filepath.Join(s.data, m[1])
 	name := fmt.Sprintf("%06d-%s-%s-%s.sav", seq, time.Now().UTC().Format("20060102T150405Z"), client, h)
-	tmp := filepath.Join(dir, name+".tmp")
-	err := os.MkdirAll(dir, 0o755)
-	if err == nil {
-		os.Remove(tmp)
-		err = writeVerified(tmp, body) // written to disk and read back: an accepted Version survives a power cut
-	}
-	if err == nil {
-		err = os.Rename(tmp, filepath.Join(dir, name))
-	}
-	if err != nil {
+	// Written to disk and read back: an accepted Version survives a power cut.
+	if err := writeAtomic(filepath.Join(dir, name), body); err != nil {
 		answer(w, 500, nil, "")
 		return
 	}
@@ -250,13 +240,7 @@ func (s *Server) setName(w http.ResponseWriter, key string, body []byte) {
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	tmp := filepath.Join(s.data, key, "nom.txt.tmp")
-	os.Remove(tmp)
-	err := writeVerified(tmp, []byte(name)) // written to disk and read back, like a Version
-	if err == nil {
-		err = os.Rename(tmp, filepath.Join(s.data, key, "nom.txt"))
-	}
-	if err != nil {
+	if err := writeAtomic(filepath.Join(s.data, key, "nom.txt"), []byte(name)); err != nil { // like a Version
 		answer(w, 500, nil, "")
 		return
 	}
@@ -319,7 +303,7 @@ func cmdServe(config string) (int, error) {
 	if err := os.MkdirAll(data, 0o755); err != nil {
 		return 1, err
 	}
-	(&Session{dir: filepath.Dir(config)}).log(fmt.Sprintf("serveur local : port %d, données %s", cfg.LocalServer.Port, data))
+	logTo(filepath.Dir(config), fmt.Sprintf("serveur local : port %d, données %s", cfg.LocalServer.Port, data))
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.LocalServer.Port), Handler: &Server{data: data, token: cfg.Token},
 		ReadHeaderTimeout: 30 * time.Second}
 	err := srv.ListenAndServe()
@@ -328,7 +312,7 @@ func cmdServe(config string) (int, error) {
 		// Started at login while it already runs: nothing to report.
 		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", cfg.LocalServer.Port)
 		if testServer(&cfg) == nil {
-			(&Session{dir: filepath.Dir(config)}).log("serveur local déjà en marche")
+			logTo(filepath.Dir(config), "serveur local déjà en marche")
 			return 0, nil
 		}
 		return 1, fmt.Errorf(tr("le serveur local ne démarre pas : un autre programme utilise déjà le port %d. Choisissez un autre port dans les réglages et entrez la nouvelle adresse sur la 3DS.",

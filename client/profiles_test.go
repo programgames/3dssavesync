@@ -88,7 +88,7 @@ func TestProfiles(t *testing.T) {
 	equal(e.dir(p, "3DS", ""), filepath.Join(m, "APPDATA", "Azahar", "sdmc"), "Azahar installé : %APPDATA%\\Azahar\\sdmc")
 
 	// RetroArch: savefile_directory + core subfolder; sort by content
-	cores := map[string]string{"GB": "cores/gambatte_libretro.dll", "GBA": "cores/mgba_libretro.so", "DS": "melondsds_libretro.dylib"}
+	cores := map[System]string{"GB": "cores/gambatte_libretro.dll", "GBA": "cores/mgba_libretro.so", "DS": "melondsds_libretro.dylib"}
 	e, p = emu("retroarch", "ra", Emulator{Cores: cores})
 	equal(strings.Join(p.Args(e, "GB", rom, ""), "|"), "-L|cores/gambatte_libretro.dll|"+rom, "RetroArch : -L <cœur> <rom>")
 	write(t, filepath.Join(d("ra"), "retroarch.cfg"), []byte("savefile_directory = \"default\"\n"))
@@ -108,7 +108,7 @@ func TestProfiles(t *testing.T) {
 	if _, err := (&Emulator{Profile: "retroarch"}).profile("retroarch"); err == nil {
 		t.Error("RetroArch sans cœur : erreur attendue")
 	}
-	if _, err := (&Emulator{Cores: map[string]string{"GBA": "gearboy_libretro.dll"}}).profile("retroarch"); err == nil {
+	if _, err := (&Emulator{Cores: map[System]string{"GBA": "gearboy_libretro.dll"}}).profile("retroarch"); err == nil {
 		t.Error("cœur non géré (Gearboy) : erreur attendue")
 	}
 	equal(library("cores/gpsp_libretro.dll")+"|"+library("mednafen_gba_libretro.so"), "gpSP|Beetle GBA", "cœurs gpSP et Beetle GBA gérés (srm.go)")
@@ -166,14 +166,14 @@ func TestProfiles(t *testing.T) {
 	}
 
 	// config.json still wins
-	e, p = emu("mgba", "mgba", Emulator{Saves: map[string]string{"GBA": "E:/GBA"}})
+	e, p = emu("mgba", "mgba", Emulator{Saves: map[System]string{"GBA": "E:/GBA"}})
 	equal(e.dir(p, "GBA", rom), "E:/GBA", "dossier de config.json prioritaire")
 	if e.handles(p, "GB") {
 		t.Error("dossiers dans config.json : seuls ces Systèmes sont gérés")
 	}
 
 	// Custom Profile
-	e, p = emu("monemu", "perso", Emulator{Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".sav", Saves: map[string]string{"GBA": "S"}})
+	e, p = emu("monemu", "perso", Emulator{Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".sav", Saves: map[System]string{"GBA": "S"}})
 	equal(strings.Join(p.Args(e, "GBA", rom, "S"), "|"), "--batt=S|"+rom, "profil personnalisé : {sauvegardes} et {rom}")
 	equal(strings.Join(p.Args(e, "GBA", "", "S"), "|"), "--batt=S", "profil personnalisé sans jeu : {rom} retiré")
 	if _, err := (&Emulator{}).profile("inconnu"); err == nil {
@@ -190,9 +190,9 @@ func TestTitles3DS(t *testing.T) {
 	if _, err := newSession(config); err != nil {
 		t.Fatal(err)
 	}
-	_, key, name, _, err := readRom(rom3DS(t, "Mon jeu", 0x00040000000EC300))
-	if err != nil || key != "3DS-00040000000EC300" || name != "Jeu a moi" {
-		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", key, name, err)
+	r, err := readRom(rom3DS(t, "Mon jeu", 0x00040000000EC300))
+	if err != nil || r.Key != "3DS-00040000000EC300" || r.Name != "Jeu a moi" {
+		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", r.Key, r.Name, err)
 	}
 }
 
@@ -201,9 +201,9 @@ func TestGBKey(t *testing.T) {
 	tmp = t.TempDir()
 	rom := filepath.Join(tmp, "Pokemon.gb")
 	write(t, rom, gbHeader("Pok\xe9mon\x99", 0x91E6))
-	_, key, _, _, err := readRom(rom)
-	if err != nil || key != "GB-POK_MON_-91E6" {
-		t.Errorf("Clé %q, erreur %v", key, err)
+	r, err := readRom(rom)
+	if err != nil || r.Key != "GB-POK_MON_-91E6" {
+		t.Errorf("Clé %q, erreur %v", r.Key, err)
 	}
 }
 

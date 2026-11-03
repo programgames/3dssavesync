@@ -49,7 +49,7 @@ type WebEmu struct {
 	Hint     string            `json:"Conseil"`
 	Error    string            `json:"Erreur"`
 	Problems []string          `json:"Problemes"` // to-do lines of the checks for this config.json emulator
-	Cores    map[string]string `json:"Coeurs"`
+	Cores    map[System]string `json:"Coeurs"`
 	Extra    string            `json:"EnPlus"` // built-in Profile: extra arguments, before the ROM
 	// Custom emulator: command line ({rom}, {sauvegardes}), extension, name of the file inside the zip.
 	Custom       bool   `json:"Personnalise"`
@@ -59,7 +59,7 @@ type WebEmu struct {
 }
 
 type WebSystem struct {
-	System  string `json:"Systeme"`
+	System  System `json:"Systeme"`
 	Saves   string `json:"Sauvegardes"` // shown value (explicit, or the emulator's setting)
 	Default string `json:"Defaut"`      // the emulator's setting; "" = next to the ROM
 	Roms    string
@@ -247,7 +247,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "api/alias":
 		var x struct {
 			Name   string `json:"Nom"`
-			System string `json:"Systeme"`
+			System System `json:"Systeme"`
 			Remove bool   `json:"Retirer"`
 		}
 		json.NewDecoder(r.Body).Decode(&x)
@@ -289,7 +289,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // aliasWeb handles ROM hacks that get their own Key (ADR 0014). A non-empty name: add (Key made by addAlias) or
 // remove, written to config.json with a dated copy.
-func (a *WebSetup) aliasWeb(name, system string, remove bool) map[string]any {
+func (a *WebSetup) aliasWeb(name string, system System, remove bool) map[string]any {
 	var cfg Config
 	if err := readConfig(a.config, &cfg); err != nil {
 		return map[string]any{"Erreur": errorText(err)}
@@ -401,14 +401,14 @@ func preview(x WebEmu) map[string]string {
 		return map[string]string{"Erreur": err.Error()}
 	}
 	s := x.Systems[0]
-	examples := map[string]string{"DS": "Pokemon Platine.nds", "GB": "Pokemon Cristal.gbc", "GBA": "Pokemon Emeraude.gba", "3DS": "Pokemon X.3ds"}
+	examples := map[System]string{DS: "Pokemon Platine.nds", GB: "Pokemon Cristal.gbc", GBA: "Pokemon Emeraude.gba", N3DS: "Pokemon X.3ds"}
 	romsDir := s.Roms
 	if romsDir == "" {
 		romsDir = filepath.Join(home(), "roms")
 	}
 	rom := filepath.Join(romsDir, examples[s.System])
 	if x.Custom {
-		e.Saves = map[string]string{s.System: s.Saves}
+		e.Saves = map[System]string{s.System: s.Saves}
 	}
 	p, err := e.profile(x.Name)
 	if err != nil {
@@ -474,7 +474,7 @@ func (a *WebSetup) state() WebState {
 	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
 		for i := range e.Emulators {
 			x := &e.Emulators[i]
-			var systems []string
+			var systems []System
 			for _, s := range x.Systems {
 				systems = append(systems, s.System)
 			}
@@ -566,13 +566,13 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 			explicit = explicit || s.Saves != s.Default
 			if s.Roms != "" {
 				if e.Roms == nil {
-					e.Roms = map[string]string{}
+					e.Roms = map[System]string{}
 				}
 				e.Roms[s.System] = s.Roms
 			}
 		}
 		if explicit { // one folder changed: all written (else the emulator would handle only that one)
-			e.Saves = map[string]string{}
+			e.Saves = map[System]string{}
 			for _, s := range x.Systems {
 				if s.Saves == "" {
 					return nil, fmt.Errorf(tr("%s : indiquez le dossier des sauvegardes %s.", "%s: enter the %s save folder."), x.Name, s.System)

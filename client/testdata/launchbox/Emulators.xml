@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" standalone="yes"?>
+<LaunchBox>
+  <EmulatorPlatform>
+    <Emulator>6f0d1c55-0b52-4f0e-9a43-0d2d5bb1a001</Emulator>
+    <Platform>Nintendo DS</Platform>
+    <CommandLine />
+    <Default>true</Default>
+    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>
+    <AutoExtract>true</AutoExtract>
+  </EmulatorPlatform>
+  <EmulatorPlatform>
+    <Emulator>0a6b2f7e-4a7c-4c1e-8d0b-5b1c2e3f4002</Emulator>
+    <Platform>Nintendo Game Boy</Platform>
+    <CommandLine>-L "cores\gambatte_libretro.dll"</CommandLine>
+    <Default>true</Default>
+    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>
+    <AutoExtract>false</AutoExtract>
+  </EmulatorPlatform>
+  <EmulatorPlatform>
+    <Emulator>0a6b2f7e-4a7c-4c1e-8d0b-5b1c2e3f4002</Emulator>
+    <Platform>Nintendo Game Boy Advance</Platform>
+    <CommandLine>-L "cores\mgba_libretro.dll"</CommandLine>
+    <Default>true</Default>
+    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>
+    <AutoExtract>false</AutoExtract>
+  </EmulatorPlatform>
+  <EmulatorPlatform>
+    <Emulator>0a6b2f7e-4a7c-4c1e-8d0b-5b1c2e3f4002</Emulator>
+    <Platform>Super Nintendo Entertainment System</Platform>
+    <CommandLine>-L "cores\snes9x_libretro.dll"</CommandLine>
+    <Default>true</Default>
+    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>
+    <AutoExtract>false</AutoExtract>
+  </EmulatorPlatform>
+  <EmulatorPlatform>
+    <Emulator>c3d4e5f6-1111-4222-8333-444455556003</Emulator>
+    <Platform>Nintendo 3DS</Platform>
+    <CommandLine />
+    <Default>true</Default>
+    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>
+    <AutoExtract>false</AutoExtract>
+  </EmulatorPlatform>
+  <Emulator>
+    <ApplicationPath>Emulators\melonDS\melonDS.exe</ApplicationPath>
+    <CommandLine>-f</CommandLine>
+    <DefaultPlatform>Nintendo DS</DefaultPlatform>
+    <ID>6f0d1c55-0b52-4f0e-9a43-0d2d5bb1a001</ID>
+    <Title>melonDS</Title>
+    <NoQuotes>false</NoQuotes>
+    <NoSpace>false</NoSpace>
+    <HideConsole>true</HideConsole>
+    <FileNameWithoutExtensionAndPath>false</FileNameWithoutExtensionAndPath>
+    <AutoExtract>true</AutoExtract>
+    <UsePauseScreen>true</UsePauseScreen>
+    <PauseAutoHotkeyScript />
+  </Emulator>
+  <Emulator>
+    <ApplicationPath>Emulators\RetroArch\retroarch.exe</ApplicationPath>
+    <CommandLine />
+    <DefaultPlatform />
+    <ID>0a6b2f7e-4a7c-4c1e-8d0b-5b1c2e3f4002</ID>
+    <Title>Retroarch</Title>
+    <NoQuotes>false</NoQuotes>
+    <NoSpace>false</NoSpace>
+    <HideConsole>true</HideConsole>
+    <FileNameWithoutExtensionAndPath>false</FileNameWithoutExtensionAndPath>
+    <AutoExtract>false</AutoExtract>
+    <UsePauseScreen>true</UsePauseScreen>
+    <PauseAutoHotkeyScript />
+  </Emulator>
+  <Emulator>
+    <ApplicationPath>Emulators\Azahar\azahar.exe</ApplicationPath>
+    <CommandLine />
+    <DefaultPlatform>Nintendo 3DS</DefaultPlatform>
+    <ID>c3d4e5f6-1111-4222-8333-444455556003</ID>
+    <Title>Azahar l'émulateur 3DS</Title>
+    <NoQuotes>false</NoQuotes>
+    <NoSpace>false</NoSpace>
+    <HideConsole>false</HideConsole>
+    <FileNameWithoutExtensionAndPath>false</FileNameWithoutExtensionAndPath>
+    <AutoExtract>false</AutoExtract>
+    <UsePauseScreen>true</UsePauseScreen>
+    <PauseAutoHotkeyScript />
+  </Emulator>
+</LaunchBox>

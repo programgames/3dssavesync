@@ -389,12 +389,12 @@ func serverStep(q *Questions, cfg *Config) error {
 }
 
 func testServer(cfg *Config) error {
-	s := &Session{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}, profile: "setup"}
+	r := &remote{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}}
 	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
 		return errors.New(tr("Entrez l'adresse du serveur, avec https:// (ou http:// pour le serveur local).",
 			"Enter the server address, with https:// (or http:// for the local server)."))
 	}
-	st, _, err := s.api("GET", "/saves", nil, nil)
+	st, _, err := r.request("setup", "GET", "/saves", nil, nil)
 	if err == nil && st != 200 {
 		err = &httpError{"GET /saves", st}
 	}
@@ -431,23 +431,18 @@ func installExe(cfg *Config, dir string) string {
 	stopTray(dir) // on failure the installed exe may stay locked; the copy message says what to do
 	o, err := os.ReadFile(current)
 	if err == nil {
-		err = os.MkdirAll(filepath.Dir(target), 0o755)
-	}
-	if err == nil {
-		os.Remove(target + ".3dssavesync-tmp")
-		if err = writeVerified(target+".3dssavesync-tmp", o); err == nil {
-			os.Chmod(target+".3dssavesync-tmp", 0o755)
-			if err = rename(target+".3dssavesync-tmp", target); err != nil { // installed exe running
-				os.Remove(target + ".3dssavesync-tmp")
-				return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
-					"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
-					"\n" + tr("Détail : ", "Detail: ") + err.Error()
-			}
+		err = writeAtomic(target, o)
+		var running *os.LinkError
+		if errors.As(err, &running) { // the rename failed: installed exe running
+			return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
+				"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
+				"\n" + tr("Détail : ", "Detail: ") + err.Error()
 		}
 	}
 	if err != nil {
 		return tr("Impossible de copier le programme, il est peut-être encore ouvert : ", "Couldn't copy the program, it may still be running: ") + errorText(err)
 	}
+	os.Chmod(target, 0o755)
 	cfg.Launcher = target
 	return tr("Programme copié : ", "Program copied: ") + target
 }
@@ -563,7 +558,7 @@ func shimTarget(exe string) string {
 }
 
 // retroArchCores finds RetroArch cores next to the exe or in the configuration folder: System -> preferred core.
-func retroArchCores(exe string) map[string]string {
+func retroArchCores(exe string) map[System]string {
 	var dirs []string
 	if exe != "" {
 		dirs = append(dirs, filepath.Join(filepath.Dir(exe), "cores"))
@@ -581,8 +576,8 @@ func retroArchCores(exe string) map[string]string {
 			}
 		}
 	}
-	preferred := map[string][]string{"DS": {"melonDS DS"}, "GB": {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, "GBA": {"mGBA", "VBA-M", "gpSP", "Beetle GBA"}}
-	cores := map[string]string{}
+	preferred := map[System][]string{DS: {"melonDS DS"}, GB: {"Gambatte", "SameBoy", "mGBA", "VBA-M"}, GBA: {"mGBA", "VBA-M", "gpSP", "Beetle GBA"}}
+	cores := map[System]string{}
 	for s, l := range preferred {
 		for _, b := range l {
 			if f := foundList[b]; f != "" {
@@ -683,14 +678,14 @@ func addEmulator(q *Questions, cfg *Config, t Found, replace bool) {
 		}
 		if r := q.text(fmt.Sprintf(tr("Sauvegardes %s", "%s saves"), s), shown); r != shown && r != "" {
 			if e.Saves == nil {
-				e.Saves = map[string]string{}
+				e.Saves = map[System]string{}
 			}
 			e.Saves[s] = r
 		}
 		if s != "3DS" {
 			if r := q.text(fmt.Sprintf(tr("Dossier des ROM %s, pour la commande launch (Entrée pour passer)", "%s ROM folder, for the launch command (Enter to skip)"), s), e.Roms[s]); r != "" {
 				if e.Roms == nil {
-					e.Roms = map[string]string{}
+					e.Roms = map[System]string{}
 				}
 				e.Roms[s] = r
 			}
@@ -765,7 +760,7 @@ func createShortcuts(q *Questions, cfg *Config) {
 	sort.Strings(names)
 	for _, n := range names {
 		e := cfg.Emulators[n]
-		if p, err := e.profile(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systems(p), []string{"3DS"}) {
+		if p, err := e.profile(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systems(p), []System{N3DS}) {
 			noRoms = append(noRoms, e.process())
 			continue
 		}

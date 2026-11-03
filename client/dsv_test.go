@@ -78,7 +78,7 @@ func TestDSV(t *testing.T) {
 	// Download: Backup copy of the .dsv, then received SRAM + existing footer.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(other) }))
 	defer srv.Close()
-	s := &Session{cfg: &Config{URL: srv.URL}, dir: dir, profile: "desmume", http: srv.Client()}
+	s := testClient(srv, dir, "desmume")
 	if err := s.download(j, l, &Version{Hash: sha256Hex(other)}); err != nil {
 		t.Fatal(err)
 	}

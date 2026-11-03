@@ -75,7 +75,7 @@ func serverLine(cfg *Config, err error) string {
 // pendingCount returns the number of pending Uploads (unreadable en-attente.json: 0, the usual resume sets it aside).
 func pendingCount(dir string) int {
 	var l []pendingEntry
-	readJSON((&Session{dir: dir}).pendingPath(), &l)
+	readJSON(pendingPath(dir), &l)
 	return len(l)
 }
 
@@ -235,7 +235,6 @@ func cmdTray(config string) (int, error) {
 	}
 	defer release()
 	os.Remove(filepath.Join(dir, stopFile)) // left from a request made when the tray icon was not running
-	s := &Session{dir: dir}
 	var cfg Config
 	readJSON(config, &cfg) // not configured yet: only the open-settings and quit items
 	var server struct {
@@ -246,7 +245,7 @@ func cmdTray(config string) (int, error) {
 		go func() {
 			_, err := cmdServe(config) // returns only on an error, or if it already runs elsewhere
 			if err != nil {
-				s.log("tray : serveur local : " + err.Error())
+				logTo(dir, "tray : serveur local : "+err.Error())
 				notify(tr("Le serveur local ne fonctionne pas : ", "The local server isn't running: ") + errorText(err))
 				server.Lock()
 				server.err = err
@@ -303,12 +302,12 @@ func cmdTray(config string) (int, error) {
 		return trayMenuItems(pendingCount(dir), serverLine(&cfg, server.err), update.version)
 
 	}
-	s.log("tray : icône près de l'horloge")
+	logTo(dir, "tray : icône près de l'horloge")
 	err := showIcon(menu, choose, end)
 	if err == nil {
 		return 0, nil
 	}
-	s.log("tray : " + err.Error())
+	logTo(dir, "tray : "+err.Error())
 	if cfg.LocalServer == nil {
 		return 1, err
 	}

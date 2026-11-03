@@ -103,7 +103,7 @@ A frontend calls `3dssavesync run [--emulator <name>] "<rom>"` instead of the em
 5. Start the emulator and wait for its process to end.
 6. **After the game**: read the Local save again, `etat` with the Base. `A_ENVOYER` → Upload with `If-Match` = Base. `412` → `etat` again with the new Current version; `CONFLIT` → **Keep PC save** / **Do nothing**. Network error → the save is written to `en-attente.json` and uploaded first at the next `run` or `launch`.
 
-Backup copies: `<copies>/<emulator>/<name>-<date>`. The Go tests (`client/launcher_test.go`) run this flow against the real `server/server.py` in a temporary folder.
+Backup copies: `<copies>/<emulator>/<name>-<date>`. The Go tests (`client/launcher_test.go`) run this flow against the local server (`client/server.go`) in a temporary folder; `client/server_test.go` checks that it keeps the contract of `server/server.py` by running `server/test_server.py` against it.
 
 ## 4. 3DS homebrew: `3ds/`
 

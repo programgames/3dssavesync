@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<!-- This is the ES-DE find rules configuration file, customized by EmuDeck. -->
+<ruleList>
+    <emulator name="MELONDS">
+        <!-- Nintendo DS emulator melonDS -->
+        <rule type="staticpath">
+            <entry>/run/media/mmcblk0p1/Emulation/tools/launchers/melonds.sh</entry>
+        </rule>
+    </emulator>
+  <emulator name="3DSSAVESYNC">
+    <rule type="staticpath">
+      <entry>/opt/3dssavesync/3dssavesync</entry>
+    </rule>
+  </emulator>
+</ruleList>

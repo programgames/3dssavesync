@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -36,8 +37,8 @@ func validXML(t *testing.T, name, text string) {
 func TestLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
-		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
-		{"mgba", filepath.Join("x", "mGBA.exe"), []string{"GB", "GBA"}},
+		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []System{"DS"}},
+		{"mgba", filepath.Join("x", "mGBA.exe"), []System{"GB", "GBA"}},
 	}
 	newText, report := launchbox(emulatorsXML, lb, launcher, entries)
 	validXML(t, "Emulators.xml", newText)
@@ -81,7 +82,7 @@ func TestLaunchBox(t *testing.T) {
 }
 
 func TestESDE(t *testing.T) {
-	emus := map[string]string{"DS": "melonds", "3DS": "azahar"}
+	emus := map[System]string{"DS": "melonds", "3DS": "azahar"}
 	s, r, report := esde("", "", "/home/x/.local/bin/3dssavesync", emus)
 	validXML(t, "es_systems.xml", s)
 	validXML(t, "es_find_rules.xml", r)
@@ -100,14 +101,14 @@ func TestESDE(t *testing.T) {
 	emudeck := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <fullname>Nintendo DS</fullname>\n" +
 		"        <command label=\"melonDS (Standalone)\">%EMULATOR_MELONDS% -f %ROM%</command>\n" +
 		"        <command label=\"DeSmuME\">%EMULATOR_RETROARCH% %ROM%</command>\n    </system>\n</systemList>\n"
-	s4, _, _ := esde(emudeck, "", "x", map[string]string{"DS": "melonds"})
+	s4, _, _ := esde(emudeck, "", "x", map[System]string{"DS": "melonds"})
 	validXML(t, "es_systems.xml EmuDeck", s4)
 	i, j := strings.Index(s4, "3dssavesync (melonds)"), strings.Index(s4, "melonDS (Standalone)")
 	if i < 0 || j < i || !strings.Contains(s4, "DeSmuME") {
 		t.Errorf("bloc EmuDeck : commande 3dssavesync en premier, les autres gardées :\n%s", s4)
 	}
 	noCommand := "<?xml version=\"1.0\"?>\n<systemList>\n    <system>\n        <name>nds</name>\n        <extension>.nds .7z .rar</extension>\n    </system>\n</systemList>\n"
-	s5, _, _ := esde(noCommand, "", "x", map[string]string{"DS": "melonds"})
+	s5, _, _ := esde(noCommand, "", "x", map[System]string{"DS": "melonds"})
 	if !strings.Contains(s5, "<extension>.nds .7z .rar</extension>") || !strings.Contains(s5, "3dssavesync (melonds)") {
 		t.Errorf("bloc sans commande : extensions de l'utilisateur gardées :\n%s", s5)
 	}
@@ -240,26 +241,76 @@ func TestPortable(t *testing.T) {
 func TestLaunchBoxOptions(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")
-	if o := launchBoxOptions(emulatorsXML, lb, melon, []string{"DS"}); o != "-f" {
+	if o := launchBoxOptions(emulatorsXML, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("options de MelonDS : %q", o)
 	}
 	platform := strings.Replace(emulatorsXML, "<CommandLine />", "<CommandLine>--plein-ecran</CommandLine>", 1)
-	if o := launchBoxOptions(platform, lb, melon, []string{"DS"}); o != "-f --plein-ecran" {
+	if o := launchBoxOptions(platform, lb, melon, []System{"DS"}); o != "-f --plein-ecran" {
 		t.Errorf("options de l'émulateur et de la plateforme DS : %q", o)
 	}
 	core := strings.Replace(emulatorsXML, "<CommandLine />", `<CommandLine>-L &quot;cores\melonds_libretro.dll&quot;</CommandLine>`, 1)
-	if o := launchBoxOptions(core, lb, melon, []string{"DS"}); o != "-f" {
+	if o := launchBoxOptions(core, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("cœur RetroArch d'une plateforme repris : %q", o)
 	}
-	if o := launchBoxOptions(platform, lb, melon, []string{"GB"}); o != "-f" {
+	if o := launchBoxOptions(platform, lb, melon, []System{"GB"}); o != "-f" {
 		t.Errorf("plateforme d'un autre système ignorée : %q", o)
 	}
-	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", melon, []string{"DS"}}})
-	if o := launchBoxOptions(installed, lb, melon, []string{"DS"}); o != "-f" {
+	installed, _ := launchbox(emulatorsXML, lb, launcher, []LBEntry{{"melonds", melon, []System{"DS"}}})
+	if o := launchBoxOptions(installed, lb, melon, []System{"DS"}); o != "-f" {
 		t.Errorf("après l'installation, lu dans l'émulateur d'origine : %q", o)
 	}
 	inPlace := strings.Replace(emulatorsXML, `Emulators\MelonDS\melonDS.exe`, launcher, 1)
-	if o := launchBoxOptions(inPlace, lb, melon, []string{"DS"}); o != "" {
+	if o := launchBoxOptions(inPlace, lb, melon, []System{"DS"}); o != "" {
 		t.Errorf("émulateur modifié sur place : rien à reprendre : %q", o)
+	}
+}
+
+// Golden files (testdata/): real-looking frontend files, the exact install output, a second install that changes
+// nothing, and an uninstall that gives back the same bytes. UPDATE_GOLDEN=1 go test -run Golden rewrites the
+// expected files: read the diff before committing it.
+func TestFrontendsGolden(t *testing.T) {
+	golden := func(name, got string) {
+		t.Helper()
+		f := filepath.Join("testdata", name)
+		if os.Getenv("UPDATE_GOLDEN") != "" {
+			os.WriteFile(f, []byte(got), 0o644)
+		}
+		if got != string(read(f)) {
+			t.Errorf("%s: different output:\n%s", name, got)
+		}
+	}
+	launcher := "/opt/3dssavesync/3dssavesync"
+
+	original := string(read(filepath.Join("testdata", "launchbox", "Emulators.xml")))
+	entries := []LBEntry{
+		{"azahar", "x/azahar.exe", []System{N3DS}},
+		{"melonds", "x/melonDS.exe", []System{DS}},
+		{"retroarch", "x/retroarch.exe", []System{GB, GBA}},
+	}
+	installed, _ := launchbox(original, "LaunchBox", launcher, entries)
+	for i, b := range lbEmulatorBlock.FindAllString(installed, -1) { // newID: random
+		if strings.HasSuffix(field(b, "Title"), " (3dssavesync)") {
+			installed = strings.ReplaceAll(installed, field(b, "ID"), fmt.Sprintf("00000000-0000-4000-8000-00000000000%d", i))
+		}
+	}
+	golden(filepath.Join("launchbox", "Emulators.installed.xml"), installed)
+	if again, _ := launchbox(installed, "LaunchBox", launcher, entries); again != installed {
+		t.Errorf("LaunchBox: a second install changes the file:\n%s", again)
+	}
+	if undone, _ := undoLaunchbox(installed, "LaunchBox", launcher, &Config{}); undone != original {
+		t.Errorf("LaunchBox: the uninstall doesn't give back the original file:\n%s", undone)
+	}
+
+	systems := string(read(filepath.Join("testdata", "esde", "es_systems.xml")))
+	rules := string(read(filepath.Join("testdata", "esde", "es_find_rules.xml")))
+	emus := map[System]string{DS: "melonds", GB: "retroarch", GBA: "retroarch", N3DS: "azahar"}
+	s, r, _ := esde(systems, rules, launcher, emus)
+	golden(filepath.Join("esde", "es_systems.installed.xml"), s)
+	golden(filepath.Join("esde", "es_find_rules.installed.xml"), r)
+	if s2, r2, _ := esde(s, r, launcher, emus); s2 != s || r2 != r {
+		t.Errorf("ES-DE: a second install changes the files:\n%s\n%s", s2, r2)
+	}
+	if ds, dr, _ := undoEsde(s, r); ds != systems || dr != rules {
+		t.Errorf("ES-DE: the uninstall doesn't give back the original files:\n%s\n%s", ds, dr)
 	}
 }

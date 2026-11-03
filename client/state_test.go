@@ -32,7 +32,7 @@ func TestState(t *testing.T) {
 		if base == "-" {
 			base = ""
 		}
-		if got := state(obs(c[1], c[2]), obs(c[3], c[4]), base); got != c[6] {
+		if got := state(obs(c[1], c[2]), obs(c[3], c[4]), base); string(got) != c[6] {
 			t.Errorf("%s : attendu %s, obtenu %s", c[0], c[6], got)
 		}
 	}

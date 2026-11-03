@@ -40,14 +40,14 @@ func TestMBC2(t *testing.T) {
 	other[3] = 7
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(other) }))
 	defer srv.Close()
-	s := &Session{cfg: &Config{URL: srv.URL}, dir: dir, profile: "mgba", http: srv.Client()}
+	s := testClient(srv, dir, "mgba")
 	if err := s.download(j, l, &Version{Hash: sha256Hex(other), Size: 512}); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(read(j.File), mbc2File(other, 512)) {
 		t.Fatal("Récupération : taille du fichier existant non gardée")
 	}
-	fresh := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Neuf", File: filepath.Join(dir, "Neuf.sav")}
+	fresh := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Neuf", File: filepath.Join(dir, "Neuf.sav"), MBC2: s.cfg.mbc2Size("mgba", "")}
 	if err := s.download(fresh, nil, &Version{Hash: sha256Hex(other), Size: 512}); err != nil {
 		t.Fatal(err)
 	}
