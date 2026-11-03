@@ -17,6 +17,7 @@
 #include "erreurs.h"
 #include "etat.h"
 #include "fichiers.h"
+#include "liste.h"
 #include "maj.h"
 #include "net.h"
 #include "pokemon.h"
@@ -479,7 +480,9 @@ static void scanner(void)
 /* GET /saves : Version courante de chaque Jeu. 0 si tout va bien. */
 static int lire_serveur(void)
 {
-    char url[300], *corps, *p;
+    char url[300], *corps;
+    const char *p;
+    entree_t e;
     size_t taille;
     long statut;
     int i;
@@ -498,23 +501,17 @@ static int lire_serveur(void)
     }
     serveur_lu = 1;
     lu_quand = osGetTime();
-    /* [{"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc"}, ...]
-     * ponytail: lecture à la main, liée au format de json.dumps (séparateur ": ") ; un vrai parseur (jsmn) si le serveur change. */
-    for (p = strstr(corps, "\"code\": \""); p; p = strstr(p + 1, "\"code\": \"")) {
-        const char *h = strstr(p, "\"hash\": \""), *t = strstr(p, "\"taille\": ");
-        const char *d = strstr(p, "\"date\": \""), *c = strstr(p, "\"client\": \""), *a = strstr(p, "\"age\": ");
-        const char *n = strstr(p, "\"nom\": \""), *suivant = strstr(p + 1, "\"code\": \"");
-        char cle[CLE_MAX] = "";
-        sscanf(p + 9, "%31[^\"]", cle);
-        for (i = 0; i < nb_jeux && strcmp(jeux[i].cle, cle); i++);
-        if (i == nb_jeux || !h || !t) continue; /* pas de ROM locale : pas affiché */
-        sscanf(h + 9, "%64[0-9a-f]", jeux[i].hash_serveur);
-        jeux[i].serveur.taille = strtoul(t + 10, NULL, 10);
-        if (d) sscanf(d + 9, "%16[^\"]", jeux[i].date);
-        if (c) sscanf(c + 11, "%16[^\"]", jeux[i].client);
-        jeux[i].age = a ? strtol(a + 7, NULL, 10) : -1;
+    /* [{"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc"}, ...] (liste.h) */
+    for (p = corps; liste_serveur(&p, &e);) {
+        for (i = 0; i < nb_jeux && strcmp(jeux[i].cle, e.code); i++);
+        if (i == nb_jeux || !e.hash[0] || e.taille < 0) continue; /* pas de ROM locale : pas affiché */
+        strcpy(jeux[i].hash_serveur, e.hash);
+        jeux[i].serveur.taille = e.taille;
+        strcpy(jeux[i].date, e.date);
+        strcpy(jeux[i].client, e.client);
+        jeux[i].age = e.age;
         jeux[i].a_serveur = 1;
-        jeux[i].a_nom = n && (!suivant || n < suivant);
+        jeux[i].a_nom = e.a_nom;
     }
     free(corps);
     /* Nom de chaque jeu pour l'Historique du PC (ADR 0018), une fois par jeu. Arrêt au premier refus : un serveur plus

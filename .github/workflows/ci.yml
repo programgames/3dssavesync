@@ -35,6 +35,7 @@ jobs:
           gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e
           gcc -std=c99 -Wall -I source source/texte.c test/test_texte.c -o /tmp/x && /tmp/x
           gcc -std=c99 -Wall -I source source/fichiers.c source/maj.c test/test_maj.c -o /tmp/m && /tmp/m test/release_latest.json
+          gcc -std=c99 -Wall -I source source/fichiers.c source/liste.c test/test_liste.c -o /tmp/l && /tmp/l ../tests/saves.json
 
   lanceur-windows:
     runs-on: windows-latest

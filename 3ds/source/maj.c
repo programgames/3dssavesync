@@ -4,7 +4,7 @@
 #include "maj.h"
 
 /* Texte JSON après "clé": (espaces permis), sans échappement. 0 si lu en entier dans out.
- * ponytail: lecture à la main comme /saves (main.c) ; tag_name et adresses n'ont jamais d'échappement. */
+ * ponytail: lecture à la main comme /saves (liste.c) ; tag_name et adresses n'ont jamais d'échappement. */
 static int valeur(const char *p, char *out, size_t n)
 {
     size_t i = 0;

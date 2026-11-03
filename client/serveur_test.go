@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -72,6 +74,47 @@ func TestServeurLocal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(data, "IRBF")); err == nil {
 		t.Error("corps tronqué : aucune Version ne doit être écrite")
+	}
+}
+
+// tests/saves.json (écrite par server.py, lue par le test C de la 3DS) : les mêmes Versions donnent la même liste, champ
+// pour champ, sur le serveur Go.
+func TestServeurListeCommeServerPy(t *testing.T) {
+	o, err := os.ReadFile(filepath.Join("..", "tests", "saves.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attendu, recu []map[string]any
+	if err := json.Unmarshal(o, &attendu); err != nil || len(attendu) != 3 {
+		t.Fatalf("saves.json : %v %d", err, len(attendu))
+	}
+	data := t.TempDir()
+	for _, j := range attendu {
+		ecrire(t, filepath.Join(data, j["code"].(string), j["version"].(string)), make([]byte, int(j["taille"].(float64))))
+		if nom, ok := j["nom"].(string); ok {
+			ecrire(t, filepath.Join(data, j["code"].(string), "nom.txt"), []byte(nom))
+		}
+	}
+	srv := httptest.NewServer(&Serveur{data: data, jeton: "j"})
+	defer srv.Close()
+	req, _ := http.NewRequest("GET", srv.URL+"/saves", nil)
+	req.Header.Set("Authorization", "Bearer j")
+	r, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Body.Close()
+	if err := json.NewDecoder(r.Body).Decode(&recu); err != nil {
+		t.Fatal(err)
+	}
+	for _, j := range append(attendu, recu...) { // age : dépend de l'heure du test
+		if a, ok := j["age"].(float64); !ok || a <= 0 {
+			t.Errorf("age : %v", j["age"])
+		}
+		delete(j, "age")
+	}
+	if !reflect.DeepEqual(recu, attendu) {
+		t.Errorf("liste du serveur Go différente de tests/saves.json :\n%v\n%v", recu, attendu)
 	}
 }
 

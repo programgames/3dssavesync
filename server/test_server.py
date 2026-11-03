@@ -202,6 +202,36 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.envoyer(b"v3", If_Match=f'"{h2}"')[0], 200)
         self.assertEqual(self.requete("GET", f"/saves/{self.cle}")[2], b"v3")
 
+    @unittest.skipIf(DISTANT, "accès au dossier data du serveur")
+    def test_liste_comme_tests_saves_json(self):
+        """tests/saves.json : la liste de référence, lue par le test C de la 3DS (test_liste.c) et comparée à celle du
+        serveur Go (serveur_test.go). NDSSYNC_FIXTURE=1 python -m unittest test_server.py la réécrit."""
+        jeux = {  # 3DS : la plus récente seulement ; ADAF sans nom, entre deux jeux nommés ; nom avec } et "
+            "3DS-0004000000055D00": [("000003-20260101T120000Z-3ds", b"x" * 1024, "Pokémon X")],
+            "ADAF": [("000001-20260102T080910Z-pc", b"v1", None), ("000002-20260102T081011Z-pc", b"\0" * 524288, None)],
+            "GBA-BPEF": [("000001-20260103T235959Z-3ds", b"\xff" * 131072, 'Pokémon Émeraude {hack} "FR"')],
+        }
+        for cle, versions in jeux.items():
+            os.mkdir(os.path.join(self.data.name, cle))
+            for debut, corps, nom in versions:
+                with open(os.path.join(self.data.name, cle, f"{debut}-{hashlib.sha256(corps).hexdigest()}.sav"), "wb") as f:
+                    f.write(corps)
+                if nom:
+                    with open(os.path.join(self.data.name, cle, "nom.txt"), "w", encoding="utf-8") as f:
+                        f.write(nom)
+        statut, _, corps = self.requete("GET", "/saves")
+        self.assertEqual(statut, 200)
+        fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tests", "saves.json")
+        if os.environ.get("NDSSYNC_FIXTURE"):
+            with open(fixture, "wb") as f:
+                f.write(corps)
+        with open(fixture, "rb") as f:
+            attendu = json.load(f)
+        recu = json.loads(corps)
+        for j in attendu + recu:  # age : dépend de l'heure du test
+            self.assertGreater(j.pop("age"), 0)
+        self.assertEqual(recu, attendu)
+
     def test_jeu_inconnu_404(self):
         self.assertEqual(self.requete("GET", f"/saves/{self.cle}")[0], 404)
 
