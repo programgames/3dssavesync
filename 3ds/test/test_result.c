@@ -79,7 +79,12 @@ int main(void)
     r.program = "open_agb_firm";
     expect(r, 1, KIND_SUCCESS, "Zelda: now played with open_agb_firm.", "");
     expect(make(RESULT_SWITCH_FAILED, SAV), 0, KIND_FAILURE, "Zelda : changement impossible, rien n'est perdu.", SAV);
-    expect(make(RESULT_GB_GBA_ONLY, ""), 0, KIND_INFO, "X : seulement pour les jeux GB et GBA.", "");
+    expect(make(RESULT_GB_GBA_ONLY, ""), 0, KIND_INFO, "X : seulement pour les ROM GB et GBA de la carte SD.", "");
+    expect(make(RESULT_VC_READ_ONLY, ""), 0, KIND_INFO,
+           "Zelda : la récupération des jeux Virtual Console arrive dans une prochaine version. Votre sauvegarde n'a pas été modifiée.", "");
+    expect(make(RESULT_VC_UNEXPECTED, "sav.dat, SecureValue, rsm2.dat"), 1, KIND_FAILURE,
+           "Zelda: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line.",
+           "Files: sav.dat, SecureValue, rsm2.dat");
     expect(make(RESULT_CONFLICT_LEFT, ""), 0, KIND_INFO, "Zelda : conflit laissé tel quel.", "");
     r = make(RESULT_DUPLICATE_SHARED, "");
     r.count = 2;

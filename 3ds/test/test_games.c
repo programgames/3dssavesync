@@ -59,7 +59,7 @@ int main(void)
               !base_outdated(STATUS_DUPLICATE, NULL, H1), "not In sync: Base not written");
 
     check(status_priority(STATUS_CONFLICT) == 0 && status_priority(STATUS_TO_DOWNLOAD) == 1 && status_priority(STATUS_TO_UPLOAD) == 2 &&
-              status_priority(STATUS_DUPLICATE) == 3 && status_priority(STATUS_IN_SYNC) == 4 && status_priority(STATUS_OFFLINE) == 4,
+              status_priority(STATUS_DUPLICATE) == 3 && status_priority(STATUS_NOT_SYNCED) == 3 && status_priority(STATUS_IN_SYNC) == 4 && status_priority(STATUS_OFFLINE) == 4,
           "display order");
 
     printf("%s\n", failures ? "FAILED" : "games: OK");

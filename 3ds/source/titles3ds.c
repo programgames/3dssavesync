@@ -1,4 +1,5 @@
 /* Same order of operations as Checkpoint (io.cpp: write, commit, secure value), code written here (ADR 0009). */
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +12,7 @@ static Result open_save_archive(u64 id, FS_MediaType media, FS_Archive *a)
     return FSUSER_OpenArchive(a, ARCHIVE_USER_SAVEDATA, (FS_Path){ PATH_BINARY, sizeof path, path });
 }
 
-int read_title_save(u64 id, FS_MediaType *media, unsigned char **bytes, size_t *size)
+int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char **bytes, size_t *size)
 {
     static const FS_MediaType media_types[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
     int i;
@@ -24,7 +25,7 @@ int read_title_save(u64 id, FS_MediaType *media, unsigned char **bytes, size_t *
         int ok = 0;
 
         if (R_FAILED(open_save_archive(id, media_types[i], &a))) continue;
-        if (R_SUCCEEDED(FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, "/main"), FS_OPEN_READ, 0))) {
+        if (R_SUCCEEDED(FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, file), FS_OPEN_READ, 0))) {
             if (R_SUCCEEDED(FSFILE_GetSize(f, &t)) && t > 0 && (*bytes = malloc(t))) {
                 ok = R_SUCCEEDED(FSFILE_Read(f, &bytes_read, 0, *bytes, t)) && bytes_read == t;
                 if (!ok) free(*bytes);
@@ -69,31 +70,6 @@ int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size)
     return 0;
 }
 
-int title_main_only(u64 id)
-{
-    static const FS_MediaType media_types[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
-    int i;
-    for (i = 0; i < 2; i++) {
-        FS_Archive a;
-        Handle d;
-        FS_DirectoryEntry e[2];
-        u32 count_read = 0;
-        int main_only;
-        if (R_FAILED(open_save_archive(id, media_types[i], &a))) continue;
-        if (R_FAILED(FSUSER_OpenDirectory(&d, a, fsMakePath(PATH_ASCII, "/")))) {
-            FSUSER_CloseArchive(a);
-            continue;
-        }
-        FSDIR_Read(d, &count_read, 2, e);
-        FSDIR_Close(d);
-        FSUSER_CloseArchive(a);
-        main_only = count_read == 1 && !(e[0].attributes & FS_ATTRIBUTE_DIRECTORY) && e[0].name[0] == 'm' && e[0].name[1] == 'a' &&
-               e[0].name[2] == 'i' && e[0].name[3] == 'n' && e[0].name[4] == 0;
-        return main_only;
-    }
-    return -1;
-}
-
 /* UTF-16 (Basic Multilingual Plane) -> UTF-8, without cutting a character; line break -> space. */
 static void utf8(const u16 *src, size_t max, char *name, size_t n)
 {
@@ -107,6 +83,69 @@ static void utf8(const u16 *src, size_t max, char *name, size_t n)
         else name[j++] = (char)(0xE0 | c >> 12), name[j++] = (char)(0x80 | (c >> 6 & 0x3F)), name[j++] = (char)(0x80 | (c & 0x3F));
     }
     name[j] = '\0';
+}
+
+int title_root(u64 id, char *names, size_t n)
+{
+    static const FS_MediaType media_types[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
+    int i;
+    for (i = 0; i < 2; i++) {
+        FS_Archive a;
+        Handle d;
+        FS_DirectoryEntry e;
+        u32 count_read = 0;
+        int count = 0;
+        if (R_FAILED(open_save_archive(id, media_types[i], &a))) continue;
+        if (R_FAILED(FSUSER_OpenDirectory(&d, a, fsMakePath(PATH_ASCII, "/")))) {
+            FSUSER_CloseArchive(a);
+            continue;
+        }
+        names[0] = '\0';
+        while (R_SUCCEEDED(FSDIR_Read(d, &count_read, 1, &e)) && count_read == 1) {
+            char name[128];
+            size_t l = strlen(names);
+            utf8(e.name, sizeof e.name / sizeof *e.name, name, sizeof name);
+            /* cut when full: a cut list is never one of the short lists that callers accept */
+            snprintf(names + l, n - l, "%s%s%s", count++ ? ", " : "", name, e.attributes & FS_ATTRIBUTE_DIRECTORY ? "/" : "");
+        }
+        FSDIR_Close(d);
+        FSUSER_CloseArchive(a);
+        return count;
+    }
+    return -1;
+}
+
+int title_main_only(u64 id)
+{
+    char names[64];
+    return title_root(id, names, sizeof names) < 0 ? -1 : !strcmp(names, "main");
+}
+
+int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
+{
+    Result r = romfsMountFromTitle(id, MEDIATYPE_SD, "vc");
+    DIR *d;
+    struct dirent *e;
+    size_t got = 0;
+    if (R_FAILED(r)) {
+        snprintf(why, wn, "romfsMountFromTitle %016llX: 0x%08lX", id, (unsigned long)r);
+        return -1;
+    }
+    /* RomFS of a VC title: the ROM is the file of rom/ (3dbrew, 3DS Virtual Console), its name does not matter. */
+    if ((d = opendir("vc:/rom/"))) {
+        while (got < n && (e = readdir(d))) {
+            char path[300];
+            FILE *f;
+            if (snprintf(path, sizeof path, "vc:/rom/%s", e->d_name) >= (int)sizeof path || !(f = fopen(path, "rb"))) continue;
+            got = fread(header, 1, n, f);
+            fclose(f);
+        }
+        closedir(d);
+    }
+    romfsUnmount("vc");
+    if (got == n) return 0;
+    snprintf(why, wn, "vc:/rom/ %016llX: %s", id, d ? "no ROM file" : "no folder");
+    return -1;
 }
 
 /* SMDH of the title (0x36C0 bytes): ExeFS:/icon of ARCHIVE_SAVEDATA_AND_CONTENT (FBI's method). 0 if read. */

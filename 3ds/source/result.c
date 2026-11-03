@@ -74,8 +74,17 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : changement impossible, rien n'est perdu.", "%s: switch failed, nothing lost."), game);
         return KIND_FAILURE;
     case RESULT_GB_GBA_ONLY:
-        snprintf(text, n, "%s", T("X : seulement pour les jeux GB et GBA.", "X: GB and GBA games only."));
+        snprintf(text, n, "%s", T("X : seulement pour les ROM GB et GBA de la carte SD.", "X: GB and GBA ROMs on the SD card only."));
         return KIND_INFO;
+    case RESULT_VC_READ_ONLY:
+        snprintf(text, n, T("%s : la récupération des jeux Virtual Console arrive dans une prochaine version. Votre sauvegarde n'a pas été modifiée.",
+                            "%s: downloading Virtual Console games comes in a later version. Your save was not changed."), game);
+        return KIND_INFO;
+    case RESULT_VC_UNEXPECTED:
+        snprintf(detail, dn, T("Fichiers : %s", "Files: %s"), r->path);
+        snprintf(text, n, T("%s : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
+                            "%s: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line."), game);
+        return KIND_FAILURE;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);
         return KIND_INFO;

@@ -22,7 +22,8 @@ int status_priority(status_t s)
     case STATUS_CONFLICT: return 0;
     case STATUS_TO_DOWNLOAD: return 1;
     case STATUS_TO_UPLOAD: return 2;
-    case STATUS_DUPLICATE: return 3;
+    case STATUS_DUPLICATE:
+    case STATUS_NOT_SYNCED: return 3;
     default: return 4;
     }
 }

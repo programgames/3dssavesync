@@ -18,8 +18,8 @@ typedef struct {
     long long modified; /* date of the Local save, 0 if unknown */
 } row_t;
 
-/* 1 if the Game goes in the tab. To do: Upload, Download, Conflict, and Duplicate (the user must rename or remove a ROM,
- * or the game is never synced). */
+/* 1 if the Game goes in the tab. To do: Upload, Download, Conflict, Duplicate (the user must rename or remove a ROM,
+ * or the game is never synced) and Not synced. */
 int in_tab(tab_t t, const row_t *r);
 
 /* Next tab in the direction step (+1 R, -1 L), wrapping; a tab with no game (counts) is skipped, except All. */
