@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Forme d'une Clé par Système (ADR 0007) : celle que le serveur accepte. Un alias doit l'avoir (ADR 0014).
+// keyShapes holds the Key shape of each System (ADR 0007), as the server accepts it. An Alias must have it (ADR 0014).
 var keyShapes = map[string]*regexp.Regexp{
 	"DS":  code4,
 	"GBA": regexp.MustCompile(`^GBA-[A-Z0-9]{4}$`),
@@ -21,8 +21,8 @@ var keyShapes = map[string]*regexp.Regexp{
 
 var keyExamples = map[string]string{"DS": "0RAD", "GBA": "GBA-0RAD", "GB": "GB-MONHACK-0001"}
 
-// cleAlias : la Clé choisie dans « alias » pour cette ROM (nom du fichier sans extension), sinon celle de l'en-tête.
-// Un alias mal formé est une erreur : la ROM ne se synchronise pas sous la Clé de l'en-tête (celle du jeu d'origine).
+// aliasKey returns the Key chosen in "alias" for this ROM (file name without extension), otherwise the header Key.
+// A malformed Alias is an error: the ROM does not sync under the header Key (the one of the original game).
 func (c *Config) aliasKey(system, name, key string) (string, error) {
 	a, ok := c.Alias[name]
 	if !ok || keyShapes[system] == nil {
@@ -35,12 +35,13 @@ func (c *Config) aliasKey(system, name, key string) (string, error) {
 	return a, nil
 }
 
-// ROM de chaque Clé synchronisée sur ce PC, tous émulateurs ensemble (ADR 0014) : la Version courante du serveur est
-// la même pour tous. Hors de bases/ : la Base d'un émulateur nommé « roms » serait bases/roms.json.
+// romsPath returns the file that holds the ROM of each Key synced on this PC, all emulators together (ADR 0014): the
+// Current version of the server is the same for all. Outside bases/: the Base of an emulator named "roms" would be
+// bases/roms.json.
 func (s *Session) romsPath() string { return filepath.Join(s.dir, "roms.json") }
 
-// romsRetenues : roms.json, complété par les anciens fichiers par émulateur (bases/roms/<profil>.json, lus seulement ;
-// à Clé égale, le premier émulateur par ordre alphabétique). Ils sont repris dans roms.json à sa prochaine écriture.
+// keptRoms returns roms.json, completed by the old per-emulator files (bases/roms/<profile>.json, read only; for the
+// same Key, the first emulator in alphabetical order). The next write of roms.json takes them over.
 func (s *Session) keptRoms() (map[string]string, error) {
 	m := map[string]string{}
 	err := readJSON(s.romsPath(), &m)
@@ -60,7 +61,7 @@ func (s *Session) keptRoms() (map[string]string, error) {
 	return m, err
 }
 
-// baseConnue : un émulateur de ce PC a une Base pour cette Clé (ou une Base illisible : dans le doute, oui).
+// knownBase reports whether an emulator of this PC has a Base for this Key (or an unreadable Base: when in doubt, yes).
 func (s *Session) knownBase(key string) bool {
 	files, _ := filepath.Glob(filepath.Join(s.dir, "bases", "*.json"))
 	for _, f := range files {
@@ -72,16 +73,16 @@ func (s *Session) knownBase(key string) bool {
 	return false
 }
 
-// romAutre : texte du refus si cette ROM ne doit pas se synchroniser sous la Clé de j, sinon "" et la ROM est retenue
-// pour la prochaine Base (fixerBase). Refus :
-//   - une autre ROM, qui existe encore, est déjà synchronisée sous cette Clé (ROM hack qui garde la Clé du jeu
-//     d'origine). Une ROM retenue qui n'existe plus (renommée, déplacée, extraite dans un dossier temporaire) laisse la place ;
-//   - aucune ROM retenue, mais une Base de cette Clé sur ce PC (synchronisée avant que les ROM soient retenues), et pas de
-//     sauvegarde pour cette ROM : la Récupération donnerait à un éventuel ROM hack la partie du jeu d'origine, que son
-//     prochain Envoi remplacerait.
+// romRefusal returns the refusal text if this ROM must not sync under the Key of j, otherwise "" and the ROM is kept
+// for the next Base (setBase). Refusals:
+//   - another ROM, which still exists, is already synced under this Key (ROM hack that keeps the Key of the original
+//     game). A kept ROM that no longer exists (renamed, moved, extracted to a temporary folder) gives way;
+//   - no kept ROM, but a Base of this Key on this PC (synced before ROMs were kept), and no save for this ROM: the
+//     Download would give a possible ROM hack the playthrough of the original game, and its next Upload would replace
+//     it.
 //
-// Avec question (run), l'utilisateur choisit : même jeu (second cas), « Synchroniser à part » (un alias est créé, j prend
-// sa Clé), ou jouer sans synchroniser.
+// With question (run), the user chooses: same game (second case), "Sync separately" (an Alias is created, j takes
+// its Key), or play without syncing.
 func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 	if j.Key == "" || rom == "" {
 		return ""
@@ -142,10 +143,10 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 	return ""
 }
 
-// creerAlias : l'alias de la ROM nom, créé s'il manque et écrit dans config.json (copie datée avant).
+// createAlias returns the Alias of the ROM name, created if missing and written to config.json (dated copy first).
 func (s *Session) createAlias(system, name string) (string, error) {
 	var cfg Config
-	if err := readConfig(s.config, &cfg); err != nil { // relu : la page des réglages a pu l'écrire depuis
+	if err := readConfig(s.config, &cfg); err != nil { // read again: the settings page may have written it since
 		return "", err
 	}
 	key, err := addAlias(&cfg, system, name)
@@ -159,7 +160,7 @@ func (s *Session) createAlias(system, name string) (string, error) {
 	return key, nil
 }
 
-// ecrireConfigCopie : copie datée de config.json, puis écriture vérifiée.
+// writeConfigCopy makes a dated copy of config.json, then a verified write.
 func writeConfigCopy(path string, cfg *Config) error {
 	if err := copyBefore(path); err != nil {
 		return err
@@ -167,8 +168,8 @@ func writeConfigCopy(path string, cfg *Config) error {
 	return writeJSON(path, cfg, true)
 }
 
-// ajouterAlias : l'alias de la ROM nom dans cfg, créé s'il manque (ADR 0014). La Clé est tirée du nom : la même ROM
-// reçoit la même Clé sur chaque PC ; une Clé déjà prise par un autre alias en donne une autre.
+// addAlias returns the Alias of the ROM name in cfg, created if missing (ADR 0014). The Key comes from the name: the
+// same ROM gets the same Key on each PC; a Key already taken by another Alias gives another one.
 func addAlias(cfg *Config, system, name string) (string, error) {
 	if keyShapes[system] == nil {
 		return "", fmt.Errorf(tr("Les jeux %s n'ont pas d'alias.", "%s games don't use aliases."), system)
@@ -193,7 +194,7 @@ func addAlias(cfg *Config, system, name string) (string, error) {
 	return key, nil
 }
 
-// nouvelleCle : une Clé de la forme du Système, qui commence par un chiffre (jamais un code de jeu commercial).
+// newKey returns a Key with the shape of the System that starts with a digit (never a commercial Game code).
 func newKey(system, name string, taken map[string]bool) string {
 	const signs = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	for i := 0; ; i++ {
@@ -206,7 +207,7 @@ func newKey(system, name string, taken map[string]bool) string {
 	}
 }
 
-// retenirRom : après une Base écrite, la ROM de cette Clé (si elle est connue et a changé).
+// keepRom keeps the ROM of this Key after a Base is written (if the ROM is known and changed).
 func (s *Session) keepRom(key string) error {
 	rom := s.romOf[key]
 	if rom == "" {
@@ -223,9 +224,9 @@ func (s *Session) keepRom(key string) error {
 	return writeJSON(s.romsPath(), m, true)
 }
 
-// cleDeRom (run) : Clé de la ROM pour ce Client, alias compris. pourquoi non vide = jeu lancé sans Synchronisation.
+// romKey (run) returns the Key of the ROM for this Client, Alias included, or a reason to start without Sync.
 func (s *Session) romKey(system, key, name string) (string, string) {
-	if system == "3DS" { // Azahar range la Sauvegarde par title ID : deux ROM d'un jeu 3DS ont la même
+	if system == "3DS" { // Azahar stores the Save by title ID: two ROMs of a 3DS game share it
 		return key, ""
 	}
 	key, err := s.cfg.aliasKey(system, name, key)
@@ -235,8 +236,8 @@ func (s *Session) romKey(system, key, name string) (string, string) {
 	return key, ""
 }
 
-// Envoi en attente (D5) : une Sauvegarde jouée que le serveur n'a pas reçue (réseau coupé). Reprise au début de chaque
-// run ou launch, quel que soit le jeu, par la Synchronisation habituelle (jamais d'écrasement sans comparaison).
+// pendingEntry is a pending Upload: a played Save that the server did not receive (network down). The usual Sync
+// resumes it at the start of each run or launch, whatever the game (never an overwrite without comparison).
 type pendingEntry struct {
 	Profile string `json:"profil"`
 	Game
@@ -244,8 +245,8 @@ type pendingEntry struct {
 
 func (s *Session) pendingPath() string { return filepath.Join(s.dir, "en-attente.json") }
 
-// verrouAttente : un seul Lanceur à la fois relit et réécrit la liste (deux Lanceurs peuvent tourner ensemble).
-// Un verrou de plus de 30 s vient d'un Lanceur arrêté : retiré. La fonction rendue retire le verrou.
+// pendingLock lets one Launcher at a time read and rewrite the list (two Launchers can run together).
+// A lock older than 30 s comes from a stopped Launcher: it is removed. The returned function removes the lock.
 func (s *Session) pendingLock() func() {
 	v := s.pendingPath() + ".verrou"
 	os.MkdirAll(s.dir, 0o755)
@@ -268,8 +269,8 @@ func (s *Session) pendingLock() func() {
 	return func() {}
 }
 
-// modifierAttente : relit la liste, la change, la réécrit (fichier temporaire vérifié puis renommé, ecrireJSON).
-// Liste illisible : mise de côté (en-attente.json.illisible-<date>), jamais remplacée sans copie.
+// editPending reads the list again, changes it and writes it back (verified temporary file then renamed, writeJSON).
+// Unreadable list: set aside (en-attente.json.illisible-<date>), never replaced without a copy.
 func (s *Session) editPending(f func([]pendingEntry) []pendingEntry) error {
 	defer s.pendingLock()()
 	var l []pendingEntry
@@ -291,8 +292,8 @@ func (s *Session) editPending(f func([]pendingEntry) []pendingEntry) error {
 	return err
 }
 
-// mettreEnAttente : les jeux dont la Sauvegarde locale a changé depuis la Base (ceux à envoyer). Erreur : la liste
-// n'a pas pu être écrite.
+// addPending marks as pending the games whose Local save changed since the Base (those To upload). Error: the list
+// could not be written.
 func (s *Session) addPending(games []*Game) error {
 	b, _ := s.bases()
 	var added []pendingEntry
@@ -325,15 +326,15 @@ func remove(l []pendingEntry, a pendingEntry) []pendingEntry {
 	return r
 }
 
-// reprendre : les Envois en attente, avant la Synchronisation du jeu lancé. Un Conflit passe par la question habituelle
-// (après la partie : garder le PC ou ne rien faire). Reste en attente : émulateur ouvert, ou réseau encore coupé.
-// Rend la dernière erreur d'envoi (menu de l'icône, « Envoyer maintenant »).
+// resume runs the pending Uploads, before the Sync of the started game. A Conflict goes through the usual question
+// (after play: keep the PC save or do nothing). Stays pending: emulator open, or network still down.
+// Returns the last Upload error (tray icon menu, "Upload now").
 func (s *Session) resume() error {
 	var l []pendingEntry
 	if readJSON(s.pendingPath(), &l) != nil || len(l) == 0 {
 		return nil
 	}
-	profile, downloaded, romOf := s.profile, s.downloaded, s.romOf // romDe : la ROM lancée n'est pas celle d'un Envoi en attente
+	profile, downloaded, romOf := s.profile, s.downloaded, s.romOf // romOf: the started ROM is not the one of a pending Upload
 	s.romOf = nil
 	defer func() { s.profile, s.downloaded, s.romOf = profile, downloaded, romOf }()
 	var done []pendingEntry
@@ -345,7 +346,7 @@ func (s *Session) resume() error {
 			done = append(done, a)
 			continue
 		}
-		if instances(e.process()) > 0 { // une partie en cours peut encore écrire ce fichier
+		if instances(e.process()) > 0 { // a running game can still write this file
 			continue
 		}
 		s.profile = a.Profile

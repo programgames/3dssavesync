@@ -1,8 +1,8 @@
 package main
 
-// Configuration des frontends (phase 4) : LaunchBox, ES-DE, raccourcis. Chaque écriture garde une copie datée
-// du fichier, et refaire la configuration ne change rien quand elle est déjà en place (réparation).
-// Sources : docs/research-v3-frontends.md.
+// Frontend setup: LaunchBox, ES-DE, shortcuts. Each write keeps a dated copy of the file, and running the setup again
+// changes nothing when it is already in place (repair).
+// Sources: docs/notes/research-v3-frontends.md.
 
 import (
 	"bytes"
@@ -24,8 +24,8 @@ import (
 	"time"
 )
 
-// Copie datée d'un fichier avant de le modifier ; rien si le fichier n'existe pas. Deux changements dans la même
-// seconde (ajout puis retrait d'un alias) : -1, -2… en plus, jamais d'écrasement d'une copie.
+// copyBefore makes a dated copy of a file before changing it; nothing if the file doesn't exist. Two changes in the
+// same second (add then remove an Alias): -1, -2… appended, a copy is never overwritten.
 func copyBefore(path string) error {
 	o, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -44,7 +44,7 @@ func copyBefore(path string) error {
 	}
 }
 
-// Remplacement d'un fichier de frontend : copie datée, fichier temporaire vérifié, puis renommage.
+// replaceFile replaces a frontend file: dated copy, verified temp file, then rename.
 func replaceFile(path string, content []byte) error {
 	if err := copyBefore(path); err != nil {
 		return err
@@ -66,7 +66,7 @@ func escapeXML(s string) string {
 	return b.String()
 }
 
-// Inverse d'echapperXML (&#39;, &#34;) et des textes de LaunchBox (&apos;, &quot;, ou ' et " tels quels) : toutes les entités.
+// unescapeXML reverses escapeXML (&#39;, &#34;) and LaunchBox texts (&apos;, &quot;, or raw ' and "): all entities.
 func unescapeXML(s string) string { return html.UnescapeString(s) }
 
 func newID() string {
@@ -78,7 +78,7 @@ func newID() string {
 
 // --- LaunchBox -----------------------------------------------------------------------------------
 
-// Plateformes LaunchBox -> Système.
+// lbPlatforms maps LaunchBox platforms -> System.
 var lbPlatforms = map[string]string{
 	"Nintendo DS": "DS", "Nintendo DSi": "DS", "Nintendo Game Boy": "GB", "Nintendo Game Boy Color": "GB",
 	"Nintendo Game Boy Advance": "GBA", "Nintendo 3DS": "3DS",
@@ -105,18 +105,18 @@ func setField(block, name, value string) string {
 	return r.ReplaceAllLiteralString(block, "<"+name+">"+escapeXML(value)+"</"+name+">")
 }
 
-// cheminLB : chemin complet d'un ApplicationPath de LaunchBox (relatif à son dossier quand il est dedans).
+// lbPath returns the full path of a LaunchBox ApplicationPath (relative to its folder when it is inside).
 func lbPath(lbDir, app string) string {
-	app = filepath.FromSlash(strings.ReplaceAll(html.UnescapeString(app), `\`, "/")) // chemins Windows, même lus ailleurs (Wine)
+	app = filepath.FromSlash(strings.ReplaceAll(html.UnescapeString(app), `\`, "/")) // Windows paths, even when read elsewhere (Wine)
 	if app != "" && !filepath.IsAbs(app) && !strings.Contains(app, ":") {
 		app = filepath.Join(lbDir, app)
 	}
 	return filepath.Clean(app)
 }
 
-// optionsLaunchBox : les options de l'utilisateur dans l'émulateur LaunchBox d'origine de exe (sa ligne de commande,
-// puis celles de ses plateformes de systemes), pour args_en_plus : la copie « (3dssavesync) » a une ligne vide.
-// Émulateur modifié sur place (versions 1 et 2) : son exe est le Lanceur, rien n'est trouvé.
+// launchBoxOptions returns the user's options in the original LaunchBox emulator of exe (its command line, then those
+// of its platforms for systems), for args_en_plus: the "(3dssavesync)" copy has an empty line.
+// An emulator changed in place by an old Launcher: its exe is the Launcher, nothing is found.
 func launchBoxOptions(text, lbDir, exe string, systems []string) string {
 	for _, b := range lbEmulatorBlock.FindAllString(text, -1) {
 		app := lbPath(lbDir, field(b, "ApplicationPath"))
@@ -125,7 +125,7 @@ func launchBoxOptions(text, lbDir, exe string, systems []string) string {
 		}
 		var options []string
 		add := func(o string) {
-			// jamais le cœur RetroArch d'une plateforme (-L) : il irait à tous les systèmes
+			// never the RetroArch core of a platform (-L): it would go to every System
 			if o = strings.TrimSpace(html.UnescapeString(o)); o != "" && !slices.Contains(options, o) && !strings.Contains(" "+o, " -L ") {
 				options = append(options, o)
 			}
@@ -141,16 +141,16 @@ func launchBoxOptions(text, lbDir, exe string, systems []string) string {
 	return ""
 }
 
-// EntreeLB : un émulateur de la configuration, à faire passer par 3dssavesync dans LaunchBox.
+// LBEntry is an emulator of the configuration, to route through 3dssavesync in LaunchBox.
 type LBEntry struct {
 	Name    string
-	Exe     string // nom dans config.json, exécutable de l'émulateur réel
+	Exe     string // name in config.json, executable of the real emulator
 	Systems []string
 }
 
-// launchbox : pour chaque entrée, un nouvel émulateur « <titre> (3dssavesync) » copié de l'émulateur d'origine,
-// devenu l'émulateur par défaut de ses plateformes. L'émulateur d'origine reste intact (seul Default change).
-// Rien n'est fait si un émulateur passe déjà par 3dssavesync pour cette entrée.
+// launchbox adds, for each entry, a new "<title> (3dssavesync)" emulator copied from the original emulator, made the
+// default emulator of its platforms. The original emulator stays intact (only Default changes).
+// Nothing is done if an emulator already goes through 3dssavesync for this entry.
 func launchbox(text, lbDir, launcher string, entries []LBEntry) (string, []string) {
 	var report []string
 	unescape := unescapeXML
@@ -195,9 +195,9 @@ func launchbox(text, lbDir, launcher string, entries []LBEntry) (string, []strin
 				continue
 			}
 			q := setField(p, "Emulator", id)
-			q = setField(q, "CommandLine", "run --emulator "+e.Name) // LaunchBox ajoute la ROM à la fin
+			q = setField(q, "CommandLine", "run --emulator "+e.Name) // LaunchBox adds the ROM at the end
 			q = setField(q, "Default", "true")
-			if sys != "3DS" { // le Lanceur lit les .zip ; pas les .3ds dans un .zip
+			if sys != "3DS" { // the Launcher reads .zip files; not .3ds inside a .zip
 				q = setField(q, "AutoExtract", "false")
 			}
 			added = append(added, q)
@@ -217,7 +217,7 @@ func launchbox(text, lbDir, launcher string, entries []LBEntry) (string, []strin
 
 // --- ES-DE ---------------------------------------------------------------------------------------
 
-// Systèmes ES-DE -> Système, nom complet, extensions lues par le Lanceur.
+// esdeSystems maps ES-DE systems -> System, full name, extensions read by the Launcher.
 var esdeSystems = map[string][3]string{
 	"nds":  {"DS", "Nintendo DS", ".nds .NDS .zip .ZIP"},
 	"gb":   {"GB", "Nintendo Game Boy", ".gb .GB .zip .ZIP"},
@@ -226,10 +226,10 @@ var esdeSystems = map[string][3]string{
 	"n3ds": {"3DS", "Nintendo 3DS", ".3ds .3DS .cci .CCI .cxi .CXI"},
 }
 
-// esde : règle 3DSSAVESYNC dans es_find_rules.xml, et une commande « 3dssavesync » en tête de chaque système géré
-// dans es_systems.xml (première commande = émulateur par défaut). Un système absent du fichier personnalisé reçoit
-// un bloc minimal (le bloc fourni par ES-DE n'est pas lisible dans une AppImage).
-// emus : Système -> nom de l'entrée de config.json.
+// esde writes the 3DSSAVESYNC rule in es_find_rules.xml, and a "3dssavesync" command at the top of each handled system
+// in es_systems.xml (first command = default emulator). A system missing from the custom file gets a minimal block
+// (the block shipped with ES-DE can't be read inside an AppImage).
+// emus: System -> name of the config.json entry.
 func esde(systems, rules, launcher string, emus map[string]string) (string, string, []string) {
 	var report []string
 	rule := "  <emulator name=\"3DSSAVESYNC\">\n    <rule type=\"staticpath\">\n      <entry>" + escapeXML(launcher) + "</entry>\n    </rule>\n  </emulator>\n"
@@ -268,7 +268,7 @@ func esde(systems, rules, launcher string, emus map[string]string) (string, stri
 		default:
 			ext := d[2]
 			if block != "" {
-				if e := field(block, "extension"); e != "" { // liste de l'utilisateur gardée, jamais réduite
+				if e := field(block, "extension"); e != "" { // the user's list kept, never shortened
 					ext = e
 				}
 				systems = strings.Replace(systems, block, "", 1)
@@ -283,9 +283,9 @@ func esde(systems, rules, launcher string, emus map[string]string) (string, stri
 	return systems, rules, report
 }
 
-// --- Raccourcis ----------------------------------------------------------------------------------
+// --- Shortcuts -----------------------------------------------------------------------------------
 
-// Argument de la clé Exec d'un .desktop : guillemets si besoin, \ devant " ` $ \ ; % doublé.
+// argDesktop quotes an argument of the Exec key of a .desktop file: quotes if needed, \ before " ` $ \; % doubled.
 func argDesktop(a string) string {
 	a = strings.ReplaceAll(a, "%", "%%")
 	if !strings.ContainsAny(a, " \t\n\"'\\><~|&;$*?#()`") {
@@ -302,8 +302,8 @@ func desktopFile(name string, exec []string, terminal bool) string {
 	return fmt.Sprintf("[Desktop Entry]\nType=Application\nName=%s\nExec=%s\nTerminal=%t\nCategories=Game;\n", name, strings.Join(a, " "), terminal)
 }
 
-// raccourci : un lanceur « nom » qui exécute lanceur + args. Windows : .lnk sur le bureau ; Linux : .desktop dans
-// le menu des applications ; macOS : .app dans ~/Applications. console : l'assistant (terminal sous Linux et macOS).
+// shortcut creates a "name" shortcut that runs launcher + args. Windows: .lnk on the desktop; Linux: .desktop in the
+// applications menu; macOS: .app in ~/Applications. console: the setup (terminal on Linux and macOS).
 func shortcut(name, launcher string, args []string, console bool) (string, error) {
 	switch runtime.GOOS {
 	case "windows":
@@ -331,7 +331,7 @@ func shortcut(name, launcher string, args []string, console bool) (string, error
 	return f, os.WriteFile(f, []byte(desktopFile(name, append([]string{launcher}, args...), console)), 0o755)
 }
 
-// Raccourci .lnk dans un dossier spécial de Windows (Desktop, Startup). Arguments avec espace entre guillemets.
+// lnk creates a .lnk shortcut in a special Windows folder (Desktop, Startup). Arguments with a space get quotes.
 func lnk(dir, name, launcher string, args []string) (string, error) {
 	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`[Console]::OutputEncoding=[Text.Encoding]::UTF8; $d=[Environment]::GetFolderPath($env:R_DOSSIER); $l=Join-Path $d ($env:R_NOM+'.lnk'); `+
@@ -349,8 +349,8 @@ func lnk(dir, name, launcher string, args []string) (string, error) {
 	return strings.TrimSpace(string(o)), err
 }
 
-// demarrageAuto : lance lanceur + args à l'ouverture de session. Windows : .lnk dans Démarrage ; Linux : autostart XDG ;
-// macOS : LaunchAgent.
+// addAutostart starts launcher + args at login. Windows: .lnk in Startup; Linux: XDG autostart;
+// macOS: LaunchAgent.
 func addAutostart(name, launcher string, args []string) (string, error) {
 	switch runtime.GOOS {
 	case "windows":
@@ -385,9 +385,9 @@ func mapper(l []string, f func(string) string) []string {
 	return r
 }
 
-// --- Réparation ----------------------------------------------------------------------------------
+// --- Repair --------------------------------------------------------------------------------------
 
-// reparer : refait la configuration des frontends notés dans config.json. Un frontend ouvert est sauté.
+// repair redoes the setup of the frontends listed in config.json. An open frontend is skipped.
 func repair(cfg *Config, launcher string) []string {
 	var report []string
 	lb, emus := frontendEntries(cfg)
@@ -435,7 +435,7 @@ func repair(cfg *Config, launcher string) []string {
 	return report
 }
 
-// entreesFrontends : les émulateurs de config.json pour LaunchBox, et pour ES-DE le premier (par nom) de chaque Système.
+// frontendEntries returns the config.json emulators for LaunchBox, and for ES-DE the first (by name) of each System.
 func frontendEntries(cfg *Config) ([]LBEntry, map[string]string) {
 	var lb []LBEntry
 	emus := map[string]string{}
@@ -460,8 +460,8 @@ func frontendEntries(cfg *Config) ([]LBEntry, map[string]string) {
 	return lb, emus
 }
 
-// manquantsLaunchBox : les entrées dont l'émulateur d'origine est dans LaunchBox, mais sans émulateur
-// « (3dssavesync) » par défaut sur une de ses plateformes (réparation à refaire).
+// missingLaunchBox returns the entries whose original emulator is in LaunchBox, but with no default "(3dssavesync)"
+// emulator on any of its platforms (repair needed).
 func missingLaunchBox(text, launcher string, entries []LBEntry) []string {
 	base := func(app string) string { return strings.ToLower(path.Base(strings.ReplaceAll(app, `\`, "/"))) }
 	emus, plats := lbEmulatorBlock.FindAllString(text, -1), lbPlatformBlock.FindAllString(text, -1)
@@ -490,7 +490,8 @@ func prefix(p string, l []string) []string {
 	return l
 }
 
-// ponytail: clé cloud_sync_status de ~/emudeck/settings.sh non vérifiée (research-v3-frontends §5) ; avertissement seulement.
+// ponytail: cloud_sync_status key of ~/emudeck/settings.sh not verified (docs/notes/research-v3-frontends.md §5);
+// warning only.
 func emuDeckWarning() string {
 	o, err := os.ReadFile(home("emudeck", "settings.sh"))
 	if err == nil && regexp.MustCompile(`(?m)^cloud_sync_status="?true"?`).Match(o) {

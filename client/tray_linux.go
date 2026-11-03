@@ -1,7 +1,7 @@
 package main
 
-// Icône près de l'horloge sous Linux : protocole StatusNotifierItem et menu com.canonical.dbusmenu, sur le bus D-Bus de
-// session. KDE Plasma (Steam Deck en mode Bureau) l'affiche ; GNOME seulement avec l'extension AppIndicator.
+// Tray icon on Linux: StatusNotifierItem protocol and com.canonical.dbusmenu menu, on the D-Bus session bus.
+// KDE Plasma (Steam Deck in Desktop mode) shows it; GNOME only with the AppIndicator extension.
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ const (
 	menuPath = dbus.ObjectPath("/MenuBar")
 )
 
-// Image pour D-Bus : largeur, hauteur, pixels ARGB 32 bits non prémultipliés, octets dans l'ordre du réseau.
+// pixmap is an image for D-Bus: width, height, 32-bit ARGB pixels not premultiplied, bytes in network order.
 type pixmap struct {
 	L, H int32
 	ARGB []byte
@@ -49,7 +49,7 @@ func iconPixmap(size int) []pixmap {
 	return []pixmap{p}
 }
 
-// org.kde.StatusNotifierItem : clic gauche = réglages ; le menu passe par la propriété Menu.
+// sniItem is the org.kde.StatusNotifierItem: left click = settings page; the menu goes through the Menu property.
 type sniItem struct{ choose func(string) }
 
 func (i sniItem) Activate(x, y int32) *dbus.Error          { go i.choose("reglages"); return nil }
@@ -59,7 +59,7 @@ func (i sniItem) Scroll(delta int32, direction string) *dbus.Error {
 	return nil
 }
 
-// Élément de com.canonical.dbusmenu : id, propriétés, enfants.
+// menuEntry is a com.canonical.dbusmenu item: id, properties, children.
 type menuEntry struct {
 	ID       int32
 	Props    map[string]dbus.Variant
@@ -71,7 +71,7 @@ type menuProperties struct {
 	Props map[string]dbus.Variant
 }
 
-// com.canonical.dbusmenu : le menu de l'icône, à plat ; l'id d'un élément est sa position + 1, la racine est 0.
+// dbusMenu is the com.canonical.dbusmenu of the tray icon, flat; the id of an item is its position + 1, the root is 0.
 type dbusMenu struct {
 	lock     sync.Mutex
 	read     func() []MenuItem
@@ -80,7 +80,7 @@ type dbusMenu struct {
 	revision uint32
 }
 
-// rafraichir : relit l'état ; vrai si le menu a changé (nouvelle révision).
+// refresh reads the state again; true if the menu changed (new revision).
 func (m *dbusMenu) refresh() bool {
 	l := m.read()
 	m.lock.Lock()
@@ -168,7 +168,7 @@ func (m *dbusMenu) EventGroup(events []struct {
 	return []int32{}, nil
 }
 
-// AboutToShow : le menu va s'ouvrir ; vrai s'il faut le relire (Envois en attente, serveur local).
+// AboutToShow: the menu is about to open; true if it must be read again (pending Uploads, local Server).
 func (m *dbusMenu) AboutToShow(id int32) (bool, *dbus.Error) { return m.refresh(), nil }
 
 func (m *dbusMenu) AboutToShowGroup(ids []int32) ([]int32, []int32, *dbus.Error) {
@@ -178,7 +178,7 @@ func (m *dbusMenu) AboutToShowGroup(ids []int32) ([]int32, []int32, *dbus.Error)
 	return []int32{}, []int32{}, nil
 }
 
-// afficherIcone : inscrit l'icône auprès du StatusNotifierWatcher du bureau, puis sert ses appels jusqu'à la fin.
+// showIcon registers the tray icon with the desktop's StatusNotifierWatcher, then serves its calls until end.
 func showIcon(menu func() []MenuItem, choose func(string), end <-chan struct{}) error {
 	fail := func(err error) error {
 		return fmt.Errorf("%s\n%s%v", tr("Impossible d'afficher l'icône près de l'horloge : votre bureau n'a pas de zone de notification compatible. "+
@@ -240,7 +240,7 @@ func showIcon(menu func() []MenuItem, choose func(string), end <-chan struct{}) 
 	if err := register(); err != nil {
 		return fail(err)
 	}
-	// Bureau redémarré (Plasma, passage au mode Bureau du Steam Deck) : nouvelle inscription auprès du nouveau Watcher.
+	// Desktop restarted (Plasma, Steam Deck switch to Desktop mode): register again with the new Watcher.
 	conn.AddMatchSignal(dbus.WithMatchInterface("org.freedesktop.DBus"), dbus.WithMatchMember("NameOwnerChanged"),
 		dbus.WithMatchArg(0, "org.kde.StatusNotifierWatcher"))
 	signals := make(chan *dbus.Signal, 10)

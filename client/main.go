@@ -1,18 +1,18 @@
-// 3dssavesync : synchronise les sauvegardes d'un émulateur avec le serveur, avant et après la partie.
+// 3dssavesync syncs an emulator's saves with the server, before and after playing.
 //
-//	3dssavesync run [--emulator <nom>] <rom>             un jeu (frontends)
-//	3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>  enveloppe une commande quelconque
-//	3dssavesync launch <nom>                             tous les jeux d'un émulateur, puis l'émulateur
-//	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
-//	3dssavesync repair                                   refait la configuration des frontends
-//	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
-//	3dssavesync tray                                     icône près de l'horloge (et serveur local), à l'ouverture de session
-//	3dssavesync restore [--oui] [<clé> [<n°>]]           remet une ancienne Version comme Version courante
+//	3dssavesync run [--emulator <name>] <rom>            one game (frontends)
+//	3dssavesync run [--emulator <name>] --rom <rom> -- <command…>  wraps any command
+//	3dssavesync launch <name>                            all games of an emulator, then the emulator
+//	3dssavesync setup [--texte] (or no argument)         setup (browser, or console)
+//	3dssavesync repair                                   redoes the frontend configuration
+//	3dssavesync serve                                    local server (local network, for the 3DS)
+//	3dssavesync tray                                     tray icon (and local server), at login
+//	3dssavesync restore [--oui] [<key> [<n>]]            makes an old Version the Current version again
 //
-// Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
+// Common option: --config <file> (default: <config folder>/3dssavesync/config.json).
 package main
 
-// Icône de l'exe Windows (rsrc_windows_*.syso, ignorés hors Windows) depuis icone/icone.ico (assets/generer.py) :
+// Windows exe icon (rsrc_windows_*.syso, ignored outside Windows) from icone/icone.ico (assets/generer.py):
 //go:generate go run github.com/tc-hib/go-winres@v0.3.3 simply --arch amd64,arm64 --manifest none --icon icone/icone.ico
 
 import (
@@ -38,35 +38,35 @@ import (
 type Config struct {
 	URL       string               `json:"url"`
 	Token     string               `json:"jeton"`
-	Copies    string               `json:"copies,omitempty"` // défaut : <dossier de la configuration>/copies
+	Copies    string               `json:"copies,omitempty"` // default: <config folder>/copies
 	Emulators map[string]*Emulator `json:"emulateurs"`
-	Launcher  string               `json:"lanceur,omitempty"`    // exe installé, vers lequel pointent les frontends
-	Frontends map[string]string    `json:"frontends,omitempty"`  // launchbox, esde -> dossier (réparation)
-	Titles3DS map[string]string    `json:"titres_3ds,omitempty"` // jeux 3DS en plus des 8 Pokémon : title ID -> nom
-	Alias     map[string]string    `json:"alias,omitempty"`      // nom de la ROM sans extension -> Clé choisie (ADR 0014)
-	// Serveur local (3dssavesync serve) : même jeton ; url = http://127.0.0.1:<port> pour ce PC.
+	Launcher  string               `json:"lanceur,omitempty"`    // installed exe, which the frontends point to
+	Frontends map[string]string    `json:"frontends,omitempty"`  // launchbox, esde -> folder (repair)
+	Titles3DS map[string]string    `json:"titres_3ds,omitempty"` // 3DS games besides the 8 Pokémon: title ID -> name
+	Alias     map[string]string    `json:"alias,omitempty"`      // ROM name without extension -> chosen Key (ADR 0014)
+	// Local server (3dssavesync serve): same token; url = http://127.0.0.1:<port> for this PC.
 	LocalServer  *LocalServer `json:"serveur_local,omitempty"`
-	TrayIcon     *bool        `json:"icone_horloge,omitempty"` // absent : icône près de l'horloge (tray.go)
-	CheckUpdates *bool        `json:"verifier_maj,omitempty"`  // absent : recherche des mises à jour (majpc.go)
-	// Date de la dernière préparation réussie de la carte SD de la 3DS (liste « Tout est prêt »), jamais devinée.
+	TrayIcon     *bool        `json:"icone_horloge,omitempty"` // missing: tray icon on (tray.go)
+	CheckUpdates *bool        `json:"verifier_maj,omitempty"`  // missing: update check on (selfupdate.go)
+	// Date of the last successful preparation of the 3DS SD card (the "all ready" list), never guessed.
 	PreparedCard string `json:"carte_preparee,omitempty"`
 }
 
 type LocalServer struct {
 	Port int    `json:"port"`
-	Data string `json:"donnees,omitempty"` // défaut : serveur/ à côté de config.json
+	Data string `json:"donnees,omitempty"` // default: serveur/ next to config.json
 }
 
 type Emulator struct {
-	Profile string            `json:"profil,omitempty"` // profil intégré (profils.go) ; défaut : le nom de l'entrée
+	Profile string            `json:"profil,omitempty"` // built-in Profile (profiles.go); default: the entry name
 	Exe     string            `json:"exe"`
-	Saves   map[string]string `json:"sauvegardes,omitempty"` // Système -> dossier (3DS : sdmc) ; défaut : réglage de l'émulateur
-	Roms    map[string]string `json:"roms,omitempty"`        // Système -> dossier des ROM (commande launch)
-	Cores   map[string]string `json:"coeurs,omitempty"`      // RetroArch : Système -> fichier du cœur
-	Process string            `json:"processus,omitempty"`   // défaut : nom de l'exécutable
-	// Profil personnalisé : arguments ({rom}, {sauvegardes}), extension (défaut .sav), nom du fichier interne d'une archive.
+	Saves   map[string]string `json:"sauvegardes,omitempty"` // System -> folder (3DS: sdmc); default: emulator setting
+	Roms    map[string]string `json:"roms,omitempty"`        // System -> ROM folder (launch command)
+	Cores   map[string]string `json:"coeurs,omitempty"`      // RetroArch: System -> core file
+	Process string            `json:"processus,omitempty"`   // default: name of the executable
+	// Custom Profile: arguments ({rom}, {sauvegardes}), extension (default .sav), name of the file inside an archive.
 	Args         []string `json:"args,omitempty"`
-	ExtraArgs    []string `json:"args_en_plus,omitempty"` // profil intégré : ajoutés avant la ROM (ex. -f)
+	ExtraArgs    []string `json:"args_en_plus,omitempty"` // built-in Profile: added before the ROM (e.g. -f)
 	Extension    string   `json:"extension,omitempty"`
 	InternalName bool     `json:"nom_interne,omitempty"`
 }
@@ -78,19 +78,19 @@ func (c *Config) copiesDir(configDir string) string {
 	return filepath.Join(configDir, "copies")
 }
 
-// Adaptateurs remplacés par les tests.
+// Adapters that the tests replace.
 var (
-	ask            = askSystem // texte, boutons -> bouton choisi ; "" si aucune fenêtre possible
+	ask            = askSystem // text, buttons -> chosen button; "" if no window is possible
 	notify         = systemNotify
 	launch         = runCommand
 	activeEmulator = func(name string) bool { return instances(name) > 0 }
-	instances      = countProcesses // processus de ce nom en cours
-	alive          = processAlive   // ce pid tourne encore
+	instances      = countProcesses // running processes with this name
+	alive          = processAlive   // this pid still runs
 	transport      = http.DefaultTransport
 )
 
-// Attend la fin de la commande. Seul l'échec du démarrage compte : après un plantage de l'émulateur,
-// l'envoi doit quand même partir.
+// runCommand waits for the command to end. Only a failed start counts: after an emulator crash,
+// the Upload must still happen.
 func runCommand(command []string) error {
 	c := exec.Command(command[0], command[1:]...)
 	if err := c.Start(); err != nil {
@@ -107,11 +107,11 @@ func main() {
 }
 
 func realMain(args []string) int {
-	// Un frontend qui arrête le programme (Lutris, Steam) ne doit pas couper l'envoi :
-	// on attend la fin de l'émulateur, puis on envoie. SIGKILL reste imparable.
+	// A frontend that stops the program (Lutris, Steam) must not cut the Upload:
+	// wait for the emulator to end, then upload. SIGKILL can't be caught.
 	signal.Notify(make(chan os.Signal, 1), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 
-	if len(args) == 0 { // double-clic sur l'exe : l'assistant
+	if len(args) == 0 { // double-click on the exe: the setup
 		args = []string{"setup"}
 	}
 	fl := flag.NewFlagSet(args[0], flag.ContinueOnError)
@@ -179,7 +179,7 @@ func defaultConfig() string {
 	return "config.json"
 }
 
-// lireConfig : config.json absent = assistant jamais terminé ; le message dit quoi faire.
+// readConfig: a missing config.json means the setup never finished; the message says what to do.
 func readConfig(path string, cfg *Config) error {
 	err := readJSON(path, cfg)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -194,13 +194,13 @@ func newSession(path string) (*Session, error) {
 	if err := readConfig(path, &cfg); err != nil {
 		return nil, err
 	}
-	for id, name := range cfg.Titles3DS { // même liste que titres.ini de la 3DS (seulement des jeux à un seul fichier /main)
+	for id, name := range cfg.Titles3DS { // same list as the 3DS titres.ini (only games with a single /main file)
 		titles3DS[strings.ToUpper(id)] = name
 	}
 	return &Session{cfg: &cfg, config: path, dir: filepath.Dir(path), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
 }
 
-// Émulateur de la configuration qui gère ce Système : celui demandé, ou le seul possible.
+// emulatorFor returns the configured emulator that handles this System: the one asked for, or the only possible one.
 func (c *Config) emulatorFor(system, asked string) (string, error) {
 	handles := func(name string) bool {
 		e := c.Emulators[name]
@@ -251,8 +251,8 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	// Format non lu (.7z, .rar, .cia…) : le jeu démarre quand même, sans Synchronisation, avec l'émulateur demandé
-	// (LaunchBox, ES-DE) ou le seul de la configuration.
+	// Unread format (.7z, .rar, .cia…): the game still starts, without Sync, with the emulator asked for
+	// (LaunchBox, ES-DE) or the only one in the configuration.
 	unread := system == ""
 	if unread {
 		if asked == "" && len(s.cfg.Emulators) == 1 {
@@ -273,13 +273,13 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 		return 1, err
 	}
 	if l := e.systems(p); unread && len(l) == 1 {
-		system = l[0] // pour la commande (cœur RetroArch)
+		system = l[0] // for the command (RetroArch core)
 	}
 	if unread && command == nil && len(e.Cores) > 0 && e.Cores[system] == "" {
-		return 1, fmt.Errorf(tr("Extension de ROM inconnue : %s", "Unknown ROM extension: %s"), rom) // RetroArch : quel cœur ?
+		return 1, fmt.Errorf(tr("Extension de ROM inconnue : %s", "Unknown ROM extension: %s"), rom) // RetroArch: which core?
 	}
 	var why string
-	if !unread { // format non lu : pas de Clé, donc pas d'alias non plus
+	if !unread { // unread format: no Key, so no Alias either
 		key, why = s.romKey(system, key, name)
 	}
 	if s.refusal(e, key, name) {
@@ -296,16 +296,16 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 			name = internal
 		}
 		j = &Game{system, key, name, savePath(dir, system, key, name, p.Ext), library(e.Cores[system])}
-		if system != "3DS" { // Azahar range la Sauvegarde par title ID : deux ROM d'un jeu 3DS ont la même
+		if system != "3DS" { // Azahar stores the Save by title ID: two ROMs of a 3DS game share it
 			why = s.romRefusal(j, rom, true)
 		}
 	}
 	var games []*Game
 	switch {
-	case why != "": // ROM hack sous la Clé d'un autre jeu, Clé déjà synchronisée sans ROM retenue, alias invalide (ADR 0014)
+	case why != "": // ROM hack under another game's Key, Key already synced with no ROM kept, invalid Alias (ADR 0014)
 		s.log("sans synchronisation : " + why)
 		notify(tr("Jeu lancé sans synchronisation : ", "Game started without syncing: ") + why)
-	case key == "": // homebrew, ou 3DS hors des 8 Pokémon
+	case key == "": // homebrew, or a 3DS game other than the 8 Pokémon
 		s.log("sans synchronisation : Clé illisible ou jeu hors périmètre")
 		if !unread {
 			notify(tr("Jeu lancé sans synchronisation : 3dssavesync ne reconnaît pas ce jeu (homebrew ou jeu 3DS non pris en charge). Sa sauvegarde reste sur ce PC.",
@@ -323,7 +323,7 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	return s.play(games, command, hint(e, p))
 }
 
-// Réglage qui recharge un état au lancement : il peut remplacer une Version récupérée par une partie plus ancienne.
+// hint names the setting that loads a save state at start: it can replace a downloaded Version with older progress.
 func hint(e *Emulator, p Profile) string {
 	if p.Autoload == nil {
 		return ""
@@ -346,11 +346,11 @@ func cmdLaunch(config, name string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	if s.refusal(e, "*", "") { // sans jeu : l'émulateur peut ouvrir n'importe quel jeu
+	if s.refusal(e, "*", "") { // no game: the emulator can open any game
 		return 1, nil
 	}
 	defer s.acquireLock(e.process(), "*")()
-	// mGBA sans jeu : un seul savegamePath possible, donc seulement si GB et GBA partagent le dossier.
+	// mGBA without a game: only one savegamePath is possible, so only if GB and GBA share the folder.
 	var dir string
 	for i, sys := range e.systems(p) {
 		if d := e.dir(p, sys, ""); i > 0 && d != dir {
@@ -363,9 +363,9 @@ func cmdLaunch(config, name string) (int, error) {
 	return s.play(s.gamesOf(e, p), e.command(p, "", "", dir), hint(e, p))
 }
 
-// L'émulateur tourne déjà. Refus si son jeu est inconnu (instance ouverte hors de 3dssavesync, ou lancée sans jeu)
-// ou si c'est ce jeu : synchroniser écraserait ou enverrait une partie en cours. Deux jeux différents lancés par
-// 3dssavesync peuvent tourner ensemble (un échange entre X et Y). cle « * » : lancement sans jeu (launch).
+// refusal: the emulator already runs. Refuse if its game is unknown (instance opened outside 3dssavesync, or
+// started without a game) or if it is this game: a Sync would overwrite or upload a game in progress. Two different
+// games started by 3dssavesync can run together (a trade between X and Y). key "*": start without a game (launch).
 func (s *Session) refusal(e *Emulator, key, game string) bool {
 	name := e.process()
 	n := instances(name)
@@ -390,9 +390,9 @@ func (s *Session) refusal(e *Emulator, key, game string) bool {
 	return true
 }
 
-// Verrous des parties en cours : un fichier en-cours/<processus>.<pid> par Lanceur actif, qui contient la Clé de son
-// jeu. Clés des Lanceurs encore vivants pour cet émulateur ; un verrou d'un Lanceur disparu (plantage) est retiré.
-// ponytail: un pid réutilisé par un autre programme garde le verrou ; il disparaît au prochain redémarrage du PC.
+// locks of the games in progress: one file en-cours/<process>.<pid> per active Launcher, holding its game's Key.
+// Returns the Keys of the Launchers still alive for this emulator; it removes the lock of a dead Launcher (crash).
+// ponytail: a pid reused by another program keeps the lock; it goes away at the next PC restart.
 func (s *Session) locks(process string) (keys []string) {
 	files, _ := filepath.Glob(filepath.Join(s.dir, "en-cours", process+".*"))
 	for _, f := range files {
@@ -408,7 +408,7 @@ func (s *Session) locks(process string) (keys []string) {
 	return keys
 }
 
-// Pose le verrou de ce Lanceur ; la fonction rendue le retire (après l'envoi).
+// acquireLock sets this Launcher's lock; the returned function removes it (after the Upload).
 func (s *Session) acquireLock(process, key string) func() {
 	f := filepath.Join(s.dir, "en-cours", fmt.Sprintf("%s.%d", process, os.Getpid()))
 	if os.MkdirAll(filepath.Dir(f), 0o755) != nil || os.WriteFile(f, []byte(key), 0o644) != nil {
@@ -419,18 +419,18 @@ func (s *Session) acquireLock(process, key string) func() {
 	return func() { os.Remove(f) }
 }
 
-// Jeux d'un émulateur pour launch : les ROM de ses dossiers roms, et les Pokémon 3DS déjà vus par Azahar.
+// gamesOf returns an emulator's games for launch: the ROMs of its roms folders, and the 3DS Pokémon seen by Azahar.
 func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 	var games []*Game
 	var noRoms, refusal []string
-	byKey, roms := map[string][]*Game{}, map[*Game]string{} // roms : chemin de la ROM de chaque Jeu
+	byKey, roms := map[string][]*Game{}, map[*Game]string{} // roms: ROM path of each Game
 	for _, system := range e.systems(p) {
 		if system == "3DS" {
 			dir := e.dir(p, system, "")
 			for id, title := range titles3DS {
 				key := "3DS-" + id
 				j := &Game{system, key, title, savePath(dir, system, key, title, ""), ""}
-				if dir != "" && (exists(filepath.Dir(j.File)) || formats3DS[id] != nil) { // jamais lancé, format inconnu : ignoré
+				if dir != "" && (exists(filepath.Dir(j.File)) || formats3DS[id] != nil) { // never started, unknown format: skipped
 					games = append(games, j)
 				}
 			}
@@ -462,8 +462,8 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 			return nil
 		})
 	}
-	// Plusieurs ROM pour une Clé, ou pour un fichier de sauvegarde (dossier des sauvegardes commun et même nom dans deux
-	// sous-dossiers) : aucune n'est synchronisée, comme le Doublon de la 3DS (ADR 0005, 0014, 0015).
+	// Several ROMs for one Key, or for one save file (shared save folder and same name in two subfolders):
+	// none is synced, like the Duplicate on the 3DS (ADR 0005, 0014, 0015).
 	byFile := map[string]int{}
 	for _, l := range byKey {
 		for _, j := range l {
@@ -512,9 +512,9 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 	return games
 }
 
-// Envois en attente, Synchronisation avant, partie, Synchronisation après. Une lecture de la liste du serveur par passe.
+// play runs the pending Uploads, the Sync before, the game, the Sync after. One read of the server list per pass.
 func (s *Session) play(games []*Game, command []string, hint string) (int, error) {
-	s.resume() // même passe que l'avant-partie : réseau coupé = un seul délai d'attente
+	s.resume() // same pass as the pre-game Sync: network down = a single timeout
 	var failures []string
 	for _, j := range games {
 		cancelled, err := s.syncGame(j, false)
@@ -544,14 +544,14 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 		if r == noPlay {
 			return 0, nil
 		}
-		if r == "" { // pas de fenêtre : la partie a lieu, l'avertissement reste visible
+		if r == "" { // no window: the game runs, the warning stays visible
 			notify(hint)
 		}
 	} else if hint != "" {
 		s.log("avertissement : " + hint)
 	}
-	// Un jeu sans sauvegarde avant la partie : s'il n'en a toujours pas après, le dossier ou l'extension est
-	// peut-être faux (profil personnalisé). Un seul jeu (run) : launch en aurait des dizaines jamais joués.
+	// A game with no save before playing: if it still has none after, the folder or the extension may be
+	// wrong (custom Profile). One game only (run): launch would have dozens of never-played games.
 	noSave := len(games) == 1 && games[0].System != "3DS" && !exists(games[0].File)
 	if err := launch(command); err != nil {
 		return 1, fmt.Errorf(tr("impossible de lancer %s : %w", "couldn't start %s: %w"), command[0], err)
@@ -563,7 +563,7 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 	}
 	failures = nil
 	s.listRead = false
-	var notUploaded []*Game // repris au prochain lancement d'un jeu (D5), quelle que soit l'erreur
+	var notUploaded []*Game // retried at the next game start, whatever the error
 	for i, j := range games {
 		if _, err := s.syncGame(j, true); err != nil {
 			s.log(j.Key + " après : " + err.Error())
@@ -574,7 +574,7 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 			notUploaded = append(notUploaded, j)
 		}
 	}
-	if len(failures) > 0 { // le plus important d'abord : la notification est coupée à 255 caractères
+	if len(failures) > 0 { // most important first: the notification is cut at 255 characters
 		text := tr("Sauvegarde non envoyée. Elle reste sur le PC et sera envoyée au prochain lancement d'un jeu.\n", "Upload failed. The save stays on the PC and will upload the next time you start a game.\n")
 		if s.addPending(notUploaded) != nil {
 			text = tr("Sauvegarde non envoyée. Elle reste sur le PC : relancez ce jeu pour l'envoyer.\n", "Upload failed. The save stays on the PC. Start this game again to upload it.\n")
@@ -584,8 +584,8 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 	return 0, nil
 }
 
-// Une ligne d'échec pour l'utilisateur : le nom du jeu, sauf quand le serveur ou le réseau est en cause (un seul
-// message pour toute la passe).
+// addFailure adds a failure line for the user: the game name, except when the server or the network is the cause
+// (one message for the whole pass).
 func addFailure(failures []string, j *Game, err error) []string {
 	text, global := classify(err)
 	if !global {
@@ -594,7 +594,7 @@ func addFailure(failures []string, j *Game, err error) []string {
 	return append(failures, text)
 }
 
-// fin : le serveur ou le réseau est en cause, les jeux suivants échoueraient pareil (et attendraient chacun le délai).
+// end: the server or the network is the cause, so the next games would fail the same way (each after a timeout).
 func end(err error) bool {
 	_, global := classify(err)
 	return global

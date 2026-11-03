@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// MBC2 (ADR 0012) : mGBA 256 o et SameBoy 512 o donnent la même forme du serveur ; la Récupération écrit à la taille
-// du fichier existant, sinon à celle de l'émulateur.
+// MBC2 (ADR 0012): mGBA 256 B and SameBoy 512 B give the same server form; the Download writes at the size of the
+// existing file, otherwise at the size of the emulator.
 func TestMBC2(t *testing.T) {
 	mgba := make([]byte, 256)
-	mgba[0], mgba[255] = 0x21, 0xA5 // adresse paire dans le quartet bas
+	mgba[0], mgba[255] = 0x21, 0xA5 // even address in the low nibble
 	server := make([]byte, 512)
 	server[0], server[1], server[510], server[511] = 1, 2, 5, 0xA
 	sameboy := make([]byte, 512)

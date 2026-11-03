@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Extrait d'un vrai Emulators.xml (mêmes champs, même indentation, fins de ligne CRLF).
+// Excerpt of a real Emulators.xml (same fields, same indentation, CRLF line endings).
 const emulatorsXML = "<?xml version=\"1.0\" standalone=\"yes\"?>\r\n<LaunchBox>\r\n" +
 	"  <EmulatorPlatform>\r\n    <Emulator>aaaa</Emulator>\r\n    <Platform>Nintendo DS</Platform>\r\n    <CommandLine />\r\n    <Default>true</Default>\r\n    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>\r\n    <AutoExtract>true</AutoExtract>\r\n  </EmulatorPlatform>\r\n" +
 	"  <EmulatorPlatform>\r\n    <Emulator>aaaa</Emulator>\r\n    <Platform>Nintendo Entertainment System</Platform>\r\n    <CommandLine />\r\n    <Default>false</Default>\r\n    <M3uDiscLoadEnabled>false</M3uDiscLoadEnabled>\r\n    <AutoExtract>false</AutoExtract>\r\n  </EmulatorPlatform>\r\n" +
@@ -72,7 +72,7 @@ func TestLaunchBox(t *testing.T) {
 	if again != newText || !strings.Contains(report[0], "déjà en place") {
 		t.Errorf("réparation d'une configuration en place : rien ne doit changer (%q)", report)
 	}
-	// Installation modifiée à la main (bascule de la phase 1) : reconnue, pas de doublon.
+	// Install changed by hand (emulator switched to the Launcher in place): recognized, no duplicate.
 	main := strings.Replace(strings.Replace(emulatorsXML, `Emulators\MelonDS\melonDS.exe`, `C:\Users\J\AppData\Local\Programs\3dssavesync\3dssavesync.exe`, 1),
 		"<CommandLine />", "<CommandLine>run --emulator melonds</CommandLine>", 1)
 	if r, rap := launchbox(main, lb, launcher, entries[:1]); r != main || !strings.Contains(rap[0], "déjà en place") {
@@ -120,7 +120,7 @@ func TestDesktop(t *testing.T) {
 	}
 }
 
-// Assistant complet, puis réparation : vrai serveur, émulateur détecté factice, LaunchBox et ES-DE factices.
+// Full setup, then repair: real server, fake detected emulator, fake LaunchBox and ES-DE.
 func TestTextSetup(t *testing.T) {
 	tmp = t.TempDir()
 	m := fakeHome(t)
@@ -181,7 +181,7 @@ func TestTextSetup(t *testing.T) {
 		}
 	}
 
-	// Seconde ouverture : menu, réparation, rien ne change.
+	// Second opening: menu, repair, nothing changes.
 	output.Reset()
 	cfgBefore := string(read(config))
 	q = &Questions{in: bufio.NewReader(strings.NewReader("2\n")), out: &output}
@@ -196,8 +196,8 @@ func TestTextSetup(t *testing.T) {
 	}
 }
 
-// Version portable (ADR 0020) : portable.txt à côté de l'exe. Réglages dans le dossier de l'exe, exe jamais copié,
-// frontends vers l'exe en cours, dossier en lecture seule refusé avec un message.
+// Portable version (ADR 0020): portable.txt next to the exe. Settings in the exe's folder, exe never copied,
+// frontends point to the running exe, read-only folder refused with a message.
 func TestPortable(t *testing.T) {
 	m := fakeHome(t)
 	dir := filepath.Join(t.TempDir(), "LaunchBox", "ThirdParty", "3dssavesync")
@@ -235,8 +235,8 @@ func TestPortable(t *testing.T) {
 	}
 }
 
-// Options de l'émulateur LaunchBox d'origine (ligne de l'émulateur, puis de ses plateformes des systèmes) : pour
-// args_en_plus, car la copie « (3dssavesync) » a une ligne vide.
+// Options of the original LaunchBox emulator (the emulator's line, then its platforms for the systems): for
+// args_en_plus, because the "(3dssavesync)" copy has an empty line.
 func TestLaunchBoxOptions(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")

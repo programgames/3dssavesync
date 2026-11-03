@@ -2,8 +2,8 @@ package main
 
 import "strings"
 
-// Langue des fenêtres, des notifications et des erreurs : français si le système est en français, sinon anglais.
-// Le journal reste en français.
+// Language of windows, notifications and errors: French if the OS is in French, otherwise English.
+// The log stays in French.
 var english = !strings.HasPrefix(strings.ToLower(systemLanguage()), "fr")
 
 func tr(fr, en string) string {

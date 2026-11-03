@@ -1,7 +1,7 @@
 package main
 
-// Assistant dans le navigateur : l'exe sert une page sur 127.0.0.1 (port au hasard, secret dans l'adresse) et ouvre
-// le navigateur par défaut. Même logique que l'assistant en console (setup.go) ; rien n'est écrit sans copie préalable.
+// Setup in the browser: the exe serves a page on 127.0.0.1 (random port, secret in the address) and opens the default
+// browser. Same logic as the console setup (setup.go); nothing is written without a copy first.
 
 import (
 	"bytes"
@@ -31,13 +31,13 @@ var setupPageHTML string
 type WebSetup struct {
 	config, secret, host string
 	lock                 sync.Mutex
-	seen                 time.Time // dernier signe de vie de la page
+	seen                 time.Time // last sign of life from the page
 	end                  chan struct{}
-	names                map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
+	names                map[string]string // Key -> ROM name, read once (history.go)
 	namesRead            sync.Once
 }
 
-// Émulateur tel que la page l'affiche et le renvoie.
+// WebEmu is an emulator as the page shows it and sends it back.
 type WebEmu struct {
 	Name     string `json:"Nom"`
 	Profile  string `json:"Profil"`
@@ -48,10 +48,10 @@ type WebEmu struct {
 	Systems  []WebSystem       `json:"Systemes"`
 	Hint     string            `json:"Conseil"`
 	Error    string            `json:"Erreur"`
-	Problems []string          `json:"Problemes"` // lignes à faire de Vérifications pour cet émulateur de config.json
+	Problems []string          `json:"Problemes"` // to-do lines of the checks for this config.json emulator
 	Cores    map[string]string `json:"Coeurs"`
-	Extra    string            `json:"EnPlus"` // profil intégré : arguments en plus, avant la ROM
-	// Émulateur personnalisé : ligne de commande ({rom}, {sauvegardes}), extension, nom du fichier dans le zip.
+	Extra    string            `json:"EnPlus"` // built-in Profile: extra arguments, before the ROM
+	// Custom emulator: command line ({rom}, {sauvegardes}), extension, name of the file inside the zip.
 	Custom       bool   `json:"Personnalise"`
 	Command      string `json:"Commande"`
 	Extension    string
@@ -60,8 +60,8 @@ type WebEmu struct {
 
 type WebSystem struct {
 	System  string `json:"Systeme"`
-	Saves   string `json:"Sauvegardes"` // valeur affichée (explicite, ou réglage de l'émulateur)
-	Default string `json:"Defaut"`      // réglage de l'émulateur ; "" = à côté de la ROM
+	Saves   string `json:"Sauvegardes"` // shown value (explicit, or the emulator's setting)
+	Default string `json:"Defaut"`      // the emulator's setting; "" = next to the ROM
 	Roms    string
 }
 
@@ -76,19 +76,19 @@ type WebState struct {
 	Installed     string `json:"Installe"`
 	LaunchBox     string
 	EsDe          string
-	Address3DS    string `json:"Adresse3DS"` // écrite sur la carte SD de la 3DS
+	Address3DS    string `json:"Adresse3DS"` // written to the 3DS SD card
 	Port          int
 	EsDeActive    bool     `json:"EsDeActif"`
 	Emulators     []WebEmu `json:"Emulateurs"`
 	Profiles      []string `json:"Profils"`
-	Configured    []string `json:"Configures"` // émulateurs de config.json : boutons « Ouvrir »
+	Configured    []string `json:"Configures"` // config.json emulators: "Open" buttons
 	Icon          bool     `json:"Icone"`
-	IconAvailable bool     `json:"IconeDisponible"` // icône près de l'horloge (tray.go)
-	Version       string   // de ce programme (majpc.go)
-	Update        bool     `json:"Maj"` // recherche des mises à jour
+	IconAvailable bool     `json:"IconeDisponible"` // tray icon (tray.go)
+	Version       string   // of this program (selfupdate.go)
+	Update        bool     `json:"Maj"` // update check
 }
 
-// Ouvre un émulateur sans jeu, avec Synchronisation (launch), indépendant de la page. Remplacé par les tests.
+// openDetached opens an emulator without a game, with Sync (launch), apart from the page. Tests replace it.
 var openDetached = startDetached
 
 type WebChoices struct {
@@ -121,11 +121,11 @@ func cmdSetupWeb(config string, noBrowser bool) (int, error) {
 		fmt.Println(address)
 		notify(tr("Ouvrez cette adresse dans votre navigateur : ", "Open this address in your browser: ") + address)
 	}
-	// Fin : bouton « Terminer », ou plus de signe de vie de la page (onglet fermé) pendant 2 minutes.
+	// End: "Finish" button, or no sign of life from the page (tab closed) for 2 minutes.
 	for {
 		select {
 		case <-a.end:
-			time.Sleep(300 * time.Millisecond) // la réponse part avant la fin du programme
+			time.Sleep(300 * time.Millisecond) // the response goes out before the program ends
 			return 0, nil
 		case <-time.After(5 * time.Second):
 			a.lock.Lock()
@@ -149,7 +149,7 @@ func openBrowser(address string) error {
 }
 
 func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Seulement la page ouverte par l'assistant : bon hôte (pas de rebinding DNS) et secret dans l'adresse.
+	// Only the page opened by the setup: right host (no DNS rebinding) and secret in the address.
 	path, ok := strings.CutPrefix(r.URL.Path, "/"+a.secret+"/")
 	if r.Host != a.host || !ok {
 		http.NotFound(w, r)
@@ -165,7 +165,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t.Execute(w, map[string]any{"Langue": tr("fr", "en")})
 		return
 	}
-	if path == "config.ini" && r.Method == "GET" { // à copier par FTP sur la 3DS
+	if path == "config.ini" && r.Method == "GET" { // to copy to the 3DS by FTP
 		var cfg Config
 		readJSON(a.config, &cfg)
 		url, _ := address3DS(&cfg)
@@ -178,7 +178,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, configIni("", url, cfg.Token))
 		return
 	}
-	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // une autre page ne peut pas envoyer ce type sans CORS
+	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // another page can't send this type without CORS
 		http.Error(w, "", 405)
 		return
 	}
@@ -206,7 +206,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		lines, err := a.apply(c)
 		x := map[string]any{"Lignes": lines, "Erreur": errorText(err)}
 		var cfg Config
-		if err == nil && readJSON(a.config, &cfg) == nil && cfg.LocalServer != nil { // cadre « à entrer sur la 3DS »
+		if err == nil && readJSON(a.config, &cfg) == nil && cfg.LocalServer != nil { // "enter on the 3DS" box
 			x["Adresse"], x["Autres"] = address3DS(&cfg)
 			x["Jeton"] = cfg.Token
 		}
@@ -236,7 +236,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		lines, err := uninstall(&cfg, a.config)
 		response = map[string]any{"Lignes": lines, "Erreur": errorText(err)}
 		if err == nil {
-			a.finish() // la réponse part, puis le programme s'arrête : son exe peut aller à la Corbeille
+			a.finish() // the response goes out, then the program stops: its exe can go to the Recycle Bin
 		}
 	case "api/ouvrir":
 		var x struct {
@@ -259,7 +259,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Current string `json:"Courant"`
 		}
 		json.NewDecoder(r.Body).Decode(&x)
-		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
+		func() { // network reads without the lock: the page (ping, other tabs) stays served meanwhile
 			a.lock.Unlock()
 			defer a.lock.Lock()
 			switch path {
@@ -287,8 +287,8 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// aliasWeb : les ROM hacks qui ont leur propre Clé (ADR 0014). Nom non vide : ajout (Clé créée par ajouterAlias) ou
-// retrait, écrit dans config.json avec une copie datée.
+// aliasWeb handles ROM hacks that get their own Key (ADR 0014). A non-empty name: add (Key made by addAlias) or
+// remove, written to config.json with a dated copy.
 func (a *WebSetup) aliasWeb(name, system string, remove bool) map[string]any {
 	var cfg Config
 	if err := readConfig(a.config, &cfg); err != nil {
@@ -312,14 +312,14 @@ func (a *WebSetup) aliasWeb(name, system string, remove bool) map[string]any {
 		names = append(names, n)
 	}
 	sort.Slice(names, func(i, j int) bool { return strings.ToLower(names[i]) < strings.ToLower(names[j]) })
-	x := map[string]any{"Noms": names, "Cles": cfg.Alias} // Clé : la console dans la liste
+	x := map[string]any{"Noms": names, "Cles": cfg.Alias} // Key: the console in the list
 	if err != nil {
 		x["Erreur"] = errorText(err)
 	}
 	return x
 }
 
-// finir : arrête le programme après la réponse ; un deuxième appel (deux onglets, deux clics) ne fait rien.
+// finish stops the program after the response; a second call (two tabs, two clicks) does nothing.
 func (a *WebSetup) finish() {
 	select {
 	case <-a.end:
@@ -328,7 +328,7 @@ func (a *WebSetup) finish() {
 	}
 }
 
-// Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
+// webEmu builds the emulator for the page: folders per System (emulator setting, or config.json value), autoload hint.
 func webEmu(name string, e *Emulator, source string, active bool) WebEmu {
 	x := WebEmu{Name: name, Profile: e.Profile, Exe: e.Exe, Process: e.Process, Source: source, Active: active, Cores: e.Cores,
 		Extra: joinArgs(e.ExtraArgs)}
@@ -347,7 +347,7 @@ func webEmu(name string, e *Emulator, source string, active bool) WebEmu {
 		x.Error = err.Error()
 		return x
 	}
-	standalone := &Emulator{Exe: e.Exe, Cores: e.Cores, Profile: e.Profile, Args: e.Args} // sans config.json : le réglage de l'émulateur
+	standalone := &Emulator{Exe: e.Exe, Cores: e.Cores, Profile: e.Profile, Args: e.Args} // without config.json: the emulator's setting
 	for _, s := range e.systems(p) {
 		d := standalone.dir(p, s, "")
 		v := e.Saves[s]
@@ -362,7 +362,7 @@ func webEmu(name string, e *Emulator, source string, active bool) WebEmu {
 
 var reEmulatorName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,15}$`)
 
-// emulateurDe : l'émulateur que la page décrit. Rend une erreur claire pour un émulateur personnalisé incomplet.
+// emulatorOf returns the emulator that the page describes. Returns a clear error for an incomplete custom emulator.
 func emulatorOf(x WebEmu) (*Emulator, error) {
 	e := &Emulator{Exe: x.Exe, Process: x.Process, Cores: x.Cores}
 	if !x.Custom {
@@ -391,7 +391,7 @@ func emulatorOf(x WebEmu) (*Emulator, error) {
 	return e, nil
 }
 
-// apercu : la commande lancée pour une ROM d'exemple du premier Système (affichage seulement).
+// preview returns the command started for a sample ROM of the first System (display only).
 func preview(x WebEmu) map[string]string {
 	e, err := emulatorOf(x)
 	if err == nil && len(x.Systems) == 0 {
@@ -449,7 +449,7 @@ func (a *WebSetup) state() WebState {
 	}
 	sort.Strings(names)
 	e.Configured = names
-	problems := map[string][]string{} // même état que Vérifications (azahar sans dossier sdmc : « À vérifier »)
+	problems := map[string][]string{} // same state as the checks (azahar without an sdmc folder: "to check")
 	for _, v := range emulatorChecks(&cfg) {
 		if !v.Ok {
 			problems[v.Emulator] = append(problems[v.Emulator], v.Text)
@@ -460,17 +460,17 @@ func (a *WebSetup) state() WebState {
 		x.Problems = problems[n]
 		e.Emulators = append(e.Emulators, x)
 	}
-	// Trouvés sur ce PC, absents de config.json : cochés au premier lancement (rien à choisir avant), sinon pas cochés,
-	// dans la partie repliée de la page : rien n'est ajouté à une configuration existante sans un choix.
+	// Found on this PC, missing from config.json: ticked on first run (nothing chosen before), else not ticked, in the
+	// collapsed part of the page: nothing is added to an existing configuration without a choice.
 	for _, t := range detect(e.LaunchBox) {
 		if c := cfg.Emulators[t.Profile]; c != nil && strings.EqualFold(c.Exe, t.Exe) {
 			continue
 		}
 		e.Emulators = append(e.Emulators, webEmu(t.Profile, &Emulator{Exe: t.Exe, Process: t.Process}, t.Source, !cfgExists))
 	}
-	// Arguments en plus : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ». Seulement
-	// pour un émulateur absent de config.json (une valeur vide enregistrée reste vide). Jamais pour RetroArch (le -L du
-	// cœur d'une plateforme irait à tous les systèmes) ni NanoBoyAdvance (la ROM doit rester le premier argument).
+	// Extra arguments: suggested from the original LaunchBox emulator (e.g. -f), written by "Save". Only for an emulator
+	// missing from config.json (a saved empty value stays empty). Never for RetroArch (the -L of one platform's core
+	// would go to every System) nor NanoBoyAdvance (the ROM must stay the first argument).
 	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
 		for i := range e.Emulators {
 			x := &e.Emulators[i]
@@ -490,8 +490,8 @@ func (a *WebSetup) state() WebState {
 	return e
 }
 
-// ouvrir : l'émulateur nom de config.json, sans jeu, par « launch » (Synchronisation avant et après). Pour « Ouvrir
-// mGBA » de LaunchBox, qui démarre le Lanceur sans argument, donc sur cette page.
+// open starts the config.json emulator name, without a game, through "launch" (Sync before and after). For the
+// LaunchBox "Open mGBA" entry, which starts the Launcher with no argument, so on this page.
 func (a *WebSetup) open(name string) map[string]any {
 	var cfg Config
 	if err := readJSON(a.config, &cfg); err != nil || cfg.Emulators[name] == nil {
@@ -517,8 +517,8 @@ func (a *WebSetup) test(c WebChoices) map[string]any {
 	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connected.")}
 }
 
-// appliquer : config.json (copie avant), programme, frontends, raccourcis, serveur local. Rien n'est écrit si le
-// serveur personnel ne répond pas ou si un choix est invalide.
+// apply writes config.json (copy first), program, frontends, shortcuts, local server. Nothing is written if the
+// personal server doesn't answer or a choice is invalid.
 func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 	var cfg Config
 	if err := readJSON(a.config, &cfg); err != nil && !os.IsNotExist(err) {
@@ -561,7 +561,7 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		explicit := x.Custom // le Lanceur ne connaît pas les réglages d'un émulateur personnalisé
+		explicit := x.Custom // the Launcher doesn't know the settings of a custom emulator
 		for _, s := range x.Systems {
 			explicit = explicit || s.Saves != s.Default
 			if s.Roms != "" {
@@ -571,7 +571,7 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 				e.Roms[s.System] = s.Roms
 			}
 		}
-		if explicit { // un dossier changé : tous écrits (sinon l'émulateur ne gérerait que celui-là)
+		if explicit { // one folder changed: all written (else the emulator would handle only that one)
 			e.Saves = map[string]string{}
 			for _, s := range x.Systems {
 				if s.Saves == "" {
@@ -586,7 +586,7 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 		emus[x.Name] = e
 	}
 	cfg.Emulators = emus
-	cfg.TrayIcon = nil // "icone_horloge": false seulement quand elle est retirée
+	cfg.TrayIcon = nil // "icone_horloge": false only when it is removed
 	if !c.Icon {
 		cfg.TrayIcon = &c.Icon
 	}
@@ -616,7 +616,7 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 		}
 		cfg.Frontends["esde"] = esde
 	}
-	if c.Install { // après les vérifications : installerExe arrête l'icône, serveurLocal la redémarre
+	if c.Install { // after the checks: installExe stops the icon, localServer restarts it
 		lines = append(lines, installExe(&cfg, filepath.Dir(a.config)))
 	} else if cfg.Launcher == "" {
 		cfg.Launcher = executable()
@@ -628,7 +628,7 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 	if c.Shortcuts {
 		createShortcuts(q, &cfg)
 	}
-	if err := localServer(q, &cfg, a.config); err != nil { // icône près de l'horloge, serveur local
+	if err := localServer(q, &cfg, a.config); err != nil { // tray icon, local server
 		lines = append(lines, err.Error())
 	}
 	for _, l := range strings.Split(output.String(), "\n") {

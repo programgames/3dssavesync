@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// Assistant web : accès réservé à la page (hôte et secret), page en français, état, test du serveur, enregistrement.
+// Web setup: access only for the page (host and secret), page in French, state, Server test, save.
 func TestWebSetup(t *testing.T) {
 	fakeHome(t)
 	reset()
@@ -41,7 +41,7 @@ func TestWebSetup(t *testing.T) {
 	}
 	r := httptest.NewRequest("POST", "http://127.0.0.1:9/s3cret/api/etat", strings.NewReader("{}"))
 	r.Host = "127.0.0.1:9"
-	r.Header.Set("Content-Type", "text/plain") // formulaire d'une autre page : refusé
+	r.Header.Set("Content-Type", "text/plain") // form from another page: refused
 	w := httptest.NewRecorder()
 	a.ServeHTTP(w, r)
 	if w.Code != 405 {
@@ -50,7 +50,7 @@ func TestWebSetup(t *testing.T) {
 
 	var state WebState
 	json.Unmarshal(request("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.Bytes(), &state)
-	// Premier lancement : l'émulateur trouvé est coché (rien à choisir avant). Avec une configuration, il ne l'est pas.
+	// First run: the found emulator is ticked (nothing chosen before). With a configuration, it isn't.
 	if state.Exists || len(state.Emulators) != 1 || !state.Emulators[0].Active || state.Emulators[0].Systems[0].System != "DS" {
 		t.Fatalf("état initial : %+v", state)
 	}
@@ -62,7 +62,7 @@ func TestWebSetup(t *testing.T) {
 	}
 
 	emu := state.Emulators[0]
-	emu.Active = true // coché par l'utilisateur
+	emu.Active = true // ticked by the user
 	emu.Systems[0].Saves = filepath.Join(t.TempDir(), "saves")
 	choice := WebChoices{URL: server.URL, Token: "jeton-web", Emulators: []WebEmu{emu}}
 	body, _ := json.Marshal(choice)
@@ -81,7 +81,7 @@ func TestWebSetup(t *testing.T) {
 		t.Fatalf("config.json : %+v", cfg)
 	}
 
-	choice.Token, choice.URL = "", "http://127.0.0.1:1" // serveur injoignable : rien n'est écrit
+	choice.Token, choice.URL = "", "http://127.0.0.1:1" // server unreachable: nothing is written
 	body, _ = json.Marshal(choice)
 	before := string(read(config))
 	json.Unmarshal(request("POST", "127.0.0.1:9", "/s3cret/api/appliquer", string(body)).Body.Bytes(), &res)
@@ -92,7 +92,7 @@ func TestWebSetup(t *testing.T) {
 	if !state.Exists || !state.HasToken || state.URL != server.URL || strings.Contains(request("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.String(), "jeton-web") {
 		t.Errorf("état après enregistrement (jamais le jeton) : %+v", state)
 	}
-	// Dossier des sauvegardes absent : la ligne de l'émulateur dit ce que dit Vérifications, jamais « Prêt ».
+	// Save folder missing: the emulator's line says what the checks say, never "Ready".
 	if p := state.Emulators[0].Problems; len(p) != 1 || !strings.Contains(p[0], "melonds DS : dossier des sauvegardes introuvable") {
 		t.Errorf("problème de melonds attendu : %q", p)
 	}
@@ -101,7 +101,7 @@ func TestWebSetup(t *testing.T) {
 		t.Errorf("dossier créé : plus de problème attendu (%q)", state.Emulators[0].Problems)
 	}
 
-	// « Ouvrir » : l'émulateur configuré, sans jeu, par launch ; un nom inconnu ne lance rien.
+	// "Open": the configured emulator, without a game, through launch; an unknown name starts nothing.
 	var launched []string
 	openDetached = func(exe string, args []string) error { launched = append([]string{exe}, args...); return nil }
 	var opened map[string]any
@@ -119,7 +119,7 @@ func TestWebSetup(t *testing.T) {
 	}
 }
 
-// Émulateur personnalisé dans la page : contrôles, aperçu, enregistrement.
+// Custom emulator in the page: checks, preview, save.
 func TestWebSetupCustom(t *testing.T) {
 	fakeHome(t)
 	server := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
@@ -137,11 +137,11 @@ func TestWebSetupCustom(t *testing.T) {
 		t.Errorf("aperçu : %v", r)
 	}
 	for _, bad := range []WebEmu{
-		{Name: "mgba", Custom: true, Command: "{rom}", Systems: x.Systems},                                    // nom d'un profil intégré
-		{Name: "GEARBOY", Custom: true, Command: "{rom}", Systems: x.Systems},                                 // majuscules
-		{Name: "gearboy", Custom: true, Command: "-rom", Systems: x.Systems},                                  // sans {rom}
-		{Name: "gearboy", Custom: true, Command: "{rom}"},                                                     // aucun Système
-		{Name: "gearboy", Custom: true, Command: "{rom}", Systems: []WebSystem{{System: "GB"}}, Active: true}, // dossier vide
+		{Name: "mgba", Custom: true, Command: "{rom}", Systems: x.Systems},                                    // name of a built-in Profile
+		{Name: "GEARBOY", Custom: true, Command: "{rom}", Systems: x.Systems},                                 // uppercase
+		{Name: "gearboy", Custom: true, Command: "-rom", Systems: x.Systems},                                  // no {rom}
+		{Name: "gearboy", Custom: true, Command: "{rom}"},                                                     // no System
+		{Name: "gearboy", Custom: true, Command: "{rom}", Systems: []WebSystem{{System: "GB"}}, Active: true}, // empty folder
 	} {
 		bad.Active = true
 		if _, err := a.apply(WebChoices{URL: server.URL, Token: "j", Emulators: []WebEmu{bad}}); err == nil {
@@ -163,7 +163,7 @@ func TestWebSetupCustom(t *testing.T) {
 	}
 }
 
-// Section ROM hacks : ajout (Clé créée, copie de config.json avant), liste, retrait.
+// ROM hacks section: add (Key created, config.json copied first), list, remove.
 func TestAliasWeb(t *testing.T) {
 	config := filepath.Join(t.TempDir(), "config.json")
 	if err := writeJSON(config, &Config{URL: "http://192.0.2.5", Token: "j"}, true); err != nil {
@@ -190,8 +190,8 @@ func TestAliasWeb(t *testing.T) {
 	}
 }
 
-// Page : « Arguments en plus » proposé depuis l'émulateur LaunchBox d'origine pour un émulateur trouvé, absent de
-// config.json ; jamais à la place d'une valeur de config.json, même vide ; jamais pour RetroArch ni NanoBoyAdvance.
+// Page: "Extra arguments" suggested from the original LaunchBox emulator for a found emulator missing from
+// config.json; never in place of a config.json value, even empty; never for RetroArch or NanoBoyAdvance.
 func TestWebSetupLaunchBoxOptions(t *testing.T) {
 	fakeHome(t)
 	detectBefore := detect
@@ -214,7 +214,7 @@ func TestWebSetupLaunchBoxOptions(t *testing.T) {
 		found    Found
 		expected string
 	}{
-		{map[string]*Emulator{"melonds": {Exe: melon}}, Found{}, ""}, // vide enregistré : reste vide
+		{map[string]*Emulator{"melonds": {Exe: melon}}, Found{}, ""}, // saved empty: stays empty
 		{map[string]*Emulator{"melonds": {Exe: melon, ExtraArgs: []string{"-g"}}}, Found{}, "-g"},
 		{nil, Found{Profile: "melonds", Exe: melon}, "-f"},
 		{nil, Found{Profile: "nanoboyadvance", Exe: nba}, ""},

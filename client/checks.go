@@ -1,7 +1,7 @@
 package main
 
-// Liste « Tout est prêt » de la page des réglages : chaque élément est bon, ou dit ce qu'il faut faire. Rien n'est
-// écrit, sauf la date de la recherche de mise à jour (maj-pc.json).
+// The "all ready" list of the settings page: each item is fine, or says what to do. Nothing is written, except
+// the date of the update check (maj-pc.json).
 
 import (
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-// Verif : un élément de la liste. Page : l'entrée du menu qui reçoit le compteur ; Emulateur : l'émulateur de
-// config.json concerné (sa ligne dans Émulateurs dit « À vérifier »), "" sinon.
+// Check is one item of the list. Page: the menu entry that gets the counter; Emulator: the config.json emulator
+// concerned (its row in Emulators shows a warning), "" otherwise.
 type Check struct {
 	Ok       bool
 	Text     string `json:"Texte"`
@@ -20,8 +20,8 @@ type Check struct {
 	Emulator string `json:"Emulateur"`
 }
 
-// verifications : la liste, et la mise à jour disponible (Version, Page ; nil sinon). Lectures sur le réseau : la
-// page l'appelle sans son verrou.
+// checks returns the list, and the available update (Version, Page; nil otherwise). It reads the network: the
+// page calls it without its lock.
 func checks(config string) ([]Check, map[string]string) {
 	var cfg Config
 	if err := readConfig(config, &cfg); err != nil {
@@ -108,8 +108,8 @@ func checks(config string) ([]Check, map[string]string) {
 	return l, update
 }
 
-// verifsEmulateurs : les dossiers des sauvegardes des émulateurs de config.json (lectures locales seulement : la page
-// les montre aussi dans Émulateurs, au même état que dans Vérifications).
+// emulatorChecks checks the save folders of the config.json emulators (local reads only: the page also shows them
+// in Emulators, in the same state as in Checks).
 func emulatorChecks(cfg *Config) []Check {
 	var l []Check
 	n := ""

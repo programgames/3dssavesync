@@ -17,7 +17,7 @@ import (
 	"testing"
 )
 
-// Contrat HTTP : la suite de server/test_server.py, lancée contre le serveur Go.
+// HTTP contract: the server/test_server.py suite, run against the Go server.
 func TestServerContract(t *testing.T) {
 	srv := httptest.NewServer(&Server{data: t.TempDir(), token: "jeton-go"})
 	defer srv.Close()
@@ -35,7 +35,7 @@ func TestServerContract(t *testing.T) {
 	t.Logf("%s", strings.TrimSpace(string(o)))
 }
 
-// Ce que la suite Python ne peut pas faire à distance : format exact de la liste (lu par la 3DS), corps tronqué.
+// What the Python suite can't do remotely: exact list format (read by the 3DS), truncated body.
 func TestLocalServer(t *testing.T) {
 	data := t.TempDir()
 	srv := httptest.NewServer(&Server{data: data, token: "j"})
@@ -77,8 +77,8 @@ func TestLocalServer(t *testing.T) {
 	}
 }
 
-// tests/saves.json (écrite par server.py, lue par le test C de la 3DS) : les mêmes Versions donnent la même liste, champ
-// pour champ, sur le serveur Go.
+// tests/saves.json (written by server.py, read by the 3DS C test): the same Versions give the same list, field
+// by field, on the Go server.
 func TestServerListLikeServerPy(t *testing.T) {
 	o, err := os.ReadFile(filepath.Join("..", "tests", "saves.json"))
 	if err != nil {
@@ -107,7 +107,7 @@ func TestServerListLikeServerPy(t *testing.T) {
 	if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 		t.Fatal(err)
 	}
-	for _, j := range append(expected, received...) { // age : dépend de l'heure du test
+	for _, j := range append(expected, received...) { // age: depends on the test time
 		if a, ok := j["age"].(float64); !ok || a <= 0 {
 			t.Errorf("age : %v", j["age"])
 		}
@@ -118,7 +118,7 @@ func TestServerListLikeServerPy(t *testing.T) {
 	}
 }
 
-// Assistant, choix « serveur local » : config.json, démarrage automatique, lancement, adresse et jeton pour la 3DS.
+// Setup, "local server" choice: config.json, autostart, start, address and token for the 3DS.
 func TestTextSetupLocalServer(t *testing.T) {
 	fakeHome(t)
 	reset()
@@ -138,7 +138,7 @@ func TestTextSetupLocalServer(t *testing.T) {
 		go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), &Server{data: t.TempDir(), token: cfg.Token})
 		return nil
 	}
-	responses := []string{"2", fmt.Sprint(port), "n", "", "n"} // serveur local, port, pas de copie, pas d'ajout manuel, frontends…
+	responses := []string{"2", fmt.Sprint(port), "n", "", "n"} // local server, port, no copy, no manual add, frontends…
 	var output bytes.Buffer
 	q := &Questions{in: bufio.NewReader(strings.NewReader(strings.Join(responses, "\n") + "\n")), out: &output}
 	if err := textSetup(q, config); err != nil {
@@ -149,7 +149,7 @@ func TestTextSetupLocalServer(t *testing.T) {
 	if cfg.LocalServer == nil || cfg.LocalServer.Port != port || cfg.URL != fmt.Sprintf("http://127.0.0.1:%d", port) || len(cfg.Token) != 32 {
 		t.Fatalf("config.json du serveur local incorrect : %+v", cfg)
 	}
-	expected := "tray --config " + config // l'icône près de l'horloge fait tourner le serveur local (ADR 0022)
+	expected := "tray --config " + config // the tray icon runs the local server (ADR 0022)
 	if !trayAvailable {
 		expected = "serve --config " + config
 	}

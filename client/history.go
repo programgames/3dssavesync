@@ -1,8 +1,8 @@
 package main
 
-// Restauration (GLOSSARY, ADR 0004, ADR 0016) : une ancienne Version de l'Historique du serveur redevient la Version
-// courante, par un nouvel Envoi conditionnel. Aucun fichier local n'est écrit et aucune Base ne change : chaque
-// appareil reçoit ensuite cette Version par sa Récupération normale, avec sa Copie de sécurité.
+// Restore (GLOSSARY, ADR 0004, ADR 0016): an old Version of the server History becomes the Current version again,
+// through a new conditional Upload. No local file is written and no Base changes: each device then gets this
+// Version through its normal Download, with its Backup copy.
 
 import (
 	"bufio"
@@ -20,14 +20,14 @@ import (
 	"time"
 )
 
-// Version de l'Historique, telle que GET /saves/<clé>/history la décrit (server.py, serveur.go).
+// HistoryVersion is a History Version, as GET /saves/<key>/history describes it (server.py, server.go).
 type HistoryVersion struct {
 	Version
 	File string `json:"version"`
 	Date string `json:"date"`
 }
 
-// Une Version pour la page et la console. N : le <seq> du serveur, jamais renuméroté.
+// HistoryLine is one Version for the page and the console. N: the server's <seq>, never renumbered.
 type HistoryLine struct {
 	N        int
 	File     string `json:"Fichier"`
@@ -46,15 +46,15 @@ type HistoryGame struct {
 
 const (
 	maxVersions   = 30
-	restoreClient = "restauration" // X-Client de l'Envoi : l'Historique montre qui a remis cette Version
+	restoreClient = "restauration" // X-Client of the Upload: the History shows who put this Version back
 )
 
 var reVersion = regexp.MustCompile(`^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\.sav$`)
 
 func validKey(key string) bool { return reCode.MatchString("/saves/" + key) }
 
-// jeuxServeur : les jeux du serveur, avec le nom connu (titres 3DS, ROM trouvée par nomsRoms, ou nom donné au serveur
-// par un Client : ADR 0018).
+// serverGames returns the server's games, with the known name (3DS titles, ROM found by romNames, or name given to the
+// server by a Client: ADR 0018).
 func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 	st, o, err := s.api("GET", "/saves", nil, nil)
 	if err != nil {
@@ -82,8 +82,8 @@ func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 	return games, nil
 }
 
-// nomsRoms : Clé -> nom de la ROM, dans les dossiers des ROM des émulateurs configurés.
-// ponytail: un parcours complet, une seule fois par page ouverte ; un cache sur le disque si des milliers de ROM le rendent lent.
+// romNames returns Key -> ROM name, from the ROM folders of the configured emulators.
+// ponytail: a full walk, once per opened page; add a disk cache if thousands of ROMs make it slow.
 func romNames(cfg *Config) map[string]string {
 	m := map[string]string{}
 	for _, e := range cfg.Emulators {
@@ -101,9 +101,9 @@ func romNames(cfg *Config) map[string]string {
 	return m
 }
 
-// lignesHisto : les versionsMax dernières Versions d'un Jeu, la plus récente (la courante) d'abord.
-// Pokémon : temps de jeu et dresseur de chaque Version, lue en entier.
-// ponytail: jusqu'à 30 lectures de 512 Kio par liste ; à lire à la demande si un serveur distant lent le rend pénible.
+// historyLines returns the last maxVersions Versions of a Game, the newest (the current one) first.
+// Pokémon: play time and trainer of each Version, read in full.
+// ponytail: up to 30 reads of 512 KiB per list; read on demand if a slow remote server makes it painful.
 func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 	if !validKey(key) {
 		return nil, fmt.Errorf(tr("Clé de jeu inconnue : %s. « 3dssavesync restore » affiche les clés des jeux du serveur.",
@@ -138,7 +138,7 @@ func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 	return lines, nil
 }
 
-// Date du serveur (UTC, horloge du serveur) en heure locale.
+// localDate converts a server date (UTC, server clock) to local time.
 func localDate(d string) string {
 	t, err := time.Parse("20060102T150405Z", d)
 	if err != nil {
@@ -154,8 +154,8 @@ func formatSize(n int64) string {
 	return fmt.Sprintf(tr("%d octets", "%d bytes"), n)
 }
 
-// restaurer : la Version fichier redevient la Version courante, seulement si la courante est encore courant (le Hash
-// vu par l'utilisateur) : un Envoi arrivé entre-temps est refusé, jamais écrasé. deja : rien à faire, même contenu.
+// restore makes the Version file the Current version again, only if the current one is still current (the Hash
+// the user saw): an Upload that arrived meanwhile is refused, never overwritten. already: nothing to do, same content.
 func (s *Session) restore(key, file, current string) (already bool, err error) {
 	defer func() {
 		if err != nil {
@@ -204,7 +204,7 @@ func alreadyText() string {
 		"This version is the same as the current one. There's nothing to restore.")
 }
 
-// Session de la Restauration : la configuration, et le nom de Client « restauration ».
+// restoreSession returns the Restore Session: the configuration, and the Client name "restauration".
 func restoreSession(config string) (*Session, error) {
 	s, err := newSession(config)
 	if s != nil {
@@ -213,7 +213,7 @@ func restoreSession(config string) (*Session, error) {
 	return s, err
 }
 
-// Dans une console (l'exe Windows n'en a pas, comme repair) ; l'erreur y est affichée, sans fenêtre.
+// cmdRestoreConsole runs in a console (the Windows exe has none, like repair) and shows the error there, no window.
 func cmdRestoreConsole(config string, args []string, yes bool) int {
 	openConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}
@@ -228,8 +228,8 @@ func cmdRestoreConsole(config string, args []string, yes bool) int {
 	return code
 }
 
-// 3dssavesync restore [--oui] [<clé> [<n°>]] : sans clé, les jeux du serveur ; sans n°, les Versions ; sinon la
-// Restauration de la Version n°, après confirmation.
+// cmdRestore: 3dssavesync restore [--oui] [<key> [<n>]]. Without a key, the server's games; without n, the Versions;
+// otherwise the Restore of Version n, after confirmation.
 func cmdRestore(config string, args []string, yes bool, q *Questions) (int, error) {
 	var rest []string
 	for _, a := range args {
@@ -315,13 +315,13 @@ func cmdRestore(config string, args []string, yes bool, q *Questions) (int, erro
 	return 0, nil
 }
 
-// Page de l'assistant : jeux, Versions, Restauration.
+// webGames serves the setup page: games, Versions, Restore.
 func (a *WebSetup) webGames() map[string]any {
 	s, err := restoreSession(a.config)
 	if err != nil {
 		return map[string]any{"Erreur": errorText(err)}
 	}
-	a.namesRead.Do(func() { a.names = romNames(s.cfg) }) // hors du verrou de la page : deux appels peuvent arriver ensemble
+	a.namesRead.Do(func() { a.names = romNames(s.cfg) }) // outside the page lock: two calls can arrive together
 	games, err := s.serverGames(a.names)
 	if err != nil {
 		return map[string]any{"Erreur": errorText(err)}
@@ -329,7 +329,7 @@ func (a *WebSetup) webGames() map[string]any {
 	return map[string]any{"Jeux": games}
 }
 
-// versionsWeb, restaurerWeb : sans le verrou de la page (jusqu'à 30 lectures sur le réseau), ServeHTTP le rend avant.
+// versionsWeb, restoreWeb: without the page lock (up to 30 network reads); ServeHTTP releases it before.
 func (a *WebSetup) versionsWeb(key string) map[string]any {
 	s, err := restoreSession(a.config)
 	if err == nil {

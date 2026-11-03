@@ -1,7 +1,7 @@
 package main
 
-// Profils d'émulateurs (phase 2) : lancement, dossier et nom des sauvegardes, rechargement d'un état.
-// Sources : docs/research-v3-emulateurs.md (chemins par système, Flatpak, EmuDeck, RetroDECK).
+// Emulator Profiles: how to start the emulator, folder and name of the Saves, save state reloaded at start.
+// Sources: docs/notes/research-v3-emulateurs.md (paths per System, Flatpak, EmuDeck, RetroDECK).
 
 import (
 	"fmt"
@@ -13,12 +13,12 @@ import (
 )
 
 type Profile struct {
-	Systems      []string                                            // nil : ceux de la configuration (cœurs RetroArch, dossiers d'un profil personnalisé)
-	Ext          string                                              // extension de la sauvegarde ; défaut .sav
-	InternalName bool                                                // ROM en archive : sauvegarde au nom du fichier interne (melonDS), sinon au nom de l'archive
-	Args         func(e *Emulator, system, rom, dir string) []string // rom vide : émulateur sans jeu (launch)
-	Dir          func(e *Emulator, system, rom string) string        // réglage de l'émulateur ; "" = inconnu
-	Autoload     func(e *Emulator) string                            // conseil si un état est rechargé au lancement
+	Systems      []string                                            // nil: the ones of the configuration (RetroArch cores, folders of a custom Profile)
+	Ext          string                                              // extension of the Save; default .sav
+	InternalName bool                                                // ROM in an archive: Save named after the inner file (melonDS), else after the archive
+	Args         func(e *Emulator, system, rom, dir string) []string // empty rom: emulator with no game (launch)
+	Dir          func(e *Emulator, system, rom string) string        // setting of the emulator; "" = unknown
+	Autoload     func(e *Emulator) string                            // hint if a save state is reloaded at start
 }
 
 var profiles = map[string]Profile{
@@ -39,12 +39,12 @@ var profiles = map[string]Profile{
 			if dir == "" {
 				return romArgs(rom)
 			}
-			return append([]string{"-C", "savegamePath=" + dir}, romArgs(rom)...) // jamais --config (mGBA quitte)
+			return append([]string{"-C", "savegamePath=" + dir}, romArgs(rom)...) // never --config (mGBA quits)
 		},
 		Dir: func(e *Emulator, _, _ string) string { return setting(configMGBA(e), "ports.qt", "savegamePath") },
 		Autoload: func(e *Emulator) string {
 			f := configMGBA(e)
-			if f != "" && read1(f, "ports.qt", "autoload") != "0" { // absent = actif (défaut de mGBA)
+			if f != "" && read1(f, "ports.qt", "autoload") != "0" { // absent = on (mGBA default)
 				return tr("mGBA recharge automatiquement l'état du slot 0 au lancement. Mettez autoload=0 dans ", "mGBA automatically reloads the slot 0 save state at launch. Set autoload=0 in ") + f + "."
 			}
 			return ""
@@ -113,17 +113,17 @@ var profiles = map[string]Profile{
 			return ""
 		},
 	},
-	"desmume": { // .dsv : SRAM + pied de page (dsv.go)
+	"desmume": { // .dsv: SRAM + footer (dsv.go)
 		Systems: []string{"DS"}, Ext: ".dsv", InternalName: true,
 		Args: func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
 		Dir: func(e *Emulator, _, _ string) string {
 			switch runtime.GOOS {
-			case "windows": // desmume.ini à côté de l'exe ; Battery absent = .\Battery (path.cpp, winutil.cpp)
+			case "windows": // desmume.ini next to the exe; no Battery = .\Battery (path.cpp, winutil.cpp)
 				if d := setting(nextTo(e, "desmume.ini"), "PathSettings", "Battery"); d != "" {
 					return d
 				}
 				return nextTo(e, "Battery")
-			case "linux": // GTK : tout dans le dossier de configuration (path.cpp LoadModulePath)
+			case "linux": // GTK: everything in the configuration folder (path.cpp LoadModulePath)
 				if d := first(xdgConfig("desmume"), home(".var", "app", "org.desmume.DeSmuME", "config", "desmume")); d != "" {
 					return d
 				}
@@ -132,38 +132,39 @@ var profiles = map[string]Profile{
 			return ""
 		},
 	},
-	"sameboy": { // .sav toujours à côté de la ROM
+	"sameboy": { // .sav always next to the ROM
 		Systems: []string{"GB"},
 		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
 	},
-	"skyemu": { // .sav brut, sans Trailer d'horloge (main.c se_write_save_to_disk)
+	"skyemu": { // raw .sav, no Clock trailer (main.c se_write_save_to_disk)
 		Systems: []string{"DS", "GB", "GBA"},
 		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
 		Dir:     skyEmuDir,
 	},
-	"nanoboyadvance": { // .sav brut ; horloge prise sur le PC, jamais écrite (rtc.cc)
+	"nanoboyadvance": { // raw .sav; clock taken from the PC, never written (rtc.cc)
 		Systems: []string{"GBA"},
-		// ponytail: la ROM doit rester argv[1] (main.cc) ; args_en_plus casse le lancement, champ args si besoin.
+		// ponytail: the ROM must stay argv[1] (main.cc); args_en_plus breaks the start, use the args field if needed.
 		Args: func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) },
 		Dir: func(e *Emulator, _, _ string) string {
-			// Windows, Linux : config.toml dans le dossier courant, celui de l'exe quand une ROM est donnée (main.cc, PORTABLE_MODE forcé)
+			// Windows, Linux: config.toml in the current folder, which is the exe folder when a ROM is given
+			// (main.cc, PORTABLE_MODE forced)
 			f := first(nextTo(e, "config.toml"), home("Library", "Application Support", "org.github.fleroviux.NanoBoyAdvance", "config.toml"))
-			if d := setting(f, "general", "save_folder"); exists(d) { // vide ou absent : à côté de la ROM (main_window.cc GetSavePath)
+			if d := setting(f, "general", "save_folder"); exists(d) { // empty or absent: next to the ROM (main_window.cc GetSavePath)
 				return d
 			}
 			return ""
 		},
 	},
-	"bgb": { // .sav + Trailer d'horloge de 48 octets ; clé du réglage « Save files » non documentée : champ sauvegardes
+	"bgb": { // .sav + 48-byte Clock trailer; the key of the "Save files" setting is undocumented: use the sauvegardes field
 		Systems: []string{"GB"},
-		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) }, // « [-rom] <fichier> » : -rom facultatif
+		Args:    func(_ *Emulator, _, rom, _ string) []string { return romArgs(rom) }, // "[-rom] <file>": -rom is optional
 	},
 }
 
-// library_name des cœurs RetroArch gérés : nom du sous-dossier quand sort_savefiles_enable est actif.
+// library_name of the supported RetroArch cores: name of the subfolder when sort_savefiles_enable is on.
 var libraries = map[string]string{
 	"melondsds": "melonDS DS", "mgba": "mGBA", "gambatte": "Gambatte", "sameboy": "SameBoy", "vbam": "VBA-M",
-	"gpsp": "gpSP", "mednafen_gba": "Beetle GBA", // .srm de taille fixe, converti (srm.go)
+	"gpsp": "gpSP", "mednafen_gba": "Beetle GBA", // fixed-size .srm, converted (srm.go)
 }
 
 func library(core string) string {
@@ -178,7 +179,7 @@ func romArgs(rom string) []string {
 	return []string{rom}
 }
 
-// Profil d'une entrée de la configuration : intégré, ou personnalisé (champ args).
+// profile returns the Profile of a configuration entry: built in, or custom (args field).
 func (e *Emulator) profile(name string) (Profile, error) {
 	p := e.Profile
 	if p == "" {
@@ -212,7 +213,7 @@ func (e *Emulator) profile(name string) (Profile, error) {
 	}}, nil
 }
 
-// Commande complète : exécutable, arguments du profil, et ArgsEnPlus juste avant la ROM (à la fin sans ROM).
+// command returns the full command: exe, Profile arguments, and ExtraArgs just before the ROM (at the end with no ROM).
 func (e *Emulator) command(p Profile, system, rom, dir string) []string {
 	a := p.Args(e, system, rom, dir)
 	if n := len(a); rom != "" && n > 0 && a[n-1] == rom {
@@ -223,8 +224,8 @@ func (e *Emulator) command(p Profile, system, rom, dir string) []string {
 	return append([]string{e.Exe}, a...)
 }
 
-// decouper : une ligne de commande saisie par l'utilisateur -> arguments. Espaces = séparateurs, sauf entre
-// guillemets doubles ou simples ; la barre oblique inverse reste telle quelle (chemins Windows).
+// split turns a command line typed by the user into arguments. Spaces separate them, except inside double or
+// single quotes; a backslash stays as is (Windows paths).
 func split(line string) []string {
 	var a []string
 	var current strings.Builder
@@ -252,7 +253,7 @@ func split(line string) []string {
 	return a
 }
 
-// joindre : l'inverse de decouper, pour afficher une commande (guillemets autour d'un argument avec espace).
+// joinArgs is the reverse of split, to show a command (quotes around an argument with a space).
 func joinArgs(a []string) string {
 	l := make([]string, len(a))
 	for i, x := range a {
@@ -264,7 +265,7 @@ func joinArgs(a []string) string {
 	return strings.Join(l, " ")
 }
 
-// Systèmes gérés : ceux de la configuration s'il y en a, sinon ceux du profil.
+// handles reports a handled System: the ones of the configuration if any, else the ones of the Profile.
 func (e *Emulator) handles(p Profile, system string) bool {
 	if len(e.Saves) > 0 || len(e.Cores) > 0 {
 		return e.Saves[system] != "" || e.Cores[system] != ""
@@ -281,8 +282,8 @@ func (e *Emulator) systems(p Profile) (s []string) {
 	return s
 }
 
-// Dossier des sauvegardes : config.json, sinon le réglage de l'émulateur, sinon à côté de la ROM
-// (jamais pour la 3DS : sans sdmc connu, "").
+// dir returns the Save folder: config.json, else the emulator setting, else next to the ROM
+// (never for the 3DS: with no known sdmc, "").
 func (e *Emulator) dir(p Profile, system, rom string) string {
 	if d := e.Saves[system]; d != "" {
 		return d
@@ -298,7 +299,7 @@ func (e *Emulator) dir(p Profile, system, rom string) string {
 	return filepath.Dir(rom)
 }
 
-// Nom du processus à surveiller : champ processus, sinon le nom de l'exécutable.
+// process returns the name of the process to watch: processus field, else the exe name.
 func (e *Emulator) process() string {
 	if e.Process != "" {
 		return e.Process
@@ -310,7 +311,7 @@ func (e *Emulator) process() string {
 	return b
 }
 
-// RetroArch : savefile_directory, puis sous-dossier du contenu et du cœur selon les options de tri.
+// retroArchDir returns savefile_directory, then the content and core subfolders as the sort options say.
 func retroArchDir(e *Emulator, system, rom string) string {
 	f := configRetroArch(e)
 	if read1(f, "", "savefiles_in_content_dir") == "true" {
@@ -318,7 +319,7 @@ func retroArchDir(e *Emulator, system, rom string) string {
 	}
 	base := setting(f, "", "savefile_directory")
 	switch {
-	case base == "" && f != "": // vide = dossier de la ROM
+	case base == "" && f != "": // empty = ROM folder
 		return ""
 	case base == "" || base == "default":
 		switch {
@@ -331,7 +332,7 @@ func retroArchDir(e *Emulator, system, rom string) string {
 		default:
 			base = xdgConfig("retroarch", "saves")
 		}
-	case strings.HasPrefix(base, ":"): // :\saves = relatif au dossier de retroarch.exe
+	case strings.HasPrefix(base, ":"): // :\saves = relative to the retroarch.exe folder
 		base = nextTo(e, base[1:])
 	}
 	if read1(f, "", "sort_savefiles_by_content_enable") == "true" {
@@ -340,7 +341,7 @@ func retroArchDir(e *Emulator, system, rom string) string {
 		}
 		base = filepath.Join(base, filepath.Base(filepath.Dir(rom)))
 	}
-	if t := read1(f, "", "sort_savefiles_enable"); t == "" || t == "true" { // absent = actif (défaut)
+	if t := read1(f, "", "sort_savefiles_enable"); t == "" || t == "true" { // absent = on (default)
 		base = filepath.Join(base, library(e.Cores[system]))
 	}
 	return base
@@ -361,17 +362,18 @@ func configMGBA(e *Emulator) string {
 		home(".var", "app", "io.mgba.mGBA", "config", "mgba", "config.ini"))
 }
 
-// ponytail: ordre des emplacements de vbam.ini non vérifié (research §3.6) ; `--print-cfg-path` si un cas réel diffère.
+// ponytail: order of the vbam.ini locations not checked (docs/notes/research-v3-emulateurs.md §3.6);
+// `--print-cfg-path` if a real case differs.
 func configVBAM(e *Emulator) string {
 	return first(nextTo(e, "vbam.ini"), env("APPDATA", "visualboyadvance-m", "vbam.ini"), env("LOCALAPPDATA", "visualboyadvance-m", "vbam.ini"),
 		home(".vbam", "vbam.ini"), xdgConfig("visualboyadvance-m", "vbam.ini"),
 		home("Library", "Application Support", "visualboyadvance-m", "vbam.ini"))
 }
 
-// SkyEmu (main.c se_load_rom) : <ROM>.sav à côté de la ROM s'il existe ; sinon le dossier « Save File/State Path »
-// si le .sav y est déjà ou si « Create new files in paths » est coché. Réglages binaires dans SDL_GetPrefPath("Sky", "SkyEmu") :
-// search_paths.bin commence par ce dossier (texte fini par 0) ; save_to_path est le 21e uint32 de user_settings.bin
-// (structure figée, « keep alignment and ordering the same »).
+// skyEmuDir (main.c se_load_rom): <ROM>.sav next to the ROM if it exists; else the "Save File/State Path" folder
+// if the .sav is already there or if "Create new files in paths" is ticked. Binary settings in
+// SDL_GetPrefPath("Sky", "SkyEmu"): search_paths.bin starts with this folder (text ended by 0); save_to_path is the
+// 21st uint32 of user_settings.bin (frozen struct, "keep alignment and ordering the same").
 func skyEmuDir(_ *Emulator, _, rom string) string {
 	if rom == "" {
 		return ""
@@ -380,7 +382,7 @@ func skyEmuDir(_ *Emulator, _, rom string) string {
 	pref := first(env("APPDATA", "Sky", "SkyEmu"), xdgData("Sky", "SkyEmu"), home("Library", "Application Support", "Sky", "SkyEmu"))
 	p, _ := os.ReadFile(joinPath(pref, "search_paths.bin"))
 	d, _, _ := strings.Cut(string(p), "\x00")
-	if exists(filepath.Join(filepath.Dir(rom), sav)) || !filepath.IsAbs(d) { // vide = "./" (dossier courant) : ignoré
+	if exists(filepath.Join(filepath.Dir(rom), sav)) || !filepath.IsAbs(d) { // empty = "./" (current folder): ignored
 		return ""
 	}
 	r, _ := os.ReadFile(joinPath(pref, "user_settings.bin"))
@@ -390,8 +392,8 @@ func skyEmuDir(_ *Emulator, _, rom string) string {
 	return ""
 }
 
-// lire1 : valeur brute d'une clé (INI, TOML ou retroarch.cfg). section "" = pas de section.
-// ponytail: lecture ligne à ligne, sans échappements TOML ou INI complets ; suffit pour des chemins et des booléens.
+// read1 returns the raw value of a key (INI, TOML or retroarch.cfg). section "" = no section.
+// ponytail: line by line, without full TOML or INI escapes; enough for paths and booleans.
 func read1(file, section, key string) string {
 	o, err := os.ReadFile(file)
 	if file == "" || err != nil {
@@ -406,13 +408,13 @@ func read1(file, section, key string) string {
 		}
 		k, v, ok := strings.Cut(l, "=")
 		if inside && ok && strings.TrimSpace(k) == key {
-			return strings.Trim(strings.TrimSpace(v), `"'`) // pas d'échappements : retroarch.cfg n'en a pas
+			return strings.Trim(strings.TrimSpace(v), `"'`) // no escapes: retroarch.cfg has none
 		}
 	}
 	return ""
 }
 
-// reglage : comme lire1, pour un chemin (~ développé ; \\ des formats TOML et wx ramenés à un séparateur).
+// setting is read1 for a path (~ expanded; \\ of the TOML and wx formats turned into one separator).
 func setting(file, section, key string) string {
 	v := read1(file, section, key)
 	if v == "" {
@@ -421,7 +423,7 @@ func setting(file, section, key string) string {
 	if strings.HasPrefix(v, "~/") {
 		v = home(v[2:])
 	}
-	if !filepath.IsAbs(v) && !strings.HasPrefix(v, ":") && v != "default" { // relatif (mGBA portable : savegamePath=savegame) : au dossier du réglage
+	if !filepath.IsAbs(v) && !strings.HasPrefix(v, ":") && v != "default" { // relative (portable mGBA: savegamePath=savegame): to the folder of the settings file
 		v = filepath.Join(filepath.Dir(file), v)
 	}
 	return filepath.Clean(v)
@@ -435,7 +437,7 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// Premier chemin existant ; "" sinon.
+// first returns the first path that exists; "" if none.
 func first(paths ...string) string {
 	for _, c := range paths {
 		if exists(c) {
@@ -445,7 +447,7 @@ func first(paths ...string) string {
 	return ""
 }
 
-// Chemins candidats : "" si la base manque (jamais un chemin relatif au dossier courant).
+// joinPath builds a candidate path: "" if base is missing (never a path relative to the current folder).
 func joinPath(base string, elements ...string) string {
 	if base == "" {
 		return ""

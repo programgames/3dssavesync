@@ -1,8 +1,8 @@
 package main
 
-// Reprise de pc/test_lanceur.ps1 : le vrai serveur (server/server.py) et un dossier temporaire.
-// L'émulateur, les fenêtres et la détection de processus sont remplacés par des doublures.
-// Les scénarios se suivent : chacun part de l'état laissé par le précédent.
+// End-to-end Launcher tests: the real server (server/server.py) and a temporary folder.
+// Test doubles replace the emulator, the windows and the process detection.
+// The scenarios follow one another: each one starts from the state that the previous one left.
 
 import (
 	"archive/zip"
@@ -34,7 +34,7 @@ var (
 	responses, questions, notifications []string
 	play                                func()
 	played                              bool
-	running                             int // processus de l'émulateur en cours
+	running                             int // running emulator processes
 	launchedCommand                     []string
 )
 
@@ -43,7 +43,7 @@ func reset() {
 }
 
 func init() {
-	english = false // les vérifications lisent les textes français, quelle que soit la langue de la machine de test
+	english = false // the checks read the French texts, whatever the language of the test machine
 	ask = func(text string, buttons []string) string {
 		questions = append(questions, text)
 		if len(responses) == 0 {
@@ -75,9 +75,9 @@ func startTestServer(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		py = "python"
 	}
-	// Le vrai serveur, mais sur 127.0.0.1 comme server/test_server.py, et sans socket.getfqdn
-	// (appelé par HTTPServer.server_bind) : sur les machines macOS de la CI, ces recherches de nom
-	// retardaient le démarrage de ~35 s par adresse (~70 s sur 0.0.0.0, 2026-11-02).
+	// The real server, but on 127.0.0.1 like server/test_server.py, and without socket.getfqdn
+	// (called by HTTPServer.server_bind): on the macOS CI machines, these name lookups
+	// delayed the start by ~35 s per address (~70 s on 0.0.0.0, 2026-11-02).
 	c := exec.Command(py, "-c", "import socket, server; socket.getfqdn = lambda nom='': nom; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
 	c.Dir = filepath.Join("..", "server")
 	output, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
@@ -93,9 +93,9 @@ func startTestServer(t *testing.T) {
 	go func() { c.Wait(); close(finished) }()
 	t.Cleanup(func() { c.Process.Kill(); <-finished })
 	url = fmt.Sprintf("http://127.0.0.1:%d", port)
-	// Le premier Python lancé sur une machine Windows neuve de la CI a dépassé 10 s (2026-11-02) :
-	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
-	// Délai court par essai : une connexion sans réponse ne doit pas manger toute la limite.
+	// The first Python started on a fresh Windows CI machine took more than 10 s (2026-11-02):
+	// wait while the process lives, with a wide limit, and stop at once if it dies.
+	// Short timeout per attempt: a connection with no response must not use up the whole limit.
 	limit := time.After(time.Minute)
 	for {
 		r, err := (&http.Client{Timeout: time.Second}).Get(url + "/saves")
@@ -113,7 +113,7 @@ func startTestServer(t *testing.T) {
 	}
 }
 
-// Requêtes directes au serveur, pour jouer « l'autre Client ».
+// api sends direct requests to the server, to play "the other Client".
 func api(method, path string, body []byte, headers map[string]string) (int, []byte) {
 	var r io.Reader
 	if body != nil {
@@ -165,7 +165,7 @@ func upload3ds(key string, buf, before []byte) int {
 	return st
 }
 
-func byteRange(start, end int) []byte { // [byte[]](debut..fin) de PowerShell
+func byteRange(start, end int) []byte { // bytes from start to end, both included
 	o := []byte{}
 	for i := start; i <= end; i++ {
 		o = append(o, byte(i))
@@ -199,7 +199,7 @@ func romDS(t *testing.T, name, code string) string {
 	return c
 }
 
-// Fausse ROM dans un .zip au nom No-Intro.
+// romZip writes a fake ROM in a .zip with a No-Intro name.
 func romZip(t *testing.T, name, internal string, o []byte) string {
 	c := filepath.Join(tmp, "roms", name+".zip")
 	os.MkdirAll(filepath.Dir(c), 0o755)
@@ -224,7 +224,7 @@ func gbHeader(title string, sum uint16) []byte {
 
 func gbaHeader(code string) []byte { o := make([]byte, 0xC0); copy(o[0xAC:], code); return o }
 
-// Fausse ROM 3DS : NCSD, partition 0 à 0x200, program_id à NCCH + 0x118.
+// rom3DS writes a fake 3DS ROM: NCSD, partition 0 at 0x200, program_id at NCCH + 0x118.
 func rom3DS(t *testing.T, name string, id uint64) string {
 	o := make([]byte, 0x400)
 	copy(o[0x100:], "NCSD")
@@ -260,7 +260,7 @@ func contains(list []string, text string) bool {
 	return false
 }
 
-// Transport qui fait envoyer la 3DS juste après le premier GET /saves du PC (course GET/PUT).
+// raceTransport makes the 3DS upload just after the first GET /saves of the PC (GET/PUT race).
 type raceTransport struct{ after func() }
 
 func (c *raceTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -397,7 +397,7 @@ func TestLauncher(t *testing.T) {
 
 	t.Log("Course : la 3DS envoie entre le GET et le PUT du PC (412)")
 	reset()
-	write(t, black, v11) // retour à l'état synchronisé
+	write(t, black, v11) // back to the synced state
 	run(rom)
 	v12, v13 := byteRange(12, 211), byteRange(13, 212)
 	write(t, black, v12)
@@ -426,7 +426,7 @@ func TestLauncher(t *testing.T) {
 	verify(strings.Contains(string(read(filepath.Join(tmp, "cfg", "3dssavesync.log"))), "refus"), "le refus est écrit dans 3dssavesync.log")
 	verify(!played, "melonDS non lancé")
 
-	// Verrou d'un autre Lanceur pour ce même émulateur (pid vivant : celui de ce test).
+	// Lock of another Launcher for this same emulator (live pid: the one of this test).
 	lock := func(key string) string {
 		f := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", os.Getpid()))
 		write(t, f, []byte(key))
@@ -517,7 +517,7 @@ func TestLauncher(t *testing.T) {
 	platinum := romDS(t, "Pokemon Platine", "CPUF")
 	p1, p2 := byteRange(30, 229), byteRange(31, 230)
 	write(t, filepath.Join(tmp, "saves2", "Pokemon Platine.sav"), p1)
-	realMain([]string{"run", "--config", cfg2, platinum}) // premier Envoi : Base = p1
+	realMain([]string{"run", "--config", cfg2, platinum}) // first Upload: Base = p1
 	upload3ds("CPUF", p2, p1)
 	reset()
 	responses = []string{"Non"}
@@ -620,7 +620,7 @@ func TestLauncher(t *testing.T) {
 	run(rom3DS(t, "Zelda (Europe)", 0x0004000000033500))
 	verify(played && len(questions) == 0, "Azahar lancé, aucune question")
 
-	// --- Sauvegarde vierge = absente --------------------------------------------------------
+	// --- Blank Save = absent -------------------------------------------------------------------
 	t.Log("Sauvegarde vierge (0xFF) sur le PC, Version sur le serveur : Récupération sans Conflit")
 	reset()
 	pearl := romDS(t, "Pokemon Perle", "APAF")
@@ -650,11 +650,11 @@ func TestLauncher(t *testing.T) {
 	st, _ = api("GET", "/saves/3DS-0004000000175E00", nil, nil)
 	verify(st == 200, "le serveur a main")
 
-	// --- Nouveautés v3 ----------------------------------------------------------------------
+	// --- Wrapped command, several emulators, launch ---------------------------------------
 	t.Log("run --rom … -- <commande> : la commande quelconque est enveloppée")
 	reset()
 	v14 := byteRange(14, 213)
-	play = func() { write(t, black, v14) } // avant : v13 sur le PC et sur le serveur, à jour
+	play = func() { write(t, black, v14) } // before: v13 on the PC and on the server, In sync
 	run("--rom", rom, "--", "lanceur.exe", "-rom", rom)
 	verify(len(questions) == 0, "aucune question")
 	verify(strings.Join(launchedCommand, "|") == "lanceur.exe|-rom|"+rom, "la commande donnée est lancée telle quelle")
@@ -701,7 +701,7 @@ func TestLauncher(t *testing.T) {
 	verify(sha256Hex(current("ADAF")) == sha256Hex(diamond2), "Diamant joué envoyé après la partie")
 	verify(len(questions) == 0, "aucune question")
 
-	// --- Profils (phase 2) -------------------------------------------------------------------
+	// --- Profiles ------------------------------------------------------------------------------
 	t.Log("RetroArch : dossier lu dans retroarch.cfg, .srm dans le sous-dossier du cœur, -L <cœur>")
 	reset()
 	ra := filepath.Join(tmp, "retroarch")
@@ -756,7 +756,7 @@ func TestLauncher(t *testing.T) {
 	t.Logf("%d vérifications", checks)
 }
 
-// Mêmes tailles que sram_taille dans 3ds/test/test_cle.c (ADR 0010).
+// TestSRAM uses the same sizes as sram_taille in 3ds/test/test_cle.c (ADR 0010).
 func TestSRAM(t *testing.T) {
 	for _, c := range []struct {
 		system     string
@@ -775,7 +775,7 @@ func TestSRAM(t *testing.T) {
 	}
 }
 
-// Erreurs du réseau, du serveur et des fichiers -> texte pour l'utilisateur ; global = un seul message pour la passe.
+// TestClassify maps network, server and file errors to a text for the user; global = one message for the pass.
 func TestClassify(t *testing.T) {
 	type tcase struct {
 		err    error
@@ -814,7 +814,7 @@ func TestClassify(t *testing.T) {
 		t.Error("sans erreur : texte vide attendu")
 	}
 
-	// Frontend qui lance un jeu avant l'assistant : pas de « The system cannot find the file specified ».
+	// Frontend that starts a game before the setup: no "The system cannot find the file specified".
 	reset()
 	realMain([]string{"run", "--config", filepath.Join(t.TempDir(), "absent", "config.json"), "x.nds"})
 	if len(questions) != 1 || !strings.Contains(questions[0], "3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync »") ||

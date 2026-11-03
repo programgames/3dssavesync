@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// .dsv écrit comme DeSmuME (mc.cpp BackupDevice::ensure) : SRAM, texte, 6 u32 LE, cookie.
+// makeDSV writes a .dsv like DeSmuME (mc.cpp BackupDevice::ensure): SRAM, text, 6 u32 LE, cookie.
 func makeDSV(sram []byte, written, typ, address uint32) []byte {
 	o := append(append([]byte{}, sram...), "|<--Snip above here to create a raw sav by excluding this DeSmuME savedata footer:"...)
 	for _, v := range []uint32{written, uint32(len(sram)), typ, address, uint32(len(sram)), 0} {
@@ -22,12 +22,12 @@ func makeDSV(sram []byte, written, typ, address uint32) []byte {
 func TestDSV(t *testing.T) {
 	dir := t.TempDir()
 	sram := random(512<<10, 7)
-	raw := makeDSV(sram, 0x40001, 6, 3) // taille écrite < puce, comme après une croissance par ensure()
+	raw := makeDSV(sram, 0x40001, 6, 3) // written size < chip, like after a growth by ensure()
 	if len(raw) != len(sram)+122 {
 		t.Fatalf("pied de %d octets", len(raw)-len(sram))
 	}
 
-	// .dsv -> SRAM : le Hash porte sur la SRAM seule.
+	// .dsv -> SRAM: the Hash covers the SRAM only.
 	j := &Game{System: "DS", Key: "IPKF", Name: "Pokemon HG", File: filepath.Join(dir, "Pokemon HG.dsv")}
 	write(t, j.File, raw)
 	l, err := readLocal(j, nil)
@@ -35,7 +35,7 @@ func TestDSV(t *testing.T) {
 		t.Fatalf("lireLocal : err=%v taille=%d", err, len(l.SRAM))
 	}
 
-	// SRAM -> .dsv : même taille, le pied existant reste tel quel, fichier identique.
+	// SRAM -> .dsv: same size, the existing footer stays as it is, identical file.
 	if o, err := dsv(sram, raw); err != nil || !bytes.Equal(o, raw) {
 		t.Fatalf(".dsv -> SRAM -> .dsv différent (err=%v)", err)
 	}
@@ -44,7 +44,7 @@ func TestDSV(t *testing.T) {
 		t.Fatal("nouvelle SRAM : le pied existant doit rester")
 	}
 
-	// Pas de fichier, ou autre taille : pied neuf, comme DeSmuME à l'import d'un .sav brut de 8 Kio.
+	// No file, or another size: new footer, like DeSmuME when it imports a raw 8 KiB .sav.
 	small := random(8<<10, 9)
 	for _, old := range [][]byte{nil, raw} {
 		o, err := dsv(small, old)
@@ -59,14 +59,14 @@ func TestDSV(t *testing.T) {
 		t.Fatal("taille hors des puces DeSmuME acceptée")
 	}
 
-	// .dsv vide (jeu lancé sans sauvegarde) : SRAM vide, vierge. Sans pied valide : refus.
+	// Empty .dsv (game started with no save): empty SRAM, blank. Without a valid footer: refused.
 	empty, broken := filepath.Join(dir, "vide.dsv"), filepath.Join(dir, "casse.dsv")
 	write(t, empty, nil)
 	if l, err := readLocal(&Game{System: "DS", File: empty}, nil); err != nil || len(l.SRAM) != 0 || !l.Blank {
 		t.Fatalf(".dsv vide : err=%v", err)
 	}
 	fake := append([]byte{}, raw...)
-	binary.LittleEndian.PutUint32(fake[len(sram)+86:], 1234) // taille remplie fausse
+	binary.LittleEndian.PutUint32(fake[len(sram)+86:], 1234) // wrong filled size
 	for _, b := range [][]byte{sram, fake, raw[:100]} {
 		write(t, broken, b)
 		if _, err := readLocal(&Game{System: "DS", File: broken}, nil); err == nil {
@@ -75,7 +75,7 @@ func TestDSV(t *testing.T) {
 		os.Remove(broken)
 	}
 
-	// Récupération : Copie de sécurité du .dsv, puis SRAM reçue + pied existant.
+	// Download: Backup copy of the .dsv, then received SRAM + existing footer.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(other) }))
 	defer srv.Close()
 	s := &Session{cfg: &Config{URL: srv.URL}, dir: dir, profile: "desmume", http: srv.Client()}

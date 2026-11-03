@@ -4,7 +4,7 @@ package main
 
 import "errors"
 
-// macOS : pas encore d'icône près de l'horloge ; le raccourci « 3dssavesync réglages » reste.
+// macOS: no tray icon yet; the settings shortcut stays.
 var trayAvailable = false
 
 func showIcon(func() []MenuItem, func(string), <-chan struct{}) error {

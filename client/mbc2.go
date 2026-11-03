@@ -1,12 +1,12 @@
 package main
 
-// MBC2 (Game Boy) : 512 valeurs de 4 bits (docs/research-eeprom-mbc2.md, ADR 0012). mGBA écrit 256 octets, deux
-// valeurs par octet (adresse paire dans le quartet bas) ; SameBoy, VBA-M et BGB 512 octets, une valeur par octet.
-// Forme du serveur : 512 octets, quartet haut à 0. Sur PC, un fichier GB de 256 ou 512 octets ne peut être que MBC2.
+// MBC2 (Game Boy): 512 4-bit values (docs/notes/research-eeprom-mbc2.md, ADR 0012). mGBA writes 256 bytes, two
+// values per byte (even address in the low nibble); SameBoy, VBA-M and BGB write 512 bytes, one value per byte.
+// Server form: 512 bytes, high nibble at 0. On PC, a GB file of 256 or 512 bytes can only be MBC2.
 
 func isMBC2(system string, n int) bool { return system == "GB" && (n == 256 || n == 512) }
 
-// normaliserMBC2 : fichier de 256 ou 512 octets -> forme du serveur.
+// normalizeMBC2 converts a file of 256 or 512 bytes to the server form.
 func normalizeMBC2(f []byte) []byte {
 	s := make([]byte, 512)
 	for i := range s {
@@ -19,8 +19,8 @@ func normalizeMBC2(f []byte) []byte {
 	return s
 }
 
-// fichierMBC2 : forme du serveur -> fichier de n octets : 256 (mGBA) ou 512 (quartet haut à 0xF, lu par SameBoy,
-// VBA-M et BGB).
+// mbc2File converts the server form to a file of n bytes: 256 (mGBA) or 512 (high nibble at 0xF, read by SameBoy,
+// VBA-M and BGB).
 func mbc2File(s []byte, n int) []byte {
 	f := make([]byte, n)
 	for i, v := range s {
@@ -33,7 +33,7 @@ func mbc2File(s []byte, n int) []byte {
 	return f
 }
 
-// Taille d'un fichier MBC2 neuf : 256 octets chez mGBA (application ou cœur RetroArch), 512 ailleurs.
+// mbc2Size returns the size of a new MBC2 file: 256 bytes for mGBA (app or RetroArch core), 512 elsewhere.
 func (s *Session) mbc2Size(j *Game) int {
 	p := s.profile
 	if e := s.cfg.Emulators[p]; e != nil && e.Profile != "" {

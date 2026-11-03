@@ -1,10 +1,10 @@
 package main
 
-// Désinstallation (ADR 0019) : défait ce que l'installation a fait hors des dossiers de 3dssavesync, pour que LaunchBox
-// et ES-DE lancent de nouveau leurs jeux sans lui. Rien n'est effacé définitivement : les fichiers des frontends sont
-// copiés avant (remplacerFichier), les raccourcis et le programme vont à la Corbeille (Windows). Les réglages, les copies
-// de sécurité et les données du serveur local restent : ce sont les données de l'utilisateur. Version portable
-// (ADR 0020) : le programme et son dossier restent, le rapport dit de supprimer ce dossier.
+// Uninstall (ADR 0019): undoes what the install did outside the 3dssavesync folders, so that LaunchBox and ES-DE
+// start their games without it again. Nothing is deleted for good: the frontend files are copied first
+// (replaceFile), the shortcuts and the program go to the Recycle Bin (Windows). The settings, the Backup copies and
+// the local Server data stay: they are the user's data. Portable version (ADR 0020): the program and its folder
+// stay, the report says to delete that folder.
 
 import (
 	"errors"
@@ -22,23 +22,23 @@ var (
 	esdeRule    = regexp.MustCompile(`(?s)  <emulator name="3DSSAVESYNC">.*?</emulator>\r?\n`)
 	esdeCommand = regexp.MustCompile(`<command label="3dssavesync \([^"]*\)">[^<]*</command>\r?\n[ \t]*`)
 	esdeSystem  = regexp.MustCompile(`(?s)[ \t]*<system>.*?</system>\r?\n?`)
-	// Ligne de commande LaunchBox d'un émulateur qui passe par le Lanceur : « run --emulator <nom> ».
+	// LaunchBox command line of an emulator that goes through the Launcher: "run --emulator <name>".
 	emulatorOption = regexp.MustCompile(`--emulator (\S+)`)
 )
 
-// Adaptateurs remplacés par les tests (PowerShell, Corbeille, processus détaché).
+// Adapters that the tests replace (PowerShell, Recycle Bin, detached process).
 var removeShortcuts, removeProgram = removeShortcutsSystem, removeProgramSystem
 
-// defaireLaunchbox : retire chaque copie « <titre> (3dssavesync) » qui lance le Lanceur, et ses plateformes ;
-// l'émulateur dont elle est la copie (même titre sans « (3dssavesync) ») redevient l'émulateur par défaut de ces
-// plateformes. Un émulateur qui lance le Lanceur sous son titre d'origine a été modifié sur place (assistant des
-// versions 1 et 2) : il reste avec ses plateformes, et retrouve l'exe réel de config.json (nom lu dans
-// « --emulator <nom> ») ; exe inconnu ou absent : laissé tel quel, le rapport dit de le corriger à la main. Une
-// plateforme où cet émulateur est par défaut le reste : l'émulateur d'origine de la copie n'y redevient pas par défaut.
-// Deux émulateurs encore par défaut d'une même plateforme : le rapport dit d'en garder un.
+// undoLaunchbox removes each "<title> (3dssavesync)" copy that starts the Launcher, and its platforms; the emulator
+// it copies (same title without "(3dssavesync)") becomes the default emulator of these platforms again. An emulator
+// that starts the Launcher under its original title was changed in place (setup of versions 1 and 2): it stays with
+// its platforms, and gets back the real exe of config.json (name read from "--emulator <name>"); unknown or missing
+// exe: left as is, the report says to fix it by hand. A platform where this emulator is the default keeps it: the
+// original emulator of the copy does not become the default there again.
+// Two emulators still the default of one platform: the report says to keep one.
 func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string) {
 	var report []string
-	inPlace := map[string]bool{} // ID des émulateurs modifiés sur place
+	inPlace := map[string]bool{} // IDs of the emulators changed in place
 	unescape := unescapeXML
 	ours := func(b string) bool {
 		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(field(b, "ApplicationPath")), `\`, "/")), filepath.Base(launcher))
@@ -67,7 +67,7 @@ func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string)
 				"emulator \"%[1]s\" left as is: it still starts 3dssavesync and its real exe is unknown. Fix it by hand in LaunchBox: Tools, Manage, Emulators, \"%[1]s\": Application Path"), title))
 			continue
 		}
-		app := e.Exe // relatif sous le dossier de LaunchBox, comme LaunchBox l'écrit
+		app := e.Exe // relative under the LaunchBox folder, as LaunchBox writes it
 		if r, err := filepath.Rel(lbDir, e.Exe); err == nil && !strings.HasPrefix(r, "..") {
 			app = r
 		}
@@ -82,11 +82,11 @@ func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string)
 			}
 			if emulatorOption.MatchString(field(n, "CommandLine")) {
 				line := ""
-				if i > 0 && profile == "retroarch" { // le -L du cœur, que « run --emulator » avait remplacé
+				if i > 0 && profile == "retroarch" { // the core's -L, which "run --emulator" replaced
 					platform := unescape(field(n, "Platform"))
 					if c := e.Cores[lbPlatforms[platform]]; c != "" {
 						if r, err := filepath.Rel(filepath.Dir(e.Exe), c); err == nil && !strings.HasPrefix(r, "..") {
-							c = r // relatif au dossier de RetroArch, comme LaunchBox l'écrit
+							c = r // relative to the RetroArch folder, as LaunchBox writes it
 						}
 						line = `-L "` + c + `"`
 					} else {
@@ -108,11 +108,11 @@ func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string)
 		id, title := field(b, "ID"), strings.TrimSuffix(field(b, "Title"), " (3dssavesync)")
 		idOrig := ""
 		for _, o := range emus {
-			if !ours(o) && unescape(field(o, "Title")) == unescape(title) { // &#39; (echapperXML) contre ' (LaunchBox)
+			if !ours(o) && unescape(field(o, "Title")) == unescape(title) { // &#39; (escapeXML) against ' (LaunchBox)
 				idOrig = field(o, "ID")
 			}
 		}
-		restored, kept := false, false // origine de nouveau par défaut ; émulateur modifié sur place resté par défaut
+		restored, kept := false, false // original back as the default; emulator changed in place still the default
 		for _, p := range lbPlatformBlock.FindAllString(text, -1) {
 			if field(p, "Emulator") != id {
 				continue
@@ -161,8 +161,8 @@ func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string)
 	return text, report
 }
 
-// defaireEsde : retire la règle 3DSSAVESYNC et les commandes 3dssavesync. Un système qui n'a plus de commande est un
-// bloc minimal ajouté par esde : il est retiré, et ES-DE reprend son propre réglage pour ce système.
+// undoEsde removes the 3DSSAVESYNC rule and the 3dssavesync commands. A system with no command left is a minimal
+// block that esde added: it is removed, and ES-DE goes back to its own setting for this system.
 func undoEsde(systems, rules string) (string, string, []string) {
 	var report []string
 	if esdeRule.MatchString(rules) {
@@ -184,8 +184,8 @@ func undoEsde(systems, rules string) (string, string, []string) {
 	return systems, rules, report
 }
 
-// desinstaller : frontends, raccourcis, démarrage automatique, puis le programme installé. Erreur : un frontend est
-// ouvert, rien n'est fait (il garderait en mémoire l'émulateur 3dssavesync et le réécrirait en se fermant).
+// uninstall undoes the frontends, shortcuts, autostart, then the installed program. Error: a frontend is open, nothing
+// is done (it would keep the 3dssavesync emulator in memory and write it again when it closes).
 func uninstall(cfg *Config, config string) ([]string, error) {
 	lb, es := cfg.Frontends["launchbox"], cfg.Frontends["esde"]
 	switch {
@@ -223,7 +223,7 @@ func uninstall(cfg *Config, config string) ([]string, error) {
 	}
 	targets := []string{launcher}
 	if installed := installedLocation(); !strings.EqualFold(installed, launcher) {
-		targets = append(targets, installed) // désinstallation lancée depuis un autre exe (téléchargé à nouveau)
+		targets = append(targets, installed) // uninstall started from another exe (downloaded again)
 	}
 	removed := 0
 	for _, c := range targets {
@@ -236,7 +236,7 @@ func uninstall(cfg *Config, config string) ([]string, error) {
 	if removed > 0 {
 		report = append(report, fmt.Sprintf(tr("Raccourcis mis à la Corbeille : %d", "Shortcuts moved to the Recycle Bin: %d"), removed))
 	}
-	if err := stopTray(filepath.Dir(config)); err != nil { // sinon l'exe de l'icône ne peut pas aller à la Corbeille
+	if err := stopTray(filepath.Dir(config)); err != nil { // else the exe of the tray icon cannot go to the Recycle Bin
 		report = append(report, err.Error())
 	}
 	if portable := portableDir(); portable != "" {
@@ -264,8 +264,8 @@ func uninstall(cfg *Config, config string) ([]string, error) {
 	return report, nil
 }
 
-// retirerRaccourcisSysteme : les raccourcis qui lancent le Lanceur (bureau, menu, démarrage automatique). Windows :
-// Corbeille ; Linux et macOS : fichiers créés par raccourci et demarrageAuto, retirés.
+// removeShortcutsSystem removes the shortcuts that start the Launcher (desktop, menu, autostart). Windows:
+// Recycle Bin; Linux and macOS: the files that shortcut and addAutostart wrote are removed.
 func removeShortcutsSystem(launcher string) ([]string, error) {
 	if runtime.GOOS == "windows" {
 		c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
@@ -275,7 +275,7 @@ func removeShortcutsSystem(launcher string) ([]string, error) {
 				`[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($_.FullName,'OnlyErrorDialogs','SendToRecycleBin'); $_.FullName } }`)
 		c.Env = append(os.Environ(), "R_CIBLE="+launcher)
 		o, err := c.Output()
-		var l []string // un chemin par ligne (des espaces dans les noms)
+		var l []string // one path per line (names can hold spaces)
 		for _, x := range strings.Split(strings.TrimSpace(string(o)), "\n") {
 			if x = strings.TrimSpace(x); x != "" {
 				l = append(l, x)
@@ -300,8 +300,8 @@ func removeShortcutsSystem(launcher string) ([]string, error) {
 	return removed, nil
 }
 
-// retirerProgrammeSysteme : Windows ne retire pas un exe en cours : un PowerShell détaché attend sa fermeture, puis le
-// met à la Corbeille et retire son dossier s'il est vide. Linux et macOS : retiré tout de suite.
+// removeProgramSystem: Windows cannot remove a running exe, so a detached PowerShell waits until it closes, then moves
+// it to the Recycle Bin and removes its folder if empty. Linux and macOS: removed at once.
 func removeProgramSystem(installed string) error {
 	if runtime.GOOS != "windows" {
 		return os.Remove(installed)

@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// Fausse sauvegarde de Pokémon X (taille 0x65600) : temps de jeu et dresseur aux positions de pokemon.go.
+// pokemonX builds a fake Pokémon X save (size 0x65600): play time and trainer at the offsets of pokemon.go.
 func pokemonX(hours int, trainer string) []byte {
 	d := make([]byte, 0x65600)
 	le.PutUint16(d[0x1800:], uint16(hours))
@@ -23,7 +23,7 @@ func pokemonX(hours int, trainer string) []byte {
 	return d
 }
 
-// Envoi d'un autre appareil (Client « 3ds »).
+// uploadFromOther uploads from another device (Client "3ds").
 func uploadFromOther(t *testing.T, s *Session, key string, o, before []byte) {
 	t.Helper()
 	other := *s
@@ -42,7 +42,7 @@ func currentOf(s *Session, key string) []byte {
 	return o
 }
 
-// Restauration contre les deux serveurs : le serveur local (serveur.go) et server.py.
+// Restore against both servers: the local server (server.go) and server.py.
 func TestRestore(t *testing.T) {
 	local := httptest.NewServer(&Server{data: t.TempDir(), token: "jeton-test"})
 	defer local.Close()
@@ -84,7 +84,7 @@ func checkRestore(t *testing.T, address string) {
 		t.Errorf("même contenu : aucune nouvelle Version attendue (%d)", len(n))
 	}
 
-	uploadFromOther(t, s, key, v3, v2) // un appareil envoie après l'affichage de la liste
+	uploadFromOther(t, s, key, v3, v2) // a device uploads after the list was shown
 	if _, err := s.restore(key, lines[1].File, lines[0].Hash); err == nil || !strings.Contains(err.Error(), "vient de changer sur le serveur") {
 		t.Errorf("Envoi concurrent : refus attendu (%v)", err)
 	}
@@ -100,7 +100,7 @@ func checkRestore(t *testing.T, address string) {
 	if len(lines) != 4 || lines[0].N != 4 || lines[0].Hash != sha256Hex(v1) || lines[0].Client != "restauration" || !bytes.Equal(currentOf(s, key), v1) {
 		t.Errorf("la version 1 doit être la Version courante n° 4, envoyée par « restauration » : %+v", lines)
 	}
-	for _, d := range []string{"bases", "copies"} { // aucune Base, aucune sauvegarde locale touchée
+	for _, d := range []string{"bases", "copies"} { // no Base and no Local save touched
 		if _, err := os.Stat(filepath.Join(filepath.Dir(config), d)); err == nil {
 			t.Errorf("restauration : %s ne doit pas être créé", d)
 		}
@@ -142,7 +142,7 @@ func TestRestoreCommand(t *testing.T) {
 	}
 }
 
-// Page : jeux (nom lu dans les dossiers des ROM), versions, restauration, refus après un Envoi concurrent.
+// Page: games (name read in the ROM folders), Versions, Restore, refusal after a concurrent Upload.
 func TestWebSetupHistory(t *testing.T) {
 	srv := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
 	defer srv.Close()
@@ -186,7 +186,7 @@ func TestWebSetupHistory(t *testing.T) {
 	if !r.Ok || !strings.Contains(r.Message, "Version restaurée") || string(currentOf(s, "CPUF")) != "un" {
 		t.Errorf("restauration : %+v", r)
 	}
-	request("restaurer", string(body), &r) // même liste, mais la Version courante a changé depuis
+	request("restaurer", string(body), &r) // same list, but the Current version changed since
 	if r.Ok || !strings.Contains(r.Message, "vient de changer") {
 		t.Errorf("liste périmée : refus attendu, %+v", r)
 	}

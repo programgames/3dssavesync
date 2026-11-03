@@ -16,8 +16,8 @@ func TestDialogs(t *testing.T) {
 	}{
 		{"zenity", "", 0, "Prendre celle du serveur"},
 		{"zenity", "Garder celle du PC\n", 1, "Garder celle du PC"},
-		{"zenity", "", 1, "Ne pas jouer"}, // Annuler ou fenêtre fermée : le plus prudent
-		{"zenity", "", 255, ""},           // erreur de zenity : aucune fenêtre (Q16)
+		{"zenity", "", 1, "Ne pas jouer"}, // Cancel or window closed: the safest
+		{"zenity", "", 255, ""},           // zenity error: no window
 		{"kdialog", "", 1, "Garder celle du PC"},
 		{"kdialog", "", 2, "Ne pas jouer"},
 		{"kdialog", "", 254, ""},

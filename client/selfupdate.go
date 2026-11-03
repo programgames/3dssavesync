@@ -1,7 +1,7 @@
 package main
 
-// Mise à jour du programme PC depuis GitHub (ADR 0023) : recherchée au plus une fois par jour, installée seulement par
-// le bouton « Mettre à jour » de la page. SHA256SUMS de la même release ; l'exe d'avant reste à côté, renommé.
+// PC program update from GitHub (ADR 0023): checked at most once a day, installed only by the page's "update"
+// button. SHA256SUMS from the same release; the previous exe stays next to it, renamed.
 
 import (
 	"crypto/sha256"
@@ -24,16 +24,16 @@ import (
 	"time"
 )
 
-// Version de ce programme : -ldflags "-X main.version=3.7.0" dans le job release. « dev » ne propose jamais de mise à jour.
+// version of this program: -ldflags "-X main.version=3.7.0" in the release job. "dev" never offers an update.
 var version = "dev"
 
-// Adaptateurs remplacés par les tests : jamais GitHub, jamais le vrai exe.
+// Adapters that the tests replace: never GitHub, never the real exe.
 var (
 	releaseURL = "https://api.github.com/repos/programgames/3dssavesync/releases/latest"
 	rename     = os.Rename
 )
 
-// pageVersion : la page GitHub de cette version (« dev » : la dernière).
+// versionPage returns the GitHub page of this version ("dev": the latest).
 func versionPage() string {
 	if version == "dev" {
 		return releasesPage
@@ -41,7 +41,7 @@ func versionPage() string {
 	return "https://github.com/programgames/3dssavesync/releases/tag/v" + version
 }
 
-// Recherche des mises à jour, sauf "verifier_maj": false.
+// checkUpdate: look for updates, unless "verifier_maj": false.
 func (c *Config) checkUpdate() bool { return c.CheckUpdates == nil || *c.CheckUpdates }
 
 type Release struct {
@@ -54,7 +54,7 @@ type Release struct {
 	} `json:"assets"`
 }
 
-// "v3.10.2-rc.1" -> {3, 10, 2}, pre = true (comme maj.c du homebrew).
+// readVersion: "v3.10.2-rc.1" -> {3, 10, 2}, pre = true (like maj.c in the homebrew).
 func readVersion(s string) (n [3]int, pre, ok bool) {
 	s, suffix, pre := strings.Cut(strings.TrimPrefix(s, "v"), "-")
 	p := strings.Split(s, ".")
@@ -71,7 +71,7 @@ func readVersion(s string) (n [3]int, pre, ok bool) {
 	return n, pre, true
 }
 
-// plusRecente : distante après courante ; une version illisible (dev) n'est jamais plus ancienne.
+// newest: remote comes after current; an unreadable version (dev) is never older.
 func newest(current, remote string) bool {
 	a, pa, oka := readVersion(current)
 	b, pb, okb := readVersion(remote)
@@ -105,7 +105,7 @@ func fetch(url string, max int64) ([]byte, error) {
 	return o, err
 }
 
-// Échecs de GitHub reconnus par erreurGitHub.
+// GitHub failures that gitHubError recognizes.
 var (
 	errTooBig     = errors.New("réponse trop grande")
 	errUnreadable = errors.New("réponse illisible")
@@ -113,7 +113,7 @@ var (
 
 const releasesPage = "https://github.com/programgames/3dssavesync/releases/latest"
 
-// erreurGitHub : la recherche ou le téléchargement a échoué ; ce qui s'est passé et quoi faire, puis le détail.
+// gitHubError: the check or the download failed; says what happened and what to do, then the detail.
 func gitHubError(err error) string {
 	var h *httpError
 	var cert *tls.CertificateVerificationError
@@ -149,9 +149,9 @@ func gitHubError(err error) string {
 	return t + "\n" + tr("Détail : ", "Detail: ") + err.Error()
 }
 
-// verrouMaj : maj-pc.verrou, créé seul (O_EXCL) dans le dossier des réglages : une mise à jour à la fois (deux onglets,
-// deux fenêtres de réglages). Un verrou de plus de 15 minutes vient d'un programme arrêté en route : il est remplacé.
-// Rend la fonction qui le retire.
+// updateLock: maj-pc.verrou, created exclusively (O_EXCL) in the settings folder: one update at a time (two tabs,
+// two settings windows). A lock older than 15 minutes comes from a program stopped midway: it is replaced.
+// Returns the function that removes it.
 func updateLock(dir string) (func(), error) {
 	f := filepath.Join(dir, "maj-pc.verrou")
 	if i, err := os.Stat(f); err == nil && time.Since(i.ModTime()) > 15*time.Minute {
@@ -171,13 +171,13 @@ func updateLock(dir string) (func(), error) {
 	return func() { os.Remove(f) }, nil
 }
 
-// Dernière recherche, dans le dossier des réglages : le jour et la release vue.
+// UpdateCheck is the last check, in the settings folder: the day and the release seen.
 type UpdateCheck struct {
 	Day     string `json:"Jour"`
 	Release Release
 }
 
-// derniereRelease : la dernière release de GitHub, lue au plus une fois par jour (maj-pc.json), sauf forcer.
+// latestRelease returns the latest GitHub release, read at most once a day (maj-pc.json), unless force.
 func latestRelease(dir string, force bool) (*Release, error) {
 	f := filepath.Join(dir, "maj-pc.json")
 	day := time.Now().Format("2006-01-02")
@@ -193,11 +193,11 @@ func latestRelease(dir string, force bool) (*Release, error) {
 	if err := json.Unmarshal(o, &r); err != nil || r.Tag == "" {
 		return nil, fmt.Errorf("GET %s : %w (%v, tag_name %q)", releaseURL, errUnreadable, err, r.Tag)
 	}
-	writeJSON(f, UpdateCheck{day, r}, true) // pas écrit (deux recherches en même temps) : une recherche de plus, sans gêne
+	writeJSON(f, UpdateCheck{day, r}, true) // if not written (two checks at once): one more check, harmless
 	return &r, nil
 }
 
-// Nom du fichier de la release pour ce système : 3dssavesync-<os>-<arch>[.exe].
+// pcFileName returns the release file name for this OS: 3dssavesync-<os>-<arch>[.exe].
 func pcFileName(goos, goarch string) string {
 	if goos == "windows" {
 		return "3dssavesync-" + goos + "-" + goarch + ".exe"
@@ -205,7 +205,7 @@ func pcFileName(goos, goarch string) string {
 	return "3dssavesync-" + goos + "-" + goarch
 }
 
-// sommeValide : la ligne « <sha256>  <nom> » de SHA256SUMS correspond à o.
+// validSum: the "<sha256>  <name>" line of SHA256SUMS matches o.
 func validSum(sums, name string, o []byte) bool {
 	h := sha256.Sum256(o)
 	for _, l := range strings.Split(sums, "\n") {
@@ -216,8 +216,8 @@ func validSum(sums, name string, o []byte) bool {
 	return false
 }
 
-// mettreAJour : télécharge le programme de ce système et SHA256SUMS, vérifie la taille, la somme et la place libre,
-// puis remplace exe (remplacerExe). Tout échec laisse exe tel quel. Rend le chemin de l'exe d'avant, gardé.
+// selfUpdate downloads the program for this OS and SHA256SUMS, checks the size, the sum and the free space,
+// then replaces exe (replaceExe). Any failure leaves exe as is. Returns the path of the previous exe, kept.
 func selfUpdate(r *Release, exe, goos, goarch string) (string, error) {
 	name := pcFileName(goos, goarch)
 	var url, sums string
@@ -238,7 +238,7 @@ func selfUpdate(r *Release, exe, goos, goarch string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%s", gitHubError(err))
 	}
-	// Déjà fait (autre fenêtre, onglet resté ouvert) : l'exe sur le disque est celui de la release.
+	// Already done (other window, tab left open): the exe on disk is the release one.
 	if o, err := os.ReadFile(exe); err == nil && validSum(string(s), name, o) {
 		return "", fmt.Errorf(tr("La version %s est déjà installée, depuis une autre fenêtre. Fermez cet onglet et rouvrez le raccourci « 3dssavesync réglages ».\nDétail : %s",
 			"Version %s is already installed from another window. Close this tab and open the \"3dssavesync settings\" shortcut again.\nDetail: %s"), strings.TrimPrefix(r.Tag, "v"), exe)
@@ -258,8 +258,8 @@ func selfUpdate(r *Release, exe, goos, goarch string) (string, error) {
 	return replaceExe(exe, o, version)
 }
 
-// remplacerExe : le nouvel exe en fichier temporaire vérifié ; exe renommé 3dssavesync-<ancienne>[.exe] (Windows
-// accepte de renommer un exe en marche) ; le temporaire prend sa place. Un échec remet l'ancien exe en place.
+// replaceExe writes the new exe to a verified temp file; renames exe to 3dssavesync-<previous>[.exe] (Windows
+// allows renaming a running exe); the temp file takes its place. A failure puts the old exe back.
 func replaceExe(exe string, fresh []byte, prev string) (string, error) {
 	ext := ""
 	if runtime.GOOS == "windows" {
@@ -295,8 +295,8 @@ func replaceExe(exe string, fresh []byte, prev string) (string, error) {
 	return cp, nil
 }
 
-// mettreAJourWeb : bouton « Mettre à jour » de la page. Puis le nouvel exe redémarre l'icône (si elle tournait) et
-// les réglages ; ce programme s'arrête.
+// selfUpdateWeb: the page's "update" button. Then the new exe restarts the tray icon (if it was running) and
+// the settings page; this program stops.
 func (a *WebSetup) selfUpdateWeb() map[string]any {
 	dir := filepath.Dir(a.config)
 	exe := executable()

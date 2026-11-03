@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Même table que le C (3ds/test/test_etat.c) et sync.ps1 : tests/cas_etat.csv, "-" = absent.
+// TestState uses the same table as the C code (3ds/test/test_etat.c): tests/cas_etat.csv, "-" = absent.
 func TestState(t *testing.T) {
 	f, err := os.Open("../tests/cas_etat.csv")
 	if err != nil {

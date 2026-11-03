@@ -7,24 +7,24 @@ import (
 	"testing"
 )
 
-// Dossier personnel factice : aucun réglage réel d'un émulateur de la machine ne doit compter.
+// fakeHome makes a fake home folder: no real emulator setting of the machine may count.
 func fakeHome(t *testing.T) string {
 	m := t.TempDir()
 	for _, v := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME"} {
 		t.Setenv(v, filepath.Join(m, v))
 	}
-	// Raccourcis et démarrage automatique : jamais sur le vrai bureau (Windows les place selon le registre, pas l'environnement).
+	// Shortcuts and autostart: never on the real desktop (Windows places them from the registry, not the environment).
 	r, a, o := createShortcut, autostart, openDetached
 	t.Cleanup(func() { createShortcut, autostart, openDetached = r, a, o })
 	createShortcut = func(name, _ string, _ []string, _ bool) (string, error) { return "test:" + name, nil }
 	autostart = func(name, _ string, _ []string) (string, error) { return "test:" + name, nil }
-	openDetached = func(string, []string) error { return nil } // jamais un vrai émulateur
-	// Jamais une vraie icône près de l'horloge ni un vrai serveur lancé, jamais le vrai dossier Démarrage.
+	openDetached = func(string, []string) error { return nil } // never a real emulator
+	// Never a real tray icon or a real Server started, never the real Startup folder.
 	l, ra := launchServer, removeAutostart
 	t.Cleanup(func() { launchServer, removeAutostart = l, ra })
 	launchServer = func(string, []string) error { return nil }
 	removeAutostart = func(bool) error { return nil }
-	rr, rp := removeShortcuts, removeProgram // désinstallation : jamais les vrais raccourcis ni le vrai programme
+	rr, rp := removeShortcuts, removeProgram // uninstall: never the real shortcuts or the real program
 	t.Cleanup(func() { removeShortcuts, removeProgram = rr, rp })
 	removeShortcuts = func(string) ([]string, error) { return nil, nil }
 	removeProgram = func(string) error { return nil }
@@ -50,13 +50,13 @@ func TestProfiles(t *testing.T) {
 	}
 	rom := filepath.Join(m, "roms", "gb", "Pokemon Bleue.gb")
 
-	// melonDS : melonDS.toml à côté de l'exe (build portable)
+	// melonDS: melonDS.toml next to the exe (portable build)
 	e, p := emu("melonds", "melon", Emulator{})
 	write(t, filepath.Join(d("melon"), "melonDS.toml"), []byte("[Instance0]\nSaveFilePath = \""+filepath.ToSlash(d("Saves/DS"))+"\"\n[Instance0.Audio]\nSaveFilePath = \"faux\"\n"))
 	equal(e.dir(p, "DS", rom), d("Saves/DS"), "melonDS lit SaveFilePath de [Instance0]")
 	equal(savePath("x", "DS", "ADAF", "Pokemon Diamant", p.Ext), filepath.Join("x", "Pokemon Diamant.sav"), "melonDS : .sav")
 
-	// mGBA portable : savegamePath et autoload dans config.ini
+	// Portable mGBA: savegamePath and autoload in config.ini
 	e, p = emu("mgba", "mgba", Emulator{})
 	equal(e.dir(p, "GB", rom), filepath.Dir(rom), "mGBA sans réglage : à côté de la ROM")
 	equal(hint(e, p), "", "mGBA sans config.ini : rien à signaler")
@@ -75,7 +75,7 @@ func TestProfiles(t *testing.T) {
 		t.Error("mGBA sans clé autoload : actif par défaut, conseil attendu")
 	}
 
-	// Azahar : dossier user (portable), puis stockage personnalisé
+	// Azahar: user folder (portable), then custom storage
 	e, p = emu("azahar", "azahar", Emulator{})
 	write(t, filepath.Join(d("azahar"), "user", "config", "qt-config.ini"), []byte("[Data%20Storage]\nuse_custom_storage=false\nsdmc_directory=ignore\n"))
 	equal(e.dir(p, "3DS", ""), filepath.Join(d("azahar"), "user", "sdmc"), "Azahar portable : user/sdmc")
@@ -87,12 +87,12 @@ func TestProfiles(t *testing.T) {
 	e, p = emu("azahar", "azahar-installe", Emulator{})
 	equal(e.dir(p, "3DS", ""), filepath.Join(m, "APPDATA", "Azahar", "sdmc"), "Azahar installé : %APPDATA%\\Azahar\\sdmc")
 
-	// RetroArch : savefile_directory + sous-dossier du cœur ; tri par contenu
+	// RetroArch: savefile_directory + core subfolder; sort by content
 	cores := map[string]string{"GB": "cores/gambatte_libretro.dll", "GBA": "cores/mgba_libretro.so", "DS": "melondsds_libretro.dylib"}
 	e, p = emu("retroarch", "ra", Emulator{Cores: cores})
 	equal(strings.Join(p.Args(e, "GB", rom, ""), "|"), "-L|cores/gambatte_libretro.dll|"+rom, "RetroArch : -L <cœur> <rom>")
 	write(t, filepath.Join(d("ra"), "retroarch.cfg"), []byte("savefile_directory = \"default\"\n"))
-	if runtime.GOOS != "darwin" { // macOS : ~/Documents/RetroArch/saves
+	if runtime.GOOS != "darwin" { // macOS: ~/Documents/RetroArch/saves
 		equal(e.dir(p, "GB", rom), filepath.Join(d("ra"), "saves", "Gambatte"), "RetroArch default : saves/<cœur> à côté de retroarch.cfg")
 	}
 	write(t, filepath.Join(d("ra"), "retroarch.cfg"), []byte("savefile_directory = \""+filepath.ToSlash(d("ra-saves"))+"\"\nsort_savefiles_by_content_enable = \"true\"\n"))
@@ -116,7 +116,7 @@ func TestProfiles(t *testing.T) {
 		t.Error("RetroArch gère les Systèmes de ses cœurs, et eux seuls")
 	}
 
-	// VBA-M : BatteryDir relatif, %s = système
+	// VBA-M: relative BatteryDir, %s = System
 	e, p = emu("vbam", "vbam", Emulator{})
 	write(t, filepath.Join(d("vbam"), "vbam.ini"), []byte("[General]\nAutoLoadLastState=1\nBatteryDir=battery/%s\n"))
 	equal(e.dir(p, "GBA", rom), filepath.Join(d("vbam"), "battery", "GameBoy Advance"), "VBA-M : BatteryDir relatif à l'exe, %s remplacé")
@@ -124,11 +124,12 @@ func TestProfiles(t *testing.T) {
 		t.Error("VBA-M AutoLoadLastState=1 : conseil attendu")
 	}
 
-	// SameBoy : toujours à côté de la ROM
+	// SameBoy: always next to the ROM
 	e, p = emu("sameboy", "sameboy", Emulator{})
 	equal(e.dir(p, "GB", rom), filepath.Dir(rom), "SameBoy : à côté de la ROM")
 
-	// SkyEmu : à côté de la ROM ; dossier de search_paths.bin si le .sav y est, ou si save_to_path (user_settings.bin) est coché
+	// SkyEmu: next to the ROM; folder of search_paths.bin if the .sav is there, or if save_to_path
+	// (user_settings.bin) is ticked
 	e, p = emu("skyemu", "sky", Emulator{})
 	romSky := filepath.Join(m, "roms", "sky", "Pokemon Bleue.gb")
 	equal(e.dir(p, "GB", romSky), filepath.Dir(romSky), "SkyEmu sans réglages : à côté de la ROM")
@@ -148,7 +149,7 @@ func TestProfiles(t *testing.T) {
 	write(t, filepath.Join(pref, "search_paths.bin"), []byte("./\x00"))
 	equal(e.dir(p, "GBA", filepath.Join(m, "roms", "sky", "Pokemon Emeraude.gba")), filepath.Join(m, "roms", "sky"), "SkyEmu : dossier relatif ignoré")
 
-	// NanoBoyAdvance : general.save_folder de config.toml à côté de l'exe, seulement si le dossier existe
+	// NanoBoyAdvance: general.save_folder of config.toml next to the exe, only if the folder exists
 	e, p = emu("nanoboyadvance", "nba", Emulator{})
 	write(t, filepath.Join(d("nba"), "config.toml"), []byte("[cartridge]\nsave_folder = \"faux\"\n\n[general]\nbios_path = \"bios.bin\"\nsave_folder = \""+filepath.ToSlash(d("nba-saves"))+"\"\n"))
 	equal(e.dir(p, "GBA", rom), filepath.Dir(rom), "NanoBoyAdvance : save_folder absent du disque, à côté de la ROM")
@@ -156,7 +157,7 @@ func TestProfiles(t *testing.T) {
 	equal(e.dir(p, "GBA", rom), d("nba-saves"), "NanoBoyAdvance lit save_folder de [general]")
 	equal(strings.Join(p.Args(e, "GBA", rom, ""), "|"), rom, "NanoBoyAdvance : la ROM seule")
 
-	// BGB : à côté de la ROM (« Save files » vide) ; -rom facultatif, args_en_plus avant la ROM
+	// BGB: next to the ROM (empty "Save files"); -rom optional, args_en_plus before the ROM
 	e, p = emu("bgb", "bgb", Emulator{ExtraArgs: []string{"-nowarn"}})
 	equal(e.dir(p, "GB", rom), filepath.Dir(rom), "BGB : à côté de la ROM")
 	equal(strings.Join(e.command(p, "GB", rom, ""), "|"), e.Exe+"|-nowarn|"+rom, "BGB : exe, args_en_plus, ROM")
@@ -164,14 +165,14 @@ func TestProfiles(t *testing.T) {
 		t.Error("BGB : GB seulement")
 	}
 
-	// config.json reste prioritaire
+	// config.json still wins
 	e, p = emu("mgba", "mgba", Emulator{Saves: map[string]string{"GBA": "E:/GBA"}})
 	equal(e.dir(p, "GBA", rom), "E:/GBA", "dossier de config.json prioritaire")
 	if e.handles(p, "GB") {
 		t.Error("dossiers dans config.json : seuls ces Systèmes sont gérés")
 	}
 
-	// Profil personnalisé
+	// Custom Profile
 	e, p = emu("monemu", "perso", Emulator{Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".sav", Saves: map[string]string{"GBA": "S"}})
 	equal(strings.Join(p.Args(e, "GBA", rom, "S"), "|"), "--batt=S|"+rom, "profil personnalisé : {sauvegardes} et {rom}")
 	equal(strings.Join(p.Args(e, "GBA", "", "S"), "|"), "--batt=S", "profil personnalisé sans jeu : {rom} retiré")
@@ -195,7 +196,7 @@ func TestTitles3DS(t *testing.T) {
 	}
 }
 
-// Titre GB avec un octet >= 0x80 : même Clé que cle.c (3ds/test/test_cle.c), sans panique.
+// GB title with a byte >= 0x80: same Key as cle.c (3ds/test/test_cle.c), no panic.
 func TestGBKey(t *testing.T) {
 	tmp = t.TempDir()
 	rom := filepath.Join(tmp, "Pokemon.gb")
@@ -224,8 +225,8 @@ func TestCommandAndSplit(t *testing.T) {
 	}
 }
 
-// Shim de Scoop : scoop\shims\SkyEmu.exe (dans le PATH) et SkyEmu.shim à côté, qui nomme l'exe réel. Un seul SkyEmu
-// trouvé, l'exe réel (pas deux, PATH et scoop).
+// Scoop shim: scoop\shims\SkyEmu.exe (in the PATH) and SkyEmu.shim next to it, which names the real exe. Only one
+// SkyEmu found, the real exe (not two, PATH and scoop).
 func TestDetectScoopShim(t *testing.T) {
 	m := fakeHome(t)
 	real, shims := home("scoop", "apps", "skyemu", "current", "SkyEmu-v5-Windows.exe"), home("scoop", "shims")

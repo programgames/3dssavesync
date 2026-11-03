@@ -14,10 +14,10 @@ import (
 	"syscall"
 )
 
-// Fenêtres hors Windows : osascript (macOS), zenity ou kdialog (Linux).
-// Le dernier bouton est le plus prudent : bouton par défaut, et choisi quand on ferme la fenêtre.
-// "" = aucune fenêtre possible (pas d'outil, pas d'écran, erreur de l'outil) : un Conflit ne remplace rien (Q16).
-// ponytail: affichage sous Gamescope (Steam Deck, mode Jeu) non vérifié.
+// askSystem shows a dialog outside Windows: osascript (macOS), zenity or kdialog (Linux).
+// The last button is the safest: default button, and the choice when the user closes the window.
+// "" = no window possible (no tool, no display, tool error): a Conflict replaces nothing.
+// ponytail: display under Gamescope (Steam Deck, Game mode) not checked.
 func askSystem(text string, buttons []string) string {
 	fmt.Fprintln(os.Stderr, text)
 	tool := dialogTool()
@@ -54,14 +54,14 @@ func dialogTool() string {
 	return ""
 }
 
-// Arguments de l'outil. Au plus 3 boutons (limite d'AppleScript et de kdialog).
+// dialogArgs returns the tool arguments. At most 3 buttons (limit of AppleScript and kdialog).
 func dialogArgs(tool, text string, b []string) []string {
 	switch tool {
-	case "osascript": // texte et boutons en arguments : aucun échappement AppleScript
+	case "osascript": // text and buttons as arguments: no AppleScript escaping
 		return append([]string{"-e", "on run argv", "-e", "set b to items 2 thru -1 of argv", "-e",
 			`button returned of (display dialog (item 1 of argv) with title "3dssavesync" buttons b default button (count of b))`,
 			"-e", "end run", text}, b...)
-	case "kdialog": // codes de sortie : 0, 1, 2 = boutons 1, 2, 3
+	case "kdialog": // exit codes: 0, 1, 2 = buttons 1, 2, 3
 		a := []string{"--title", "3dssavesync"}
 		switch len(b) {
 		case 1:
@@ -71,7 +71,7 @@ func dialogArgs(tool, text string, b []string) []string {
 		}
 		return append(a, "--yesnocancel", text, "--yes-label", b[0], "--no-label", b[1], "--cancel-label", b[2])
 	}
-	// zenity : OK = premier bouton, Annuler (et fermeture) = dernier, boutons du milieu en --extra-button.
+	// zenity: OK = first button, Cancel (and close) = last, middle buttons as --extra-button.
 	if len(b) == 1 {
 		return []string{"--info", "--no-markup", "--title=3dssavesync", "--text=" + text, "--ok-label=" + b[0]}
 	}
@@ -82,7 +82,7 @@ func dialogArgs(tool, text string, b []string) []string {
 	return a
 }
 
-// Bouton choisi d'après le code de sortie et la sortie de l'outil ; "" si l'outil a échoué.
+// dialogResponse returns the chosen button from the exit code and the tool output; "" if the tool failed.
 func dialogResponse(tool string, b []string, code int, output string) string {
 	output = strings.TrimSpace(output)
 	switch tool {
@@ -94,7 +94,7 @@ func dialogResponse(tool string, b []string, code int, output string) string {
 		if code >= 0 && code <= 2 {
 			return b[min(code, len(b)-1)]
 		}
-	default: // zenity : 0 = OK ; 1 = Annuler, fermeture ou bouton du milieu (libellé sur la sortie)
+	default: // zenity: 0 = OK; 1 = Cancel, close or middle button (label on the output)
 		switch {
 		case code == 0:
 			return b[0]
@@ -116,14 +116,14 @@ func systemNotify(text string) {
 	}
 }
 
-func waitNotifications() {} // notify-send et osascript rendent la main une fois la notification affichée
+func waitNotifications() {} // notify-send and osascript return once the notification shows
 
-// L'assistant se lance dans un terminal : rien à ouvrir.
+// The setup starts in a terminal: nothing to open.
 func openConsole() {}
 
 const cleanConsole = false
 
-// Saisie sans écho (jeton) par stty ; sans terminal, rien à faire.
+// noEcho turns off echo for input (token) with stty; with no terminal, nothing to do.
 func noEcho() func() {
 	c := exec.Command("stty", "-echo")
 	c.Stdin = os.Stdin
@@ -137,7 +137,7 @@ func noEcho() func() {
 	}
 }
 
-// Langue : variables de locale, puis la préférence de macOS (une application lancée par le Finder n'a pas LANG).
+// systemLanguage reads the locale variables, then the macOS preference (an app started by the Finder has no LANG).
 func systemLanguage() string {
 	for _, v := range []string{"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"} {
 		if l := os.Getenv(v); l != "" && l != "C" && l != "POSIX" {
@@ -152,7 +152,8 @@ func systemLanguage() string {
 	return ""
 }
 
-// Nombre de processus de ce nom. Linux : /proc/<pid>/comm (15 caractères au plus) ; macOS : ps.
+// countProcesses returns the number of processes with this name. Linux: /proc/<pid>/comm (15 characters at most);
+// macOS: ps.
 func countProcesses(name string) (n int) {
 	name = strings.ToLower(name)
 	if len(name) > 15 {
@@ -178,13 +179,14 @@ func countProcesses(name string) (n int) {
 	return n
 }
 
-// Le processus pid tourne encore (signal 0 : vérifie sans rien envoyer ; EPERM = il existe, à un autre utilisateur).
+// processAlive reports that the process pid still runs (signal 0: checks without sending; EPERM = it exists, owned by
+// another user).
 func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || err == syscall.EPERM
 }
 
-// Processus qui survit à la fermeture du terminal de l'assistant (nouvelle session, sans SIGHUP).
+// startDetached starts a process that outlives the setup terminal (new session, no SIGHUP).
 func startDetached(exe string, args []string) error {
 	c := exec.Command(exe, args...)
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -194,7 +196,8 @@ func startDetached(exe string, args []string) error {
 	return c.Process.Release()
 }
 
-// Volumes montés (carte SD, clé USB) : /Volumes (macOS), /media/$USER et /run/media/$USER (Linux).
+// removableRoots returns the mounted volumes (SD card, USB stick): /Volumes (macOS), /media/$USER and
+// /run/media/$USER (Linux).
 func removableRoots() []string {
 	patterns := []string{"/Volumes/*"}
 	if runtime.GOOS != "darwin" {
@@ -208,7 +211,7 @@ func removableRoots() []string {
 	return l
 }
 
-// Place libre pour l'utilisateur sur le disque du dossier.
+// systemFreeSpace returns the free space for the user on the disk of dir.
 func systemFreeSpace(dir string) (uint64, error) {
 	var s syscall.Statfs_t
 	if err := syscall.Statfs(dir, &s); err != nil {

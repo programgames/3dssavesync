@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-// LaunchBox prêt : l'émulateur « (3dssavesync) » par défaut sur une plateforme de l'entrée ; un émulateur absent de
-// LaunchBox n'est pas à faire.
+// LaunchBox ready: the "(3dssavesync)" emulator is the default on a platform of the entry; an emulator missing from
+// LaunchBox is not a to-do.
 func TestMissingLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
@@ -24,14 +24,14 @@ func TestMissingLaunchBox(t *testing.T) {
 	if m := missingLaunchBox(newText, launcher, entries); m != nil {
 		t.Errorf("après la réparation : %v", m)
 	}
-	// L'utilisateur remet l'émulateur d'origine par défaut dans LaunchBox : à refaire.
+	// The user sets the original emulator back as default in LaunchBox: to redo.
 	i := strings.LastIndex(newText, "<Default>true</Default>")
 	if m := missingLaunchBox(newText[:i]+"<Default>false</Default>"+newText[i+len("<Default>true</Default>"):], launcher, entries); !slices.Equal(m, []string{"melonds"}) {
 		t.Errorf("plus par défaut : %v", m)
 	}
 }
 
-// Liste « Tout est prêt » : serveur, dossiers des sauvegardes, frontends, carte SD, sans jamais deviner.
+// The "all ready" list: server, save folders, frontends, SD card, never guessing.
 func TestChecks(t *testing.T) {
 	m := fakeHome(t)
 	server := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
@@ -61,7 +61,7 @@ func TestChecks(t *testing.T) {
 	writeJSON(config, &cfg, true)
 	l, _ := checks(config)
 	ok, todo := texts(l)
-	for _, v := range l { // la ligne de l'émulateur dans la page reprend ces lignes (EmuWeb.Problemes)
+	for _, v := range l { // the emulator's row on the page reuses these lines (WebEmu.Problems)
 		if strings.HasPrefix(v.Text, "mgba ") != (v.Emulator == "mgba") || strings.HasPrefix(v.Text, "melonds ") != (v.Emulator == "melonds") {
 			t.Errorf("émulateur de la ligne %q : %q", v.Text, v.Emulator)
 		}

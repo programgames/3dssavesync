@@ -7,8 +7,8 @@ import (
 	"unicode/utf16"
 )
 
-// Une sauvegarde synthétique par génération (sommes de contrôle et signatures valides), comme 3ds/test/test_pokemon.c.
-// Vérifié aussi, hors dépôt, sur de vraies sauvegardes de chaque génération.
+// One synthetic save per generation (valid checksums and signatures), like 3ds/test/test_pokemon.c.
+// Also checked, outside the repo, on real saves of each generation.
 func TestPokemonPlayInfo(t *testing.T) {
 	be := binary.BigEndian
 	tcase := map[string]struct {
@@ -16,7 +16,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{}
 
-	g1 := make([]byte, 0x8000) // J, inconnu, é ; 57 h 32
+	g1 := make([]byte, 0x8000) // J, unknown, é; 57 h 32
 	copy(g1[0x2598:], []byte{0x89, 0xE0, 0xBC, 0x50})
 	g1[0x2CED], g1[0x2CEF] = 57, 32
 	g1[0x3523] = byte(^sum(g1[0x2598:0x3523]))
@@ -25,7 +25,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{g1, "57 h 32 · J?é"}
 
-	g2 := make([]byte, 0x8000) // Cristal : Jean ; heures big-endian
+	g2 := make([]byte, 0x8000) // Crystal: Jean; big-endian hours
 	copy(g2[0x200B:], []byte{0x89, 0xA4, 0xA0, 0xAD, 0x50})
 	be.PutUint16(g2[0x2052:], 295)
 	g2[0x2054] = 10
@@ -35,7 +35,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{g2, "295 h 10 · Jean"}
 
-	g3 := make([]byte, 0x20000) // deux moitiés valides, secteurs décalés ; la moitié 1 a le plus grand compteur
+	g3 := make([]byte, 0x20000) // two valid halves, shifted sectors; half 1 has the highest counter
 	for k := 0; k < 28; k++ {
 		m, id := k/14, (k%14+3+k/14)%14
 		sec := g3[m*0xE000+(k%14)*0x1000:]
@@ -52,7 +52,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{g3, "576 h 48 · Jé"}
 
-	g4 := make([]byte, 0x80000) // Platine : partition 1 plus récente
+	g4 := make([]byte, 0x80000) // Platinum: partition 1 is more recent
 	le.PutUint32(g4[0x40000+0xCF2C-0x0C:], 0xCF2C)
 	le.PutUint32(g4[0x40000+0xCF2C-0x08:], 0x20060623)
 	le.PutUint32(g4[0xCF2C-0x14:], 1)
@@ -67,7 +67,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{g4, "35 h 07 · Jé"}
 
-	g5 := make([]byte, 0x80000) // Noir 2/Blanc 2 : CRC16-CCITT du bloc 0x25F00
+	g5 := make([]byte, 0x80000) // Black 2/White 2: CRC16-CCITT of block 0x25F00
 	for i := 0; i < 0x94; i++ {
 		g5[0x25F00+i] = byte(i * 7)
 	}
@@ -83,7 +83,7 @@ func TestPokemonPlayInfo(t *testing.T) {
 		expected string
 	}{g5, "15 h 41 · Jé"}
 
-	g7 := make([]byte, 0x6CC00) // Ultra : 13 caractères au plus
+	g7 := make([]byte, 0x6CC00) // Ultra: 13 characters at most
 	le.PutUint16(g7[0x41000:], 999)
 	g7[0x41002] = 30
 	for i, c := range utf16.Encode([]rune("ABCDEFGHIJKLMNO")) {
@@ -103,14 +103,14 @@ func TestPokemonPlayInfo(t *testing.T) {
 			t.Errorf("%s : %q (%v), attendu %q", name, r, ok, c.expected)
 		}
 	}
-	for _, size := range []int{0x8000, 0x20000, 0x80000, 1024} { // vierges ou taille inconnue : refusés
+	for _, size := range []int{0x8000, 0x20000, 0x80000, 1024} { // blank or unknown size: refused
 		if r, ok := pokemonPlayInfo(make([]byte, size)); ok {
 			t.Errorf("%d octets vierges reconnus à tort : %q", size, r)
 		}
 	}
 }
 
-// main synthétique de Soleil/Lune : temps de jeu et dresseur.
+// mainSunMoon builds a synthetic Sun/Moon main: play time and trainer.
 func mainSunMoon(h, m int, name string) []byte {
 	d := make([]byte, 0x6BE00)
 	le.PutUint16(d[0x40C00:], uint16(h))
@@ -121,7 +121,7 @@ func mainSunMoon(h, m int, name string) []byte {
 	return d
 }
 
-// Le Conflit d'un Pokémon montre le temps de jeu des deux Versions.
+// A Conflict on a Pokémon game shows the play time of both Versions.
 func TestConflictPlayTime(t *testing.T) {
 	reset()
 	responses = []string{""}

@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// Versions comparées comme sur la 3DS (maj.c) ; « dev » ne propose jamais de mise à jour.
+// Versions compared like on the 3DS (maj.c); "dev" never offers an update.
 func TestNewest(t *testing.T) {
 	for _, c := range []struct {
 		current, remote string
@@ -33,7 +33,7 @@ func TestNewest(t *testing.T) {
 		pcFileName("darwin", "arm64") != "3dssavesync-darwin-arm64" {
 		t.Error("nom du fichier de la release")
 	}
-	// Vraie réponse de GitHub (v3.6.1).
+	// Real GitHub response (v3.6.1).
 	var r Release
 	if err := json.Unmarshal(read("../3ds/test/release_latest.json"), &r); err != nil || r.Tag != "v3.6.1" || r.Page != "https://github.com/programgames/3dssavesync/releases/tag/v3.6.1" ||
 		len(r.Assets) != 3 || r.Assets[0].Name != "3dssavesync-windows-amd64.exe" || r.Assets[0].Size != 10036224 ||
@@ -46,8 +46,8 @@ func TestNewest(t *testing.T) {
 	}
 }
 
-// Mise à jour du PC : recherche une fois par jour, téléchargement vérifié, exe remplacé avec l'ancien gardé à côté ;
-// tout échec laisse l'ancien exe en place. Jamais GitHub, jamais le vrai exe : un serveur de test, un dossier temporaire.
+// PC update: one check a day, verified download, exe replaced with the old one kept next to it;
+// any failure leaves the old exe in place. Never GitHub, never the real exe: a test server, a temp folder.
 func TestSelfUpdate(t *testing.T) {
 	fresh := []byte("programme 3.7.0")
 	h := sha256.Sum256(fresh)
@@ -122,7 +122,7 @@ func TestSelfUpdate(t *testing.T) {
 		t.Errorf("SHA-256 différent : %v", err)
 	}
 	sums = hex.EncodeToString(h[:]) + "  " + name + "\n"
-	// Le nouvel exe ne prend pas la place : l'ancien revient.
+	// The new exe can't take its place: the old one comes back.
 	n := 0
 	rename = func(a, b string) error {
 		if n++; n == 2 {
@@ -144,12 +144,12 @@ func TestSelfUpdate(t *testing.T) {
 		t.Fatalf("mise à jour : %v, %s", err, cp)
 	}
 	rest("programme 3.7.0")
-	// Encore une fois (onglet resté ouvert, autre fenêtre) : l'exe sur le disque est déjà celui de la release.
+	// Once more (tab left open, other window): the exe on disk is already the release one.
 	if _, err := selfUpdate(r, exe, runtime.GOOS, runtime.GOARCH); err == nil || !strings.HasPrefix(err.Error(), "La version 3.7.0 est déjà installée") {
 		t.Errorf("déjà à jour : %v", err)
 	}
 	rest("programme 3.7.0")
-	// Encore depuis la même ancienne version : la première copie n'est jamais écrasée.
+	// Again from the same old version: the first copy is never overwritten.
 	write(t, exe, []byte("programme 3.6.1 bis"))
 	if cp, err := selfUpdate(r, exe, runtime.GOOS, runtime.GOARCH); err != nil || cp != filepath.Join(d, "3dssavesync-3.6.1-1"+ext) ||
 		string(read(filepath.Join(d, "3dssavesync-3.6.1"+ext))) != "programme 3.6.1" || string(read(cp)) != "programme 3.6.1 bis" {
@@ -157,9 +157,9 @@ func TestSelfUpdate(t *testing.T) {
 	}
 }
 
-// Une mise à jour à la fois (deux onglets, deux fenêtres) ; un verrou de plus de 15 minutes est remplacé.
+// One update at a time (two tabs, two windows); a lock older than 15 minutes is replaced.
 func TestUpdateLock(t *testing.T) {
-	closed := httptest.NewServer(http.NotFoundHandler()) // jamais GitHub, même si le verrou laissait passer
+	closed := httptest.NewServer(http.NotFoundHandler()) // never GitHub, even if the lock let it through
 	closed.Close()
 	aa := releaseURL
 	t.Cleanup(func() { releaseURL = aa })
@@ -190,7 +190,7 @@ func TestUpdateLock(t *testing.T) {
 	}
 }
 
-// Échecs de GitHub : un texte par cas (quoi faire), puis le détail technique.
+// GitHub failures: one text per case (what to do), then the technical detail.
 func TestGitHubError(t *testing.T) {
 	var response func(w http.ResponseWriter)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { response(w) }))

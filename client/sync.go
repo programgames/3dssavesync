@@ -25,12 +25,12 @@ import (
 	"time"
 )
 
-// Systèmes (ADR 0007) : extension de ROM -> Système.
+// extensions maps a ROM extension to its System (ADR 0007).
 var extensions = map[string]string{
 	".nds": "DS", ".gb": "GB", ".gbc": "GB", ".gba": "GBA", ".3ds": "3DS", ".cci": "3DS", ".cxi": "3DS",
 }
 
-// Les 8 Pokémon 3DS synchronisés (ADR 0009) : un title ID par jeu, toutes régions.
+// titles3DS lists the 8 synced 3DS Pokémon games (ADR 0009): one title ID per game, all regions.
 var titles3DS = map[string]string{
 	"0004000000055D00": "Pokemon X", "0004000000055E00": "Pokemon Y",
 	"000400000011C400": "Pokemon Rubis Omega", "000400000011C500": "Pokemon Saphir Alpha",
@@ -38,13 +38,13 @@ var titles3DS = map[string]string{
 	"00040000001B5000": "Pokemon Ultra-Soleil", "00040000001B5100": "Pokemon Ultra-Lune",
 }
 
-// Format de l'archive de sauvegarde d'un jeu 3DS : le 00000001.metadata d'Azahar (ArchiveFormatInfo : total_size,
-// nombre de répertoires, nombre de fichiers en u32 LE, duplicate_data, 3 octets de bourrage). Avec lui, le Lanceur crée
-// le dossier d'un jeu jamais lancé dans Azahar ; sans lui, il refuse : un jeu sans .metadata peut reformater sa sauvegarde.
-// Relevé sur de vraies installations : Lune, Ultra-Soleil (2026-11-01). Les autres Pokémon : même moteur, même valeur
-// supposée ; Pokémon X vérifié par le test sur une copie d'Azahar (issue #9).
+// formats3DS holds the Save archive format of a 3DS game: Azahar's 00000001.metadata (ArchiveFormatInfo:
+// total_size, directory count, file count as u32 LE, duplicate_data, 3 padding bytes). With it, the Launcher creates
+// the folder of a game never started in Azahar; without it, it refuses: a game without .metadata can reformat its Save.
+// Read on real installs: Moon, Ultra Sun (2026-11-01). The other Pokémon games: same engine, same value assumed;
+// Pokémon X checked by the test on a copy of Azahar (issue #9).
 var formats3DS = func() map[string][]byte {
-	pokemon := []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0} // 0x40000 octets, 1 répertoire, 1 fichier, dupliqué
+	pokemon := []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0} // 0x40000 bytes, 1 directory, 1 file, duplicated
 	m := map[string][]byte{}
 	for id := range titles3DS {
 		m[id] = pokemon
@@ -52,20 +52,20 @@ var formats3DS = func() map[string][]byte {
 	return m
 }()
 
-// Jeu : une Clé et le fichier de sauvegarde qui lui correspond chez un émulateur.
+// Game is a Key and its matching save file in an emulator.
 type Game struct {
 	System string `json:"Systeme"`
 	Key    string `json:"Cle"`
 	Name   string `json:"Nom"`
 	File   string `json:"Fichier"`
-	Core   string `json:"Coeur"` // bibliothèque du cœur RetroArch, "" sinon : gpSP et Beetle GBA ont un .srm à convertir (srm.go)
+	Core   string `json:"Coeur"` // RetroArch core library or "": gpSP and Beetle GBA have a .srm to convert (srm.go)
 }
 
 var code4 = regexp.MustCompile(`^[A-Z0-9]{4}$`)
 
-// lireRom : Système, Clé et noms possibles de la sauvegarde d'une ROM (fichier ou .zip).
-// Système vide = extension inconnue ; Clé vide = hors périmètre (homebrew, 3DS non listé).
-// nom : la ROM ou le zip (mGBA, RetroArch) ; interne : le fichier dans le zip (melonDS), "" hors zip.
+// readRom returns the System, the Key and the possible save names of a ROM (file or .zip).
+// Empty System = unknown extension; empty Key = out of scope (homebrew, unlisted 3DS game).
+// name: the ROM or the zip (mGBA, RetroArch); internal: the file inside the zip (melonDS), "" outside a zip.
 func readRom(rom string) (system, key, name, internal string, err error) {
 	ext := strings.ToLower(filepath.Ext(rom))
 	name = strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom))
@@ -86,7 +86,7 @@ func readRom(rom string) (system, key, name, internal string, err error) {
 				if err != nil {
 					return "", "", name, "", err
 				}
-				io.ReadFull(r, header) // une ROM plus courte que l'en-tête garde des zéros
+				io.ReadFull(r, header) // a ROM shorter than the header keeps zeros
 				r.Close()
 				ext = e
 				internal = strings.TrimSuffix(path.Base(f.Name), path.Ext(f.Name))
@@ -117,7 +117,7 @@ func readRom(rom string) (system, key, name, internal string, err error) {
 			title = title[:i]
 		}
 		clean := make([]byte, len(title))
-		for i, c := range title { // octet par octet comme cle.c : bytes.ToUpper changerait la longueur (octet >= 0x80)
+		for i, c := range title { // byte by byte like cle.c: bytes.ToUpper would change the length (byte >= 0x80)
 			if c >= 'a' && c <= 'z' {
 				c -= 'a' - 'A'
 			}
@@ -141,8 +141,8 @@ func readRom(rom string) (system, key, name, internal string, err error) {
 	return system, key, name, internal, nil
 }
 
-// Title ID d'une ROM 3DS : NCSD (.3ds/.cci) -> partition 0 à u32@0x120 × 0x200, ou NCCH direct (.cxi) ;
-// program_id à NCCH + 0x118.
+// titleID3DS returns the title ID of a 3DS ROM: NCSD (.3ds/.cci) -> partition 0 at u32@0x120 × 0x200, or direct
+// NCCH (.cxi); program_id at NCCH + 0x118.
 func titleID3DS(rom string) (string, error) {
 	f, err := os.Open(rom)
 	if err != nil {
@@ -166,7 +166,7 @@ func titleID3DS(rom string) (string, error) {
 	return fmt.Sprintf("%016X", binary.LittleEndian.Uint64(id)), nil
 }
 
-// Fichier de sauvegarde d'un Jeu dans le dossier d'un émulateur. 3DS : dossier = sdmc d'Azahar.
+// savePath returns the save file of a Game in an emulator's folder. 3DS: folder = Azahar's sdmc.
 func savePath(dir, system, key, name, ext string) string {
 	if system == "3DS" {
 		id, z := strings.ToLower(key[4:]), strings.Repeat("0", 32)
@@ -183,25 +183,26 @@ func sha256Hex(o []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-// Version : une Sauvegarde vue du serveur ou du PC (Hash et taille de la SRAM).
+// Version is a Save as the server or the PC sees it (Hash and size of the SRAM).
 type Version struct {
 	Code   string `json:"code"`
 	Hash   string `json:"hash"`
 	Size   int64  `json:"taille"`
 	Client string `json:"client"`
 	Age    *int64 `json:"age"`
-	Name   string `json:"nom"` // nom du jeu donné par un Client (ADR 0018) ; vide sur un serveur plus ancien
+	Name   string `json:"nom"` // game name given by a Client (ADR 0018); empty on an older server
 }
 
 type Local struct {
 	Version
 	Raw   []byte
 	SRAM  []byte
-	Blank bool // SRAM vierge (que des 0x00 ou que des 0xFF), écrite avant toute partie
+	Blank bool // blank SRAM (only 0x00 or only 0xFF), written before any play
 }
 
-// GB/GBA : Hash, taille et envoi portent sur la SRAM seule ; le Trailer d'horloge reste local (ADR 0008).
-// srv : Version courante du serveur ou nil ; elle donne la taille de la SRAM d'un .srm gpSP ou Beetle GBA (ADR 0011).
+// readLocal reads the Local save. GB/GBA: Hash, size and Upload cover the SRAM only; the Clock trailer stays local
+// (ADR 0008). srv: Current version of the server or nil; it gives the SRAM size of a gpSP or Beetle GBA .srm
+// (ADR 0011).
 func readLocal(j *Game, srv *Version) (*Local, error) {
 	raw, err := os.ReadFile(j.File)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -211,19 +212,19 @@ func readLocal(j *Game, srv *Version) (*Local, error) {
 		return nil, err
 	}
 	sram := raw
-	r := len(raw) % 512 // Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010)
+	r := len(raw) % 512 // Clock trailer: 16, 44 or 48 bytes after the SRAM (ADR 0010)
 	if (j.System == "GB" || j.System == "GBA") && len(raw) > r && (r == 16 || r == 44 || r == 48) {
 		sram = raw[:len(raw)-r]
 	}
-	if isMBC2(j.System, len(sram)) { // forme du serveur (mbc2.go)
+	if isMBC2(j.System, len(sram)) { // server form (mbc2.go)
 		sram = normalizeMBC2(sram)
 	}
-	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME : pied de page retiré (dsv.go)
+	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME: footer removed (dsv.go)
 		if sram, err = sramDSV(raw); err != nil {
 			return nil, fmt.Errorf("%s : %w", j.File, err)
 		}
 	}
-	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA : .srm de taille fixe (srm.go)
+	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA: fixed-size .srm (srm.go)
 		if sram, err = sramSRM(j.Core, raw, srv); err != nil {
 			return nil, fmt.Errorf("%s : %w", j.File, err)
 		}
@@ -231,7 +232,7 @@ func readLocal(j *Game, srv *Version) (*Local, error) {
 	return &Local{Version{Hash: sha256Hex(sram), Size: int64(len(sram))}, raw, sram, j.System != "3DS" && blank(sram)}, nil
 }
 
-// État d'un Jeu (docs/design.md §1, ADR 0001). nil = absent ; base vide = jamais synchronisé.
+// State of a Game (docs/design.md §1, ADR 0001). nil = absent; empty base = never synced.
 const (
 	inSync     = "A_JOUR"
 	toUpload   = "A_ENVOYER"
@@ -260,16 +261,16 @@ func state(local, server *Version, base string) string {
 	return conflict
 }
 
-// Session : un émulateur (profil) et son dossier de configuration (journal, Bases, Copies de sécurité).
+// Session is an emulator (Profile) and its configuration folder (log, Bases, Backup copies).
 type Session struct {
 	cfg        *Config
-	config     string // chemin de config.json : un alias créé au lancement y est écrit (ADR 0014)
+	config     string // path of config.json: an Alias created at launch is written there (ADR 0014)
 	dir        string
 	profile    string
 	http       *http.Client
-	downloaded bool              // une Version est arrivée du serveur pendant cette Session
-	romOf      map[string]string // Clé -> ROM de ce lancement, retenue avec la Base (ADR 0014)
-	// Liste GET /saves de la passe en cours (une seule lecture par passe) ; relue après un Envoi ou un 412.
+	downloaded bool              // a Version arrived from the server during this Session
+	romOf      map[string]string // Key -> ROM of this launch, kept with the Base (ADR 0014)
+	// GET /saves list of the current pass (read once per pass); read again after an Upload or a 412.
 	list     []Version
 	listErr  error
 	listRead bool
@@ -306,13 +307,13 @@ func (s *Session) api(method, path string, body []byte, headers map[string]strin
 		return 0, nil, &httpError{method + " " + path, 401}
 	}
 	buf, err := io.ReadAll(rep.Body)
-	if err != nil { // réponse coupée : le réseau est en cause, comme une requête sans réponse (classer)
+	if err != nil { // cut-off response: the network is at fault, like a request with no response (classify)
 		return 0, nil, &neturl.Error{Op: method, URL: path, Err: err}
 	}
 	return rep.StatusCode, buf, nil
 }
 
-// Réponse du serveur autre que celle attendue. Error() garde le détail technique, pour le journal.
+// httpError is a server response other than the expected one. Error() keeps the technical detail, for the log.
 type httpError struct {
 	request string
 	code    int
@@ -320,11 +321,11 @@ type httpError struct {
 
 func (e *httpError) Error() string { return fmt.Sprintf("%s : %d", e.request, e.code) }
 
-// Page d'aide des messages d'erreur, ajoutée aux fenêtres d'erreur du PC.
+// helpPage is the help page for error messages, added to the error windows of the PC.
 const helpPage = "https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md"
 
-// classer : texte pour l'utilisateur (sans code HTTP ni texte de Go) ; global = le serveur ou le réseau est en cause,
-// les autres jeux de la passe échoueraient pareil. Erreur inconnue : son texte, déjà écrit pour l'utilisateur.
+// classify returns a text for the user (no HTTP code, no Go text); global = the server or the network is at fault,
+// so the other games of the pass would fail the same way. Unknown error: its own text, already written for the user.
 func classify(err error) (text string, global bool) {
 	var h *httpError
 	var dns *net.DNSError
@@ -380,13 +381,13 @@ func classify(err error) (text string, global bool) {
 	return err.Error(), false
 }
 
-// texteErreur : l'erreur telle que l'utilisateur la lit ("" sans erreur).
+// errorText returns the error as the user reads it ("" without error).
 func errorText(err error) string {
 	t, _ := classify(err)
 	return t
 }
 
-// Nom de Client pour le serveur ([a-z0-9]{1,16}) : deux émulateurs = deux Clients (Q17).
+// clientName returns the Client name for the server ([a-z0-9]{1,16}): two emulators = two Clients.
 func clientName(profile string) string {
 	var b strings.Builder
 	for _, c := range strings.ToLower(profile) {
@@ -397,8 +398,8 @@ func clientName(profile string) string {
 	return b.String()
 }
 
-// Version courante d'un Jeu sur le serveur, ou nil. La liste est lue une fois par passe : une erreur aussi (réseau
-// coupé : un seul délai d'attente pour toute la passe).
+// serverVersion returns the Current version of a Game on the server, or nil. The list is read once per pass, and so is
+// an error (network down: a single timeout for the whole pass).
 func (s *Session) serverVersion(key string) (*Version, error) {
 	if !s.listRead {
 		s.list, s.listErr = s.readList()
@@ -425,14 +426,14 @@ func (s *Session) readList() ([]Version, error) {
 		return nil, &httpError{"GET /saves", st}
 	}
 	var list []Version
-	if err := json.Unmarshal(o, &list); err != nil { // page d'un portail Wi-Fi, mauvaise adresse : réponse inattendue
+	if err := json.Unmarshal(o, &list); err != nil { // Wi-Fi portal page, wrong address: unexpected response
 		s.log("GET /saves illisible : " + err.Error())
 		return nil, &httpError{"GET /saves", st}
 	}
 	return list, nil
 }
 
-// Bases : un fichier par émulateur (Q17), Clé -> Hash de la dernière Synchronisation.
+// basePath returns the Bases file: one file per emulator, Key -> Hash of the last Sync.
 func (s *Session) basePath() string { return filepath.Join(s.dir, "bases", s.profile+".json") }
 
 func (s *Session) bases() (map[string]string, error) {
@@ -462,7 +463,7 @@ func (s *Session) setBase(key, hash string) error {
 	return nil
 }
 
-// ecrireJSON : fichier temporaire vérifié puis remplacement (remplacer=false : jamais d'écrasement).
+// writeJSON writes a verified temporary file, then replaces the target (replace=false: never overwrites).
 func writeJSON(path string, v any, replace bool) error {
 	o, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -482,7 +483,7 @@ func writeJSON(path string, v any, replace bool) error {
 	return os.Rename(tmp, path)
 }
 
-// ecrireVerifie : crée le fichier (jamais d'écrasement), l'écrit sur le disque, puis le relit.
+// writeVerified creates the file (never overwrites), writes it to disk, then reads it back.
 func writeVerified(path string, buf []byte) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -508,7 +509,7 @@ func writeVerified(path string, buf []byte) error {
 	return err
 }
 
-// Envoi conditionnel : If-Match = Version courante vue par ce Client. false sur 412.
+// upload is a conditional Upload: If-Match = Current version seen by this Client. false on 412.
 func (s *Session) upload(j *Game, l *Local, srv *Version) (bool, error) {
 	cond := map[string]string{"If-None-Match": "*"}
 	if srv != nil {
@@ -524,14 +525,14 @@ func (s *Session) upload(j *Game, l *Local, srv *Version) (bool, error) {
 	if st != 200 {
 		return false, &httpError{"PUT /saves/" + j.Key, st}
 	}
-	if srv == nil && j.Name != "" { // premier Envoi de ce jeu : le serveur n'a pas encore son nom (ADR 0018)
+	if srv == nil && j.Name != "" { // first Upload of this game: the server does not have its name yet (ADR 0018)
 		s.setName(j)
 	}
-	s.listRead = false // la liste n'a plus la Version courante de ce Jeu
+	s.listRead = false // the list no longer has the Current version of this Game
 	return true, s.setBase(j.Key, l.Hash)
 }
 
-// Copie de sécurité de la Sauvegarde locale : <copies>/<émulateur>/<nom>-<date>.
+// copy makes a Backup copy of the Local save: <copies>/<emulator>/<name>-<date>.
 func (s *Session) copy(j *Game, raw []byte) error {
 	dir := filepath.Join(s.cfg.copiesDir(s.dir), s.profile)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -551,7 +552,7 @@ func (s *Session) copy(j *Game, raw []byte) error {
 	}
 }
 
-// Récupération : Copie de sécurité, fichier temporaire vérifié, puis remplacement (ADR 0004, design §3).
+// download is a Download: Backup copy, verified temporary file, then replacement (ADR 0004, docs/design.md §3).
 func (s *Session) download(j *Game, l *Local, srv *Version) error {
 	st, o, err := s.api("GET", "/saves/"+j.Key, nil, nil)
 	if err != nil {
@@ -567,8 +568,8 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 	dir := filepath.Dir(j.File)
 	tmp := j.File + ".3dssavesync-tmp"
 	if j.System == "3DS" {
-		// Pas de dossier = Azahar n'a jamais vu ce jeu. Créé seulement avec un .metadata connu (formats3DS) et jamais
-		// par-dessus un .metadata existant ; sinon refus (ADR 0009).
+		// No folder = Azahar never saw this game. Create it only with a known .metadata (formats3DS) and never
+		// over an existing .metadata; otherwise refuse (ADR 0009).
 		if _, err := os.Stat(dir); err != nil {
 			format, meta := formats3DS[strings.ToUpper(strings.TrimPrefix(j.Key, "3DS-"))], filepath.Join(filepath.Dir(dir), "00000001.metadata")
 			if format == nil || exists(meta) {
@@ -583,7 +584,7 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 				return err
 			}
 		}
-		tmp = filepath.Join(filepath.Dir(dir), "main.3dssavesync-tmp") // l'archive ne doit contenir que main
+		tmp = filepath.Join(filepath.Dir(dir), "main.3dssavesync-tmp") // the archive must hold only main
 	} else if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -592,11 +593,11 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 		if err := s.copy(j, l.Raw); err != nil {
 			return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
 		}
-		if len(l.Raw) > len(l.SRAM) { // GB/GBA : on remet le Trailer d'horloge de ce PC après la SRAM reçue
+		if len(l.Raw) > len(l.SRAM) { // GB/GBA: put the Clock trailer of this PC back after the received SRAM
 			content = append(append([]byte{}, o...), l.Raw[len(l.SRAM):]...)
 		}
 	}
-	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME : SRAM reçue + pied de page (dsv.go)
+	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME: received SRAM + footer (dsv.go)
 		var old []byte
 		if l != nil {
 			old = l.Raw
@@ -605,19 +606,19 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 			return err
 		}
 	}
-	if isMBC2(j.System, len(o)) { // MBC2 : à la taille du fichier existant, sinon à celle de l'émulateur (mbc2.go)
+	if isMBC2(j.System, len(o)) { // MBC2: at the size of the existing file, otherwise at the emulator size (mbc2.go)
 		n := s.mbc2Size(j)
 		if l != nil && isMBC2(j.System, len(l.Raw)) {
 			n = len(l.Raw)
 		}
 		content = mbc2File(normalizeMBC2(o), n)
 	}
-	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA : SRAM reçue dans un .srm de taille fixe (srm.go)
+	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA: received SRAM inside a fixed-size .srm (srm.go)
 		if content, err = srm(j.Core, o); err != nil {
 			return err
 		}
 	}
-	os.Remove(tmp) // reste d'un arrêt brutal
+	os.Remove(tmp) // leftover of a hard stop
 	if err := writeVerified(tmp, content); err != nil {
 		return err
 	}
@@ -632,12 +633,12 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 	return s.setBase(j.Key, srv.Hash)
 }
 
-// Contenu reçu dont le Hash n'est pas celui de la liste.
+// damagedError: received content whose Hash is not the one of the list.
 type damagedError string
 
 func (e damagedError) Error() string { return string(e) }
 
-// « il y a 2 h » à partir de l'âge en secondes donné par le serveur.
+// formatAge returns "2 h ago" from the age in seconds given by the server.
 func formatAge(age *int64) string {
 	switch {
 	case age == nil:
@@ -652,8 +653,8 @@ func formatAge(age *int64) string {
 	return fmt.Sprintf(tr("il y a %d j", "%d d ago"), *age/86400)
 }
 
-// Choix de l'utilisateur sur un Conflit (Q5). Sans fenêtre possible (Q16) : rien n'est remplacé.
-// distant : contenu de la Version du serveur s'il a été lu (Pokémon 3DS), pour montrer son temps de jeu.
+// resolveConflict returns the choice of the user on a Conflict. If no window can open, nothing is replaced.
+// remote: content of the server Version if it was read (Pokémon), to show its play time.
 func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool) string {
 	pc := tr("sauvegarde présente", "save found")
 	if i, err := os.Stat(j.File); err == nil {
@@ -697,8 +698,8 @@ func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool)
 	return nothing
 }
 
-// nommer : donne au serveur le nom du jeu, pour l'Historique (ADR 0018). Un échec ne gêne pas la Synchronisation : il
-// est noté, et le nom est noté comme connu pour ne pas réessayer pendant cette session.
+// setName gives the game name to the server, for the History (ADR 0018). A failure does not block the Sync: it is
+// logged, and the name is marked as known so that this session does not try again.
 func (s *Session) setName(j *Game) {
 	if st, _, err := s.api("PUT", "/saves/"+j.Key+"/name", []byte(j.Name), nil); err != nil || st != 204 {
 		s.log(fmt.Sprintf("nom de %s non envoyé : %d %v", j.Key, st, err))
@@ -710,9 +711,9 @@ func (s *Session) setName(j *Game) {
 	}
 }
 
-// Une passe de Synchronisation. annule = l'utilisateur ne veut pas jouer.
+// syncGame runs one Sync pass. cancelled = the user does not want to play.
 func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
-	for attempt := 0; attempt < 3; attempt++ { // un 412 relance une passe avec la nouvelle Version courante
+	for attempt := 0; attempt < 3; attempt++ { // a 412 starts a new pass with the new Current version
 		if attempt > 0 {
 			s.listRead = false
 		}
@@ -727,7 +728,7 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		// Une Sauvegarde vierge compte comme absente ; le fichier reste copié avant écrasement (recuperer).
+		// A blank Save counts as absent; the file is still copied before it is overwritten (download).
 		var seen *Version
 		if l != nil && (!l.Blank || srv != nil && l.Hash == srv.Hash) {
 			seen = &l.Version
@@ -741,7 +742,7 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		}
 		action := state(seen, srv, b[j.Key])
 		if action == conflict {
-			var remote []byte // Pokémon : la Version du serveur est lue pour comparer les temps de jeu
+			var remote []byte // Pokémon: read the server Version to compare the play times
 			if _, ok := pokemonPlayInfo(l.SRAM); ok {
 				if st, o, err := s.api("GET", "/saves/"+j.Key, nil, nil); err == nil && st == 200 {
 					remote = o
@@ -757,7 +758,7 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 				return false, err
 			}
 		case toDownload:
-			// Contenu autre que la liste : une Version est arrivée depuis la lecture de la liste (passe longue), on relit.
+			// Content other than the list: a Version arrived after the list was read (long pass), so read again.
 			if err := s.download(j, l, srv); !errors.As(err, new(damagedError)) || attempt == 2 {
 				return false, err
 			}

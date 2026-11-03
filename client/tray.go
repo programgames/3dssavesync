@@ -1,8 +1,8 @@
 package main
 
-// Icône près de l'horloge (ADR 0022) : « 3dssavesync tray », le seul programme résident. Son menu ouvre les réglages,
-// envoie les Envois en attente et montre l'état du serveur local, qu'il fait tourner lui-même (à la place de serve).
-// Windows : Win32 (tray_windows.go) ; Linux : StatusNotifierItem sur D-Bus (tray_linux.go) ; macOS : pas encore.
+// Tray icon (ADR 0022): "3dssavesync tray", the only resident program. Its menu opens the settings page, sends the
+// pending Uploads and shows the state of the local Server, which it runs itself (in place of serve).
+// Windows: Win32 (tray_windows.go); Linux: StatusNotifierItem on D-Bus (tray_linux.go); macOS: not yet.
 
 import (
 	_ "embed"
@@ -22,26 +22,26 @@ import (
 //go:embed icone/icone.ico
 var iconICO []byte
 
-// Demande d'arrêt (désinstallation, réglages enregistrés) : ce fichier dans le dossier des réglages, lu toutes les 2 s.
+// Stop request (uninstall, settings saved): this file in the settings folder, checked every 2 s.
 const stopFile = "arret-tray"
 
-// Entrée « 3dssavesync » du démarrage automatique : tray, ou serve sans l'icône.
+// "3dssavesync" autostart entry: tray, or serve without the tray icon.
 const startupName = "3dssavesync"
 
-// Adaptateur remplacé par les tests : jamais le vrai dossier Démarrage.
+// Adapter that the tests replace: never the real Startup folder.
 var removeAutostart = removeAutostartEntry
 
-// Icône affichée, sauf "icone_horloge": false.
+// trayIcon reports a shown tray icon, unless "icone_horloge": false.
 func (c *Config) trayIcon() bool { return c.TrayIcon == nil || *c.TrayIcon }
 
-// Élément du menu de l'icône. Texte vide : séparateur ; Action vide : ligne d'information, grisée.
+// MenuItem is an item of the tray icon menu. Empty Text: separator; empty Action: greyed information line.
 type MenuItem struct {
 	Text   string
-	Action string // reglages, envoyer, quitter
+	Action string // "reglages", "envoyer" or "quitter"
 }
 
-// menuTray : le menu d'après l'état. attente : nombre d'Envois en attente ; serveur : ligne du serveur local ("" : aucun) ;
-// maj : version plus récente sur GitHub ("" : aucune), mise à jour depuis les réglages.
+// trayMenuItems builds the menu from the state. pending: number of pending Uploads; server: local Server line
+// ("": none); update: newer version on GitHub ("": none), updated from the settings page.
 func trayMenuItems(pending int, server, update string) []MenuItem {
 	m := []MenuItem{{tr("Ouvrir les réglages", "Open settings"), "reglages"}}
 	if update != "" {
@@ -56,7 +56,7 @@ func trayMenuItems(pending int, server, update string) []MenuItem {
 	return append(m, MenuItem{"3dssavesync " + version, ""}, MenuItem{}, MenuItem{tr("Quitter", "Quit"), "quitter"})
 }
 
-// ligneServeur : "" sans serveur local ; sinon l'adresse à entrer sur la 3DS, ou la première phrase de l'erreur.
+// serverLine returns "" with no local Server; else the address to enter on the 3DS, or the first sentence of the error.
 func serverLine(cfg *Config, err error) string {
 	if cfg.LocalServer == nil {
 		return ""
@@ -72,14 +72,14 @@ func serverLine(cfg *Config, err error) string {
 	return tr("Serveur local : en marche (", "Local server: running (") + url + ")"
 }
 
-// Nombre d'Envois en attente (en-attente.json illisible : 0, la reprise habituelle le mettra de côté).
+// pendingCount returns the number of pending Uploads (unreadable en-attente.json: 0, the usual resume sets it aside).
 func pendingCount(dir string) int {
 	var l []pendingEntry
 	readJSON((&Session{dir: dir}).pendingPath(), &l)
 	return len(l)
 }
 
-// envoyerMaintenant : les Envois en attente (même passe qu'au lancement d'un jeu) ; rend le texte de la notification.
+// uploadNow sends the pending Uploads (same pass as at game start); returns the notification text.
 func uploadNow(config string) string {
 	s, err := newSession(config)
 	if err != nil {
@@ -92,13 +92,13 @@ func uploadNow(config string) string {
 		return fmt.Sprintf(tr("Sauvegardes envoyées : %d", "Saves uploaded: %d"), before)
 	}
 	text := fmt.Sprintf(tr("Sauvegardes encore en attente : %d. ", "Saves still pending: %d. "), rest)
-	if err == nil { // jeu sauté : son émulateur est ouvert
+	if err == nil { // Game skipped: its emulator is open
 		return text + tr("Fermez l'émulateur et réessayez.", "Close the emulator and try again.")
 	}
 	return text + errorText(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
 }
 
-// avecConfig : args, avec --config quand ce n'est pas le fichier par défaut.
+// withConfig returns args, with --config when config is not the default file.
 func withConfig(args []string, config string) []string {
 	if config != defaultConfig() {
 		args = append(args, "--config", config)
@@ -106,8 +106,8 @@ func withConfig(args []string, config string) []string {
 	return args
 }
 
-// choixDemarrage : le programme lancé à l'ouverture de session (nil : aucun). Icône affichée : tray, qui fait aussi
-// tourner le serveur local ; sinon serve pour le serveur local seul.
+// startupChoice returns the program started at logon (nil: none). Tray icon shown: tray, which also runs the local
+// Server; else serve for the local Server alone.
 func startupChoice(cfg *Config, config string) []string {
 	switch {
 	case cfg.trayIcon() && trayAvailable:
@@ -118,15 +118,15 @@ func startupChoice(cfg *Config, config string) []string {
 	return nil
 }
 
-// demarrageAutomatique : une seule entrée « 3dssavesync » (args nil : aucune), et plus celles « 3dssavesync serveur »
-// d'avant la v3.7 (le serveur démarrerait deux fois). L'icône en marche s'arrête : elle redémarre avec les nouveaux réglages.
+// setupAutostart keeps one "3dssavesync" entry (nil args: none) and removes the old "3dssavesync serveur" entries
+// (the Server would start twice). The running tray icon stops: it starts again with the new settings.
 func setupAutostart(q *Questions, launcher string, args []string, dir string) {
 	if err := stopTray(dir); err != nil {
 		q.say("%s", err.Error())
 	}
 	if args != nil {
 		f, err := autostart(startupName, launcher, args)
-		if err != nil { // l'ancienne entrée reste : mieux qu'aucune
+		if err != nil { // the old entry stays: better than none
 			q.say("%s %s", tr("Impossible d'activer le démarrage automatique :", "Couldn't turn on autostart:"), errorText(err))
 			return
 		}
@@ -137,8 +137,8 @@ func setupAutostart(q *Questions, launcher string, args []string, dir string) {
 	}
 }
 
-// retirerDemarrageAuto : les entrées « 3dssavesync serveur » d'avant la v3.7, et « 3dssavesync » sauf si garder.
-// Windows : raccourcis de Démarrage à la Corbeille. Linux et macOS : demarrageAuto écrit toujours le même fichier.
+// removeAutostartEntry removes the old "3dssavesync serveur" entries, and "3dssavesync" unless keep.
+// Windows: Startup shortcuts to the Recycle Bin. Linux and macOS: addAutostart always writes the same file.
 func removeAutostartEntry(keep bool) error {
 	if runtime.GOOS != "windows" {
 		f := xdgConfig("autostart", "3dssavesync-serveur.desktop")
@@ -167,8 +167,8 @@ func removeAutostartEntry(keep bool) error {
 	return nil
 }
 
-// arreterTray : demande l'arrêt de l'icône en marche et attend la fin de son programme (son exe peut alors aller à la
-// Corbeille, son port se libère). Rien à faire si elle ne tourne pas.
+// stopTray asks the running tray icon to stop and waits for its program to end (its exe can then go to the
+// Recycle Bin, its port is free). Nothing to do if it is not running.
 func stopTray(dir string) error {
 	if !trayActive(dir) {
 		return nil
@@ -188,7 +188,7 @@ func stopTray(dir string) error {
 		"The icon near the clock won't stop. Right-click it and choose Quit."), tr("Détail : ", "Detail: "), err)
 }
 
-// surveillerArret : appelle quitter quand le fichier d'arrêt apparaît (il est retiré), jusqu'à la fin.
+// watchStop calls quit when the stop file appears (it is removed), until end.
 func watchStop(dir string, quit func(), end <-chan struct{}) {
 	f := filepath.Join(dir, stopFile)
 	for {
@@ -205,8 +205,8 @@ func watchStop(dir string, quit func(), end <-chan struct{}) {
 	}
 }
 
-// imageIco : l'image d'un .ico la plus petite d'au moins taille pixels, sinon la plus grande. En-tête de 6 octets
-// (nombre d'images à l'octet 4), puis 16 octets par image : largeur (0 = 256), taille (octet 8) et début (octet 12).
+// imageIco returns the smallest image of an .ico with at least size pixels, else the largest. 6-byte header
+// (image count at byte 4), then 16 bytes per image: width (0 = 256), size (byte 8) and start (byte 12).
 func imageIco(ico []byte, size int) []byte {
 	var choice []byte
 	bestOne := 0
@@ -226,7 +226,7 @@ func imageIco(ico []byte, size int) []byte {
 	return choice
 }
 
-// 3dssavesync tray : l'icône, et le serveur local s'il est configuré. Une deuxième icône s'arrête sans rien dire.
+// cmdTray runs 3dssavesync tray: the tray icon, and the local Server if it is configured. A second icon stops silently.
 func cmdTray(config string) (int, error) {
 	dir := filepath.Dir(config)
 	release := trayLock(dir)
@@ -234,17 +234,17 @@ func cmdTray(config string) (int, error) {
 		return 0, nil
 	}
 	defer release()
-	os.Remove(filepath.Join(dir, stopFile)) // reste d'une demande faite quand l'icône ne tournait pas
+	os.Remove(filepath.Join(dir, stopFile)) // left from a request made when the tray icon was not running
 	s := &Session{dir: dir}
 	var cfg Config
-	readJSON(config, &cfg) // pas encore configuré : seulement « Ouvrir les réglages » et « Quitter »
+	readJSON(config, &cfg) // not configured yet: only the open-settings and quit items
 	var server struct {
 		sync.Mutex
 		err error
 	}
 	if cfg.LocalServer != nil {
 		go func() {
-			_, err := cmdServe(config) // rend la main seulement sur une erreur, ou s'il tourne déjà ailleurs
+			_, err := cmdServe(config) // returns only on an error, or if it already runs elsewhere
 			if err != nil {
 				s.log("tray : serveur local : " + err.Error())
 				notify(tr("Le serveur local ne fonctionne pas : ", "The local server isn't running: ") + errorText(err))
@@ -262,7 +262,7 @@ func cmdTray(config string) (int, error) {
 		sync.Mutex
 		version string
 	}
-	if version != "dev" && cfg.checkUpdate() { // au plus une recherche par jour (derniereRelease) ; échec : rien dans le menu
+	if version != "dev" && cfg.checkUpdate() { // at most one check per day (latestRelease); failure: nothing in the menu
 		go func() {
 			for {
 				if r, err := latestRelease(dir, false); err == nil && newest(version, r.Tag) {
@@ -287,7 +287,7 @@ func cmdTray(config string) (int, error) {
 					"\n" + tr("Détail : ", "Detail: ") + err.Error())
 			}
 		case "envoyer":
-			if upload.TryLock() { // deux clics : un seul envoi
+			if upload.TryLock() { // two clicks: one Upload only
 				defer upload.Unlock()
 				notify(uploadNow(config))
 			}

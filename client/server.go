@@ -1,8 +1,8 @@
 package main
 
-// Serveur local (phase 6) : le contrat HTTP de server/server.py (docs/design.md §2), dans l'exe du PC.
-// Même format de données : data/<Clé>/<n°>-<date>-<client>-<hash>.sav, rien n'est jamais supprimé ni réécrit.
-// HTTP sur le réseau local seulement (jamais ouvert sur Internet) ; la 3DS y accède sans TLS.
+// Local server: the HTTP contract of server/server.py (docs/design.md §2), inside the PC exe.
+// Same data format: data/<Key>/<n>-<date>-<client>-<hash>.sav; nothing is ever deleted or rewritten.
+// HTTP on the local network only (never open to the Internet); the 3DS reaches it without TLS.
 
 import (
 	"crypto/sha256"
@@ -36,11 +36,11 @@ var (
 	reClient  = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 )
 
-const maxSize = 64 << 20 // plus grande mémoire de sauvegarde DS connue
+const maxSize = 64 << 20 // largest known DS save memory
 
 type Server struct {
 	data, token string
-	lock        sync.Mutex // ponytail: verrou global, comme server.py ; suffit pour quelques Clients
+	lock        sync.Mutex // ponytail: global lock, like server.py; enough for a few Clients
 }
 
 func (s *Server) versions(key string) []string {
@@ -64,7 +64,7 @@ func hashOf(version string) string {
 	return p[len(p)-1]
 }
 
-// Même texte que json.dumps de server.py (", " et ": ") : le homebrew 3DS lit ce format.
+// info writes the same text as json.dumps in server.py (", " and ": "): the 3DS homebrew reads this format.
 func (s *Server) info(key, version string) string {
 	p := strings.Split(strings.TrimSuffix(version, ".sav"), "-")
 	var size int64
@@ -143,7 +143,7 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		key = m[1]
-		for _, x := range s.versions(key) { // seulement un nom de la liste : jamais de chemin hors du dossier
+		for _, x := range s.versions(key) { // only a name from the list: never a path outside the folder
 			if x == m[2][1:] {
 				v = x
 			}
@@ -170,7 +170,7 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body := make([]byte, r.ContentLength)
-	if _, err := io.ReadFull(r.Body, body); err != nil { // connexion coupée : jamais de Version tronquée
+	if _, err := io.ReadFull(r.Body, body); err != nil { // connection cut: never a truncated Version
 		w.Header().Set("Connection", "close")
 		answer(w, 400, nil, "")
 		return
@@ -224,7 +224,7 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 	err := os.MkdirAll(dir, 0o755)
 	if err == nil {
 		os.Remove(tmp)
-		err = writeVerified(tmp, body) // écrite sur le disque et relue : une Version acceptée survit à une coupure
+		err = writeVerified(tmp, body) // written to disk and read back: an accepted Version survives a power cut
 	}
 	if err == nil {
 		err = os.Rename(tmp, filepath.Join(dir, name))
@@ -236,7 +236,7 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 	answer(w, 200, nil, `"`+h+`"`)
 }
 
-// Nom du jeu (nom de la ROM ou titre 3DS), comme server.py : seulement pour un jeu qui a déjà une Version.
+// setName stores the game name (ROM name or 3DS title), like server.py: only for a game that already has a Version.
 func (s *Server) setName(w http.ResponseWriter, key string, body []byte) {
 	name := strings.TrimSpace(string(body))
 	if !utf8.ValidString(name) || name == "" || utf8.RuneCountInString(name) > 200 ||
@@ -252,7 +252,7 @@ func (s *Server) setName(w http.ResponseWriter, key string, body []byte) {
 	defer s.lock.Unlock()
 	tmp := filepath.Join(s.data, key, "nom.txt.tmp")
 	os.Remove(tmp)
-	err := writeVerified(tmp, []byte(name)) // écrit sur le disque et relu, comme une Version
+	err := writeVerified(tmp, []byte(name)) // written to disk and read back, like a Version
 	if err == nil {
 		err = os.Rename(tmp, filepath.Join(s.data, key, "nom.txt"))
 	}
@@ -263,10 +263,10 @@ func (s *Server) setName(w http.ResponseWriter, key string, body []byte) {
 	answer(w, 204, nil, "")
 }
 
-// Adresses IPv4 du PC sur le réseau local : celles à entrer sur la 3DS, la plus probable en tête.
+// localAddresses returns the PC's IPv4 addresses on the local network: the ones to enter on the 3DS, most likely first.
 func localAddresses() []string {
 	route := ""
-	// UDP : « connecter » choisit seulement la route, rien n'est envoyé. 192.0.2.1 : adresse de documentation.
+	// UDP: "connect" only picks the route, nothing is sent. 192.0.2.1: a documentation address.
 	if c, err := net.Dial("udp4", "192.0.2.1:9"); err == nil {
 		route = c.LocalAddr().(*net.UDPAddr).IP.String()
 		c.Close()
@@ -281,8 +281,9 @@ func localAddresses() []string {
 	return sortAddresses(l, route)
 }
 
-// La carte réseau de la box d'abord : pas en .1 (côté PC d'un réseau virtuel : WSL, Docker, VirtualBox, VMware), puis
-// en 192.168 (plage des box), puis celle de la route par défaut (seule, elle désigne un VPN actif : ADR 0017).
+// sortAddresses puts the home router's network first: not ending in .1 (PC side of a virtual network: WSL,
+// Docker, VirtualBox, VMware), then in 192.168 (home router range), then the default route (alone, it means an
+// active VPN: ADR 0017).
 func sortAddresses(l []string, route string) []string {
 	rank := func(a string) int {
 		r := 0
@@ -301,7 +302,7 @@ func sortAddresses(l []string, route string) []string {
 	return l
 }
 
-// 3dssavesync serve : le serveur local, avec le jeton et le dossier de config.json.
+// cmdServe: 3dssavesync serve, the local server, with the token and the folder of config.json.
 func cmdServe(config string) (int, error) {
 	var cfg Config
 	if err := readConfig(config, &cfg); err != nil {
@@ -324,7 +325,7 @@ func cmdServe(config string) (int, error) {
 	err := srv.ListenAndServe()
 	var errno syscall.Errno
 	if errors.Is(err, syscall.EADDRINUSE) || errors.As(err, &errno) && errno == 10048 { // WSAEADDRINUSE
-		// Démarrage à l'ouverture de session alors qu'il tourne déjà : rien à signaler.
+		// Started at login while it already runs: nothing to report.
 		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", cfg.LocalServer.Port)
 		if testServer(&cfg) == nil {
 			(&Session{dir: filepath.Dir(config)}).log("serveur local déjà en marche")

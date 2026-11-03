@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// Menu de l'icône d'après l'état : Envois en attente, serveur local.
+// Tray icon menu from the state: pending Uploads, local Server.
 func TestTrayMenu(t *testing.T) {
 	texts := func(m []MenuItem) string {
 		var l []string
@@ -50,7 +50,7 @@ func TestTrayMenu(t *testing.T) {
 	}
 }
 
-// Démarrage automatique : l'icône (qui fait tourner le serveur local), sinon serve, sinon rien. Réglage absent = icône.
+// Autostart: the tray icon (which runs the local Server), else serve, else nothing. No setting = tray icon.
 func TestStartupChoice(t *testing.T) {
 	before := trayAvailable
 	t.Cleanup(func() { trayAvailable = before })
@@ -87,8 +87,8 @@ func TestStartupChoice(t *testing.T) {
 	}
 }
 
-// Page des réglages, case « Afficher l'icône près de l'horloge » : entrée « 3dssavesync » vers tray, lancée tout de
-// suite, anciennes entrées retirées ; case décochée : "icone_horloge": false, plus aucune entrée (pas de serveur local).
+// Settings page, tray icon checkbox: "3dssavesync" entry to tray, started at once, old entries removed;
+// unticked: "icone_horloge": false, no entry left (no local Server).
 func TestIconSetting(t *testing.T) {
 	fakeHome(t)
 	before, detectBefore := trayAvailable, detect
@@ -130,7 +130,7 @@ func TestIconSetting(t *testing.T) {
 	}
 }
 
-// Une seule icône par dossier de réglages ; demande d'arrêt par le fichier arret-tray, vue dans les 2 s.
+// One tray icon per settings folder; stop request through the arret-tray file, seen within 2 s.
 func TestTrayStop(t *testing.T) {
 	d := t.TempDir()
 	if trayActive(d) {
@@ -161,7 +161,7 @@ func TestTrayStop(t *testing.T) {
 	l()
 }
 
-// Image de l'icône : la plus petite d'au moins la taille demandée, sinon la plus grande (largeur lue dans l'en-tête PNG).
+// Icon image: the smallest with at least the asked size, else the largest (width read from the PNG header).
 func TestImageIco(t *testing.T) {
 	for size, expectedValue := range map[int]uint32{16: 16, 20: 24, 64: 64, 300: 256} {
 		img := imageIco(iconICO, size)
@@ -174,8 +174,8 @@ func TestImageIco(t *testing.T) {
 	}
 }
 
-// Copie vers l'emplacement installé : l'icône, qui tourne souvent depuis l'exe installé, s'arrête avant la copie
-// (Windows refuse de remplacer un exe en marche). Exe installé encore pris : le message dit quoi faire, puis le détail.
+// Copy to the installed location: the tray icon, which often runs from the installed exe, stops before the copy
+// (Windows refuses to replace a running exe). Installed exe still in use: the message says what to do, then the detail.
 func TestInstallExeStopsIcon(t *testing.T) {
 	fakeHome(t)
 	exe := filepath.Join(t.TempDir(), "3dssavesync.exe")
@@ -185,7 +185,7 @@ func TestInstallExeStopsIcon(t *testing.T) {
 	executable = func() string { return exe }
 	target := installedLocation()
 	write(t, target, []byte("ancien"))
-	d := t.TempDir() // dossier des réglages
+	d := t.TempDir() // settings folder
 	release := trayLock(d)
 	stopped, end := make(chan string, 1), make(chan struct{})
 	t.Cleanup(func() { close(end) })

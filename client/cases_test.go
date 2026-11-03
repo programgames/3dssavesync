@@ -1,7 +1,7 @@
 package main
 
-// Lot D : ROM hack et alias (ADR 0014), Envois en attente (D5), une lecture de la liste du serveur par passe (D6).
-// Mêmes doublures que lanceur_test.go ; le vrai serveur.
+// ROM hacks and Aliases (ADR 0014), pending Uploads, one read of the server list per pass.
+// Same test doubles as launcher_test.go; the real server.
 
 import (
 	"errors"
@@ -24,7 +24,7 @@ func TestAliasKey(t *testing.T) {
 		{"GBA", "Sans alias", "GBA-BPRE", "GBA-BPRE"},
 		{"GBA", "Trop long", "GBA-BPRE", ""},
 		{"GBA", "Mauvais Système", "GBA-BPRE", ""},
-		{"3DS", "Hack DS", "3DS-0004000000055D00", "3DS-0004000000055D00"}, // jamais d'alias 3DS
+		{"3DS", "Hack DS", "3DS-0004000000055D00", "3DS-0004000000055D00"}, // never a 3DS Alias
 	} {
 		key, err := c.aliasKey(k.system, k.name, k.key)
 		if key != k.expected || (err != nil) != (k.expected == "") {
@@ -33,11 +33,11 @@ func TestAliasKey(t *testing.T) {
 	}
 }
 
-// Transport qui compte les requêtes et peut couper le réseau.
+// network is a transport that counts the requests and can cut the network.
 type network struct {
 	cut           bool
-	lists, others int // GET /saves, autres GET
-	attempts      int // toutes les requêtes, coupées ou non
+	lists, others int // GET /saves, other GETs
+	attempts      int // all requests, cut or not
 }
 
 func (r *network) RoundTrip(q *http.Request) (*http.Response, error) {
@@ -305,7 +305,7 @@ func TestOneListPerPass(t *testing.T) {
 	}
 }
 
-// Lot E : ROM retenue pour tous les émulateurs du PC, et Clé déjà synchronisée sans ROM retenue (ADR 0014).
+// ROM kept for all the emulators of the PC, and Key already synced with no kept ROM (ADR 0014).
 func TestGlobalKeptRom(t *testing.T) {
 	tmp = t.TempDir()
 	fakeHome(t)
@@ -352,13 +352,13 @@ func TestGlobalKeptRom(t *testing.T) {
 		t.Errorf("Récupération attendue, questions %q", questions)
 	}
 	reset()
-	run("autre", rr) // la question propose « Synchroniser à part » ; sans réponse, le hack part sans synchronisation
+	run("autre", rr) // the question offers "Sync separately"; with no answer, the hack starts without Sync
 	if len(questions) != 1 || !contains(notifications, "ressemble à") {
 		t.Errorf("questions %q, notifications %q", questions, notifications)
 	}
 }
 
-// Lot E : deux ROM de Clés différentes, un seul fichier de sauvegarde (dossier commun) : aucune synchronisée.
+// Two ROMs with different Keys, one save file (shared folder): neither is synced.
 func TestLaunchSameFile(t *testing.T) {
 	tmp = t.TempDir()
 	fakeHome(t)
@@ -378,7 +378,7 @@ func TestLaunchSameFile(t *testing.T) {
 	}
 }
 
-// Transport qui refuse les Envois (400) ou répond par la page d'un portail Wi-Fi à la liste.
+// faultyTransport refuses the Uploads (400) or answers the list with a Wi-Fi portal page.
 type faultyTransport struct{ rejectUploads, captivePortal bool }
 
 func (p *faultyTransport) RoundTrip(q *http.Request) (*http.Response, error) {
@@ -392,7 +392,7 @@ func (p *faultyTransport) RoundTrip(q *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(q)
 }
 
-// Lot E : tout Envoi raté après la partie est mis en attente ; liste en attente illisible gardée à part.
+// Every failed Upload after play becomes pending; an unreadable pending list is kept aside.
 func TestPendingFailures(t *testing.T) {
 	tmp = t.TempDir()
 	fakeHome(t)
@@ -432,7 +432,7 @@ func TestPendingFailures(t *testing.T) {
 	}
 }
 
-// Lot E : ROM au format non lu (.7z) avec un alias : jamais synchronisée, comme la notification le dit.
+// ROM in an unread format (.7z) with an Alias: never synced, as the notification says.
 func TestUnreadFormatAlias(t *testing.T) {
 	tmp = t.TempDir()
 	fakeHome(t)
@@ -450,7 +450,7 @@ func TestUnreadFormatAlias(t *testing.T) {
 	}
 }
 
-// Clé d'un alias créé par 3dssavesync : forme du Système, tirée du nom (même ROM, même Clé sur chaque PC), libre.
+// Key of an Alias created by 3dssavesync: shape of the System, from the name (same ROM, same Key on each PC), free.
 func TestAddAlias(t *testing.T) {
 	cfg := &Config{}
 	a, err := addAlias(cfg, "GBA", "Radical Red (4.10)")

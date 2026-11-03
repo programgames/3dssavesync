@@ -17,10 +17,10 @@ var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	shell32  = syscall.NewLazyDLL("shell32.dll")
-	comctl32 = syscall.NewLazyDLL("comctl32.dll") // chargée sous le contexte d'activation : version 6
+	comctl32 = syscall.NewLazyDLL("comctl32.dll") // loaded under the activation context: version 6
 )
 
-// Un binaire Go n'a pas de manifeste : sans lui, comctl32 v5 n'a pas TaskDialog.
+// A Go binary has no manifest: without one, comctl32 v5 has no TaskDialog.
 const manifest = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
 <dependency><dependentAssembly><assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls"
@@ -31,7 +31,7 @@ func u16(s string) *uint16 { p, _ := syscall.UTF16PtrFromString(s); return p }
 
 func ptr(p *uint16) uint64 { return uint64(uintptr(unsafe.Pointer(p))) }
 
-// Fenêtre au premier plan : le frontend est souvent en plein écran.
+// Window in the foreground: the frontend is often full screen.
 var dialogCallback = syscall.NewCallback(func(hwnd, msg, wparam, lparam, data uintptr) uintptr {
 	if msg == 0 { // TDN_CREATED
 		user32.NewProc("SetWindowPos").Call(hwnd, ^uintptr(0), 0, 0, 0, 0, 0x3) // HWND_TOPMOST, SWP_NOSIZE|SWP_NOMOVE
@@ -40,16 +40,16 @@ var dialogCallback = syscall.NewCallback(func(hwnd, msg, wparam, lparam, data ui
 	return 0
 })
 
-// demanderSysteme : TaskDialog à boutons nommés. Fermer la fenêtre (Échap, croix) = dernier bouton,
-// le plus prudent ; c'est aussi le bouton par défaut. "" si la fenêtre ne peut pas s'afficher.
+// askSystem shows a TaskDialog with named buttons. Closing the window (Esc, close box) = last button,
+// the safest; it is also the default button. "" if the window cannot show.
 func askSystem(text string, buttons []string) string {
-	runtime.LockOSThread() // le contexte d'activation vaut pour ce thread
+	runtime.LockOSThread() // the activation context applies to this thread
 	defer runtime.UnlockOSThread()
 	path := filepath.Join(os.TempDir(), "3dssavesync-comctl6.manifest")
 	if os.WriteFile(path, []byte(manifest), 0o644) != nil {
 		return ""
 	}
-	// ACTCTXW : cbSize, dwFlags, lpSource, wProcessorArchitecture, wLangId, puis 4 pointeurs (56 octets).
+	// ACTCTXW: cbSize, dwFlags, lpSource, wProcessorArchitecture, wLangId, then 4 pointers (56 bytes).
 	var actx [56]byte
 	binary.LittleEndian.PutUint32(actx[0:], 56)
 	source := u16(path)
@@ -70,10 +70,10 @@ func askSystem(text string, buttons []string) string {
 		return ""
 	}
 
-	// Première ligne (avant une ligne vide) = titre en gras du dialogue.
+	// First line (before an empty line) = bold title of the dialog.
 	instruction, content, _ := strings.Cut(text, "\n\n")
 	title, pInstr, pContent := u16("3dssavesync"), u16(instruction), u16(content)
-	// TASKDIALOG_BUTTON (pack 1) : int nButtonID, PCWSTR pszButtonText.
+	// TASKDIALOG_BUTTON (pack 1): int nButtonID, PCWSTR pszButtonText.
 	texts := make([]*uint16, len(buttons))
 	tab := make([]byte, 12*len(buttons))
 	for i, b := range buttons {
@@ -81,7 +81,7 @@ func askSystem(text string, buttons []string) string {
 		binary.LittleEndian.PutUint32(tab[12*i:], uint32(100+i))
 		binary.LittleEndian.PutUint64(tab[12*i+4:], ptr(texts[i]))
 	}
-	// TASKDIALOGCONFIG (pack 1, 160 octets en 64 bits).
+	// TASKDIALOGCONFIG (pack 1, 160 bytes on 64-bit).
 	var c [160]byte
 	le := binary.LittleEndian
 	le.PutUint32(c[0:], 160)
@@ -109,7 +109,7 @@ func askSystem(text string, buttons []string) string {
 	return buttons[len(buttons)-1] // IDCANCEL
 }
 
-// NOTIFYICONDATAW (976 octets en 64 bits).
+// NOTIFYICONDATAW (976 bytes on 64-bit).
 type notifyIconData struct {
 	CbSize           uint32
 	HWnd             uintptr
@@ -130,13 +130,13 @@ type notifyIconData struct {
 
 var activeNotifs sync.WaitGroup
 
-// notifierSysteme : notification Windows, rien à valider, affichée sans retarder le jeu. Windows la retire avec
-// l'icône : main attend la fin des notifications (8 s chacune) avant de terminer le programme.
+// systemNotify shows a Windows notification, nothing to confirm, without delaying the game. Windows removes it with
+// the icon: main waits for the notifications to end (8 s each) before the program ends.
 func systemNotify(text string) {
 	activeNotifs.Add(1)
 	go func() {
 		defer activeNotifs.Done()
-		runtime.LockOSThread() // la fenêtre de l'icône appartient à ce thread
+		runtime.LockOSThread() // the icon window belongs to this thread
 		notification(text)
 	}()
 }
@@ -156,7 +156,7 @@ func notification(text string) {
 	copy(n.SzTip[:127], syscall.StringToUTF16("3dssavesync"))
 	copy(n.SzInfoTitle[:63], syscall.StringToUTF16("3dssavesync"))
 	info := syscall.StringToUTF16(text)
-	if len(info) > 256 { // 255 caractères au plus : coupé avec « … », jamais au milieu d'une paire UTF-16
+	if len(info) > 256 { // 255 characters at most: cut with "…", never in the middle of a UTF-16 pair
 		n := 254
 		if info[n-1] >= 0xD800 && info[n-1] < 0xDC00 {
 			n--
@@ -172,8 +172,8 @@ func notification(text string) {
 	notif.Call(2, uintptr(unsafe.Pointer(&n))) // NIM_DELETE
 }
 
-// Console de l'assistant : l'exe n'en a pas (-H windowsgui), on en ouvre une.
-// Go écrit et lit la console en UTF-16 : les accents passent.
+// openConsole opens a console for the setup: the exe has none (-H windowsgui).
+// Go writes and reads the console in UTF-16: accented letters work.
 func openConsole() {
 	kernel32.NewProc("AllocConsole").Call()
 	if in, err := os.OpenFile("CONIN$", os.O_RDWR, 0); err == nil {
@@ -184,10 +184,10 @@ func openConsole() {
 	}
 }
 
-// La fenêtre de console se ferme avec le programme : on laisse lire la fin.
+// The console window closes with the program: let the user read the end.
 const cleanConsole = true
 
-// Saisie sans écho (jeton) : retire ENABLE_ECHO_INPUT, rend la fonction qui remet le mode.
+// noEcho turns off echo for input (token): removes ENABLE_ECHO_INPUT, returns the function that restores the mode.
 func noEcho() func() {
 	h := syscall.Handle(os.Stdin.Fd())
 	var mode uint32
@@ -198,7 +198,7 @@ func noEcho() func() {
 	return func() { kernel32.NewProc("SetConsoleMode").Call(uintptr(h), uintptr(mode)) }
 }
 
-// Langue de l'interface de Windows : "fr" si la langue principale est le français (LANG_FRENCH = 0x0C).
+// systemLanguage returns the Windows UI language: "fr" if the primary language is French (LANG_FRENCH = 0x0C).
 func systemLanguage() string {
 	id, _, _ := kernel32.NewProc("GetUserDefaultUILanguage").Call()
 	if id&0x3FF == 0x0C {
@@ -207,7 +207,7 @@ func systemLanguage() string {
 	return "en"
 }
 
-// Nombre de processus de ce nom (sans .exe).
+// countProcesses returns the number of processes with this name (without .exe).
 func countProcesses(name string) (n int) {
 	s, err := syscall.CreateToolhelp32Snapshot(syscall.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -224,7 +224,7 @@ func countProcesses(name string) (n int) {
 	return n
 }
 
-// Le processus pid tourne encore.
+// processAlive reports that the process pid still runs.
 func processAlive(pid int) bool {
 	h, err := syscall.OpenProcess(0x1000, false, uint32(pid)) // PROCESS_QUERY_LIMITED_INFORMATION
 	if err != nil {
@@ -235,7 +235,7 @@ func processAlive(pid int) bool {
 	return syscall.GetExitCodeProcess(h, &code) == nil && code == 259 // STILL_ACTIVE
 }
 
-// Processus indépendant de la console de l'assistant (l'exe est une application GUI : aucune console héritée).
+// startDetached starts a process independent of the setup console (the exe is a GUI app: no inherited console).
 func startDetached(exe string, args []string) error {
 	c := exec.Command(exe, args...)
 	if err := c.Start(); err != nil {
@@ -244,7 +244,7 @@ func startDetached(exe string, args []string) error {
 	return c.Process.Release()
 }
 
-// Lecteurs amovibles (carte SD, clé USB) : E:\, F:\…
+// removableRoots returns the removable drives (SD card, USB stick): E:\, F:\…
 func removableRoots() []string {
 	var l []string
 	mask, _, _ := kernel32.NewProc("GetLogicalDrives").Call()
@@ -260,7 +260,7 @@ func removableRoots() []string {
 	return l
 }
 
-// Place libre pour l'utilisateur sur le disque du dossier (GetDiskFreeSpaceExW).
+// systemFreeSpace returns the free space for the user on the disk of dir (GetDiskFreeSpaceExW).
 func systemFreeSpace(dir string) (uint64, error) {
 	var free uint64
 	if r, _, err := kernel32.NewProc("GetDiskFreeSpaceExW").Call(uintptr(unsafe.Pointer(u16(dir))), uintptr(unsafe.Pointer(&free)), 0, 0); r == 0 {

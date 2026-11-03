@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-// Désinstallation (ADR 0019) : LaunchBox et ES-DE reviennent exactement à leur état d'avant l'installation.
+// Uninstall (ADR 0019): LaunchBox and ES-DE go back exactly to what they were before the install.
 func TestUndoLaunchBox(t *testing.T) {
 	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
 	entries := []LBEntry{
 		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
-		{"cemu", filepath.Join("x", "Cemu.exe"), []string{"GB"}}, // aucune plateforme GB : rien d'ajouté
+		{"cemu", filepath.Join("x", "Cemu.exe"), []string{"GB"}}, // no GB platform: nothing added
 	}
 	installed, _ := launchbox(emulatorsXML, lb, launcher, entries)
 	if installed == emulatorsXML {
@@ -42,8 +42,8 @@ func TestUndoLaunchBox(t *testing.T) {
 	}
 }
 
-// Apostrophe et guillemets (dossier « Jeux d'enfance », titre LaunchBox) : echapperXML écrit &#39; et &#34;, LaunchBox
-// les écrit tels quels. La désinstallation compare les textes décodés.
+// Apostrophe and quotes (folder name, LaunchBox title): escapeXML writes &#39; and &#34;, LaunchBox writes them
+// as is. The uninstall compares the decoded texts.
 func TestUndoLaunchBoxApostrophe(t *testing.T) {
 	lb := filepath.Join("C:", "Jeux d'enfance", "LaunchBox")
 	launcher := filepath.Join("C:", "Jeux d'enfance", "3dssavesync", "3dssavesync.exe")
@@ -89,8 +89,8 @@ func TestUndoESDE(t *testing.T) {
 	}
 }
 
-// desinstaller : un frontend ouvert bloque tout ; sinon fichiers défaits avec copie, raccourcis et programme retirés,
-// données de l'utilisateur gardées et nommées.
+// uninstall: an open frontend blocks everything; else files undone with a copy, shortcuts and program removed,
+// user data kept and named.
 func TestUninstall(t *testing.T) {
 	fakeHome(t)
 	tmp := t.TempDir()
@@ -111,7 +111,7 @@ func TestUninstall(t *testing.T) {
 		return []string{"a.lnk"}, nil
 	}
 	removeProgram = func(f string) error { program = f; return nil }
-	write(t, installedLocation(), []byte("exe")) // dans la maison factice
+	write(t, installedLocation(), []byte("exe")) // in the fake home
 	isOpen, active := "LaunchBox", activeEmulator
 	activeEmulator = func(name string) bool { return name == isOpen }
 	t.Cleanup(func() { activeEmulator = active })
@@ -138,14 +138,14 @@ func TestUninstall(t *testing.T) {
 	if program != installedLocation() {
 		t.Errorf("programme installé à mettre à la Corbeille : %q", program)
 	}
-	// raccourcis vers l'exe noté (Lanceur) et vers l'exe installé
+	// shortcuts to the recorded exe (Launcher) and to the installed exe
 	if strings.Join(shortcutsFor, "|") != launcher+"|"+installedLocation() || !strings.Contains(text, "Raccourcis mis à la Corbeille : 2") || !strings.Contains(text, filepath.Join(tmp, "cfg", "serveur")) ||
 		!strings.Contains(text, filepath.Join(tmp, "cfg", "copies")) || !strings.Contains(text, "FBI") {
 		t.Errorf("rapport :\n%s", text)
 	}
 }
 
-// Version portable : frontends et raccourcis défaits, mais le programme et son dossier restent ; le rapport le nomme.
+// Portable version: frontends and shortcuts undone, but the program and its folder stay; the report names it.
 func TestUninstallPortable(t *testing.T) {
 	fakeHome(t)
 	dir := filepath.Join(t.TempDir(), "3dssavesync")
@@ -173,9 +173,9 @@ func TestUninstallPortable(t *testing.T) {
 	}
 }
 
-// Assistant des versions 1 et 2 : MelonDS, Mgba et Azahar modifiés sur place (exe = Lanceur, titre d'origine), plus
-// deux copies « (3dssavesync) » par défaut sur les mêmes plateformes. Les émulateurs modifiés restent, avec leurs
-// plateformes, et retrouvent leur exe ; les copies partent ; exe inconnu : émulateur laissé tel quel, rapport.
+// Setup of versions 1 and 2: MelonDS, Mgba and Azahar changed in place (exe = Launcher, original title), plus two
+// "(3dssavesync)" copies as the default on the same platforms. The changed emulators stay, with their platforms,
+// and get their exe back; the copies go; unknown exe: emulator left as is, in the report.
 func TestUndoLaunchBoxInPlace(t *testing.T) {
 	tmp := t.TempDir()
 	lb := filepath.Join(tmp, "LaunchBox")
@@ -209,7 +209,7 @@ func TestUndoLaunchBoxInPlace(t *testing.T) {
 		emu("m1", "MelonDS", launcher) + emu("m2", "Mgba", launcher) + emu("m3", "Azahar", launcher) +
 		emu("r0", "RetroArch", `C:\RetroArch\retroarch.exe`) + emu("r1", "RetroArch (3dssavesync)", launcher) +
 		emu("s0", "Sameboy", `C:\SameBoy\sameboy.exe`) + emu("s1", "Sameboy (3dssavesync)", launcher) +
-		// RetroArch modifié sur place : cœur GBA connu, GB inconnu ; DeSmuME, aussi par défaut pour Nintendo DS
+		// RetroArch changed in place: GBA core known, GB unknown; DeSmuME, also the default for Nintendo DS
 		plat("m4", "Nintendo Game Boy Advance", "run --emulator retroarch", "false") + plat("m4", "Nintendo Game Boy Color", "run --emulator retroarch", "false") +
 		plat("x0", "Nintendo DS", "", "true") + emu("m4", "RetroArch 1.9", launcher) + emu("x0", "DeSmuME", `C:\DeSmuME\desmume.exe`) +
 		"</LaunchBox>"
@@ -238,9 +238,9 @@ func TestUndoLaunchBoxInPlace(t *testing.T) {
 	}
 	for _, p := range []string{plat("m1", "Nintendo DS", "", "true"), plat("m1", "Nintendo DSi", "", "true"), plat("m1", "Nintendo Entertainment System", "", "false"),
 		plat("m2", "Nintendo Game Boy", "", "true"), plat("m2", "Nintendo Game Boy Advance", "", "true"), plat("m2", "Nintendo Game Boy Color", "", "true"),
-		// Mgba, modifié sur place, reste par défaut : RetroArch et Sameboy ne le redeviennent pas (jamais deux par défaut)
+		// Mgba, changed in place, stays the default: RetroArch and Sameboy do not become it again (never two defaults)
 		plat("r0", "Nintendo Game Boy Advance", "", "false"), plat("s0", "Nintendo Game Boy", "", "false"),
-		// le cœur de config.json revient, relatif au dossier de RetroArch
+		// the core of config.json comes back, relative to the RetroArch folder
 		plat("m4", "Nintendo Game Boy Advance", "-L &#34;"+filepath.Join("cores", "mgba_libretro.dll")+"&#34;", "false"),
 		plat("m4", "Nintendo Game Boy Color", "", "false"), plat("x0", "Nintendo DS", "", "true")} {
 		if !strings.Contains(d, p) {
@@ -248,8 +248,8 @@ func TestUndoLaunchBoxInPlace(t *testing.T) {
 		}
 	}
 	text := strings.Join(report, "\n")
-	// 8 lignes : MelonDS, Mgba, Azahar, RetroArch 1.9 et son cœur GB inconnu, les deux copies retirées, Nintendo DS
-	// par défaut deux fois (MelonDS et DeSmuME)
+	// 8 lines: MelonDS, Mgba, Azahar, RetroArch 1.9 and its unknown GB core, the two removed copies, Nintendo DS
+	// with two defaults (MelonDS and DeSmuME)
 	if len(report) != 8 || !strings.Contains(text, "Azahar") || !strings.Contains(text, "Tools, Manage, Emulators") || !strings.Contains(text, mgba) ||
 		!strings.Contains(text, "Nintendo Game Boy Color") || !strings.Contains(text, "2 émulateurs sont par défaut pour « Nintendo DS »") ||
 		strings.Contains(text, "de nouveau celui par défaut") || strings.Contains(text, "Nintendo Game Boy Advance") {

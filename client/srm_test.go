@@ -18,7 +18,7 @@ func TestSRM(t *testing.T) {
 		{"Beetle GBA", 128 << 10, 0}, {"Beetle GBA", 64 << 10, 0}, {"Beetle GBA", 32 << 10, 0},
 		{"Beetle GBA", 8 << 10, 0x20000}, {"Beetle GBA", 512, 0x20000},
 	} {
-		// SRAM -> .srm -> SRAM : même Hash qu'avec mGBA ou la 3DS (SRAM seule).
+		// SRAM -> .srm -> SRAM: same Hash as with mGBA or the 3DS (SRAM only).
 		sram := random(c.size, int64(c.size))
 		o, err := srm(c.core, sram)
 		expected := append(append(ff(c.zone), sram...), ff(fixedSRM[c.core]-c.zone-c.size)...)
@@ -29,13 +29,13 @@ func TestSRM(t *testing.T) {
 		if s, err := sramSRM(c.core, o, srv); err != nil || !bytes.Equal(s, sram) {
 			t.Fatalf("%s %d : SRAM relue fausse (err=%v)", c.core, c.size, err)
 		}
-		// Octets hors de la SRAM à 0x00 (gpSP ne remplace par 0xFF que la taille du type) : acceptés.
+		// Bytes outside the SRAM at 0x00 (gpSP sets to 0xFF only the size of the type): accepted.
 		zero := bytes.Repeat([]byte{0}, len(o))
 		copy(zero[c.zone:], sram)
 		if s, err := sramSRM(c.core, zero, srv); err != nil || !bytes.Equal(s, sram) {
 			t.Fatalf("%s %d : reste à 0x00 refusé (err=%v)", c.core, c.size, err)
 		}
-		// Une donnée hors de la taille du serveur (autre type de sauvegarde) : refus, rien n'est coupé.
+		// Data outside the server size (other save type): refused, nothing is cut.
 		for _, i := range []int{c.zone + c.size, len(o) - 1, 0} {
 			if i >= len(o) || i >= c.zone && i < c.zone+c.size {
 				continue
@@ -46,7 +46,7 @@ func TestSRM(t *testing.T) {
 				t.Fatalf("%s %d : donnée à 0x%X hors de la SRAM acceptée", c.core, c.size, i)
 			}
 		}
-		// Sans Version du serveur : taille inconnue, refus ; un .srm tout vierge passe (Sauvegarde vierge).
+		// No server Version: unknown size, refused; a fully blank .srm passes (blank Save).
 		if _, err := sramSRM(c.core, o, nil); err == nil {
 			t.Fatalf("%s %d : .srm sans Version du serveur accepté", c.core, c.size)
 		}
@@ -63,7 +63,7 @@ func TestSRM(t *testing.T) {
 		}
 	}
 
-	// Lanceur : lireLocal coupe à la taille du serveur ; la Récupération copie le .srm, puis écrit le .srm complet.
+	// Launcher: readLocal cuts at the server size; the Download copies the .srm, then writes the full .srm.
 	dir := t.TempDir()
 	sram, other := random(128<<10, 3), random(128<<10, 4)
 	j := &Game{System: "GBA", Key: "GBA-BPEF", Name: "Pokemon Emeraude", File: filepath.Join(dir, "Pokemon Emeraude.srm"), Core: "gpSP"}

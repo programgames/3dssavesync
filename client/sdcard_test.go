@@ -18,10 +18,10 @@ import (
 )
 
 func init() {
-	detectCards = func() []string { return nil } // jamais une vraie carte SD
+	detectCards = func() []string { return nil } // never a real SD card
 }
 
-// config.ini de la 3DS : url et jeton remplacés, les autres réglages gardés, copie de l'ancien, rien d'autre de touché.
+// 3DS config.ini: url and token replaced, other settings kept, old one copied, nothing else touched.
 func TestPrepareCard(t *testing.T) {
 	if got := configIni("roms=sdmc:/roms/nds\r\nurl=https://ancien\r\njeton=vieux\r\nsaves=\r\n", "http://192.0.2.5:8765", "abc"); got !=
 		"url=http://192.0.2.5:8765\njeton=abc\nroms=sdmc:/roms/nds\nsaves=\n" {
@@ -61,11 +61,11 @@ func TestPrepareCard(t *testing.T) {
 		t.Error("base.ini ne doit pas changer")
 	}
 	entries, _ := os.ReadDir(filepath.Dir(f))
-	if len(entries) != 3 { // config.ini, sa copie, base.ini : pas de fichier temporaire laissé
+	if len(entries) != 3 { // config.ini, its copy, base.ini: no temp file left
 		t.Errorf("fichiers du dossier : %v", entries)
 	}
 
-	// Dossier d'avant la v3 sans le nouveau : écrit là, le homebrew le reprend avec base.ini.
+	// Old nds-save-sync folder without the new one: written there, the homebrew takes it over with base.ini.
 	sd2 := t.TempDir()
 	os.Mkdir(filepath.Join(sd2, "Nintendo 3DS"), 0o755)
 	old := filepath.Join(sd2, "3ds", "nds-save-sync", "config.ini")
@@ -79,7 +79,7 @@ func TestPrepareCard(t *testing.T) {
 		t.Errorf("cartes3DS : %v", got)
 	}
 
-	// Console : la carte choisie par son numéro.
+	// Console: the card chosen by its number.
 	sd3 := t.TempDir()
 	os.Mkdir(filepath.Join(sd3, "Nintendo 3DS"), 0o755)
 	before := detectCards
@@ -94,7 +94,7 @@ func TestPrepareCard(t *testing.T) {
 	}
 }
 
-// Page web : config.ini à télécharger, carte préparée, serveur local proposé au premier lancement.
+// Web page: config.ini to download, card prepared, local server suggested on first run.
 func TestWebCard(t *testing.T) {
 	fakeHome(t)
 	detectBefore := detect
@@ -140,14 +140,14 @@ func TestWebCard(t *testing.T) {
 	}
 }
 
-// Adresses pour la 3DS : IPv4 privées, sans doublon, celle de la box en tête.
+// Addresses for the 3DS: private IPv4, no repeats, the router's one first.
 func TestLocalAddresses(t *testing.T) {
-	// VPN sur la route par défaut, WSL, VirtualBox, box en 192.168 : la box d'abord.
+	// VPN on the default route, WSL, VirtualBox, router on 192.168: the router first.
 	if got := sortAddresses([]string{"172.20.0.1", "10.8.0.6", "192.168.56.1", "192.168.0.42"}, "10.8.0.6"); !slices.Equal(got,
 		[]string{"192.168.0.42", "10.8.0.6", "192.168.56.1", "172.20.0.1"}) {
 		t.Errorf("VPN : %v", got)
 	}
-	// Box en 10.x sans VPN : la route par défaut d'abord, VirtualBox après.
+	// Router on 10.x without VPN: the default route first, VirtualBox after.
 	if got := sortAddresses([]string{"192.168.56.1", "10.0.0.7", "172.17.0.1"}, "10.0.0.7"); !slices.Equal(got,
 		[]string{"10.0.0.7", "192.168.56.1", "172.17.0.1"}) {
 		t.Errorf("box en 10.x : %v", got)
@@ -160,7 +160,7 @@ func TestLocalAddresses(t *testing.T) {
 	}
 }
 
-// alias.ini de la 3DS : les alias du PC remplacent ou complètent les lignes, les autres restent.
+// 3DS alias.ini: the PC's Aliases replace or add lines, the others stay.
 func TestAliasIni(t *testing.T) {
 	old := "Hack 3DS seul=GBA-0AAA\r\nRadical Red (4.10)=GBA-0OLD\r\n"
 	got := aliasIni(old, map[string]string{"Radical Red (4.10)": "GBA-0RAD", "Unbound": "GBA-0UNB"})
@@ -177,8 +177,8 @@ func TestAliasIni(t *testing.T) {
 	}
 }
 
-// 3dssavesync.cia sur la carte : écrit, déjà là, ancien copié avant, place libre, FBI absent, .cia absent de ce
-// programme ; la date de préparation notée seulement après une préparation réussie.
+// 3dssavesync.cia on the card: written, already there, old one copied first, free space, FBI missing, .cia missing from
+// this program; the preparation date recorded only after a successful preparation.
 func TestCopyCia(t *testing.T) {
 	ea, ca := freeSpace, embeddedCia
 	t.Cleanup(func() { freeSpace, embeddedCia = ea, ca })
@@ -203,7 +203,7 @@ func TestCopyCia(t *testing.T) {
 	if _, err := copyCia(sd, []byte("cia 2")); err == nil || !strings.Contains(err.Error(), "Pas assez de place sur la carte SD") || string(read(cia)) != "cia 1" {
 		t.Errorf("carte pleine : %v", err)
 	}
-	freeSpace = func(string) (uint64, error) { return 0, errors.New("inconnu") } // place inconnue : la copie est tentée
+	freeSpace = func(string) (uint64, error) { return 0, errors.New("inconnu") } // unknown space: the copy is tried
 	if _, err := copyCia(sd, []byte("cia 2")); err != nil || string(read(cia)) != "cia 2" {
 		t.Errorf("nouvelle version : %v", err)
 	}
@@ -233,7 +233,7 @@ func TestCopyCia(t *testing.T) {
 		t.Errorf("carte préparée : %v %q %+v", ok, l, cfg)
 	}
 
-	// La 3DS s'est mise à jour seule (installee= de maj.ini) : un .cia plus ancien n'est pas copié, config.ini l'est.
+	// The 3DS updated itself (installee= of maj.ini): an older .cia isn't copied, config.ini is.
 	va := version
 	t.Cleanup(func() { version = va })
 	version, embeddedCia = "3.7.0", []byte("cia 3.7.0")

@@ -1,7 +1,7 @@
 package main
 
-// Assistant d'installation (phase 4) : serveur et jeton, copie de l'exe à un emplacement fixe, émulateurs,
-// frontends. Texte dans une console (ouverte par l'exe sous Windows). Rien n'est écrit sans copie préalable.
+// Text setup: Server and token, copy of the exe to a fixed location, emulators, frontends. Text in a console
+// (opened by the exe on Windows). Nothing is written without a copy first.
 
 import (
 	"bufio"
@@ -24,11 +24,11 @@ import (
 	"time"
 )
 
-// Questions posées dans la console.
+// Questions asks questions in the console.
 type Questions struct {
 	in       *bufio.Reader
 	out      io.Writer
-	terminal bool // saisie cachée possible (jeton)
+	terminal bool // hidden input possible (token)
 }
 
 func (q *Questions) say(format string, a ...any) { fmt.Fprintf(q.out, format+"\n", a...) }
@@ -38,7 +38,7 @@ func (q *Questions) line() string {
 	return strings.TrimSpace(l)
 }
 
-// texte : réponse, ou defaut si Entrée.
+// text returns the answer, or dflt on Enter.
 func (q *Questions) text(question, dflt string) string {
 	if dflt != "" {
 		fmt.Fprintf(q.out, "%s [%s] : ", question, dflt)
@@ -75,7 +75,8 @@ func (q *Questions) secret(question string) string {
 	return q.line()
 }
 
-// Emplacement fixe de l'exe : les frontends et les raccourcis pointent vers lui. Version portable : l'exe en cours.
+// installedLocation returns the fixed location of the exe: frontends and shortcuts point to it. Portable version: the
+// running exe.
 func installedLocation() string {
 	if portableDir() != "" {
 		return executable()
@@ -89,11 +90,11 @@ func installedLocation() string {
 	return home(".local", "bin", "3dssavesync")
 }
 
-// Exe en cours ; vide en test (le binaire de test n'est pas le Lanceur).
+// executable returns the running exe; empty in tests (the test binary is not the Launcher).
 var executable = func() string { e, _ := os.Executable(); return e }
 
-// Version portable (ADR 0020) : portable.txt à côté de l'exe. Réglages et données dans le dossier de l'exe, qui n'est
-// jamais copié ailleurs. Rend ce dossier, ou "".
+// portableDir: portable version (ADR 0020) when portable.txt sits next to the exe. Settings and data live in the exe's
+// folder, which is never copied elsewhere. Returns that folder, or "".
 func portableDir() string {
 	e := executable()
 	if e == "" || !exists(filepath.Join(filepath.Dir(e), "portable.txt")) {
@@ -102,8 +103,8 @@ func portableDir() string {
 	return filepath.Dir(e)
 }
 
-// Dossier portable en lecture seule (clé verrouillée, Program Files) : une erreur qui dit quoi faire, jamais un repli
-// silencieux sur le dossier de l'utilisateur.
+// checkPortable: a read-only portable folder (locked USB drive, Program Files) gives an error that says what to do,
+// never a silent fallback to the user's folder.
 func checkPortable(d string) error {
 	f, err := os.CreateTemp(d, ".3dssavesync-essai-*")
 	if err != nil {
@@ -130,7 +131,7 @@ func cmdSetup(config string, text, noBrowser bool) (int, error) {
 		q.line()
 	}
 	if err != nil {
-		return 1, nil // déjà affichée dans la console
+		return 1, nil // already shown in the console
 	}
 	return 0, nil
 }
@@ -152,7 +153,7 @@ func cmdRepair(config string) (int, error) {
 	return 0, nil
 }
 
-// 3dssavesync uninstall [--oui] : la désinstallation (desinstaller.go), après confirmation.
+// cmdUninstall runs 3dssavesync uninstall [--oui]: the uninstall (uninstall.go), after confirmation.
 func cmdUninstall(config string, yes bool) (int, error) {
 	openConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}
@@ -178,8 +179,8 @@ func cmdUninstall(config string, yes bool) (int, error) {
 	return 0, nil
 }
 
-// Exe vers lequel pointent les frontends : celui noté à l'installation, sinon l'exe en cours. Version portable :
-// toujours l'exe en cours (la lettre d'une clé USB change).
+// launcherOf returns the exe that frontends point to: the one noted at install, else the running exe. Portable
+// version: always the running exe (the drive letter of a USB drive changes).
 func launcherOf(cfg *Config) string {
 	if cfg.Launcher != "" && portableDir() == "" {
 		return cfg.Launcher
@@ -244,7 +245,7 @@ func textSetup(q *Questions, config string) error {
 	if err := saveConfig(q, config, &cfg); err != nil {
 		return err
 	}
-	if slices.Contains(steps, "serveur") { // icône près de l'horloge (arrêtée par installerExe) et serveur local, comme la page
+	if slices.Contains(steps, "serveur") { // tray icon (stopped by installExe) and local server, like the page
 		if err := localServer(q, &cfg, config); err != nil {
 			return err
 		}
@@ -257,11 +258,11 @@ func textSetup(q *Questions, config string) error {
 	return nil
 }
 
-// Adaptateurs remplacés par les tests (aucun raccourci réel, serveur dans le test).
+// Adapters that tests replace (no real shortcut, server inside the test).
 var autostart, launchServer, createShortcut = addAutostart, startDetached, shortcut
 
-// Programmes résidents : démarrage automatique et lancement de l'icône près de l'horloge (tray.go), qui fait aussi
-// tourner le serveur local ; sans l'icône, le serveur local seul (serve). Puis le test du serveur local.
+// localServer sets up the resident programs: autostart and start of the tray icon (tray.go), which also runs the local
+// server; without the icon, the local server alone (serve). Then it tests the local server.
 func localServer(q *Questions, cfg *Config, config string) error {
 	if cfg.LocalServer != nil {
 		q.say("\n== %s ==", tr("Serveur local", "Local server"))
@@ -269,7 +270,7 @@ func localServer(q *Questions, cfg *Config, config string) error {
 	launcher, args := launcherOf(cfg), startupChoice(cfg, config)
 	setupAutostart(q, launcher, args, filepath.Dir(config))
 	icon := len(args) > 0 && args[0] == "tray"
-	if icon { // arrêtée par demarrageAutomatique : elle redémarre avec les nouveaux réglages
+	if icon { // stopped by setupAutostart: it restarts with the new settings
 		if err := launchServer(launcher, args); err != nil {
 			q.say("%s %s", tr("L'icône près de l'horloge n'a pas pu démarrer :", "The icon near the clock couldn't start:"), errorText(err))
 		}
@@ -282,7 +283,7 @@ func localServer(q *Questions, cfg *Config, config string) error {
 			q.say("%s", tr("Si Windows demande d'autoriser 3dssavesync sur le réseau, acceptez pour les réseaux privés.",
 				"If Windows asks to allow 3dssavesync on the network, allow it for private networks."))
 		}
-		if !icon { // l'icône vient de démarrer : son serveur local répond dans un instant
+		if !icon { // the icon just started: its local server answers in a moment
 			if err := launchServer(launcher, args); err != nil {
 				return fmt.Errorf(tr("impossible de lancer le serveur local : %s", "couldn't start the local server: %s"), errorText(err))
 			}
@@ -298,7 +299,7 @@ func localServer(q *Questions, cfg *Config, config string) error {
 	return nil
 }
 
-// Console : l'adresse et le jeton à entrer sur la 3DS (la page web les montre dans un cadre à part).
+// say3DS prints the address and token to enter on the 3DS (the web page shows them in a separate box).
 func say3DS(q *Questions, cfg *Config) {
 	url, others := address3DS(cfg)
 	if url == "" {
@@ -314,7 +315,7 @@ func say3DS(q *Questions, cfg *Config) {
 		"Keep this token private. Never open this port to the Internet on your router."))
 }
 
-// config.json : copie datée de l'ancien, puis écriture vérifiée. Rien si rien n'a changé.
+// saveConfig writes config.json: dated copy of the old one, then verified write. Nothing if nothing changed.
 func saveConfig(q *Questions, path string, cfg *Config) error {
 	var before Config
 	if readJSON(path, &before) == nil && jsonOf(&before) == jsonOf(cfg) {
@@ -339,7 +340,7 @@ func serverStep(q *Questions, cfg *Config) error {
 	q.say("  2. %s", tr("Serveur local sur ce PC : rien à installer, synchronisation à la maison quand le PC est allumé",
 		"Local server on this PC: nothing to install, syncs at home while the PC is on"))
 	dflt := "1"
-	if cfg.LocalServer != nil || cfg.URL == "" { // premier lancement : serveur local, rien d'autre à installer
+	if cfg.LocalServer != nil || cfg.URL == "" { // first run: local server, nothing else to install
 		dflt = "2"
 	}
 	if q.text(tr("Choix", "Choice"), dflt) == "2" {
@@ -360,7 +361,7 @@ func serverStep(q *Questions, cfg *Config) error {
 			rand.Read(o)
 			cfg.Token = hex.EncodeToString(o)
 		}
-		return nil // démarré et testé une fois config.json écrit (serveurLocal)
+		return nil // started and tested once config.json is written (localServer)
 	}
 	cfg.LocalServer = nil
 	if strings.HasPrefix(cfg.URL, "http://127.0.0.1:") {
@@ -400,7 +401,7 @@ func testServer(cfg *Config) error {
 	return err
 }
 
-// Copie de l'exe à l'emplacement fixe (un exe téléchargé reste où il est sinon).
+// installStep copies the exe to the fixed location (otherwise a downloaded exe stays where it is).
 func installStep(q *Questions, cfg *Config, config string) {
 	q.say("\n== %s ==", tr("Installation", "Install"))
 	current, target := executable(), installedLocation()
@@ -415,9 +416,9 @@ func installStep(q *Questions, cfg *Config, config string) {
 	q.say("%s", installExe(cfg, filepath.Dir(config)))
 }
 
-// Copie de l'exe en cours à l'emplacement fixe ; cfg.Lanceur suit. Rend la ligne à afficher. L'icône près de l'horloge
-// (dossier des réglages) tourne souvent depuis l'exe installé : elle s'arrête avant la copie (Windows refuse de
-// remplacer un exe en marche) ; serveurLocal la redémarre ensuite.
+// installExe copies the running exe to the fixed location; cfg.Launcher follows. Returns the line to show. The tray
+// icon (settings folder) often runs from the installed exe: it stops before the copy (Windows refuses to replace a
+// running exe); localServer restarts it afterwards.
 func installExe(cfg *Config, dir string) string {
 	current, target := executable(), installedLocation()
 	if cfg.Launcher == "" {
@@ -427,7 +428,7 @@ func installExe(cfg *Config, dir string) string {
 		cfg.Launcher = current
 		return tr("Programme déjà installé : ", "Program already installed: ") + current
 	}
-	stopTray(dir) // échec : l'exe installé reste peut-être pris, le message de la copie dit quoi faire
+	stopTray(dir) // on failure the installed exe may stay locked; the copy message says what to do
 	o, err := os.ReadFile(current)
 	if err == nil {
 		err = os.MkdirAll(filepath.Dir(target), 0o755)
@@ -436,7 +437,7 @@ func installExe(cfg *Config, dir string) string {
 		os.Remove(target + ".3dssavesync-tmp")
 		if err = writeVerified(target+".3dssavesync-tmp", o); err == nil {
 			os.Chmod(target+".3dssavesync-tmp", 0o755)
-			if err = rename(target+".3dssavesync-tmp", target); err != nil { // exe installé en marche
+			if err = rename(target+".3dssavesync-tmp", target); err != nil { // installed exe running
 				os.Remove(target + ".3dssavesync-tmp")
 				return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
 					"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
@@ -451,9 +452,9 @@ func installExe(cfg *Config, dir string) string {
 	return tr("Programme copié : ", "Program copied: ") + target
 }
 
-// --- Émulateurs ----------------------------------------------------------------------------------
+// --- Emulators -----------------------------------------------------------------------------------
 
-// Trouve : un émulateur détecté sur la machine.
+// Found is an emulator detected on the machine.
 type Found struct {
 	Profile string `json:"Profil"`
 	Exe     string
@@ -461,7 +462,7 @@ type Found struct {
 	Source  string
 }
 
-// Noms connus par profil : exécutables, dossiers usuels, Flatpak, application macOS, AppImage (EmuDeck).
+// known holds the names per Profile: executables, usual folders, Flatpak, macOS application, AppImage (EmuDeck).
 var known = map[string]struct {
 	exes, dirs   []string
 	flatpak, app string
@@ -476,13 +477,13 @@ var known = map[string]struct {
 	"sameboy":   {[]string{"sameboy"}, []string{"SameBoy"}, "io.github.sameboy.SameBoy", "SameBoy", nil, "sameboy"},
 	"desmume":   {[]string{"desmume", "DeSmuME_0.9.13_x64"}, []string{"DeSmuME"}, "org.desmume.DeSmuME", "", nil, "desmume"},
 
-	// Ticket #3 (bgb64 : nom de l'exe de bgbw64.zip NON VÉRIFIÉ)
+	// bgb64: exe name inside bgbw64.zip NOT VERIFIED
 	"skyemu":         {[]string{"SkyEmu", "SkyEmu-v5-Windows"}, []string{"SkyEmu"}, "", "SkyEmu", nil, "SkyEmu"},
 	"nanoboyadvance": {[]string{"NanoBoyAdvance"}, []string{"NanoBoyAdvance"}, "", "NanoBoyAdvance", []string{"NanoBoyAdvance*.AppImage"}, "NanoBoyAdvance"},
 	"bgb":            {[]string{"bgb", "bgb64"}, []string{"bgb"}, "", "", nil, "bgb"},
 }
 
-// Détection : PATH, dossiers usuels, Flatpak, AppImage, applications macOS, émulateurs de LaunchBox.
+// detect looks in PATH, usual folders, Flatpak, AppImage, macOS applications and LaunchBox emulators.
 var detect = func(lbDir string) []Found {
 	var t []Found
 	seenSet := map[string]bool{}
@@ -548,8 +549,8 @@ var detect = func(lbDir string) []Found {
 
 var reShim = regexp.MustCompile(`(?m)^path\s*=\s*"?([^"\r\n]+?)"?\s*$`)
 
-// cibleShim : l'exe réel derrière un shim de Scoop (scoop\shims\x.exe, et x.shim à côté : path = "…") ; sinon exe.
-// Sans cela, le même émulateur apparaît deux fois (PATH et scoop).
+// shimTarget returns the real exe behind a Scoop shim (scoop\shims\x.exe, with x.shim next to it: path = "…"); else
+// exe. Without it, the same emulator shows up twice (PATH and scoop).
 func shimTarget(exe string) string {
 	if !strings.EqualFold(filepath.Ext(exe), ".exe") {
 		return exe
@@ -561,7 +562,7 @@ func shimTarget(exe string) string {
 	return exe
 }
 
-// Cœurs RetroArch trouvés près de l'exe ou dans le dossier de configuration : Système -> cœur préféré.
+// retroArchCores finds RetroArch cores next to the exe or in the configuration folder: System -> preferred core.
 func retroArchCores(exe string) map[string]string {
 	var dirs []string
 	if exe != "" {
@@ -646,7 +647,7 @@ func emulatorsStep(q *Questions, cfg *Config) {
 	}
 }
 
-// remplacer : l'utilisateur a déjà accepté de remplacer l'émulateur du même nom.
+// addEmulator: replace means the user already agreed to replace the emulator of the same name.
 func addEmulator(q *Questions, cfg *Config, t Found, replace bool) {
 	name := t.Profile
 	if old := cfg.Emulators[name]; old != nil && !replace && !strings.EqualFold(old.Exe, t.Exe) {
@@ -656,7 +657,7 @@ func addEmulator(q *Questions, cfg *Config, t Found, replace bool) {
 	}
 	e := &Emulator{Exe: t.Exe, Process: t.Process}
 	if old := cfg.Emulators[name]; old != nil && strings.EqualFold(old.Exe, t.Exe) {
-		e = old // mêmes réglages : on les garde (dossiers, roms)
+		e = old // same settings: keep them (folders, roms)
 	}
 	if name == "retroarch" && len(e.Cores) == 0 {
 		e.Cores = retroArchCores(t.Exe)
@@ -753,8 +754,8 @@ func frontendsStep(q *Questions, cfg *Config) {
 	createShortcuts(q, cfg)
 }
 
-// Un raccourci par émulateur (launch) et un pour les réglages. Sans dossier des ROM (hors 3DS), le raccourci ne
-// synchroniserait rien : pas de raccourci, les jeux se lancent depuis le frontend.
+// createShortcuts makes one shortcut per emulator (launch) and one for the settings. Without a ROM folder (except
+// 3DS), the shortcut would sync nothing: no shortcut, the games start from the frontend.
 func createShortcuts(q *Questions, cfg *Config) {
 	launcher := launcherOf(cfg)
 	var names, noRoms []string
