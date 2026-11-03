@@ -76,6 +76,7 @@
     <string name="search">Chercher un jeu</string>
     <string name="filter_all">Tous</string>
     <string name="filter_todo">À faire</string>
+    <string name="no_match">Aucun jeu ne correspond à cette recherche ou à ce filtre.</string>
     <string name="no_game">Aucun jeu trouvé. Vérifiez les dossiers des ROM dans Émulateurs.</string>
     <plurals name="hidden_games">
         <item quantity="one">%1$d jeu n\'a encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur : il n\'est pas affiché.</item>

@@ -77,6 +77,7 @@
     <string name="search">Search a game</string>
     <string name="filter_all">All</string>
     <string name="filter_todo">To do</string>
+    <string name="no_match">No game matches this search or filter.</string>
     <string name="no_game">No game found. Check the ROM folders in Emulators.</string>
     <plurals name="hidden_games">
         <item quantity="one">%1$d game has no save yet, on this phone or on the server: it is not shown.</item>

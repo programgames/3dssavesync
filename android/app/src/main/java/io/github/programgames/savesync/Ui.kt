@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,9 +70,11 @@ enum class Tab { GAMES, EMULATORS, SETTINGS }
 @Composable
 fun Root() {
     var tab by rememberSaveable { mutableStateOf(if (App.configured()) Tab.GAMES else Tab.SETTINGS) }
-    var open by remember { mutableStateOf<Entry?>(null) }
+    // the open game, by its list key: it stays open when the phone rotates, and shows the entry as it is now (an action
+    // reads its State again)
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
-    val o = open
+    val o = App.entries.find { it.id == open }
     val ed = editing
     when {
         o != null -> {
@@ -80,8 +83,7 @@ fun Root() {
                 App.message = null
             }
             BackHandler(onBack = close)
-            // the entry as it is now: an action reads its State again
-            DetailsScreen(App.entries.find { it.emulator.id == o.emulator.id && it.rom == o.rom && it.system == o.system } ?: o, close)
+            DetailsScreen(o, close)
         }
         ed != null && App.emulators.any { it.id == ed } -> {
             BackHandler { editing = null }
@@ -101,7 +103,7 @@ fun Root() {
             },
         ) { p ->
             when (tab) {
-                Tab.GAMES -> GamesScreen(p, { open = it }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
+                Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
                 Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
                 Tab.SETTINGS -> SettingsScreen(p)
             }
@@ -316,7 +318,7 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
                 val variants = pr.systems[s].orEmpty()
                 if (variants.size > 1) {
                     Text(stringResource(R.string.core))
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { // 4 GB cores: wider than a small phone
                         variants.forEachIndexed { i, v -> FilterChip(f.variant == i, { updateSystem(s) { it.copy(variant = i) } }, { Text(v.label) }) }
                     }
                 }

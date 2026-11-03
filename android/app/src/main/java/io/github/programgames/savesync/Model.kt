@@ -51,6 +51,8 @@ data class Entry(
     val status: Status? = null,
     val error: Throwable? = null,
 ) {
+    val id get() = emulator.id + "|" + system + "|" + rom // one line of the list
+
     val shown: Shown
         get() = when {
             game == null -> Shown.DUPLICATE
@@ -85,7 +87,7 @@ object App {
     var loaded by mutableStateOf(false)
 
     fun init(c: Context) {
-        if (::context.isInitialized) return
+        if (::context.isInitialized && context === c.applicationContext) return // a new Application: the UI tests
         context = c.applicationContext
         settings = Settings(context)
         emulators = settings.emulators

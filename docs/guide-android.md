@@ -93,4 +93,4 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-The APK is in `android/app/build/outputs/apk/debug/`. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). Design choices: [ADR 0026](adr/0026-client-android.md).
+The APK is in `android/app/build/outputs/apk/debug/`. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). The UI tests run every screen on the computer with Robolectric, in English and in French, on a small screen: no emulator or phone needed (the first run downloads Robolectric and its Android library). Design choices: [ADR 0026](adr/0026-client-android.md).

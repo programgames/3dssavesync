@@ -128,7 +128,7 @@ class PythonServerTest {
         server = ProcessBuilder(
             python, "-c",
             "import socket, server; socket.getfqdn = lambda nom='': nom; server.creer(('127.0.0.1', $port), '$data', 'test-token').serve_forever()",
-        ).directory(File("../server")).redirectErrorStream(true).redirectOutput(File(tmp.root, "server.log")).start()
+        ).directory(File("../../server")).redirectErrorStream(true).redirectOutput(File(tmp.root, "server.log")).start()
         url = "http://127.0.0.1:$port"
         val limit = java.lang.System.currentTimeMillis() + 60_000
         while (true) {

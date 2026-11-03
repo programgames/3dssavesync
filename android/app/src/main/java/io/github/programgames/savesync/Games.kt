@@ -11,6 +11,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -119,8 +120,9 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     }
     val several = App.emulators.size > 1
     Column(Modifier.padding(p).padding(horizontal = 16.dp)) {
-        Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.tab_games), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.tab_games), Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleLarge)
+        // FlowRow: on a small screen or with longer words (French), the second button goes below instead of being cut
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton({ App.refresh() }, enabled = App.busy == null) { Text(stringResource(R.string.refresh)) }
             Button({
                 val replaced = App.entries.filter { it.shown == Shown.TO_DOWNLOAD && it.status?.local != null }
@@ -141,10 +143,11 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             }
         }
         LazyColumn(Modifier.weight(1f)) {
-            items(visible, key = { it.emulator.id + "|" + it.system + "|" + it.rom }) { e -> GameRow(e, several) { onOpen(e) } }
+            items(visible, key = { it.id }) { e -> GameRow(e, several) { onOpen(e) } }
             item {
                 val hidden = App.entries.size - shown.size
                 if (App.loaded && App.busy == null && App.entries.isEmpty()) Text(stringResource(R.string.no_game), Modifier.padding(vertical = 16.dp))
+                if (visible.isEmpty() && shown.isNotEmpty()) Text(stringResource(R.string.no_match), Modifier.padding(vertical = 16.dp))
                 if (hidden > 0) Text(pluralStringResource(R.plurals.hidden_games, hidden, hidden), Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.bodySmall)
             }
         }
@@ -271,10 +274,9 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
 
             if (e.shown == Shown.CONFLICT && server != null) {
                 Text(stringResource(R.string.choose_version), style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ChoiceCard(stringResource(R.string.this_phone), phoneLines, stringResource(R.string.keep_phone), Modifier.weight(1f)) { ask = true }
-                    ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.weight(1f)) { ask = false }
-                }
+                // one card above the other: side by side, the buttons were cut on a phone 320 dp wide
+                ChoiceCard(stringResource(R.string.this_phone), phoneLines, stringResource(R.string.keep_phone), Modifier.fillMaxWidth()) { ask = true }
+                ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.fillMaxWidth()) { ask = false }
                 Text(stringResource(R.string.nothing_lost), style = MaterialTheme.typography.bodySmall)
             } else {
                 InfoCard(stringResource(R.string.this_phone), phoneLines)

@@ -33,8 +33,10 @@ android {
         disable += "GradleDependency"
     }
     testOptions {
-        // The shared fixtures of every client: ../tests/ from android/, like ../tests/ from client/ in Go.
-        unitTests.all { it.workingDir = rootDir }
+        // The tests run in android/app/ (Robolectric reads the resources from there): the shared fixtures of every
+        // client are ../../tests/.
+        // Robolectric: the Compose screens run on the JVM, with the resources of the app (no emulator needed).
+        unitTests.isIncludeAndroidResources = true
     }
 }
 
@@ -47,4 +49,8 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // org.json is part of Android, but the JVM unit tests only see stubs of it.
     testImplementation("org.json:json:20240303")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(platform("androidx.compose:compose-bom:2025.05.00"))
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest") // the empty activity of createAndroidComposeRule
 }

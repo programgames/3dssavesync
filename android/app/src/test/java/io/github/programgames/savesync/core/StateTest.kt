@@ -10,7 +10,7 @@ class StateTest {
     // Same table as 3ds/test/test_state.c and client/state_test.go: tests/cas_etat.csv, "-" = absent.
     @Test
     fun stateTable() {
-        val lines = File("../tests/cas_etat.csv").readLines(Charsets.UTF_8).drop(1).filter { it.isNotBlank() }
+        val lines = File("../../tests/cas_etat.csv").readLines(Charsets.UTF_8).drop(1).filter { it.isNotBlank() }
         assertTrue(lines.size >= 12)
         fun obs(hash: String, size: String) = if (hash == "-") null else Version(hash, size.toLong())
         for (l in lines) {
@@ -23,7 +23,7 @@ class StateTest {
     // tests/saves.json, written by server/server.py and read by 3ds/test/test_list.c: same expectations.
     @Test
     fun serverList() {
-        val l = parseList(File("../tests/saves.json").readText(Charsets.UTF_8))
+        val l = parseList(File("../../tests/saves.json").readText(Charsets.UTF_8))
         assertEquals(3, l.size)
         val h1 = "49abd65bbf7f7e40c7055093ed2e3fd75f2f602f2c5fcf955c213e3135eb03f7"
         val h2 = "07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541"
