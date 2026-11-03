@@ -61,7 +61,7 @@ The bytes that an emulator adds after the SRAM for the real-time clock (mGBA: 48
 _Avoid_: RTC, footer, RTC footer
 
 **Blank save** (*Sauvegarde vierge*):
-A DS, GB or GBA Save whose SRAM holds only 0x00 or only 0xFF: no game is written in it yet. It counts as absent.
+A DS, GB or GBA Save whose SRAM holds only 0x00 or only 0xFF: no game is written in it yet. It counts as absent, unless the Current version is the same Save (then the Game is In sync).
 _Avoid_: empty save
 
 **Save archive** (*Archive de sauvegarde*):
@@ -110,6 +110,7 @@ _Avoid_: last sync, ancestor, reference, previous state
 
 **State** (*État*):
 The result of the comparison between Local save, Current version and Base for a Game: In sync (*À jour*), To upload (*À envoyer*), To download (*À récupérer*) or Conflict.
+When the Server could not be read, the 3DS shows Unknown (*Inconnu*) in place of a State, and offers no action.
 _Avoid_: action, status, decision
 
 **Conflict** (*Conflit*):

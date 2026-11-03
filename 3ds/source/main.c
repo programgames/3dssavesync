@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include "errors.h"
 #include "files.h"
+#include "games.h"
 #include "key.h"
 #include "list.h"
 #include "net.h"
@@ -30,9 +31,6 @@
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Saves of the mGBA forwarders */
 #define MAX_GAMES 512 /* ponytail: fixed array; beyond 512 ROMs, the next ones are skipped (and reported) */
 #define TOP_LINES 13 /* lines of a list on the top screen (footer below) */
-#define HIDDEN -1   /* neither Local save nor Current version: not shown */
-#define DUPLICATE 100 /* several ROMs for one Key (ADR 0005) */
-#define OFFLINE 101 /* server not read: State unknown, no action offered */
 #define GITHUB_LATEST "https://api.github.com/repos/programgames/3dssavesync/releases/latest" /* updates (ADR 0021) */
 
 static int english; /* console language: French, otherwise English */
@@ -64,7 +62,7 @@ typedef struct {
     char short_name[48]; /* for display only: "Pokemon Diamant" */
     int rom_count;
     int shares_save;    /* Duplicate: ROMs with different Keys that share one Save file (same_save) */
-    obs_t local, server;
+    unsigned long local_size, server_size;
     char local_hash[65], server_hash[65], date[17], client[17];
     long age; /* seconds since the Current version (server clock), -1 if unknown */
     int has_local, has_server;
@@ -74,7 +72,7 @@ typedef struct {
     int has_progress;   /* Pokémon: play time and trainer read (pokemon.h) */
     int mbc2;       /* GB: MBC2 cartridge, byte 0x147 of the ROM (ADR 0012) */
     progress_t progress;
-    int state;
+    status_t status;
 } game_t;
 
 /* "Pokemon - Version Diamant (France) (Rev 5)" -> "Pokemon Diamant": drops " - Version" and the "(...)" tags. */
@@ -410,7 +408,7 @@ static void read_local(game_t *j)
     u64 mtime;
     j->has_local = j->blank = j->has_progress = 0;
     j->modified = 0;
-    j->local.size = 0;
+    j->local_size = 0;
     j->local_hash[0] = '\0';
     if (j->system == SYS_DS) snprintf(j->sav, sizeof j->sav, "%s", j->sav_rom);
     else if (j->system != SYS_3DS) {
@@ -429,7 +427,7 @@ static void read_local(game_t *j)
     }
     j->has_progress = pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM only: without the Clock trailer */
     hash_hex(bytes, size, j->local_hash);
-    j->local.size = size;
+    j->local_size = size;
     j->has_local = 1;
     free(bytes);
 }
@@ -506,7 +504,7 @@ static int read_server(void)
         for (i = 0; i < game_count && strcmp(games[i].key, e.code); i++);
         if (i == game_count || !e.hash[0] || e.size < 0) continue; /* no local ROM: not shown */
         strcpy(games[i].server_hash, e.hash);
-        games[i].server.size = e.size;
+        games[i].server_size = e.size;
         strcpy(games[i].date, e.date);
         strcpy(games[i].client, e.client);
         games[i].age = e.age;
@@ -526,44 +524,37 @@ static int read_server(void)
     return 0;
 }
 
-/* Display order: what needs a decision first, then the actions, then the rest. */
-static int priority(int e)
-{
-    switch (e) {
-    case CONFLICT: return 0;
-    case TO_DOWNLOAD: return 1;
-    case TO_UPLOAD: return 2;
-    case DUPLICATE: return 3;
-    }
-    return 4;
-}
-
 static int compare_visible(const void *a, const void *b)
 {
     const game_t *x = &games[*(const int *)a], *y = &games[*(const int *)b];
-    int d = priority(x->state) - priority(y->state);
+    int d = status_priority(x->status) - status_priority(y->status);
     return d ? d : strcasecmp(x->short_name, y->short_name);
 }
 
-static void compute_states(void)
+/* Status of each Game and the sorted list of the visible ones. No write: returns the number of Games whose Base must
+ * become their Local save (In sync), their indexes in outdated. */
+static int compute_states(int *outdated)
 {
-    int i;
+    int i, n = 0;
     visible_count = 0;
     for (i = 0; i < game_count; i++) {
         game_t *j = &games[i];
-        /* Blank save = absent, unless the server has the same; download_save() copies it anyway. */
-        int seen = j->has_local && (!j->blank || (j->has_server && !strcmp(j->local_hash, j->server_hash)));
-        j->local.hash = j->local_hash;
-        j->server.hash = j->server_hash;
-        if (j->rom_count > 1) j->state = DUPLICATE;
-        else if (!seen && !j->has_server) j->state = HIDDEN;
-        else if (!server_read) j->state = OFFLINE;
-        else j->state = sync_state(seen ? &j->local : NULL, j->has_server ? &j->server : NULL, base_of(j->key));
-        if (j->state == IN_SYNC && (!base_of(j->key) || strcmp(base_of(j->key), j->local_hash)))
-            set_base(j->key, j->local_hash);
-        if (j->state != HIDDEN) visible[visible_count++] = i;
+        const obs_t local = { j->local_hash, j->local_size }, server = { j->server_hash, j->server_size };
+        const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL };
+        j->status = game_status(&o, base_of(j->key), server_read);
+        if (base_outdated(j->status, base_of(j->key), j->local_hash)) outdated[n++] = i;
+        if (j->status != STATUS_HIDDEN) visible[visible_count++] = i;
     }
     qsort(visible, visible_count, sizeof *visible, compare_visible);
+    return n;
+}
+
+/* compute_states, then the Bases written (the only write of an In sync Base). */
+static void update_states(void)
+{
+    static int outdated[MAX_GAMES];
+    int i, n = compute_states(outdated);
+    for (i = 0; i < n; i++) set_base(games[outdated[i]].key, games[outdated[i]].local_hash);
 }
 
 /* After an action: the Game it touched is already read again (read_local), only the server changes. */
@@ -572,7 +563,7 @@ static int reread_server(void)
     int r;
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     r = read_server();
-    compute_states(); /* server not read: the local games stay listed, with no action */
+    update_states(); /* server not read: the local games stay listed, with no action */
     loaded = 1;
     return r;
 }
@@ -584,7 +575,7 @@ static int refresh(void)
     scan();
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     r = read_server();
-    compute_states();
+    update_states();
     loaded = 1;
     return r;
 }
@@ -817,30 +808,30 @@ static int server_progress(const game_t *j, progress_t *p)
 
 /* ---------------------------------------------------------------- main screen (citro2d) */
 
-static u32 state_color(int e)
+static u32 state_color(status_t s)
 {
-    switch (e) {
-    case TO_UPLOAD: return C_YELLOW;
-    case TO_DOWNLOAD: return C_CYAN;
-    case CONFLICT: return C_RED;
+    switch (s) {
+    case STATUS_TO_UPLOAD: return C_YELLOW;
+    case STATUS_TO_DOWNLOAD: return C_CYAN;
+    case STATUS_CONFLICT: return C_RED;
+    default: return GREY_LIGHT; /* In sync, Duplicate, Unknown */
     }
-    return GREY_LIGHT; /* In sync, Duplicate, Unknown */
 }
 
 /* Dot and mark of the State: dark green for In sync, which does not catch the eye. */
-static u32 dot_color(int e) { return e == IN_SYNC ? RGB(0x2F6B3A) : state_color(e); }
+static u32 dot_color(status_t s) { return s == STATUS_IN_SYNC ? RGB(0x2F6B3A) : state_color(s); }
 
 /* One word per State, the same in the list, the counters and the details. */
-static const char *state_label(int e)
+static const char *state_label(status_t s)
 {
-    switch (e) {
-    case TO_UPLOAD: return T("À envoyer", "To upload");
-    case TO_DOWNLOAD: return T("À récupérer", "To download");
-    case CONFLICT: return T("Conflit", "Conflict");
-    case DUPLICATE: return T("Doublon", "Duplicate");
-    case OFFLINE: return T("Inconnu", "Unknown");
+    switch (s) {
+    case STATUS_TO_UPLOAD: return T("À envoyer", "To upload");
+    case STATUS_TO_DOWNLOAD: return T("À récupérer", "To download");
+    case STATUS_CONFLICT: return T("Conflit", "Conflict");
+    case STATUS_DUPLICATE: return T("Doublon", "Duplicate");
+    case STATUS_OFFLINE: return T("Inconnu", "Unknown");
+    default: return T("À jour", "In sync");
     }
-    return T("À jour", "In sync");
 }
 
 /* Button bar at the bottom of the bottom screen: each button can also be tapped with the stylus. */
@@ -950,10 +941,11 @@ static void draw_game_icon(const game_t *j)
  * the footer: the server, when it was read, the position in the list. */
 static void draw_list_top(void)
 {
-    static const int states[] = { CONFLICT, TO_DOWNLOAD, TO_UPLOAD, DUPLICATE, IN_SYNC }; /* order of priority() */
-    static const int all[] = { TO_UPLOAD, TO_DOWNLOAD, CONFLICT, DUPLICATE, OFFLINE, IN_SYNC };
+    static const status_t states[] = { STATUS_CONFLICT, STATUS_TO_DOWNLOAD, STATUS_TO_UPLOAD, STATUS_DUPLICATE, STATUS_IN_SYNC }; /* order of status_priority() */
+    static const status_t all[] = { STATUS_TO_UPLOAD, STATUS_TO_DOWNLOAD, STATUS_CONFLICT, STATUS_DUPLICATE, STATUS_OFFLINE, STATUS_IN_SYNC };
     const int cursor = list_cursor;
-    int i, count = 0, e[5], n[5] = { 0 }, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+    int i, count = 0, n[5] = { 0 }, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+    status_t e[5];
     char t[5][40], footer[200], age[32], pos[24];
     const char *host = strstr(cfg.url, "://") ? strstr(cfg.url, "://") + 3 : cfg.url;
     float l[5], x, xs = 0, xn;
@@ -961,14 +953,14 @@ static void draw_list_top(void)
     screen_top();
     x = 6 + screen_text(6, 4, 0.55f, WHITE, 0, "3dssavesync") + 12;
     if (loaded && server_read) { /* without the server, the counters would be wrong */
-        for (i = 0; i < visible_count; i++) n[priority(games[visible[i]].state)]++;
+        for (i = 0; i < visible_count; i++) n[status_priority(games[visible[i]].status)]++;
         for (i = 0; i < 5; i++) {
             if (!n[i]) continue;
             e[count] = states[i];
-            snprintf(t[count], sizeof t[count], e[count] == CONFLICT ? plural(n[i], english, T("%d conflit", "%d conflict"), T("%d conflits", "%d conflicts"))
-                                          : e[count] == TO_DOWNLOAD ? T("%d à récupérer", "%d to download")
-                                          : e[count] == TO_UPLOAD ? T("%d à envoyer", "%d to upload")
-                                          : e[count] == DUPLICATE ? plural(n[i], english, T("%d doublon", "%d duplicate"), T("%d doublons", "%d duplicates"))
+            snprintf(t[count], sizeof t[count], e[count] == STATUS_CONFLICT ? plural(n[i], english, T("%d conflit", "%d conflict"), T("%d conflits", "%d conflicts"))
+                                          : e[count] == STATUS_TO_DOWNLOAD ? T("%d à récupérer", "%d to download")
+                                          : e[count] == STATUS_TO_UPLOAD ? T("%d à envoyer", "%d to upload")
+                                          : e[count] == STATUS_DUPLICATE ? plural(n[i], english, T("%d doublon", "%d duplicate"), T("%d doublons", "%d duplicates"))
                                                              : T("%d à jour", "%d in sync"), n[i]);
             l[count] = screen_text_width(0.42f, t[count]);
             count++;
@@ -976,7 +968,7 @@ static void draw_list_top(void)
         count = texts_fitting(l, count, 12, 400 - 6 - x);
         for (x = 400 - 6, i = count - 1; i >= 0; i--) {
             x -= l[i];
-            screen_text(x, 7, 0.42f, e[i] == IN_SYNC ? C_GREEN : state_color(e[i]), 0, t[i]);
+            screen_text(x, 7, 0.42f, e[i] == STATUS_IN_SYNC ? C_GREEN : state_color(e[i]), 0, t[i]);
             x -= 12;
         }
     }
@@ -995,10 +987,10 @@ static void draw_list_top(void)
         float y = 27 + (i - start) * 15;
         if (i == cursor) {
             screen_rect(0, y - 1, 400, 15, SEL);
-            screen_rect(0, y - 1, 2, 15, dot_color(k->state));
+            screen_rect(0, y - 1, 2, 15, dot_color(k->status));
         }
-        screen_rect(8, y + 5, 5, 5, dot_color(k->state));
-        screen_text(18, y + 1, 0.42f, state_color(k->state), 0, state_label(k->state));
+        screen_rect(8, y + 5, 5, 5, dot_color(k->status));
+        screen_text(18, y + 1, 0.42f, state_color(k->status), 0, state_label(k->status));
         screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, SYSTEM_NAMES[k->system]);
         screen_text(xn, y, 0.5f, WHITE, 400 - xn - 8, k->short_name);
     }
@@ -1034,21 +1026,21 @@ static float detail(float y, const char *label, const char *value)
 /* Under the State word: why, and what A does. */
 static const char *state_sentence(const game_t *j, char *t, size_t n)
 {
-    switch (j->state) {
-    case TO_UPLOAD: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
-    case TO_DOWNLOAD: return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
+    switch (j->status) {
+    case STATUS_TO_UPLOAD: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
+    case STATUS_TO_DOWNLOAD: return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
                                "The server has a newer version. \xEE\x80\x80 downloads it, after a backup.");
-    case CONFLICT: return T("La sauvegarde a changé sur la 3DS et sur le serveur. \xEE\x80\x80 pour choisir laquelle garder.",
+    case STATUS_CONFLICT: return T("La sauvegarde a changé sur la 3DS et sur le serveur. \xEE\x80\x80 pour choisir laquelle garder.",
                            "The save changed on the 3DS and on the server. \xEE\x80\x80 to choose which one to keep.");
-    case DUPLICATE:
+    case STATUS_DUPLICATE:
         if (j->shares_save) snprintf(t, n, T("%d ROM ont ce nom de fichier et partageraient la même sauvegarde. Renommez-en une.",
                                          "%d ROMs have this file name and would share one save. Rename one."), j->rom_count);
         else snprintf(t, n, T("%d ROM contiennent ce jeu. Gardez-en une, ou ajoutez les autres aux ROM hacks sur le PC, puis préparez la carte SD.",
                               "%d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC, then prepare the SD card."), j->rom_count);
         return t;
-    case OFFLINE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
+    case STATUS_OFFLINE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
+    default: return T("La 3DS et le serveur ont la même sauvegarde.", "The 3DS and the server have the same save.");
     }
-    return T("La 3DS et le serveur ont la même sauvegarde.", "The 3DS and the server have the same save.");
 }
 
 /* Message band, right above the button bar (bottom): color mark, text, then the technical line
@@ -1086,9 +1078,9 @@ static void draw_bottom(const game_t *j)
     button_count = 0;
     if (j) {
         const char *b = base_of(j->key), *ext = strrchr(j->rom, '.');
-        u32 c = j->state == IN_SYNC ? C_GREEN : state_color(j->state);
+        u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
         gb = j->system == SYS_GB || j->system == SYS_GBA;
-        action = j->state == TO_UPLOAD || j->state == TO_DOWNLOAD || j->state == CONFLICT;
+        action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
         draw_game_icon(j);
         y += screen_lines(8, y, 0.6f, WHITE, 250, 2, j->short_name);
         /* System, and for GB/GBA the program whose save is synced (X changes it). */
@@ -1098,10 +1090,10 @@ static void draw_bottom(const game_t *j)
         screen_text(8, y + 1, 0.4f, GREY_LIGHT, 250, t);
         y = y + 18 < 58 ? 58 : y + 20; /* under the icon */
         screen_rect(8, y + 2, 3, 13, c);
-        screen_text(15, y, 0.5f, c, 0, state_label(j->state));
+        screen_text(15, y, 0.5f, c, 0, state_label(j->status));
         y += 19;
-        y += screen_lines(8, y, 0.42f, WHITE, 304, j->state == DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
-        if (j->state != DUPLICATE) { /* a Duplicate has no save and no version to show */
+        y += screen_lines(8, y, 0.42f, WHITE, 304, j->status == STATUS_DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
+        if (j->status != STATUS_DUPLICATE) { /* a Duplicate has no save and no version to show */
             local_text(j, t, sizeof t);
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
             server_text(j, t, sizeof t);
@@ -1124,9 +1116,9 @@ static void draw_bottom(const game_t *j)
     draw_bar_background(2);
     {
         char x[80];
-        button_t game_buttons[2] = { { KEY_A, !j ? T("Aucun jeu", "No game") : j->state == TO_UPLOAD ? T("Envoyer au serveur", "Upload to the server")
-                                     : j->state == TO_DOWNLOAD ? T("Récupérer du serveur", "Download from the server")
-                                     : j->state == CONFLICT ? T("Résoudre le conflit", "Resolve the conflict") : T("Rien à faire", "Nothing to do"), action },
+        button_t game_buttons[2] = { { KEY_A, !j ? T("Aucun jeu", "No game") : j->status == STATUS_TO_UPLOAD ? T("Envoyer au serveur", "Upload to the server")
+                                     : j->status == STATUS_TO_DOWNLOAD ? T("Récupérer du serveur", "Download from the server")
+                                     : j->status == STATUS_CONFLICT ? T("Résoudre le conflit", "Resolve the conflict") : T("Rien à faire", "Nothing to do"), action },
                             { KEY_X, x, 1 } };
         const button_t general[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
                                         { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
@@ -1813,12 +1805,12 @@ static int act(game_t *j)
     char q[500], srv[200], loc[200], t[80];
     progress_t p;
     int done = 0;
-    switch (j->state) {
-    case TO_UPLOAD:
+    switch (j->status) {
+    case STATUS_TO_UPLOAD:
         upload_save(j);
         done = 1;
         break;
-    case TO_DOWNLOAD: {
+    case STATUS_TO_DOWNLOAD: {
         int has_server_progress = server_progress(j, &p);
         server_text(j, srv, sizeof srv);
         local_text(j, loc, sizeof loc);
@@ -1830,7 +1822,7 @@ static int act(game_t *j)
             download_save(j);
         break;
     }
-    case CONFLICT: {
+    case STATUS_CONFLICT: {
         u32 k;
         const button_t b = { KEY_B, T("Ne rien faire", "Do nothing"), 1 };
         /* Both cards have the same form: the version, its play time (Pokémon), what happens. */
@@ -1879,13 +1871,13 @@ static int act(game_t *j)
         }
         break;
     }
-    case DUPLICATE:
+    case STATUS_DUPLICATE:
         if (j->shares_save) set_message(C_RED, NULL, T("%s : %d ROM ont ce nom de fichier et partageraient une sauvegarde. Renommez-en une.",
                                               "%s: %d ROMs have this file name and would share one save. Rename one."), j->short_name, j->rom_count);
         else set_message(C_RED, NULL, T("%s : %d ROM contiennent ce jeu. Gardez-en une, ou ajoutez les autres aux ROM hacks sur le PC.",
                                    "%s: %d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC."), j->short_name, j->rom_count);
         break;
-    case OFFLINE:
+    case STATUS_OFFLINE:
         set_message(C_RED, NULL, T("%s : serveur non lu. Appuyez sur \xEE\x80\x83 pour réessayer.", "%s: server not read. Press \xEE\x80\x83 to try again."), j->short_name);
         break;
     default:
@@ -1969,17 +1961,17 @@ static void sync_all(void)
         return;
     }
     for (i = 0; i < visible_count; i++) {
-        int e = games[visible[i]].state;
-        planned_uploads += e == TO_UPLOAD;
-        planned_downloads += e == TO_DOWNLOAD;
-        skipped += e == CONFLICT || e == DUPLICATE;
+        status_t e = games[visible[i]].status;
+        planned_uploads += e == STATUS_TO_UPLOAD;
+        planned_downloads += e == STATUS_TO_DOWNLOAD;
+        skipped += e == STATUS_CONFLICT || e == STATUS_DUPLICATE;
     }
     sync_summary(r, sizeof r, planned_uploads, planned_downloads, 0, skipped);
     snprintf(q, sizeof q, "%s\n\n%s", r, T("Ces sauvegardes de la 3DS seront remplacées par celles du serveur, après une copie de sécurité :\n",
                                            "These 3DS saves will be replaced by the server's, after a backup:\n"));
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
-        if (j->state == TO_DOWNLOAD && j->has_local && overwrites++ < 8) {
+        if (j->status == STATUS_TO_DOWNLOAD && j->has_local && overwrites++ < 8) {
             strncat(q, j->short_name, 40);
             if (j->has_progress) {
                 char t[80];
@@ -1993,13 +1985,13 @@ static void sync_all(void)
     if (overwrites) may_overwrite = confirm(T("Tout synchroniser", "Sync all"), NULL, q, NULL, T("Remplacer", "Replace"));
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
-        total += j->state == TO_UPLOAD || (j->state == TO_DOWNLOAD && (may_overwrite || !j->has_local));
+        total += j->status == STATUS_TO_UPLOAD || (j->status == STATUS_TO_DOWNLOAD && (may_overwrite || !j->has_local));
     }
     operation = T("Tout synchroniser", "Sync all");
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
-        int do_upload = j->state == TO_UPLOAD;
-        int do_download = j->state == TO_DOWNLOAD && (may_overwrite || !j->has_local);
+        int do_upload = j->status == STATUS_TO_UPLOAD;
+        int do_download = j->status == STATUS_TO_DOWNLOAD && (may_overwrite || !j->has_local);
         if (do_upload || do_download) {
             int ok;
             list_cursor = i; /* the top screen follows the current game */
