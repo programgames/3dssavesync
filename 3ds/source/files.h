@@ -1,50 +1,50 @@
-/* Fichiers de la carte SD. Aucune dépendance libctru : testé sur PC (test/test_files.c). */
+/* Files on the SD card. No libctru dependency: tested on the PC (test/test_files.c). */
 #ifndef FILES_H
 #define FILES_H
 
 #include <stddef.h>
 #include "key.h"
 
-/* Fichier entier dans *octets (à libérer). 0 si lu, -1 sinon. */
+/* Whole file in *bytes (to free). 0 if read, -1 otherwise. */
 int read_file(const char *path, unsigned char **bytes, size_t *size);
 
-/* 0 si écrit en entier, -1 sinon. */
+/* 0 if written in full, -1 otherwise. */
 int write_file(const char *path, const void *bytes, size_t size);
 
-/* 0 si écrit en entier et relu identique, -1 sinon. */
+/* 0 if written in full and read back identical, -1 otherwise. */
 int write_verified(const char *path, const void *bytes, size_t size);
 
-/* Remplace chemin sans perte : chemin.tmp écrit et relu, puis l'ancien retiré et chemin.tmp renommé.
- * 0 si fait ; -1 si chemin.tmp n'a pas pu être écrit (ancien intact) ; -2 si l'ancien est retiré mais le renommage ou
- * la relecture a échoué (chemin.tmp, vérifié, reste si le renommage a échoué). */
+/* Replaces path without loss: path.tmp written and read back, then the old file removed and path.tmp renamed.
+ * 0 if done; -1 if path.tmp could not be written (old file intact); -2 if the old file is removed but the rename or
+ * the read-back failed (path.tmp, checked, stays if the rename failed). */
 int replace_file(const char *path, const void *bytes, size_t size);
 
-/* Remplace le programme chemin (.3dsx) : chemin.tmp écrit et relu, chemin renommé chemin.bak, chemin.tmp renommé
- * chemin et relu, puis chemin.bak retiré. Une coupure laisse toujours un programme entier (chemin ou chemin.bak).
- * 0 si fait ; -1 si l'ancien est en place (chemin absent : rien n'est touché) ; -2 si l'ancien n'a pas pu revenir :
- * il reste dans chemin.bak. */
+/* Replaces the program at path (.3dsx): path.tmp written and read back, path renamed path.bak, path.tmp renamed
+ * path and read back, then path.bak removed. A power cut always leaves a whole program (path or path.bak).
+ * 0 if done; -1 if the old program is in place (path missing: nothing is touched); -2 if the old program could not
+ * come back: it stays in path.bak. */
 int replace_program(const char *path, const void *bytes, size_t size);
 
-/* 1 si argv[0] est un .3dsx de la carte SD (Homebrew Launcher) ; 0 pour 3dslink (3dslink:/…), un .cia ou rien. */
+/* 1 if argv[0] is a .3dsx on the SD card (Homebrew Launcher); 0 for 3dslink (3dslink:/…), a .cia or nothing. */
 int launched_from_sd(const char *argv0);
 
-/* Met le contenu de src dans dst sans perte : copie de dst dans copie s'il existe, dst.tmp relu
- * et vérifié, puis remplacement. remove_src : retire src ensuite (dst a le même contenu).
- * 0 si fait ; -1 sinon, sans rien perdre (au pire, dst.tmp reste). */
+/* Puts the content of src in dst without loss: copy of dst in backup if it exists, dst.tmp read back
+ * and checked, then replace. remove_src: removes src afterwards (dst has the same content).
+ * 0 if done; -1 otherwise, with nothing lost (at worst, dst.tmp stays). */
 int move_save(const char *src, const char *dst, const char *backup, int remove_src);
 
-/* Nom libre pour une copie de sécurité : dossier/nom-date.ext, sinon dossier/nom-date-1.ext, -2… (deux copies la même
- * seconde, ou deux ROM de même nom). Une copie existante n'est jamais écrasée. 0 si trouvé et tient dans out, -1 sinon. */
+/* Free name for a Backup copy: dir/name-date.ext, else dir/name-date-1.ext, -2… (two copies in the same
+ * second, or two ROMs with the same name). An existing copy is never overwritten. 0 if found and fits in out, -1 otherwise. */
 int backup_path(const char *dir, const char *name, const char *date, const char *ext, char *out, size_t n);
 
-/* Sauvegarde de la ROM nom (sans extension) rangée dans dossier (racine roms ou un de ses sous-dossiers, ADR 0015).
- * saves vide ou égal à roms : à côté de la ROM. saves = roms + "/saves" (TWiLight Menu++) : dans le dossier saves du
- * dossier de la ROM. Autre dossier (open_agb_firm, _nds/TWiLightMenu/saves) : toutes les ROM dans ce dossier.
- * 0 si le chemin tient dans out, -1 sinon. */
+/* Save of the ROM name (no extension) stored in dir (the roms root or one of its subfolders, ADR 0015).
+ * saves empty or equal to roms: next to the ROM. saves = roms + "/saves" (TWiLight Menu++): in the saves folder of
+ * the ROM's folder. Other folder (open_agb_firm, _nds/TWiLightMenu/saves): all ROMs in that folder.
+ * 0 if the path fits in out, -1 otherwise. */
 int save_path(const char *roms, const char *saves, const char *dir, const char *name, char *out, size_t n);
 
-/* 1 si deux ROM partagent un fichier de Sauvegarde : même .sav, ou deux ROM GB/GBA de même nom (casse ignorée), quels
- * que soient leur dossier et leur Système : le forwarder mGBA range sa Sauvegarde sous sdmc:/mGBA/forwarders/<nom>.sav. */
+/* 1 if two ROMs share a Save file: same .sav, or two GB/GBA ROMs with the same name (case ignored), whatever
+ * their folder and System: the mGBA forwarder stores its Save as sdmc:/mGBA/forwarders/<name>.sav. */
 int same_save(system_t a, const char *name_a, const char *sav_a, system_t b, const char *name_b, const char *sav_b);
 
 #endif

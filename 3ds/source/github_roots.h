@@ -1,11 +1,11 @@
-/* Racines de GitHub (mises à jour, ADR 0021), exportées du magasin Windows le 2026-11-03. api.github.com et github.com :
- * chaîne Sectigo DV E36 -> Sectigo Public Server Authentication Root E46, envoyée aussi signée par USERTrust ECC ; une
- * des deux racines suffit, les deux gardent la vérification si GitHub raccourcit sa chaîne. Les fichiers des releases
- * (release-assets.githubusercontent.com) remontent à ISRG Root X1 (isrg_root_x1.h), ajoutée à côté dans net.c.
- * Sectigo Public Server Authentication Root E46, jusqu'au 2046-03-21,
- *   SHA-256 : C9:0F:26:F0:FB:1B:40:18:B2:22:27:51:9B:5C:A2:B5:3E:2C:A5:B3:BE:5C:F1:8E:FE:1B:EF:47:38:0C:53:83
- * USERTrust ECC Certification Authority, jusqu'au 2038-01-18,
- *   SHA-256 : 4F:F4:60:D5:4B:9C:86:DA:BF:BC:FC:57:12:E0:40:0D:2B:ED:3F:BC:4D:4F:BD:AA:86:E0:6A:DC:D2:A9:AD:7A */
+/* GitHub root certificates (updates, ADR 0021), exported from the Windows store on 2026-11-03. api.github.com and
+ * github.com: chain Sectigo DV E36 -> Sectigo Public Server Authentication Root E46, also sent signed by USERTrust ECC;
+ * either root is enough, and both keep the check working if GitHub shortens its chain. Release files
+ * (release-assets.githubusercontent.com) chain up to ISRG Root X1 (isrg_root_x1.h), added next to them in net.c.
+ * Sectigo Public Server Authentication Root E46, valid until 2046-03-21,
+ *   SHA-256: C9:0F:26:F0:FB:1B:40:18:B2:22:27:51:9B:5C:A2:B5:3E:2C:A5:B3:BE:5C:F1:8E:FE:1B:EF:47:38:0C:53:83
+ * USERTrust ECC Certification Authority, valid until 2038-01-18,
+ *   SHA-256: 4F:F4:60:D5:4B:9C:86:DA:BF:BC:FC:57:12:E0:40:0D:2B:ED:3F:BC:4D:4F:BD:AA:86:E0:6A:DC:D2:A9:AD:7A */
 static const char GITHUB_ROOTS[] =
     "-----BEGIN CERTIFICATE-----\n"
     "MIICOjCCAcGgAwIBAgIQQvLM2htpN0RfFf51KBC49DAKBggqhkjOPQQDAzBfMQsw\n"

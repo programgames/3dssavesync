@@ -1,8 +1,8 @@
-"""Serveur personnel 3dssavesync : Historique des Sauvegardes DS, GB, GBA et 3DS (docs/design.md §2, ADR 0004).
+"""Self-hosted 3dssavesync server: History of the DS, GB, GBA and 3DS Saves (docs/design.md §2, ADR 0004).
 
-Variables d'environnement (préfixe NDSSYNC_ d'avant la v3, gardé pour les installations existantes) : NDSSYNC_TOKEN (obligatoire), NDSSYNC_DATA (défaut /data), NDSSYNC_PORT (défaut 8080).
-Une Version = data/<code>/<seq>-<date>-<client>-<hash>.sav ; la Version courante a le plus grand <seq>.
-Rien n'est jamais supprimé ni réécrit, sauf data/<code>/nom.txt : le nom du jeu donné par un Client, pour l'Historique.
+Environment variables (NDSSYNC_ prefix from before v3, kept for existing installs): NDSSYNC_TOKEN (required), NDSSYNC_DATA (default /data), NDSSYNC_PORT (default 8080).
+A Version = data/<code>/<seq>-<date>-<client>-<hash>.sav; the Current version has the highest <seq>.
+Nothing is ever deleted or rewritten, except data/<code>/nom.txt: the game name sent by a Client, for the History.
 """
 import calendar
 import hashlib
@@ -14,14 +14,14 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# Clé d'un Jeu (ADR 0007) : DS, GBA, GB/GBC, 3DS. Jamais de "/" ni de "." : sûre comme nom de dossier.
+# Key of a Game (ADR 0007): DS, GBA, GB/GBC, 3DS. Never "/" or ".": safe as a folder name.
 KEY = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})"
 SAVE = re.compile(rf"^/saves/{KEY}$")
 HISTORY = re.compile(rf"^/saves/{KEY}/history(/.*)?$")
 NAME = re.compile(rf"^/saves/{KEY}/name$")
 CLIENT = re.compile(r"^[a-z0-9]{1,16}$")
-MAX_SIZE = 64 * 1024 * 1024  # plus grande mémoire de sauvegarde DS connue
-LOCK = threading.Lock()  # ponytail: verrou global, suffit pour 2 Clients
+MAX_SIZE = 64 * 1024 * 1024  # largest known DS save memory
+LOCK = threading.Lock()  # ponytail: global lock, enough for 2 Clients
 
 
 def creer(address, data, token):
@@ -41,7 +41,7 @@ def creer(address, data, token):
     def info(code, version):
         _, date, client, h = version[:-4].split("-")
         size = os.path.getsize(os.path.join(data, code, version))
-        # age : calculé avec l'horloge du serveur, car celle de la 3DS n'a pas de fuseau horaire
+        # age: computed with the server clock, because the 3DS clock has no time zone
         age = int(time.time() - calendar.timegm(time.strptime(date, "%Y%m%dT%H%M%SZ")))
         return {"code": code, "version": version, "hash": h, "taille": size, "date": date, "client": client, "age": age}
 
@@ -96,9 +96,9 @@ def creer(address, data, token):
             if not 0 < size <= MAX_SIZE:
                 self.close_connection = True
                 return self.respond(400)
-            # Lire le corps avant toute réponse : sinon le client reçoit un reset au lieu du statut.
+            # Read the body before any response: otherwise the client gets a reset instead of the status.
             body = self.rfile.read(size)
-            if len(body) != size:  # connexion coupée : jamais de Version tronquée
+            if len(body) != size:  # connection cut: never a truncated Version
                 self.close_connection = True
                 return self.respond(400)
             if not self.authorized():
@@ -130,14 +130,14 @@ def creer(address, data, token):
                     with open(tmp, "wb") as f:
                         f.write(body)
                         f.flush()
-                        os.fsync(f.fileno())  # une Version acceptée doit survivre à une coupure
+                        os.fsync(f.fileno())  # an accepted Version must survive a power cut
                     os.replace(tmp, os.path.join(folder, name))
-                except OSError:  # disque plein, droits : le Client reçoit une erreur, pas une connexion coupée
+                except OSError:  # disk full, permissions: the Client gets an error, not a cut connection
                     return self.respond(500)
             self.respond(200, ETag=f'"{h}"')
 
         def set_name(self, code, body):
-            """Nom du jeu (nom de la ROM ou titre 3DS) : seulement pour un jeu qui a déjà une Version."""
+            """Name of the game (ROM name or 3DS title): only for a game that already has a Version."""
             try:
                 name = body.decode("utf-8").strip()
             except UnicodeDecodeError:

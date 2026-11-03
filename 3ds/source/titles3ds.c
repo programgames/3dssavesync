@@ -1,10 +1,10 @@
-/* Même ordre d'opérations que Checkpoint (io.cpp : écriture, commit, secure value), code écrit ici (ADR 0009). */
+/* Same order of operations as Checkpoint (io.cpp: write, commit, secure value), code written here (ADR 0009). */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "titles3ds.h"
 
-/* Chemin binaire {media, low, high} de ARCHIVE_USER_SAVEDATA (3dbrew, FS:OpenArchive). */
+/* Binary path {media, low, high} of ARCHIVE_USER_SAVEDATA (3dbrew, FS:OpenArchive). */
 static Result open_save_archive(u64 id, FS_MediaType media, FS_Archive *a)
 {
     u32 path[3] = { media, (u32)id, (u32)(id >> 32) };
@@ -54,7 +54,7 @@ int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size)
     r = FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, "/main"), FS_OPEN_WRITE, 0);
     if (R_SUCCEEDED(r)) {
         r = FSFILE_GetSize(f, &t);
-        if (R_SUCCEEDED(r) && t != size) r = -2; /* jamais de changement de taille : le jeu ne le prévoit pas */
+        if (R_SUCCEEDED(r) && t != size) r = -2; /* never a size change: the game does not expect one */
         if (R_SUCCEEDED(r)) r = FSFILE_Write(f, &written, 0, bytes, size, 0);
         if (R_SUCCEEDED(r) && written != size) r = -3;
         FSFILE_Close(f);
@@ -63,7 +63,7 @@ int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size)
     FSUSER_CloseArchive(a);
     if (R_FAILED(r)) return -1;
 
-    /* Sinon le jeu refuse une sauvegarde restaurée ; il en réécrit une à sa prochaine sauvegarde. */
+    /* Otherwise the game refuses a restored save; it writes a new one at its next save. */
     value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
     FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
     return 0;
@@ -94,7 +94,7 @@ int title_main_only(u64 id)
     return -1;
 }
 
-/* UTF-16 (plan de base) -> UTF-8, sans couper un caractère ; retour à la ligne -> espace. */
+/* UTF-16 (Basic Multilingual Plane) -> UTF-8, without cutting a character; line break -> space. */
 static void utf8(const u16 *src, size_t max, char *name, size_t n)
 {
     size_t i, j = 0;
@@ -109,7 +109,7 @@ static void utf8(const u16 *src, size_t max, char *name, size_t n)
     name[j] = '\0';
 }
 
-/* SMDH du titre (0x36C0 octets) : ExeFS:/icon de ARCHIVE_SAVEDATA_AND_CONTENT (méthode de FBI). 0 si lu. */
+/* SMDH of the title (0x36C0 bytes): ExeFS:/icon of ARCHIVE_SAVEDATA_AND_CONTENT (FBI's method). 0 if read. */
 static int read_smdh(u64 id, FS_MediaType media, u16 *smdh)
 {
     static const u32 file[5] = { 0, 0, 2, 0x6E6F6369, 0 }; /* "icon" */
@@ -127,12 +127,12 @@ static int read_smdh(u64 id, FS_MediaType media, u16 *smdh)
 
 int title_name(u64 id, FS_MediaType media, int language, char *name, size_t n)
 {
-    /* SMDH : 16 titres de 0x200 octets à 0x08, titre court (0x40 caractères UTF-16) en tête de chacun. */
+    /* SMDH: 16 titles of 0x200 bytes from 0x08, short title (0x40 UTF-16 characters) at the start of each. */
     u16 *smdh = malloc(0x36C0);
     int ok = smdh && read_smdh(id, media, smdh) == 0;
     if (ok) {
         const u16 *t = smdh + (8 + 0x200 * (language & 0xF)) / 2;
-        if (!t[0]) t = smdh + (8 + 0x200 * 1) / 2; /* titre vide dans cette langue : anglais */
+        if (!t[0]) t = smdh + (8 + 0x200 * 1) / 2; /* empty title in this language: English */
         utf8(t, 0x40, name, n);
     }
     free(smdh);
@@ -141,7 +141,7 @@ int title_name(u64 id, FS_MediaType media, int language, char *name, size_t n)
 
 int title_icon(u64 id, FS_MediaType media, u16 *pixels)
 {
-    /* Grande icône du SMDH à 0x24C0 : 48×48 RGB565 en tuiles 8×8, ordre de Morton dans chaque tuile. */
+    /* Large SMDH icon at 0x24C0: 48×48 RGB565 in 8×8 tiles, Morton order within each tile. */
     u16 *smdh = malloc(0x36C0);
     int ok = smdh && read_smdh(id, media, smdh) == 0, i;
     for (i = 0; ok && i < 48 * 48; i++) {
@@ -163,7 +163,7 @@ int installed_titles(u64 *ids, FS_MediaType *medias, int max)
         if (R_FAILED(AM_GetTitleCount(media_types[i], &total)) || !total || !(all = malloc(total * sizeof *all))) continue;
         if (R_SUCCEEDED(AM_GetTitleList(&count_read, media_types[i], total, all)))
             for (k = 0; k < count_read && n < max; k++)
-                if ((all[k] >> 32) == 0x00040000) { /* applications seulement (ni démos, ni mises à jour, ni DLC) */
+                if ((all[k] >> 32) == 0x00040000) { /* applications only (no demos, updates or DLC) */
                     ids[n] = all[k];
                     medias[n++] = media_types[i];
                 }

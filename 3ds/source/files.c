@@ -32,7 +32,7 @@ int write_file(const char *path, const void *bytes, size_t size)
     return (fclose(f) == 0 && ok) ? 0 : -1;
 }
 
-/* 1 si chemin contient exactement octets. */
+/* 1 if path holds exactly these bytes. */
 static int same_content(const char *path, const unsigned char *bytes, size_t size)
 {
     unsigned char *data;
@@ -57,7 +57,7 @@ int replace_file(const char *path, const void *bytes, size_t size)
         remove(tmp);
         return -1;
     }
-    remove(path); /* rename() refuse d'écraser sur la SD */
+    remove(path); /* rename() refuses to overwrite on the SD card */
     return rename(tmp, path) || !same_content(path, bytes, size) ? -2 : 0;
 }
 
@@ -67,12 +67,12 @@ int replace_program(const char *path, const void *bytes, size_t size)
     FILE *f;
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     snprintf(bak, sizeof bak, "%s.bak", path);
-    if (write_verified(tmp, bytes, size) || !(f = fopen(path, "rb"))) { /* chemin absent : .bak est peut-être la seule copie */
+    if (write_verified(tmp, bytes, size) || !(f = fopen(path, "rb"))) { /* path missing: .bak may be the only copy */
         remove(tmp);
         return -1;
     }
     fclose(f);
-    remove(bak); /* reste d'une mise à jour d'avant : chemin est là */
+    remove(bak); /* left over from an earlier update: path is there */
     if (rename(path, bak)) {
         remove(tmp);
         return -1;
@@ -101,7 +101,7 @@ int move_save(const char *src, const char *dst, const char *backup, int remove_s
     int r = -1;
 
     if (read_file(src, &bytes, &size)) return -1;
-    if ((f = fopen(dst, "rb"))) { /* dst existe : copie de sécurité d'abord */
+    if ((f = fopen(dst, "rb"))) { /* dst exists: Backup copy first */
         fclose(f);
         if (read_file(dst, &old_data, &n)) goto end;
         r = write_verified(backup, old_data, n);
@@ -109,7 +109,7 @@ int move_save(const char *src, const char *dst, const char *backup, int remove_s
         if (r) goto end;
         r = -1;
     }
-    if (replace_file(dst, bytes, size)) goto end; /* dst déjà copié */
+    if (replace_file(dst, bytes, size)) goto end; /* dst already copied */
     if (remove_src) remove(src);
     r = 0;
 end:

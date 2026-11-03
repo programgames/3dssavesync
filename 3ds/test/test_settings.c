@@ -1,5 +1,5 @@
-/* Vérifie titres.ini (liste des jeux 3DS) et la reprise de l'ancien dossier nds-save-sync.
- * Compilé sur PC : gcc -std=c99 -I source source/files.c source/settings.c test/test_settings.c -o /tmp/r && /tmp/r */
+/* Checks titres.ini (list of 3DS games) and the takeover of the old nds-save-sync folder.
+ * Built on the PC: gcc -std=c99 -I source source/files.c source/settings.c test/test_settings.c -o /tmp/r && /tmp/r */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,19 +56,19 @@ int main(void)
     write_text("test-titres.ini", "");
     check(read_titles("test-titres.ini", t, MAX_TITLES) == 0, "fichier vide : aucun jeu 3DS (tout décoché)");
 
-    /* Écriture sans perte (replace_file) : .tmp impossible à écrire, l'ancien titres.ini reste entier */
+    /* Write without loss (replace_file): .tmp cannot be written, the old titres.ini stays whole */
     write_text("test-titres.ini", "00040000000EC300=Jeu a moi\n");
     mkdir("test-titres.ini.tmp", 0777);
     check(write_titles("test-titres.ini", t, 0) != 0 && contains("test-titres.ini", "00040000000EC300=Jeu a moi\n"),
              "écriture impossible : ancien titres.ini intact");
     remove("test-titres.ini.tmp");
-    /* Coupure entre le retrait de titres.ini et le renommage : le .tmp, vérifié, est lu */
+    /* Power cut between the removal of titres.ini and the rename: the checked .tmp is read */
     remove("test-titres.ini");
     write_text("test-titres.ini.tmp", "00040000000EC300=Jeu a moi\n");
     check(read_titles("test-titres.ini", t, MAX_TITLES) == 1 && t[0].id == 0x00040000000EC300ULL, "titres.ini absent : titres.ini.tmp lu");
     remove("test-titres.ini.tmp");
 
-    /* Reprise de l'ancien dossier */
+    /* Takeover of the old folder */
     remove("test-ancien/config.ini"), remove("test-ancien/base.ini"), remove("test-nouveau/config.ini"), remove("test-nouveau/base.ini");
     mkdir("test-ancien", 0777);
     check(migrate_dir("test-ancien", "test-nouveau") == 0, "ancien dossier sans config : rien à faire");
@@ -82,7 +82,7 @@ int main(void)
     check(migrate_dir("test-ancien", "test-nouveau") == 0 && contains("test-nouveau/config.ini", "url=https://nouveau\n"),
              "nouveau dossier déjà configuré : rien n'est remplacé");
 
-    /* Coupure pendant un remplacement (replace_file) : seul config.ini.tmp reste ; base.ini et titres.ini sont récents */
+    /* Power cut during a replace (replace_file): only config.ini.tmp is left; base.ini and titres.ini are recent */
     remove("test-nouveau/config.ini");
     write_text("test-nouveau/config.ini.tmp", "url=https://nouveau\n");
     write_text("test-nouveau/base.ini", "CPUF=recent\n");
@@ -103,7 +103,7 @@ int main(void)
 
     remove("test-titres.ini");
     remove("test-ancien/config.ini"), remove("test-ancien/base.ini"), remove("test-nouveau/config.ini"), remove("test-nouveau/base.ini");
-    remove("test-ancien"), remove("test-nouveau"); /* remove() retire aussi un dossier vide */
+    remove("test-ancien"), remove("test-nouveau"); /* remove() also removes an empty folder */
     printf("%s\n", failures ? "ECHECS" : "reglages : OK");
     return failures != 0;
 }

@@ -1,6 +1,6 @@
-/* Vérifie update.c : versions, réponse de GitHub (test/release_latest.json, vraie réponse de /releases/latest réduite),
- * SHA256SUMS, une vérification par jour.
- * Compilé sur PC : gcc -std=c99 -Wall -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json */
+/* Checks update.c: versions, GitHub response (test/release_latest.json, a real /releases/latest response, trimmed),
+ * SHA256SUMS, one check per day.
+ * Built on the PC: gcc -std=c99 -Wall -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

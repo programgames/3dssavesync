@@ -36,8 +36,8 @@ APP_TITLE	:=	3dssavesync
 APP_DESCRIPTION	:=	Synchronisation des sauvegardes DS, GB, GBA, 3DS
 APP_AUTHOR	:=	3dssavesync
 ICON		:=	meta/icon.png
-# Version de l'application (mises à jour, ADR 0021) : la CI donne celle du tag (v3.7.0 -> 3.7.0), "dev" sinon.
-# Autre VERSION : make clean d'abord, main.o n'est pas recompilé sinon.
+# App version (updates, ADR 0021): CI passes the tag's version (v3.7.0 -> 3.7.0), "dev" otherwise.
+# Another VERSION: run make clean first, otherwise main.o is not rebuilt.
 VERSION		?=	dev
 BUILD		:=	build
 SOURCES		:=	source

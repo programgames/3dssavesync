@@ -1,11 +1,11 @@
-/* Textes calculés de l'écran (text.h). */
+/* Computed texts of the screen (text.h). */
 #include <stdio.h>
 #include <string.h>
 #include "text.h"
 
 const char *plural(long n, int english, const char *one, const char *many)
 {
-    return (english ? n == 1 : n < 2) ? one : many; /* français : « 0 conflit », anglais : "0 conflicts" */
+    return (english ? n == 1 : n < 2) ? one : many; /* French: "0 conflit", English: "0 conflicts" */
 }
 
 void format_age(long s, int english, int capitalize, char *out, size_t n)
@@ -17,7 +17,7 @@ void format_age(long s, int english, int capitalize, char *out, size_t n)
     else snprintf(out, n, english ? "%ld d ago" : "il y a %ld j", s / 86400);
     if (!capitalize) return;
     if (out[0] >= 'a' && out[0] <= 'z') out[0] -= 'a' - 'A';
-    else if (!strncmp(out, "à", 2)) out[1] = (char)0x80; /* à -> À en UTF-8 */
+    else if (!strncmp(out, "à", 2)) out[1] = (char)0x80; /* à -> À in UTF-8 */
 }
 
 int texts_fitting(const float *l, int n, float gap, float room)

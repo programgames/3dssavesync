@@ -1,16 +1,16 @@
-/* Dessin citro2d (screen.h). */
+/* citro2d drawing (screen.h). */
 #include <citro2d.h>
 #include <stdio.h>
 #include <string.h>
 #include "screen.h"
 
 static C3D_RenderTarget *top, *bottom;
-static C2D_TextBuf text_buf, measure_buf; /* mesure : vidé à chaque mesure */
-static C3D_Tex texture; /* icône du jeu : une seule par image */
+static C2D_TextBuf text_buf, measure_buf; /* measure_buf: cleared at each measure */
+static C3D_Tex texture; /* game icon: only one per frame */
 
 void screen_init(void)
 {
-    fontEnsureMapped(); /* police du système */
+    fontEnsureMapped(); /* system font */
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
@@ -19,7 +19,7 @@ void screen_init(void)
     text_buf = C2D_TextBufNew(4096);
     measure_buf = C2D_TextBufNew(256);
     C3D_TexInit(&texture, 64, 64, GPU_RGB565);
-    C3D_TexSetFilter(&texture, GPU_NEAREST, GPU_NEAREST); /* icône DS agrandie 1,5 fois : pixels nets */
+    C3D_TexSetFilter(&texture, GPU_NEAREST, GPU_NEAREST); /* DS icon scaled 1.5 times: sharp pixels */
 }
 
 void screen_exit(void)
@@ -62,7 +62,7 @@ float screen_text(float x, float y, float size, u32 color, float width, const ch
     C2D_Text t;
     char cut[256];
     float l = text_width(size, s);
-    if (width > 0 && l > width) { /* raccourci octet par octet, sans couper un caractère UTF-8 */
+    if (width > 0 && l > width) { /* shortened byte by byte, without cutting a UTF-8 character */
         size_t n = strlen(s) < sizeof cut - 4 ? strlen(s) : sizeof cut - 4;
         do {
             while (n > 0 && (s[--n] & 0xC0) == 0x80);
@@ -78,8 +78,8 @@ float screen_text(float x, float y, float size, u32 color, float width, const ch
     return l;
 }
 
-/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. dessiner = 0 : mesure.
- * max > 0 : max lignes au plus, la dernière finit par « … » s'il reste du texte. */
+/* Line wrapping done here (not by C2D_WordWrap) to know the drawn height. draw = 0: measure only.
+ * max > 0: max lines at most, the last one ends with "…" if text remains. */
 static float paragraph(float x, float y, float size, u32 color, float width, const char *s, int max, int draw)
 {
     char line[256];
@@ -87,12 +87,12 @@ static float paragraph(float x, float y, float size, u32 color, float width, con
     int lines = 0;
     while (*s) {
         size_t n = 0, cut = 0;
-        if (max && ++lines == max && s[strcspn(s, "\n")]) { /* d'autres lignes suivent : la dernière les annonce */
+        if (max && ++lines == max && s[strcspn(s, "\n")]) { /* more lines follow: the last one says so */
             snprintf(line, sizeof line, "%.*s\xE2\x80\xA6", (int)(strcspn(s, "\n") < sizeof line - 4 ? strcspn(s, "\n") : sizeof line - 4), s);
             if (draw) screen_text(x, y + h, size, color, width, line);
             return h + line_height;
         }
-        if (max && lines == max) { /* dernière ligne permise : le reste, coupé par screen_text */
+        if (max && lines == max) { /* last allowed line: the rest, cut by screen_text */
             if (draw) screen_text(x, y + h, size, color, width, s);
             return h + line_height;
         }
@@ -100,9 +100,9 @@ static float paragraph(float x, float y, float size, u32 color, float width, con
             memcpy(line, s, n + 1);
             line[n + 1] = '\0';
             if (cut && text_width(size, line) > width) break;
-            if (s[++n] == ' ' && !strchr(":;!?", s[n + 1])) cut = n; /* jamais « : » en début de ligne */
+            if (s[++n] == ' ' && !strchr(":;!?", s[n + 1])) cut = n; /* never ":" at the start of a line */
         }
-        if (s[n] && s[n] != '\n' && cut) n = cut; /* ligne trop longue : coupée au dernier espace */
+        if (s[n] && s[n] != '\n' && cut) n = cut; /* line too long: cut at the last space */
         memcpy(line, s, n);
         line[n] = '\0';
         if (draw) screen_text(x, y + h, size, color, width, line);
@@ -127,7 +127,7 @@ float screen_paragraph_height(float size, float width, const char *s) { return p
 
 void screen_icon(const u16 *pixels, int l, int h, float x, float y, float scale)
 {
-    /* Tuiles 8×8 en ordre de Morton, ligne de tuiles 0 = haut de l'image (méthode de FBI, screen.c). */
+    /* 8×8 tiles in Morton order, tile row 0 = top of the image (FBI's method, screen.c). */
     static const Tex3DS_SubTexture full_tex = { 64, 64, 0.0f, 1.0f, 1.0f, 0.0f };
     Tex3DS_SubTexture s = full_tex;
     u16 *d = texture.data;

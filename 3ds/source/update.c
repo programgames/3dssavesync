@@ -3,8 +3,8 @@
 #include <string.h>
 #include "update.h"
 
-/* Texte JSON après "clé": (espaces permis), sans échappement. 0 si lu en entier dans out.
- * ponytail: lecture à la main comme /saves (list.c) ; tag_name et adresses n'ont jamais d'échappement. */
+/* JSON string after "key": (spaces allowed), no escapes. 0 if read in full into out.
+ * ponytail: hand-written parse like /saves (list.c); tag_name and addresses never have escapes. */
 static int json_value(const char *p, char *out, size_t n)
 {
     size_t i = 0;
@@ -34,7 +34,7 @@ int parse_release(const char *json, release_t *r)
     return 0;
 }
 
-/* "v3.10.2-rc.1" -> { 3, 10, 2 }, *pre = 1. 0 si lu. */
+/* "v3.10.2-rc.1" -> { 3, 10, 2 }, *pre = 1. 0 if read. */
 static int parse_version(const char *s, long n[3], int *pre)
 {
     int i;

@@ -1,11 +1,11 @@
-/* Textes des échecs de requête (errors.h). Sans curl.h : testé sur l'hôte (test/test_errors.c). */
+/* Texts of failed requests (errors.h). No curl.h: tested on the host (test/test_errors.c). */
 #include <stdio.h>
 #include <string.h>
 #include "errors.h"
 
 #define T(fr, en) (english ? (en) : (fr))
 
-/* Valeurs de CURLcode (curl/curl.h), fixes dans l'ABI de libcurl ; net.c vérifie qu'elles correspondent. */
+/* CURLcode values (curl/curl.h), fixed by the libcurl ABI; net.c checks that they match. */
 enum {
     UNSUPPORTED_PROTOCOL = 1, URL_MALFORMAT = 3, COULDNT_RESOLVE = 6, COULDNT_CONNECT = 7, PARTIAL_FILE = 18, OUT_OF_MEMORY = 27, TIMED_OUT = 28, TLS = 35, GOT_NOTHING = 52,
     SEND_ERROR = 55, RECV_ERROR = 56, CERT_CLIENT = 58, PEER_FAILED_VERIFICATION = 60, FILESIZE_EXCEEDED = 63, CA = 77, PINNED_PUBKEY = 90,

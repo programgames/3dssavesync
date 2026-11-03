@@ -1,5 +1,5 @@
-/* Vérifie move_save (bascule forwarder mGBA <-> .sav à côté de la ROM) : jamais de perte.
- * Compilé sur PC : gcc -std=c99 -I source source/files.c test/test_files.c -o /tmp/f && /tmp/f */
+/* Checks move_save (switch between the mGBA forwarder and the .sav next to the ROM): never a loss.
+ * Built on the PC: gcc -std=c99 -I source source/files.c test/test_files.c -o /tmp/f && /tmp/f */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +21,7 @@ static void write_text(const char *path, const char *text)
     write_file(path, text, strlen(text));
 }
 
-/* 1 si le fichier contient exactement texte. */
+/* 1 if the file holds exactly text. */
 static int contains(const char *path, const char *text)
 {
     unsigned char *o;
@@ -70,29 +70,29 @@ int main(void)
     check(move_save(src, dst, "dossier-absent/copie.sav", 1) != 0, "copie impossible : refus");
     check(contains(dst, "partie rom") && contains(src, "nouvelle"), "copie impossible : rien ne change");
 
-    /* base.ini, config.ini : remplacés par un .tmp vérifié */
+    /* base.ini, config.ini: replaced through a checked .tmp */
     check(replace_file(dst, "IRBF=ab\n", 8) == 0 && contains(dst, "IRBF=ab\n") && !exists("test-dst.sav.tmp"),
              "remplacement : fait, sans .tmp restant");
     check(replace_file("dossier-absent/base.ini", "x", 1) != 0, "remplacement impossible : échec signalé");
-    mkdir("test-dst.sav.tmp", 0777); /* .tmp impossible à écrire */
+    mkdir("test-dst.sav.tmp", 0777); /* .tmp cannot be written */
     check(replace_file(dst, "nouveau", 7) == -1 && contains(dst, "IRBF=ab\n"), ".tmp impossible : -1, l'ancien reste intact");
     remove(src), remove(dst), remove(backup), remove("test-dst.sav.tmp");
-    /* Renommage impossible (cible = dossier non vide) : -2, le .tmp vérifié reste */
+    /* Rename impossible (target = non-empty folder): -2, the checked .tmp stays */
     mkdir("test-dossier.sav", 0777);
     write_text("test-dossier.sav/x", "x");
     check(replace_file("test-dossier.sav", "recu", 4) == -2 && contains("test-dossier.sav.tmp", "recu"), "renommage impossible : -2, .tmp gardé");
     remove("test-dossier.sav.tmp"), remove("test-dossier.sav/x"), remove("test-dossier.sav");
 
-    /* Mise à jour du .3dsx : l'ancien devient .bak, le nouveau prend sa place, puis .bak est retiré */
+    /* .3dsx update: the old one becomes .bak, the new one takes its place, then .bak is removed */
     remove("test.3dsx.bak");
     write_text("test.3dsx", "v1");
     write_text("test.3dsx.bak", "reste d'avant");
     check(replace_program("test.3dsx", "v2", 2) == 0 && contains("test.3dsx", "v2") && !exists("test.3dsx.tmp") && !exists("test.3dsx.bak"),
              ".3dsx : remplacé, ni .tmp ni .bak restant");
-    mkdir("test.3dsx.tmp", 0777); /* .tmp impossible à écrire */
+    mkdir("test.3dsx.tmp", 0777); /* .tmp cannot be written */
     check(replace_program("test.3dsx", "v3", 2) == -1 && contains("test.3dsx", "v2") && !exists("test.3dsx.bak"), ".3dsx, .tmp impossible : -1, l'ancien en place");
     remove("test.3dsx.tmp"), remove("test.3dsx");
-    write_text("test.3dsx.bak", "seule copie"); /* coupure entre les deux renommages */
+    write_text("test.3dsx.bak", "seule copie"); /* power cut between the two renames */
     check(replace_program("test.3dsx", "v3", 2) == -1 && contains("test.3dsx.bak", "seule copie") && !exists("test.3dsx.tmp"),
              ".3dsx absent : -1, .bak (seule copie) jamais retiré");
     remove("test.3dsx.bak");
@@ -101,12 +101,12 @@ int main(void)
                  !launched_from_sd("sdmc:/3ds/3dssavesync.3dsx.tmp"),
              "3dslink, argv vide, chemin incomplet : refusé");
 
-    /* Copie de sécurité relue (recuperer) */
+    /* Backup copy read back (download_save) */
     check(write_verified(backup, "partie", 6) == 0 && contains(backup, "partie"), "écriture relue : faite");
     check(write_verified("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");
     remove(backup);
 
-    /* Deux ROM, un fichier de Sauvegarde : Doublon (forwarder mGBA nommé comme la ROM, quel que soit le dossier) */
+    /* Two ROMs, one Save file: Duplicate (mGBA forwarder named like the ROM, whatever the folder) */
     check(same_save(SYS_GBA, "Pokemon", "sdmc:/roms/gba/USA/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/EUR/Pokemon.sav"),
              "GBA, même nom dans deux dossiers : forwarder partagé");
     check(same_save(SYS_GB, "Tetris", "sdmc:/roms/gb/Tetris.sav", SYS_GBA, "TETRIS", "sdmc:/roms/gba/TETRIS.sav"),
@@ -117,7 +117,7 @@ int main(void)
     check(!same_save(SYS_DS, "Pokemon", "sdmc:/roms/nds/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/Pokemon.sav"),
              "DS et GBA de même nom : pas de forwarder pour la DS");
 
-    /* Sauvegarde d'une ROM en sous-dossier (ADR 0015) */
+    /* Save of a ROM in a subfolder (ADR 0015) */
     {
         char c[64];
         const char *r = "sdmc:/roms/nds", *full_tex = "sdmc:/roms/nds/Pokemon";
@@ -130,7 +130,7 @@ int main(void)
                      !strcmp(c, "sdmc:/3ds/open_agb_firm/saves/X.sav"), "autre dossier (open_agb_firm) : gardé");
         check(save_path(r, "", full_tex, "un nom bien trop long pour ce petit tampon", c, sizeof c) != 0, "chemin trop long : refusé");
     }
-    /* Copie de sécurité : jamais d'écrasement d'une copie de la même seconde */
+    /* Backup copy: never overwrite a copy made in the same second */
     {
         char c[64];
         mkdir("test-copies", 0777);

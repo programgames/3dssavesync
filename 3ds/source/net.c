@@ -11,14 +11,14 @@
 #define SOC_SIZE 0x100000
 
 static u32 *soc_buffer;
-static CURL *c; /* un seul handle : curl garde la connexion TLS ouverte entre les requêtes */
+static CURL *c; /* a single handle: curl keeps the TLS connection open between requests */
 
 int net_init(void)
 {
     soc_buffer = memalign(0x1000, SOC_SIZE);
     if (!soc_buffer || R_FAILED(socInit(soc_buffer, SOC_SIZE))) return -1;
     if (R_FAILED(sslcInit(0))) return -2;
-    acInit(); /* état du Wi-Fi (net_wifi) ; sans lui, le Wi-Fi est supposé présent */
+    acInit(); /* Wi-Fi state (net_wifi); without it, Wi-Fi is assumed present */
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return -3;
     return (c = curl_easy_init()) ? 0 : -4;
 }
@@ -50,7 +50,7 @@ static size_t receive(char *chunk, size_t t, size_t n, void *u)
     return t * n;
 }
 
-static void (*on_progress)(size_t, size_t); /* net_github : téléchargement d'un fichier de release en cours */
+static void (*on_progress)(size_t, size_t); /* net_github: download of a release file in progress */
 
 static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_total, curl_off_t ul_now)
 {
@@ -58,23 +58,23 @@ static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_to
     return 0;
 }
 
-/* Une requête. envoi != NULL => PUT de ce corps. jeton == NULL => GitHub (net_github). */
+/* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). */
 static long request(const char *url, const char *token, const char *condition,
                     const void *upload, size_t upload_size, buffer_t *received)
 {
     char auth[320];
     struct curl_slist *headers = NULL;
-    static char github_cas[sizeof ISRG_ROOT_X1 + sizeof GITHUB_ROOTS]; /* assemblées au premier appel */
+    static char github_cas[sizeof ISRG_ROOT_X1 + sizeof GITHUB_ROOTS]; /* built on the first call */
     struct curl_blob ca = { (void *)ISRG_ROOT_X1, sizeof ISRG_ROOT_X1 - 1, CURL_BLOB_NOCOPY };
     CURLcode r;
     long status;
 
-    curl_easy_reset(c); /* remet les options à zéro, garde la connexion ouverte */
-    if (token) { /* Serveur : ISRG seule (ADR 0003) */
+    curl_easy_reset(c); /* resets the options, keeps the connection open */
+    if (token) { /* Server: ISRG only (ADR 0003) */
         snprintf(auth, sizeof auth, "Authorization: Bearer %s", token);
         headers = curl_slist_append(NULL, auth);
         headers = curl_slist_append(headers, "X-Client: 3ds");
-    } else { /* GitHub : sans jeton, ISRG + Sectigo (ADR 0021) */
+    } else { /* GitHub: no token, ISRG + Sectigo (ADR 0021) */
         if (!github_cas[0]) snprintf(github_cas, sizeof github_cas, "%s%s", ISRG_ROOT_X1, GITHUB_ROOTS);
         ca.data = github_cas;
         ca.len = strlen(github_cas);
@@ -95,8 +95,8 @@ static long request(const char *url, const char *token, const char *condition,
     curl_easy_setopt(c, CURLOPT_WRITEDATA, received);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, on_progress ? 300L : 60L);
-    curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* exigé par l'API de GitHub */
-    if (on_progress) { /* github.com renvoie vers release-assets.githubusercontent.com */
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* required by the GitHub API */
+    if (on_progress) { /* github.com redirects to release-assets.githubusercontent.com */
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)NET_MAX_FILE);
@@ -145,7 +145,7 @@ long net_put(const char *url, const char *token, const char *condition, const vo
     return status;
 }
 
-/* errors.c lit les codes curl sans curl.h : mêmes valeurs. */
+/* errors.c reads curl codes without curl.h: same values. */
 _Static_assert(CURLE_COULDNT_RESOLVE_HOST == 6 && CURLE_COULDNT_CONNECT == 7 && CURLE_OPERATION_TIMEDOUT == 28 &&
                CURLE_SSL_CONNECT_ERROR == 35 && CURLE_PEER_FAILED_VERIFICATION == 60 && CURLE_RECV_ERROR == 56 &&
                CURLE_PARTIAL_FILE == 18 && CURLE_FILESIZE_EXCEEDED == 63,
@@ -154,5 +154,5 @@ _Static_assert(CURLE_COULDNT_RESOLVE_HOST == 6 && CURLE_COULDNT_CONNECT == 7 && 
 int net_wifi(void)
 {
     u32 status;
-    return R_FAILED(ACU_GetStatus(&status)) || status != 1; /* 1 : aucun point d'accès */
+    return R_FAILED(ACU_GetStatus(&status)) || status != 1; /* 1: no access point */
 }

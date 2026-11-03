@@ -1,6 +1,6 @@
-/* Vérifie list.c : liste GET /saves (tests/saves.json, écrite par server/server.py, même structure que le serveur Go),
- * champ absent jamais lu dans le jeu suivant, espaces, fin et texte mal formé.
- * Compilé sur PC : gcc -std=c99 -Wall -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json */
+/* Checks list.c: GET /saves list (tests/saves.json, written by server/server.py, same structure as the Go server),
+ * a missing field never read from the next game, spaces, end and malformed text.
+ * Built on the PC: gcc -std=c99 -Wall -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

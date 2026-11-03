@@ -1,5 +1,5 @@
-/* Dessin des deux écrans avec citro2d (issue #21) : texte en police du système (accents, icônes des boutons),
- * rectangles, icône de jeu. */
+/* Drawing of both screens with citro2d: text in the system font (accents, button icons),
+ * rectangles, game icon. */
 #ifndef SCREEN_H
 #define SCREEN_H
 
@@ -10,7 +10,7 @@
 void screen_init(void);
 void screen_exit(void);
 
-/* Une image : screen_begin, puis screen_top ou screen_bottom avant de dessiner sur cet écran, puis screen_end. */
+/* One frame: screen_begin, then screen_top or screen_bottom before drawing on that screen, then screen_end. */
 void screen_begin(void);
 void screen_top(void);
 void screen_bottom(void);
@@ -18,22 +18,22 @@ void screen_end(void);
 
 void screen_rect(float x, float y, float l, float h, u32 color);
 
-/* Texte sur une ligne, coupé avec « … » au-delà de largeur (0 = sans limite). Largeur dessinée. */
+/* Text on one line, cut with "…" beyond width (0 = no limit). Returns the drawn width. */
 float screen_text(float x, float y, float size, u32 color, float width, const char *s);
 
-/* Largeur du texte sur une ligne. */
+/* Width of the text on one line. */
 float screen_text_width(float size, const char *s);
 
-/* Texte sur plusieurs lignes, retour à la ligne avant largeur. Hauteur dessinée. */
+/* Text on several lines, wrapped before width. Returns the drawn height. */
 float screen_paragraph(float x, float y, float size, u32 color, float width, const char *s);
 
-/* Le même sur max lignes au plus : la dernière finit par « … » s'il reste du texte. Hauteur dessinée. */
+/* The same on max lines at most: the last one ends with "…" if text remains. Returns the drawn height. */
 float screen_lines(float x, float y, float size, u32 color, float width, int max, const char *s);
 
-/* Hauteur qu'aurait ce paragraphe, sans le dessiner. */
+/* Height this paragraph would take, without drawing it. */
 float screen_paragraph_height(float size, float width, const char *s);
 
-/* Icône en RGB565 ligne par ligne (l, h <= 64), agrandie par echelle. */
+/* RGB565 icon, row by row (l, h <= 64), scaled by scale. */
 void screen_icon(const u16 *pixels, int l, int h, float x, float y, float scale);
 
 #endif

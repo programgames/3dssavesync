@@ -8,8 +8,8 @@ static const char *skip_spaces(const char *p)
     return p;
 }
 
-/* Texte JSON (p sur le guillemet ouvrant) dans out (NULL : ignoré), tronqué à n ; "\x" donne x (\u et les autres
- * échappements ne servent à aucun champ lu). Suite après le guillemet fermant, NULL si mal formé. */
+/* JSON string (p on the opening quote) into out (NULL: skipped), truncated to n; "\x" gives x (\u and the other
+ * escapes are used by no field we read). Returns what follows the closing quote, NULL if malformed. */
 static const char *json_string(const char *p, char *out, size_t n)
 {
     size_t i = 0;
@@ -22,8 +22,8 @@ static const char *json_string(const char *p, char *out, size_t n)
     return *p ? p + 1 : NULL;
 }
 
-/* ponytail: valeurs texte ou nombre seulement (le format de server.py) ; un objet ou un tableau en valeur arrête la
- * lecture, un vrai parseur (jsmn) s'il en faut un jour. */
+/* ponytail: string or number values only (the server.py format); an object or array value stops the
+ * parse, a real parser (jsmn) if one is ever needed. */
 int next_server_entry(const char **p, entry_t *e)
 {
     const char *q = strchr(*p, '{');

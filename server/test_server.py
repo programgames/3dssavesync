@@ -1,8 +1,8 @@
-"""Contrat HTTP du Serveur (docs/design.md §2).
+"""HTTP contract of the Server (docs/design.md §2).
 
-Local (serveur neuf par test) : python -m unittest test_server.py
-Contre un serveur déployé (Docker, cloud) : NDSSYNC_URL=https://... NDSSYNC_TOKEN=... python -m unittest test_server.py
-Chaque test utilise des Clés aléatoires : un serveur déjà utilisé convient (il garde ces Versions de test pour toujours).
+Local (a new server per test): python -m unittest test_server.py
+Against a deployed server (Docker, cloud): NDSSYNC_URL=https://... NDSSYNC_TOKEN=... python -m unittest test_server.py
+Each test uses random Keys: a server already in use is fine (it keeps these test Versions forever).
 """
 import hashlib
 import json
@@ -19,7 +19,7 @@ import server
 
 REMOTE = os.environ.get("NDSSYNC_URL", "").rstrip("/")
 TOKEN = os.environ.get("NDSSYNC_TOKEN", "jeton-de-test")
-SAVE_DATA = bytes(range(256)) * 2048  # 512 Kio
+SAVE_DATA = bytes(range(256)) * 2048  # 512 KiB
 HASH = hashlib.sha256(SAVE_DATA).hexdigest()
 
 
@@ -46,7 +46,7 @@ class ApiTest(unittest.TestCase):
         self.data.cleanup()
 
     def request(self, method, path, body=None, token=TOKEN, **headers):
-        """Renvoie (statut, en-têtes, corps) sans lever d'exception sur 4xx."""
+        """Returns (status, headers, body) without raising on 4xx."""
         req = urllib.request.Request(self.url + path, data=body, method=method)
         if token:
             req.add_header("Authorization", f"Bearer {token}")
@@ -141,7 +141,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(game["taille"], len(SAVE_DATA))
         self.assertEqual(game["client"], "3ds")
         self.assertRegex(game["date"], r"^\d{8}T\d{6}Z$")
-        self.assertTrue(0 <= game["age"] < 60)  # secondes depuis l'Envoi, horloge du serveur
+        self.assertTrue(0 <= game["age"] < 60)  # seconds since the Upload, server clock
 
     def test_history_keeps_every_version(self):
         self.upload(b"v1", client="3ds")
@@ -153,7 +153,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/saves/{self.key}/history/{history[0]['version']}")[2], b"v1")
 
     def test_game_name_in_list(self):
-        self.assertEqual(self.request("PUT", f"/saves/{self.key}/name", "Pokémon Bleue".encode())[0], 404)  # jeu sans Version
+        self.assertEqual(self.request("PUT", f"/saves/{self.key}/name", "Pokémon Bleue".encode())[0], 404)  # game without a Version
         self.upload()
         self.assertNotIn("nom", {j["code"]: j for j in self.json("/saves")}[self.key])
         self.assertEqual(self.request("PUT", f"/saves/{self.key}/name", "Pokémon Bleue".encode())[0], 204)
@@ -162,7 +162,7 @@ class ApiTest(unittest.TestCase):
         for bad in (b"", b"   ", b"a\nb", b"a\x7fb", b"\xff", b"x" * 201):
             self.assertEqual(self.request("PUT", f"/saves/{self.key}/name", bad)[0], 400, bad)
         self.assertEqual(self.request("PUT", f"/saves/{self.key}/name", b"x", token="faux")[0], 401)
-        self.assertEqual(len(self.json(f"/saves/{self.key}/history")), 1)  # le nom ne crée pas de Version
+        self.assertEqual(len(self.json(f"/saves/{self.key}/history")), 1)  # the name creates no Version
 
     def test_identical_upload_creates_no_version(self):
         self.upload()
@@ -181,7 +181,7 @@ class ApiTest(unittest.TestCase):
 
     @unittest.skipIf(REMOTE, "connexion brute en HTTP local")
     def test_truncated_body_refused(self):
-        # Connexion coupée en plein envoi : 10 octets reçus sur 100 annoncés.
+        # Connection cut during the upload: 10 bytes received out of 100 announced.
         import socket
         s = socket.create_connection(("127.0.0.1", self.srv.server_address[1]))
         s.sendall(f"PUT /saves/{self.key} HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer {TOKEN}".encode() +
@@ -204,18 +204,18 @@ class ApiTest(unittest.TestCase):
 
     @unittest.skipIf(REMOTE, "accès au dossier data du serveur")
     def test_write_failure_500(self):
-        # Disque plein, droits : une erreur 500, jamais une connexion coupée.
-        open(os.path.join(self.data.name, self.key), "w").close()  # un fichier à la place du dossier du jeu
+        # Disk full, permissions: a 500 error, never a cut connection.
+        open(os.path.join(self.data.name, self.key), "w").close()  # a file in place of the game's folder
         self.assertEqual(self.upload()[0], 500)
         self.request("PUT", f"/saves/{self.other}", b"x", If_None_Match="*")
-        os.mkdir(os.path.join(self.data.name, self.other, "nom.txt.tmp"))  # nom.txt.tmp impossible à écrire
+        os.mkdir(os.path.join(self.data.name, self.other, "nom.txt.tmp"))  # nom.txt.tmp cannot be written
         self.assertEqual(self.request("PUT", f"/saves/{self.other}/name", b"Pokemon")[0], 500)
 
     @unittest.skipIf(REMOTE, "accès au dossier data du serveur")
     def test_list_matches_tests_saves_json(self):
-        """tests/saves.json : la liste de référence, lue par le test C de la 3DS (test_liste.c) et comparée à celle du
-        serveur Go (serveur_test.go). NDSSYNC_FIXTURE=1 python -m unittest test_server.py la réécrit."""
-        games = {  # 3DS : la plus récente seulement ; ADAF sans nom, entre deux jeux nommés ; nom avec } et "
+        """tests/saves.json: the reference list, read by the 3DS C test (test_list.c) and compared with the list of the
+        Go server (serveur_test.go). NDSSYNC_FIXTURE=1 python -m unittest test_server.py rewrites it."""
+        games = {  # 3DS: latest only; ADAF without a name, between two named games; name with } and "
             "3DS-0004000000055D00": [("000003-20260101T120000Z-3ds", b"x" * 1024, "Pokémon X")],
             "ADAF": [("000001-20260102T080910Z-pc", b"v1", None), ("000002-20260102T081011Z-pc", b"\0" * 524288, None)],
             "GBA-BPEF": [("000001-20260103T235959Z-3ds", b"\xff" * 131072, 'Pokémon Émeraude {hack} "FR"')],
@@ -237,7 +237,7 @@ class ApiTest(unittest.TestCase):
         with open(fixture, "rb") as f:
             expected = json.load(f)
         received = json.loads(body)
-        for j in expected + received:  # age : dépend de l'heure du test
+        for j in expected + received:  # age: depends on the time of the test
             self.assertGreater(j.pop("age"), 0)
         self.assertEqual(received, expected)
 

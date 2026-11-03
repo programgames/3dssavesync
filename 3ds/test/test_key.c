@@ -1,5 +1,5 @@
-/* Vérifie rom_key, key_3ds, sram_size, EEPROM et MBC2 (ADR 0007, 0008, 0010, 0012). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
- * Compilé sur PC : gcc -I source source/key.c test/test_key.c -o test_cle && ./test_cle */
+/* Checks rom_key, key_3ds, sram_size, EEPROM and MBC2 (ADR 0007, 0008, 0010, 0012). Same Keys as the PC program (client/).
+ * Built on the PC: gcc -I source source/key.c test/test_key.c -o test_key && ./test_key */
 #include <stdio.h>
 #include <string.h>
 #include "key.h"
@@ -32,8 +32,8 @@ int main(void)
     check_rom(SYS_GB, 0x134, "POKEMON RED", 0x91E6, "GB-POKEMON_RED-91E6");
     check_rom(SYS_GB, 0x134, "PM_CRYSTAL", 0xF2E2, "GB-PM_CRYSTAL-F2E2");
     check_rom(SYS_GB, 0x134, "pokemon yel", 0x0001, "GB-POKEMON_YEL-0001");
-    check_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 caractères, sans 0x00 */
-    check_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* octets >= 0x80 : même Clé que client/profils_test.go */
+    check_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 characters, no 0x00 */
+    check_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* bytes >= 0x80: same Key as client/profils_test.go */
     check_rom(SYS_GB, 0x134, "", 0x1234, NULL);
     check_rom(SYS_GBA, 0xAC, "BPEF", 0, "GBA-BPEF");
     check_rom(SYS_GBA, 0xAC, "bp f", 0, NULL);
@@ -43,7 +43,7 @@ int main(void)
     key_3ds(0x00040000001B5000ULL, key);
     check(!strcmp(key, "3DS-00040000001B5000"), "3DS-00040000001B5000");
 
-    /* Alias (ADR 0014) : mêmes cas que TestCleAlias dans client/cas_test.go */
+    /* Alias (ADR 0014): same cases as TestCleAlias in client/cas_test.go */
     check(alias_key(SYS_DS, "0rad", key) == 0 && !strcmp(key, "0RAD"), "alias DS 0rad -> 0RAD");
     check(alias_key(SYS_GBA, " GBA-0RAD ", key) == 0 && !strcmp(key, "GBA-0RAD"), "alias GBA avec espaces");
     check(alias_key(SYS_GB, "GB-MONHACK-0001", key) == 0 && !strcmp(key, "GB-MONHACK-0001"), "alias GB");
@@ -81,7 +81,7 @@ int main(void)
         check(is_blank_save(SYS_DS, s, 0), "fichier vide : vierge");
     }
 
-    { /* EEPROM (ADR 0012) : open_agb_firm 01..08 = mGBA 08..01 */
+    { /* EEPROM (ADR 0012): open_agb_firm 01..08 = mGBA 08..01 */
         static unsigned char e[8192];
         static const unsigned char agb[8] = { 1, 2, 3, 4, 5, 6, 7, 8 }, mgba[8] = { 8, 7, 6, 5, 4, 3, 2, 1 };
         memcpy(e, agb, 8);
@@ -93,7 +93,7 @@ int main(void)
         check(!eeprom_swap(e, 32768), "SRAM 32 Kio : pas une EEPROM");
     }
 
-    { /* MBC2 (ADR 0012) : forme du serveur = 512 o, quartet haut à 0 */
+    { /* MBC2 (ADR 0012): server form = 512 B, high nibble 0 */
         static unsigned char f[8192], s[MBC2_SERVER], g[8192];
         unsigned char e[0x200] = { 0 };
         e[0x147] = 0x06;
@@ -101,7 +101,7 @@ int main(void)
         e[0x147] = 0x03;
         check(!rom_mbc2(e), "0x147 = 0x03 : MBC1, pas MBC2");
 
-        f[0] = 0x21; f[255] = 0xA5; /* mGBA : adresse paire dans le quartet bas */
+        f[0] = 0x21; f[255] = 0xA5; /* mGBA: even address in the low nibble */
         check(!mbc2_normalize(f, 256, s) && s[0] == 1 && s[1] == 2 && s[510] == 5 && s[511] == 0xA, "MBC2 mGBA 256 o -> serveur");
         check(!mbc2_to_file(s, g, 256) && !memcmp(f, g, 256), "MBC2 serveur -> mGBA 256 o");
         check(!mbc2_to_file(s, g, 512) && g[0] == 0xF1 && g[1] == 0xF2 && g[511] == 0xFA, "MBC2 serveur -> 512 o (quartet haut 0xF, VBA-M)");

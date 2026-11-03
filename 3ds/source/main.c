@@ -1,6 +1,6 @@
-/* 3dssavesync 3DS : synchronise les Sauvegardes avec le Serveur (docs/design.md §4) :
- * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) et les jeux 3DS de titres.ini (ADR 0007 à 0009).
- * Haut : liste des Jeux et leur État. Bas : détails, messages, touches. */
+/* 3dssavesync 3DS: syncs the Saves with the Server (docs/design.md §4):
+ * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) and the 3DS games of titres.ini (ADR 0007 to 0009).
+ * Top: list of the Games and their State. Bottom: details, messages, buttons. */
 #include <3ds.h>
 #include <dirent.h>
 #include <mbedtls/sha256.h>
@@ -26,58 +26,58 @@
 #include "update.h"
 
 #define APP_DIR "sdmc:/3ds/3dssavesync"
-#define OLD_DIR "sdmc:/3ds/nds-save-sync" /* nom avant la v3 : réglages et Bases repris au premier lancement */
-#define FORWARDERS "sdmc:/mGBA/forwarders" /* Sauvegardes des forwarders mGBA */
-#define MAX_GAMES 512 /* ponytail: tableau fixe ; au-delà de 512 ROM, les suivantes sont ignorées (et signalées) */
-#define TOP_LINES 13 /* lignes d'une liste sur l'écran du haut (pied en dessous) */
-#define HIDDEN -1   /* ni Sauvegarde locale ni Version courante : pas affiché */
-#define DUPLICATE 100 /* plusieurs ROM pour une Clé (ADR 0005) */
-#define OFFLINE 101 /* serveur non lu : état inconnu, aucune action proposée */
-#define GITHUB_LATEST "https://api.github.com/repos/programgames/3dssavesync/releases/latest" /* mises à jour (ADR 0021) */
+#define OLD_DIR "sdmc:/3ds/nds-save-sync" /* name before v3: settings and Bases taken over at first start */
+#define FORWARDERS "sdmc:/mGBA/forwarders" /* Saves of the mGBA forwarders */
+#define MAX_GAMES 512 /* ponytail: fixed array; beyond 512 ROMs, the next ones are skipped (and reported) */
+#define TOP_LINES 13 /* lines of a list on the top screen (footer below) */
+#define HIDDEN -1   /* neither Local save nor Current version: not shown */
+#define DUPLICATE 100 /* several ROMs for one Key (ADR 0005) */
+#define OFFLINE 101 /* server not read: State unknown, no action offered */
+#define GITHUB_LATEST "https://api.github.com/repos/programgames/3dssavesync/releases/latest" /* updates (ADR 0021) */
 
-static int english; /* langue de la console : français, sinon anglais */
-static u8 language;   /* CFG_LANGUAGE_* : titre des jeux 3DS dans cette langue */
+static int english; /* console language: French, otherwise English */
+static u8 language;   /* CFG_LANGUAGE_*: title of the 3DS games in this language */
 #define T(fr, en) (english ? (en) : (fr))
 
-/* Palette : un sens par couleur (le jaune ne dit que « À envoyer »). */
+/* Palette: one meaning per color (yellow only says "To upload"). */
 #define WHITE RGB(0xE8EAED)
-#define GREY_LIGHT RGB(0x8A929C)  /* libellé */
-#define GREY_DARK RGB(0x5A626C)  /* désactivé */
-#define C_GREEN RGB(0x4CC060)  /* À jour, réussite */
-#define C_YELLOW RGB(0xF0C040) /* À envoyer */
-#define C_CYAN RGB(0x40C8E8)  /* À récupérer, version disponible */
-#define C_RED RGB(0xF05050) /* Conflit, échec */
-#define BAR RGB(0x1E242C)   /* barre des touches, pied de l'écran du haut */
-#define CARD RGB(0x2A313B)   /* cartes du conflit, bande du message */
-#define SEL RGB(0x263445)     /* ligne choisie */
-#define ACCENT RGB(0x4A8FE0)  /* trait de la ligne choisie des réglages */
+#define GREY_LIGHT RGB(0x8A929C)  /* label */
+#define GREY_DARK RGB(0x5A626C)  /* disabled */
+#define C_GREEN RGB(0x4CC060)  /* In sync, success */
+#define C_YELLOW RGB(0xF0C040) /* To upload */
+#define C_CYAN RGB(0x40C8E8)  /* To download, version available */
+#define C_RED RGB(0xF05050) /* Conflict, failure */
+#define BAR RGB(0x1E242C)   /* button bar, footer of the top screen */
+#define CARD RGB(0x2A313B)   /* Conflict cards, message band */
+#define SEL RGB(0x263445)     /* selected line */
+#define ACCENT RGB(0x4A8FE0)  /* mark of the selected settings line */
 
 typedef struct {
     char key[KEY_MAX]; /* ADR 0007 */
     system_t system;
-    char rom[600];  /* ROM (icône DS) ; vide pour la 3DS */
-    char sav[600];  /* fichier de Sauvegarde ; vide pour la 3DS (archive) */
-    char sav_rom[600]; /* GB/GBA : sa Sauvegarde sans forwarder mGBA (dossier des sauvegardes) */
-    u64 title;      /* 3DS : title ID */
-    FS_MediaType media; /* 3DS : SD ou cartouche */
-    char name[256];  /* nom de la ROM sans extension = nom du .sav */
-    char short_name[48]; /* pour l'affichage seulement : "Pokemon Diamant" */
+    char rom[600];  /* ROM (DS icon); empty for the 3DS */
+    char sav[600];  /* Save file; empty for the 3DS (Save archive) */
+    char sav_rom[600]; /* GB/GBA: its Save without the mGBA forwarder (saves folder) */
+    u64 title;      /* 3DS: title ID */
+    FS_MediaType media; /* 3DS: SD or game card */
+    char name[256];  /* ROM name without extension = name of the .sav */
+    char short_name[48]; /* for display only: "Pokemon Diamant" */
     int rom_count;
-    int shares_save;    /* Doublon : ROM de Clés différentes qui partagent un fichier de Sauvegarde (same_save) */
+    int shares_save;    /* Duplicate: ROMs with different Keys that share one Save file (same_save) */
     obs_t local, server;
     char local_hash[65], server_hash[65], date[17], client[17];
-    long age; /* secondes depuis la Version courante (horloge du serveur), -1 si inconnu */
+    long age; /* seconds since the Current version (server clock), -1 if unknown */
     int has_local, has_server;
-    int has_name;      /* le serveur connaît le nom du jeu (ADR 0018) */
-    int blank; /* SRAM locale vierge : comptée comme absente (key.h) */
-    time_t modified;   /* DS, GB, GBA : date du fichier (horloge de la 3DS) ; 0 si inconnue */
-    int has_progress;   /* Pokémon : temps de jeu et dresseur lus (pokemon.h) */
-    int mbc2;       /* GB : cartouche MBC2, octet 0x147 de la ROM (ADR 0012) */
+    int has_name;      /* the server knows the game name (ADR 0018) */
+    int blank; /* Blank local SRAM: counts as absent (key.h) */
+    time_t modified;   /* DS, GB, GBA: file date (3DS clock); 0 if unknown */
+    int has_progress;   /* Pokémon: play time and trainer read (pokemon.h) */
+    int mbc2;       /* GB: MBC2 cartridge, byte 0x147 of the ROM (ADR 0012) */
     progress_t progress;
     int state;
 } game_t;
 
-/* "Pokemon - Version Diamant (France) (Rev 5)" -> "Pokemon Diamant" : retire " - Version" et les étiquettes "(...)". */
+/* "Pokemon - Version Diamant (France) (Rev 5)" -> "Pokemon Diamant": drops " - Version" and the "(...)" tags. */
 static void make_short_name(const char *name, char *out, size_t n)
 {
     const char *v = strstr(name, " - Version ");
@@ -86,20 +86,20 @@ static void make_short_name(const char *name, char *out, size_t n)
     if (v) snprintf(tmp, sizeof tmp, "%.*s %s", (int)(v - name), name, v + 11);
     else snprintf(tmp, sizeof tmp, "%s", name);
     if ((end = strstr(tmp, " ("))) *end = '\0';
-    snprintf(out, n, "%.*s", (int)n - 1, tmp); /* coupé exprès : nom d'affichage */
+    snprintf(out, n, "%.*s", (int)n - 1, tmp); /* cut on purpose: display name */
 }
 
 static struct { char url[256], token[256], roms[256], saves[256], roms_gb[256], saves_gb[256], roms_gba[256], saves_gba[256]; } cfg;
-static title_t titles[MAX_TITLES]; /* jeux 3DS synchronisés (titres.ini) */
+static title_t titles[MAX_TITLES]; /* synced 3DS games (titres.ini) */
 static int title_count;
 static game_t games[MAX_GAMES];
 static int game_count;
 static struct { char key[KEY_MAX], hash[65]; } bases[MAX_GAMES];
 static int base_count;
 static int visible[MAX_GAMES], visible_count;
-static char message[512];        /* message de la dernière action : bande au-dessus de la barre des touches */
-static char message_detail[200]; /* sa ligne technique (HTTP, curl, chemin), en gris sous le texte */
-static u32 message_color = WHITE; /* trait de la bande : rouge échec, vert réussite, blanc information */
+static char message[512];        /* message of the last action: band above the button bar */
+static char message_detail[200]; /* its technical line (HTTP, curl, path), in grey under the text */
+static u32 message_color = WHITE; /* band mark: red failure, green success, white information */
 
 static void set_message(u32 color, const char *detail, const char *format, ...)
 {
@@ -117,16 +117,16 @@ static void clear_message(void)
     message_color = WHITE;
 }
 
-/* Mise à jour (ADR 0021). VERSION vient du Makefile : "3.7.0" pour un tag, "dev" sinon (jamais de mise à jour). */
-static long last_check_day = -1;   /* jour de la dernière vérification (maj.ini) */
-static char latest_version[32]; /* dernière version vue sur GitHub (maj.ini) */
-static char installed_version[32]; /* version qui a tourné en dernier (maj.ini) : lue par le PC avant de copier un .cia */
-static char update_detail[400]; /* résultat de la dernière vérification ou installation : écran des réglages */
-static int update_failed;        /* update_detail décrit un échec */
-static const char *path_3dsx = ""; /* argv[0] : le .3dsx lancé depuis le Homebrew Launcher (launched_from_sd) */
-static int should_quit;          /* mise à jour installée : l'application se ferme */
-static char alert[300]; /* problème vu pendant une lecture ou une action : ajouté au message à la fin */
-static char alert_detail[200]; /* ligne technique de la lecture du serveur ratée */
+/* Update (ADR 0021). VERSION comes from the Makefile: "3.7.0" for a tag, "dev" otherwise (never updated). */
+static long last_check_day = -1;   /* day of the last check (maj.ini) */
+static char latest_version[32]; /* last version seen on GitHub (maj.ini) */
+static char installed_version[32]; /* version that ran last (maj.ini): read by the PC before it copies a .cia */
+static char update_detail[400]; /* result of the last check or install: settings screen */
+static int update_failed;        /* update_detail describes a failure */
+static const char *path_3dsx = ""; /* argv[0]: the .3dsx started from the Homebrew Launcher (launched_from_sd) */
+static int should_quit;          /* update installed: the app closes */
+static char alert[300]; /* problem seen during a read or an action: added to the message at the end */
+static char alert_detail[200]; /* technical line of the failed server read */
 
 static void add_alert(const char *text)
 {
@@ -143,17 +143,17 @@ static void show_alert(void)
     alert[0] = alert_detail[0] = '\0';
 }
 
-static int list_cursor; /* jeu choisi dans la liste : l'écran du haut des dialogues et de la progression */
-static int loaded;            /* 0 tant que la première lecture n'est pas finie */
-static int server_read;    /* 0 si la dernière lecture du serveur a échoué : les jeux locaux restent listés */
-static u64 read_time;      /* osGetTime() de la dernière lecture réussie du serveur */
+static int list_cursor; /* game selected in the list: the top screen of dialogs and progress */
+static int loaded;            /* 0 until the first read is done */
+static int server_read;    /* 0 if the last server read failed: the local games stay listed */
+static u64 read_time;      /* osGetTime() of the last successful server read */
 static void show_progress(int done, int total, const char *format, ...);
 static void draw_list_top(void);
-static void (*draw_current_top)(void) = draw_list_top; /* écran du haut pendant une question ou une progression */
-static const char *operation; /* titre de la longue opération en cours (Tout synchroniser), sinon NULL */
-static u32 progress_color = C_GREEN; /* barre de progression : jaune envoi, cyan récupération, vert le reste */
+static void (*draw_current_top)(void) = draw_list_top; /* top screen during a question or a progress */
+static const char *operation; /* title of the long operation in progress (Sync all), otherwise NULL */
+static u32 progress_color = C_GREEN; /* progress bar: yellow Upload, cyan Download, green the rest */
 
-/* ---------------------------------------------------------------- fichiers */
+/* ---------------------------------------------------------------- files */
 
 static void hash_hex(const unsigned char *bytes, size_t size, char out[65])
 {
@@ -163,13 +163,13 @@ static void hash_hex(const unsigned char *bytes, size_t size, char out[65])
     for (i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", h[i]);
 }
 
-/* ---------------------------------------------------------------- config et Base */
+/* ---------------------------------------------------------------- config and Base */
 
 static void read_ini(const char *path, void (*key)(const char *, const char *))
 {
     FILE *f = fopen(path, "r");
     char line[512];
-    if (!f) { /* coupure entre le retrait de l'ancien et le renommage (replace_file) : le .tmp est complet */
+    if (!f) { /* power cut between removing the old file and the rename (replace_file): the .tmp is complete */
         snprintf(line, sizeof line, "%s.tmp", path);
         f = fopen(line, "r");
     }
@@ -224,7 +224,7 @@ static const char *base_of(const char *key)
     return NULL;
 }
 
-/* La seule écriture de Base (design §1) : après À jour, Envoi ou Récupération réussis. */
+/* The only write of the Base (design §1): after In sync, or a successful Upload or Download. */
 static void set_base(const char *key, const char *hash)
 {
     static char t[MAX_GAMES * (KEY_MAX + 66)];
@@ -237,7 +237,7 @@ static void set_base(const char *key, const char *hash)
     }
     snprintf(bases[i].hash, 65, "%s", hash);
     for (i = 0; i < base_count; i++) n += snprintf(t + n, sizeof t - n, "%s=%s\n", bases[i].key, bases[i].hash);
-    if (replace_file(APP_DIR "/base.ini", t, n)) /* une coupure pendant l'écriture ne vide plus base.ini */
+    if (replace_file(APP_DIR "/base.ini", t, n)) /* a power cut during the write no longer empties base.ini */
         add_alert(T("État de synchronisation non enregistré : des conflits peuvent apparaître. Vérifiez la carte SD.",
                   "Sync state not saved: conflicts may appear. Check the SD card."));
 }
@@ -256,7 +256,7 @@ static int has_rom_extension(system_t s, const char *ext)
     }
 }
 
-/* Contenu complet de la Sauvegarde locale : le fichier (Trailer d'horloge compris), ou /main de l'archive 3DS. */
+/* Whole content of the Local save: the file (Clock trailer included), or /main of the 3DS Save archive. */
 static int read_save(game_t *j, unsigned char **bytes, size_t *size)
 {
     if (j->system == SYS_3DS) return read_title_save(j->title, &j->media, bytes, size);
@@ -265,14 +265,14 @@ static int read_save(game_t *j, unsigned char **bytes, size_t *size)
 
 static int forwarder(const game_t *j) { return !strncmp(j->sav, FORWARDERS "/", sizeof FORWARDERS); }
 
-/* SRAM du fichier local -> forme du serveur (ADR 0012) : EEPROM d'open_agb_firm remise dans l'ordre de mGBA, MBC2 en
- * 512 octets. Les copies de sécurité gardent les octets du fichier. */
+/* SRAM of the local file -> server form (ADR 0012): open_agb_firm EEPROM put back in mGBA order, MBC2 as
+ * 512 bytes. Backup copies keep the bytes of the file. */
 static void to_server_form(const game_t *j, unsigned char **bytes, size_t *size)
 {
     unsigned char *s;
     if (j->system == SYS_GBA && !forwarder(j)) eeprom_swap(*bytes, *size);
     if (!j->mbc2 || !(s = malloc(MBC2_SERVER))) return;
-    if (mbc2_normalize(*bytes, *size, s)) { /* taille inconnue : telle quelle */
+    if (mbc2_normalize(*bytes, *size, s)) { /* unknown size: as is */
         free(s);
         return;
     }
@@ -281,8 +281,8 @@ static void to_server_form(const game_t *j, unsigned char **bytes, size_t *size)
     *size = MBC2_SERVER;
 }
 
-/* Forme du serveur -> SRAM du fichier local : l'inverse de to_server_form. MBC2 à la taille du fichier existant (cible),
- * sinon 256 octets pour le forwarder mGBA et 8 Kio pour TWiLight Menu++. 0 si fait. */
+/* Server form -> SRAM of the local file: the reverse of to_server_form. MBC2 at the size of the existing file (target),
+ * otherwise 256 bytes for the mGBA forwarder and 8 KiB for TWiLight Menu++. 0 if done. */
 static int to_file_form(const game_t *j, unsigned char **bytes, size_t *size, size_t target)
 {
     unsigned char s[MBC2_SERVER], *f;
@@ -297,7 +297,7 @@ static int to_file_form(const game_t *j, unsigned char **bytes, size_t *size, si
     return 0;
 }
 
-/* Alias (alias.ini, ADR 0014) : "nom de la ROM sans extension=CLÉ", pour qu'un ROM hack ait sa propre Clé. */
+/* Alias (alias.ini, ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
 #define MAX_ALIAS 64
 static struct { char name[256], value[KEY_MAX]; } alias[MAX_ALIAS];
 static int alias_count;
@@ -308,7 +308,7 @@ static void alias_entry(const char *k, const char *v)
     while (n && k[n - 1] == ' ') n--; /* "Pokemon Radical Red = GBA-0RAD" */
     if (alias_count == MAX_ALIAS || !n || n >= sizeof alias[0].name) return;
     snprintf(alias[alias_count].name, sizeof alias[0].name, "%.*s", (int)n, k);
-    snprintf(alias[alias_count].value, sizeof alias[0].value, "%s", v); /* coupé : alias_key le refusera */
+    snprintf(alias[alias_count].value, sizeof alias[0].value, "%s", v); /* cut: alias_key will reject it */
     alias_count++;
 }
 
@@ -320,7 +320,7 @@ static const char *alias_of(const char *name)
     return NULL;
 }
 
-/* Dossiers jamais lus : sauvegardes, cachés, et ceux de TWiLight Menu++ et du système (_nds, 3ds, luma, Nintendo 3DS, mGBA). */
+/* Folders never read: saves, hidden, and those of TWiLight Menu++ and the system (_nds, 3ds, luma, Nintendo 3DS, mGBA). */
 static int is_ignored_dir(const char *name)
 {
     return name[0] == '.' || name[0] == '_' || !strcasecmp(name, "saves") || !strcasecmp(name, "Nintendo 3DS") ||
@@ -334,10 +334,10 @@ static int is_dir(const struct dirent *e, const char *path)
     return !stat(path, &st) && S_ISDIR(st.st_mode);
 }
 
-/* Une source de ROM, sous-dossiers compris (ADR 0015) : Clé lue dans l'en-tête (ou alias), Sauvegarde nommée comme la
- * ROM (save_path). Deux ROM de même Clé, ou de même fichier de Sauvegarde (forwarder mGBA compris) : Doublon. */
-#define MAX_DEPTH 4 /* niveaux de sous-dossiers lus */
-static int skipped_roms; /* ROM au-delà de MAX_GAMES */
+/* One ROM source, subfolders included (ADR 0015): Key read in the header (or Alias), Save named like the
+ * ROM (save_path). Two ROMs with the same Key, or the same Save file (mGBA forwarder included): Duplicate. */
+#define MAX_DEPTH 4 /* levels of subfolders read */
+static int skipped_roms; /* ROMs beyond MAX_GAMES */
 
 static void scan_dir(system_t s, const char *roms, const char *saves, const char *dir, int depth)
 {
@@ -373,7 +373,7 @@ static void scan_dir(system_t s, const char *roms, const char *saves, const char
                 add_alert(t);
                 continue;
             }
-        } else if (rom_key(s, header, key)) continue; /* homebrew ou en-tête illisible */
+        } else if (rom_key(s, header, key)) continue; /* homebrew or unreadable header */
 
         for (i = 0; i < game_count; i++)
             if (!strcmp(games[i].key, key) || same_save(games[i].system, games[i].name, games[i].sav_rom, s, name, sav)) j = &games[i];
@@ -401,8 +401,8 @@ static void scan_dir(system_t s, const char *roms, const char *saves, const char
     if (d) closedir(d);
 }
 
-/* Sauvegarde locale d'un Jeu : son fichier (forwarder mGBA s'il existe, docs/guide-forwarders.md) et son Hash
- * (SRAM seule pour GB/GBA, ADR 0008 ; /main pour la 3DS). Appelée au scan, et après une action sur ce seul Jeu. */
+/* Local save of a Game: its file (mGBA forwarder if it exists, docs/guide-forwarders.md) and its Hash
+ * (SRAM only for GB/GBA, ADR 0008; /main for the 3DS). Called at scan, and after an action on this Game only. */
 static void read_local(game_t *j)
 {
     unsigned char *bytes;
@@ -423,18 +423,18 @@ static void read_local(game_t *j)
         size = sram_size(j->system, size);
         to_server_form(j, &bytes, &size);
         j->blank = is_blank_save(j->system, bytes, size);
-        /* stat() ne donne pas la date sur la SD. archive_getmtime la convertit en temps UNIX ; un horodatage 0 (Azahar)
-         * devient le 1er janvier 2000 : date inconnue. */
+        /* stat() does not give the date on the SD. archive_getmtime converts it to UNIX time; a 0 timestamp (Azahar)
+         * becomes 1 January 2000: date unknown. */
         if (R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modified = (time_t)mtime;
     }
-    j->has_progress = pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM seule : sans Trailer d'horloge */
+    j->has_progress = pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM only: without the Clock trailer */
     hash_hex(bytes, size, j->local_hash);
     j->local.size = size;
     j->has_local = 1;
     free(bytes);
 }
 
-/* Les jeux 3DS de titres.ini dont l'archive existe (jeu installé ou cartouche insérée, ADR 0009). */
+/* The 3DS games of titres.ini whose Save archive exists (game installed or card inserted, ADR 0009). */
 static void scan_3ds(void)
 {
     int i;
@@ -445,8 +445,8 @@ static void scan_3ds(void)
         j->title = titles[i].id;
         j->system = SYS_3DS;
         j->rom_count = 1;
-        read_local(j); /* Hash, et temps de jeu d'un Pokémon */
-        if (!j->has_local) continue; /* jamais lancé ou absent */
+        read_local(j); /* Hash, and play time of a Pokémon */
+        if (!j->has_local) continue; /* never started or absent */
         key_3ds(j->title, j->key);
         snprintf(j->name, sizeof j->name, "%s", titles[i].name);
         snprintf(j->short_name, sizeof j->short_name, "%.47s", titles[i].name);
@@ -454,14 +454,14 @@ static void scan_3ds(void)
     }
 }
 
-/* Toutes les sources, puis le Hash de chaque Sauvegarde locale (SRAM seule pour GB/GBA, ADR 0008). */
+/* All sources, then the Hash of each Local save (SRAM only for GB/GBA, ADR 0008). */
 static void scan(void)
 {
     int i, before;
 
-    game_count = visible_count = loaded = skipped_roms = alias_count = 0; /* la liste affichée n'est plus valable pendant la lecture */
+    game_count = visible_count = loaded = skipped_roms = alias_count = 0; /* the list shown is no longer valid during the read */
     read_ini(APP_DIR "/alias.ini", alias_entry);
-    scan_dir(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* sauvegardes vides = à côté de la ROM */
+    scan_dir(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* empty saves = next to the ROM */
     scan_dir(SYS_GB, cfg.roms_gb, cfg.saves_gb, cfg.roms_gb, 0);
     scan_dir(SYS_GBA, cfg.roms_gba, cfg.saves_gba, cfg.roms_gba, 0);
     if (skipped_roms) {
@@ -477,7 +477,7 @@ static void scan(void)
     scan_3ds();
 }
 
-/* GET /saves : Version courante de chaque Jeu. 0 si tout va bien. */
+/* GET /saves: Current version of each Game. 0 if all is well. */
 static int read_server(void)
 {
     char url[300], *body;
@@ -494,7 +494,7 @@ static int read_server(void)
     if (status != 200) {
         char t[200];
         snprintf(t, sizeof t, T("Lecture du serveur impossible. %s", "Cannot read the server. %s"), network_text(status, net_wifi(), english));
-        add_alert(t); /* ajouté au message de l'action en cours (show_alert) */
+        add_alert(t); /* added to the message of the current action (show_alert) */
         network_detail(status, url, alert_detail, sizeof alert_detail);
         if (status > 0) free(body);
         return -1;
@@ -504,7 +504,7 @@ static int read_server(void)
     /* [{"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc"}, ...] (list.h) */
     for (p = body; next_server_entry(&p, &e);) {
         for (i = 0; i < game_count && strcmp(games[i].key, e.code); i++);
-        if (i == game_count || !e.hash[0] || e.size < 0) continue; /* pas de ROM locale : pas affiché */
+        if (i == game_count || !e.hash[0] || e.size < 0) continue; /* no local ROM: not shown */
         strcpy(games[i].server_hash, e.hash);
         games[i].server.size = e.size;
         strcpy(games[i].date, e.date);
@@ -514,19 +514,19 @@ static int read_server(void)
         games[i].has_name = e.has_name;
     }
     free(body);
-    /* Nom de chaque jeu pour l'Historique du PC (ADR 0018), une fois par jeu. Arrêt au premier refus : un serveur plus
-     * ancien ne connaît pas cette adresse, et la liste reste lisible sans les noms. */
+    /* Name of each game for the History on the PC (ADR 0018), once per game. Stop at the first refusal: an older
+     * server does not know this address, and the list stays readable without the names. */
     for (i = 0; i < game_count; i++) {
         if (!games[i].has_server || games[i].has_name) continue;
         show_progress(i + 1, game_count, T("Envoi des noms des jeux\n%s", "Sending game names\n%s"), games[i].short_name);
-        snprintf(url, sizeof url, "%s/saves/%.31s/name", cfg.url, games[i].key); /* Clé : 31 caractères au plus (KEY_MAX) */
+        snprintf(url, sizeof url, "%s/saves/%.31s/name", cfg.url, games[i].key); /* Key: 31 characters at most (KEY_MAX) */
         if (net_put(url, cfg.token, NULL, games[i].name, strlen(games[i].name)) != 204) break;
         games[i].has_name = 1;
     }
     return 0;
 }
 
-/* Ordre d'affichage : ce qui demande une décision d'abord, puis les actions, puis le reste. */
+/* Display order: what needs a decision first, then the actions, then the rest. */
 static int priority(int e)
 {
     switch (e) {
@@ -551,7 +551,7 @@ static void compute_states(void)
     visible_count = 0;
     for (i = 0; i < game_count; i++) {
         game_t *j = &games[i];
-        /* Sauvegarde vierge = absente, sauf si le serveur a la même ; recuperer() la copie quand même. */
+        /* Blank save = absent, unless the server has the same; download_save() copies it anyway. */
         int seen = j->has_local && (!j->blank || (j->has_server && !strcmp(j->local_hash, j->server_hash)));
         j->local.hash = j->local_hash;
         j->server.hash = j->server_hash;
@@ -566,18 +566,18 @@ static void compute_states(void)
     qsort(visible, visible_count, sizeof *visible, compare_visible);
 }
 
-/* Après une action : le Jeu touché est déjà relu (read_local), seul le serveur change. */
+/* After an action: the Game it touched is already read again (read_local), only the server changes. */
 static int reread_server(void)
 {
     int r;
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     r = read_server();
-    compute_states(); /* serveur non lu : les jeux locaux restent listés, sans action */
+    compute_states(); /* server not read: the local games stay listed, with no action */
     loaded = 1;
     return r;
 }
 
-/* Tout relire : ROM, Sauvegardes, serveur (Y, réglages modifiés). */
+/* Read everything again: ROMs, Saves, server (Y, settings changed). */
 static int refresh(void)
 {
     int r;
@@ -591,8 +591,8 @@ static int refresh(void)
 
 /* ---------------------------------------------------------------- actions */
 
-/* Envoi conditionnel : If-Match = Version courante vue par ce Client (ADR 0001). 1 si accepté.
- * GB/GBA : seule la SRAM part, le Trailer d'horloge reste sur la 3DS (ADR 0008). */
+/* Conditional Upload: If-Match = Current version seen by this Client (ADR 0001). 1 if accepted.
+ * GB/GBA: only the SRAM goes, the Clock trailer stays on the 3DS (ADR 0008). */
 static int upload_save(game_t *j)
 {
     char url[300], condition[100], hash[65];
@@ -625,7 +625,7 @@ static int upload_save(game_t *j)
     return status == 200;
 }
 
-/* Crée le dossier qui contient chemin s'il manque (dossier des sauvegardes d'un premier jeu). */
+/* Creates the folder that holds path if it is missing (saves folder of a first game). */
 static void make_parent_dir(const char *path)
 {
     char d[600], *end;
@@ -636,10 +636,10 @@ static void make_parent_dir(const char *path)
     }
 }
 
-/* Récupération (design §4) : Copie de sécurité d'abord, puis
- *  - fichier (DS, GB, GBA) : SRAM reçue + Trailer d'horloge local (ADR 0008) dans un .tmp, puis remplacement ;
- *  - 3DS : réécriture de /main avec commit et secure value (ADR 0009).
- * 1 si faite ; en cas d'échec, la Sauvegarde locale est intacte. */
+/* Download (design §4): Backup copy first, then
+ *  - file (DS, GB, GBA): received SRAM + local Clock trailer (ADR 0008) in a .tmp, then replace;
+ *  - 3DS: rewrite /main with commit and Secure value (ADR 0009).
+ * 1 if done; on failure, the Local save is intact. */
 static int download_save(game_t *j)
 {
     char tmp[610], backup[700], url[300], hash[65], date[20];
@@ -666,14 +666,14 @@ static int download_save(game_t *j)
         set_message(C_RED, NULL, T("%s : version reçue abîmée, rien n'est écrit. Réessayez.", "%s: received version damaged, nothing written. Try again."), j->short_name);
         return 0;
     }
-    /* Copie dès que la Sauvegarde existe, même si le scan n'a pas pu la lire : jamais d'écrasement sans copie. */
+    /* Copy as soon as the Save exists, even if the scan could not read it: never overwrite without a copy. */
     if (exists) {
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(APP_DIR "/copies", 0777);
-        /* même nom de ROM dans deux sous-dossiers, la même seconde : -1, -2… (jamais d'écrasement d'une copie) */
+        /* same ROM name in two subfolders, the same second: -1, -2… (a copy is never overwritten) */
         failed = backup_path(APP_DIR "/copies", j->name, date, j->system == SYS_3DS ? "main" : "sav", backup, sizeof backup);
         if (!failed) failed = read_save(j, &old_data, &n);
-        if (!failed) failed = write_verified(backup, old_data, n); /* relue : une copie abîmée ne protège rien */
+        if (!failed) failed = write_verified(backup, old_data, n); /* read back: a damaged copy protects nothing */
         if (failed) {
             free(old_data);
             free(body);
@@ -691,7 +691,7 @@ static int download_save(game_t *j)
             return 0;
         }
     } else {
-        /* SRAM reçue (forme du fichier) + Trailer d'horloge local (ce qui dépasse la SRAM de l'ancien fichier). */
+        /* Received SRAM (file form) + local Clock trailer (what lies past the SRAM of the old file). */
         unsigned char *received = (unsigned char *)body;
         sram = exists ? sram_size(j->system, n) : n;
         new_data = to_file_form(j, &received, &size, sram) ? NULL : malloc(size + (n - sram) + 1);
@@ -705,8 +705,8 @@ static int download_save(game_t *j)
         if (n > sram) memcpy(new_data + size, old_data + sram, n - sram);
         free(old_data);
         free(received);
-        make_parent_dir(j->sav); /* dossier des sauvegardes absent (premier jeu) */
-        /* .tmp écrit et relu, puis l'ancienne (déjà copiée) retirée, le .tmp renommé et relu (files.h). */
+        make_parent_dir(j->sav); /* saves folder absent (first game) */
+        /* .tmp written and read back, then the old one (already copied) removed, the .tmp renamed and read back (files.h). */
         failed = replace_file(j->sav, new_data, size + (n - sram));
         free(new_data);
         if (failed == -1) {
@@ -714,14 +714,14 @@ static int download_save(game_t *j)
             return 0;
         }
         snprintf(tmp, sizeof tmp, "%s.tmp", j->sav);
-        if (failed && access(tmp, F_OK)) { /* renommée, mais relue différente : pas de Base sur ce fichier */
+        if (failed && access(tmp, F_OK)) { /* renamed, but read back different: no Base on this file */
             set_message(C_RED, j->sav, T("%s : sauvegarde écrite abîmée. Vérifiez la carte SD, puis récupérez de nouveau.%s", "%s: written save damaged. Check the SD card, then download again.%s"),
                  j->short_name, exists ? T(" Ancienne copiée dans /3ds/3dssavesync/copies.", " Old one copied to /3ds/3dssavesync/copies.") : "");
             return 0;
         }
         if (failed) {
             const char *b = strrchr(j->sav, '/') ? strrchr(j->sav, '/') + 1 : j->sav, *ext = strrchr(b, '.');
-            int l = (int)strlen(b), cut = l > 60; /* écran du bas : nom raccourci, extension gardée */
+            int l = (int)strlen(b), cut = l > 60; /* bottom screen: name shortened, extension kept */
             set_message(C_RED, NULL, T("%s : renommage impossible. Sauvegarde reçue : %.*s%s%s.tmp%s", "%s: rename failed. Downloaded save: %.*s%s%s.tmp%s"),
                      j->short_name, cut ? 50 : l, b, cut ? "…" : "", cut && ext ? ext : "",
                      exists ? T(". Ancienne copiée dans /3ds/3dssavesync/copies.", ". Old one copied to /3ds/3dssavesync/copies.") : ".");
@@ -733,11 +733,11 @@ static int download_save(game_t *j)
     return 1;
 }
 
-/* ---------------------------------------------------------------- écran */
+/* ---------------------------------------------------------------- screen */
 
-/* Icône 32×32 d'un jeu DS, lue dans la ROM, en RGB565 ligne par ligne. 0 si lue.
- * Bannière NDS : son offset est à 0x68 de l'en-tête ; tuiles 4 bits à +0x20, palette BGR555 à +0x220. */
-#define ICON_BACKGROUND 0x10C3 /* couleur 0 de la palette (transparente) : fond de l'écran du bas (0x14181E) */
+/* 32×32 icon of a DS game, read in the ROM, as RGB565 line by line. 0 if read.
+ * NDS banner: its offset is at 0x68 in the header; 4-bit tiles at +0x20, BGR555 palette at +0x220. */
+#define ICON_BACKGROUND 0x10C3 /* palette color 0 (transparent): background of the bottom screen (0x14181E) */
 static int read_ds_icon(const game_t *j, u16 *pixels)
 {
     unsigned char o[4], icon[512 + 32];
@@ -745,14 +745,14 @@ static int read_ds_icon(const game_t *j, u16 *pixels)
     FILE *f;
     int t, l, k;
 
-    if (j->system != SYS_DS || !(f = fopen(j->rom, "rb"))) return -1; /* seules les ROM DS ont une bannière */
+    if (j->system != SYS_DS || !(f = fopen(j->rom, "rb"))) return -1; /* only DS ROMs have a banner */
     offset = fseek(f, 0x68, SEEK_SET) == 0 && fread(o, 1, 4, f) == 4 ? o[0] | o[1] << 8 | o[2] << 16 | (u32)o[3] << 24 : 0;
     if (!offset || fseek(f, offset + 0x20, SEEK_SET) || fread(icon, 1, sizeof icon, f) != sizeof icon) {
         fclose(f);
         return -1;
     }
     fclose(f);
-    for (t = 0; t < 16; t++) /* 4×4 tuiles de 8×8 */
+    for (t = 0; t < 16; t++) /* 4×4 tiles of 8×8 */
         for (l = 0; l < 8; l++)
             for (k = 0; k < 8; k++) {
                 int idx = (icon[t * 32 + l * 4 + k / 2] >> ((k & 1) * 4)) & 0xF;
@@ -763,16 +763,16 @@ static int read_ds_icon(const game_t *j, u16 *pixels)
     return 0;
 }
 
-/* ---------------------------------------------------------------- comparer deux Versions */
+/* ---------------------------------------------------------------- compare two Versions */
 
-/* « 152 h 30 · Sacha », ou partie non commencée. */
+/* "152 h 30 · Sacha", or game not started. */
 static void progress_text(const progress_t *p, char *out, size_t n)
 {
     if (p->trainer[0]) snprintf(out, n, "%d h %02d \xC2\xB7 %s", p->hours, p->minutes, p->trainer);
     else snprintf(out, n, T("%d h %02d \xC2\xB7 partie non commencée", "%d h %02d \xC2\xB7 not started yet"), p->hours, p->minutes);
 }
 
-/* Sauvegarde de la 3DS : temps de jeu (Pokémon), sinon date du fichier si l'horloge la rend crédible. */
+/* Save on the 3DS: play time (Pokémon), otherwise the file date if the clock makes it credible. */
 static void local_text(const game_t *j, char *out, size_t n)
 {
     time_t now = time(NULL);
@@ -786,7 +786,7 @@ static void local_text(const game_t *j, char *out, size_t n)
     } else snprintf(out, n, "%s", T("Présente, date inconnue", "Found, date unknown"));
 }
 
-/* Version du serveur : quand, puis depuis quel appareil. */
+/* Server version: when, then from which device. */
 static void server_text(const game_t *j, char *out, size_t n)
 {
     char age[24];
@@ -799,7 +799,7 @@ static void server_text(const game_t *j, char *out, size_t n)
     else snprintf(out, n, T("Depuis %s", "From %s"), j->client[0] ? j->client : "?");
 }
 
-/* Temps de jeu de la version du serveur (téléchargée), seulement si la 3DS a un Pokémon reconnu. 1 si lu. */
+/* Play time of the server version (downloaded), only if the 3DS has a known Pokémon game. 1 if read. */
 static int server_progress(const game_t *j, progress_t *p)
 {
     char url[300], *body;
@@ -815,7 +815,7 @@ static int server_progress(const game_t *j, progress_t *p)
     return ok;
 }
 
-/* ---------------------------------------------------------------- écran principal (citro2d, issue #21) */
+/* ---------------------------------------------------------------- main screen (citro2d) */
 
 static u32 state_color(int e)
 {
@@ -824,13 +824,13 @@ static u32 state_color(int e)
     case TO_DOWNLOAD: return C_CYAN;
     case CONFLICT: return C_RED;
     }
-    return GREY_LIGHT; /* À jour, Doublon, Inconnu */
+    return GREY_LIGHT; /* In sync, Duplicate, Unknown */
 }
 
-/* Pastille et trait de l'état : vert sombre pour À jour, qui n'attire pas l'œil. */
+/* Dot and mark of the State: dark green for In sync, which does not catch the eye. */
 static u32 dot_color(int e) { return e == IN_SYNC ? RGB(0x2F6B3A) : state_color(e); }
 
-/* Un mot par état, le même dans la liste, les compteurs et les détails. */
+/* One word per State, the same in the list, the counters and the details. */
 static const char *state_label(int e)
 {
     switch (e) {
@@ -843,26 +843,26 @@ static const char *state_label(int e)
     return T("À jour", "In sync");
 }
 
-/* Barre des touches en bas de l'écran du bas (maquette 3 de l'issue #21) : chaque touche est aussi touchable au stylet. */
+/* Button bar at the bottom of the bottom screen: each button can also be tapped with the stylus. */
 typedef struct {
     u32 button;
     const char *text;
-    int actif; /* 0 : grisée (A sans rien à faire) */
+    int actif; /* 0: greyed out (A with nothing to do) */
 } button_t;
 static struct { float x, y, l, h; u32 button; } buttons[8];
 static int button_count;
 #define BUTTON_HEIGHT 22
 #define BAR_Y (240 - 2 * BUTTON_HEIGHT - 4)
-#define BAR_TOP_1 (240 - BUTTON_HEIGHT - 7) /* haut du fond d'une barre d'une ligne de touches */
+#define BAR_TOP_1 (240 - BUTTON_HEIGHT - 7) /* top of the background of a one-line button bar */
 #define BAR_TOP_2 (240 - 2 * BUTTON_HEIGHT - 7)
 
-/* Glyphe de la police du système (U+E000 A, E001 B, E002 X, E003 Y) à la couleur de la New 3DS, ou START / SELECT. */
+/* Glyph of the system font (U+E000 A, E001 B, E002 X, E003 Y) in the New 3DS color, or START / SELECT. */
 static const char *glyph(u32 t)
 {
     return t == KEY_A ? "\xEE\x80\x80" : t == KEY_B ? "\xEE\x80\x81" : t == KEY_X ? "\xEE\x80\x82" : t == KEY_Y ? "\xEE\x80\x83" : t == KEY_START ? "START" : "SELECT";
 }
 
-/* START et SELECT : le mot dans une pastille, 6 pixels de plus. */
+/* START and SELECT: the word in a pill, 6 pixels wider. */
 static float glyph_width(u32 t)
 {
     return t & (KEY_START | KEY_SELECT) ? screen_text_width(0.34f, glyph(t)) + 6 : screen_text_width(0.55f, glyph(t));
@@ -870,8 +870,8 @@ static float glyph_width(u32 t)
 
 static float button_width(const button_t *t, float size) { return glyph_width(t->button) + 4 + screen_text_width(size, t->text); }
 
-/* Une ligne de touches à partir de y ; ecart = 0 : touches réparties sur toute la largeur.
- * Texte réduit si la ligne ne tient pas (marge comprise) avec au moins 10 pixels entre deux touches. */
+/* One row of buttons from y; gap = 0: buttons spread over the whole width.
+ * Smaller text if the row does not fit (margin included) with at least 10 pixels between two buttons. */
 static void draw_button_row(const button_t *t, int n, float y, float gap)
 {
     float l[6], total, x = 6, size = 0.44f;
@@ -885,12 +885,12 @@ static void draw_button_row(const button_t *t, int n, float y, float gap)
         u32 c = !t[i].actif ? GREY_DARK : t[i].button == KEY_A ? RGB(0xE04848) : t[i].button == KEY_B ? RGB(0xF0C030)
               : t[i].button == KEY_X ? RGB(0x4080F0) : t[i].button == KEY_Y ? RGB(0x40B060) : GREY_LIGHT;
         float g = glyph_width(t[i].button);
-        if (t[i].button & (KEY_START | KEY_SELECT)) { /* lu comme une touche, pas comme du texte */
+        if (t[i].button & (KEY_START | KEY_SELECT)) { /* read as a button, not as text */
             screen_rect(x, y + 4, g, 12, GREY_DARK);
             screen_text(x + 3, y + 4, 0.34f, WHITE, 0, glyph(t[i].button));
         } else screen_text(x, y + 2, 0.55f, c, 0, glyph(t[i].button));
         screen_text(x + g + 4, y + 3, size, t[i].actif ? WHITE : GREY_DARK, 0, t[i].text);
-        if (button_count < 8) { /* zone touchable : la touche et la moitié de l'écart de chaque côté */
+        if (button_count < 8) { /* touch area: the button and half of the gap on each side */
             buttons[button_count].x = x - gap / 2;
             buttons[button_count].y = y - 2;
             buttons[button_count].l = l[i] + gap;
@@ -901,8 +901,8 @@ static void draw_button_row(const button_t *t, int n, float y, float gap)
     }
 }
 
-/* Carte de choix de l'écran de Conflit (152 × 92), touchable : touche et action, la version (même forme des deux
- * côtés), ce qui se passe. */
+/* Choice card of the Conflict screen (152 × 92), touchable: button and action, the version (same form on both
+ * sides), what happens. */
 static void draw_choice_card(float x, float y, u32 button, const char *action, const char *version, const char *outcome)
 {
     screen_rect(x, y, 152, 92, CARD);
@@ -919,7 +919,7 @@ static void draw_choice_card(float x, float y, u32 button, const char *action, c
     }
 }
 
-/* Touche du bouton sous le stylet, 0 si aucun. */
+/* Button under the stylus, 0 if none. */
 static u32 touched_button(void)
 {
     touchPosition p;
@@ -931,14 +931,14 @@ static u32 touched_button(void)
     return 0;
 }
 
-/* Fond de la barre des touches : 1 ou 2 lignes, en bas de l'écran du bas. */
+/* Background of the button bar: 1 or 2 lines, at the bottom of the bottom screen. */
 static void draw_bar_background(int lines)
 {
     float y = 240 - lines * BUTTON_HEIGHT - 7;
     screen_rect(0, y, 320, 240 - y, BAR);
 }
 
-/* Icône du jeu en haut à droite de l'écran du bas. */
+/* Game icon at the top right of the bottom screen. */
 static void draw_game_icon(const game_t *j)
 {
     u16 icon[48 * 48];
@@ -946,11 +946,11 @@ static void draw_game_icon(const game_t *j)
         screen_icon(icon, j->system == SYS_3DS ? 48 : 32, j->system == SYS_3DS ? 48 : 32, 320 - 6 - 48, 6, j->system == SYS_3DS ? 1.0f : 1.5f);
 }
 
-/* Écran du haut de la liste : titre et compteurs (ceux qui ne tiennent pas partent, « à jour » d'abord), les jeux, puis
- * le pied : le serveur, quand il a été lu, la position dans la liste. */
+/* Top screen of the list: title and counters (those that do not fit are dropped, "in sync" first), the games, then
+ * the footer: the server, when it was read, the position in the list. */
 static void draw_list_top(void)
 {
-    static const int states[] = { CONFLICT, TO_DOWNLOAD, TO_UPLOAD, DUPLICATE, IN_SYNC }; /* rang de priorite() */
+    static const int states[] = { CONFLICT, TO_DOWNLOAD, TO_UPLOAD, DUPLICATE, IN_SYNC }; /* order of priority() */
     static const int all[] = { TO_UPLOAD, TO_DOWNLOAD, CONFLICT, DUPLICATE, OFFLINE, IN_SYNC };
     const int cursor = list_cursor;
     int i, count = 0, e[5], n[5] = { 0 }, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
@@ -960,7 +960,7 @@ static void draw_list_top(void)
 
     screen_top();
     x = 6 + screen_text(6, 4, 0.55f, WHITE, 0, "3dssavesync") + 12;
-    if (loaded && server_read) { /* sans le serveur, les compteurs seraient faux */
+    if (loaded && server_read) { /* without the server, the counters would be wrong */
         for (i = 0; i < visible_count; i++) n[priority(games[visible[i]].state)]++;
         for (i = 0; i < 5; i++) {
             if (!n[i]) continue;
@@ -982,7 +982,7 @@ static void draw_list_top(void)
     }
     screen_rect(0, 23, 400, 1, GREY_DARK);
 
-    /* Colonnes mesurées sur tous les mots d'état : rien n'est coupé, et elles ne bougent pas d'une image à l'autre. */
+    /* Columns measured on all State words: nothing is cut, and they do not move from one frame to the next. */
     for (i = 0; i < 6; i++)
         if (screen_text_width(0.42f, state_label(all[i])) > xs) xs = screen_text_width(0.42f, state_label(all[i]));
     xs = 18 + xs * WIDTH_MARGIN + 6;
@@ -1002,7 +1002,7 @@ static void draw_list_top(void)
         screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, SYSTEM_NAMES[k->system]);
         screen_text(xn, y, 0.5f, WHITE, 400 - xn - 8, k->short_name);
     }
-    if (visible_count > TOP_LINES) { /* barre de défilement */
+    if (visible_count > TOP_LINES) { /* scroll bar */
         float h = 195.0f * TOP_LINES / visible_count;
         screen_rect(396, 26 + (195.0f - h) * start / (visible_count - TOP_LINES), 2, h, GREY_DARK);
     }
@@ -1023,7 +1023,7 @@ static void draw_list_top(void)
     screen_text(8, 226, 0.38f, loaded && !server_read ? C_RED : GREY_LIGHT, x - 8 - 12, footer);
 }
 
-/* Une ligne « libellé  valeur » des détails. */
+/* One "label  value" line of the details. */
 static float detail(float y, const char *label, const char *value)
 {
     screen_text(8, y, 0.42f, GREY_LIGHT, 100, label);
@@ -1031,7 +1031,7 @@ static float detail(float y, const char *label, const char *value)
     return y + 15;
 }
 
-/* Sous le mot d'état : pourquoi, et ce que fait A. */
+/* Under the State word: why, and what A does. */
 static const char *state_sentence(const game_t *j, char *t, size_t n)
 {
     switch (j->state) {
@@ -1051,9 +1051,9 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
     return T("La 3DS et le serveur ont la même sauvegarde.", "The 3DS and the server have the same save.");
 }
 
-/* Bande d'un message, collée au-dessus de la barre des touches (bas) : trait de couleur, texte, puis la ligne technique
- * en gris, toutes deux sur plusieurs lignes. Elle monte aussi haut que le texte le demande, par-dessus les détails :
- * le message reste entier (un peu plus petit s'il le faut ; « … » seulement s'il dépasse encore l'écran). */
+/* Message band, right above the button bar (bottom): color mark, text, then the technical line
+ * in grey, both on several lines. It grows as high as the text needs, over the details:
+ * the message stays whole (a bit smaller if needed; "…" only if it still overflows the screen). */
 static void draw_band(float bottom, const char *text, const char *technical, u32 color)
 {
     float size, l1, l2 = technical && technical[0] ? screen_paragraph_height(0.38f, 302, technical) : 0, h;
@@ -1062,7 +1062,7 @@ static void draw_band(float bottom, const char *text, const char *technical, u32
     for (size = 0.42f;; size = 0.36f) {
         l1 = screen_paragraph_height(size, 302, "X");
         lines = (int)(screen_paragraph_height(size, 302, text) / l1 + 0.5f);
-        room = (int)((bottom - 12 - l2) / l1); /* jusqu'à 6 px du haut de l'écran */
+        room = (int)((bottom - 12 - l2) / l1); /* up to 6 px from the top of the screen */
         if (lines <= room || size < 0.4f) break;
     }
     if (lines > room) lines = room < 1 ? 1 : room;
@@ -1073,7 +1073,7 @@ static void draw_band(float bottom, const char *text, const char *technical, u32
     if (l2) screen_paragraph(10, bottom - h + 3 + lines * l1, 0.38f, GREY_LIGHT, 302, technical);
 }
 
-/* Message de la dernière action, dans sa bande. */
+/* Message of the last action, in its band. */
 static void draw_message(float bottom) { draw_band(bottom, message, message_detail, message_color); }
 
 static void draw_bottom(const game_t *j)
@@ -1091,17 +1091,17 @@ static void draw_bottom(const game_t *j)
         action = j->state == TO_UPLOAD || j->state == TO_DOWNLOAD || j->state == CONFLICT;
         draw_game_icon(j);
         y += screen_lines(8, y, 0.6f, WHITE, 250, 2, j->short_name);
-        /* Système, et pour GB/GBA le programme dont la sauvegarde est synchronisée (X le change). */
+        /* System, and for GB/GBA the program whose save is synced (X changes it). */
         snprintf(t, sizeof t, "%s%s%s", j->system == SYS_DS ? "Nintendo DS" : j->system == SYS_GB ? (ext && !strcasecmp(ext, ".gbc") ? "Game Boy Color" : "Game Boy")
                                        : j->system == SYS_GBA ? "Game Boy Advance" : "Nintendo 3DS",
                  gb ? " \xC2\xB7 " : "", !gb ? "" : forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
         screen_text(8, y + 1, 0.4f, GREY_LIGHT, 250, t);
-        y = y + 18 < 58 ? 58 : y + 20; /* sous l'icône */
+        y = y + 18 < 58 ? 58 : y + 20; /* under the icon */
         screen_rect(8, y + 2, 3, 13, c);
         screen_text(15, y, 0.5f, c, 0, state_label(j->state));
         y += 19;
         y += screen_lines(8, y, 0.42f, WHITE, 304, j->state == DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
-        if (j->state != DUPLICATE) { /* un Doublon n'a ni sauvegarde ni version à montrer */
+        if (j->state != DUPLICATE) { /* a Duplicate has no save and no version to show */
             local_text(j, t, sizeof t);
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
             server_text(j, t, sizeof t);
@@ -1114,13 +1114,13 @@ static void draw_bottom(const game_t *j)
         }
     }
     if (message[0]) draw_message(BAR_TOP_2);
-    else if (update_is_newer(VERSION, latest_version)) { /* sans message : la mise à jour, à la même place */
+    else if (update_is_newer(VERSION, latest_version)) { /* no message: the update, at the same place */
         snprintf(t, sizeof t, T("Version %s disponible (SELECT)", "Version %s available (SELECT)"), latest_version);
         draw_band(BAR_TOP_2, t, NULL, C_CYAN);
     }
 
-    /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
-     * en bas, les touches générales. */
+    /* Bar: on top, what A (always shown, greyed out when there is nothing to do) and X (GB/GBA) do for this game;
+     * at the bottom, the general buttons. */
     draw_bar_background(2);
     {
         char x[80];
@@ -1145,7 +1145,7 @@ static void draw(void)
     screen_end();
 }
 
-/* Touches appuyées (avec répétition pour les flèches), ou touche de la barre sous le stylet. B si l'application se ferme. */
+/* Buttons pressed (with repeat for the arrows), or bar button under the stylus. B if the app closes. */
 static u32 read_keys(void)
 {
     u32 k = 0;
@@ -1158,9 +1158,9 @@ static u32 read_keys(void)
     return k ? k : KEY_B;
 }
 
-/* Progression des longues boucles : l'écran du haut garde son contexte (draw_current_top) ; en bas, l'opération, le texte
- * (« étape\njeu » : l'étape en gris, puis le jeu) et une barre si total > 0.
- * Au plus 20 images par seconde : une image attend l'écran, la lecture ne doit pas en être ralentie. */
+/* Progress of long loops: the top screen keeps its context (draw_current_top); at the bottom, the operation, the text
+ * ("step\ngame": the step in grey, then the game) and a bar if total > 0.
+ * At most 20 frames per second: a frame waits for the screen, and must not slow down the read. */
 static void show_progress(int done, int total, const char *format, ...)
 {
     static u64 last_frame;
@@ -1197,9 +1197,9 @@ static void show_progress(int done, int total, const char *format, ...)
     screen_end();
 }
 
-/* Question sur l'écran du bas (l'écran du haut garde son contexte) : le titre est la question, le sous-titre le jeu ;
- * dans le texte, une ligne « libellé\tvaleur » se range dans la grille des détails ; l'avertissement va dans une bande
- * rouge. 1 si A, l'action nommée ; 0 si B, Annuler. */
+/* Question on the bottom screen (the top screen keeps its context): the title is the question, the subtitle the game;
+ * in the text, a "label\tvalue" line goes into the grid of the details; the warning goes into a red
+ * band. 1 if A, the named action; 0 if B, Cancel. */
 static int confirm(const char *title, const char *subtitle, const char *text, const char *warning, const char *action)
 {
     const button_t t[2] = { { KEY_A, action, 1 }, { KEY_B, T("Annuler", "Cancel"), 1 } };
@@ -1241,15 +1241,15 @@ static void edit_text(const char *title, char *value, size_t n, int masked)
     swkbdInit(&s, SWKBD_TYPE_WESTERN, 2, (int)n - 1);
     swkbdSetHintText(&s, title);
     swkbdSetInitialText(&s, value);
-    swkbdSetValidation(&s, SWKBD_ANYTHING, 0, 0); /* vide permis : « à côté de la ROM » */
+    swkbdSetValidation(&s, SWKBD_ANYTHING, 0, 0); /* empty allowed: "next to the ROM" */
     if (masked) swkbdSetPasswordMode(&s, SWKBD_PASSWORD_HIDE_DELAY);
     if (swkbdInputText(&s, input, sizeof input) == SWKBD_BUTTON_CONFIRM) snprintf(value, n, "%s", input);
 }
 
-static int test_state;        /* ligne Connexion des réglages : 0 non testée, 1 réussie, -1 échec (test_short) */
-static char test_short[80];  /* « Jeton refusé » : network_text jusqu'au premier « : », « . » ou « ( » */
+static int test_state;        /* Connection line of the settings: 0 not tested, 1 OK, -1 failure (test_short) */
+static char test_short[80];  /* "Token refused": network_text up to the first ":", "." or "(" */
 
-/* GET /saves : résultat dans le message (texte, puis la ligne technique) et la ligne Connexion. 1 si la connexion marche. */
+/* GET /saves: result in the message (text, then the technical line) and the Connection line. 1 if the connection works. */
 static int test_connection(void)
 {
     char url[300], d[200], *body;
@@ -1274,7 +1274,7 @@ static int test_connection(void)
     return 0;
 }
 
-/* ---------------------------------------------------------------- mise à jour (ADR 0021) */
+/* ---------------------------------------------------------------- update (ADR 0021) */
 
 static void update_entry(const char *k, const char *v)
 {
@@ -1283,7 +1283,7 @@ static void update_entry(const char *k, const char *v)
     else if (!strcmp(k, "installee")) snprintf(installed_version, sizeof installed_version, "%s", v);
 }
 
-/* maj.ini : jour de la vérification, dernière version vue, version en marche. Échec : réécrit au prochain lancement. */
+/* maj.ini: day of the check, last version seen, running version. On failure: written again at the next start. */
 static void write_update_ini(void)
 {
     char t[120];
@@ -1292,7 +1292,7 @@ static void write_update_ini(void)
     replace_file(APP_DIR "/maj.ini", t, strlen(t));
 }
 
-/* Échec d'une requête à GitHub : ce qui n'est pas fait, le texte de github_text, puis le code curl ou HTTP. */
+/* Failure of a request to GitHub: what is not done, the text of github_text, then the curl or HTTP code. */
 static void github_failure(const char *what, long status)
 {
     update_failed = 1;
@@ -1300,7 +1300,7 @@ static void github_failure(const char *what, long status)
              status < 0 ? "curl" : "HTTP", status < 0 ? -status : status);
 }
 
-/* GET /releases/latest : r, latest_version, update_detail et maj.ini à jour. 1 si une version plus récente existe. */
+/* GET /releases/latest: r, latest_version, update_detail and maj.ini updated. 1 if a newer version exists. */
 static int check_update(release_t *r)
 {
     char *body;
@@ -1314,7 +1314,7 @@ static int check_update(release_t *r)
     if (status > 0) free(body);
     if (ok) snprintf(latest_version, sizeof latest_version, "%s", r->version);
     last_check_day = (long)(time(NULL) / 86400);
-    write_update_ini(); /* échec : vérifié de nouveau au prochain lancement */
+    write_update_ini(); /* failure: checked again at the next start */
     if (!ok) {
         github_failure("", status);
         return 0;
@@ -1324,20 +1324,20 @@ static int check_update(release_t *r)
         snprintf(update_detail, sizeof update_detail, T("Version %s disponible.", "Version %s available."), r->version);
         return 1;
     }
-    /* Jamais la version de GitHub quand elle n'est pas plus récente : elle ne dit rien d'utile et ressemble à un retard. */
+    /* Never the GitHub version when it is not newer: it says nothing useful and looks like a delay. */
     snprintf(update_detail, sizeof update_detail, "%s", !strcmp(VERSION, "dev") ? T("Version de développement : aucune mise à jour proposée.", "Development build: no update offered.")
                                                                            : T("3dssavesync est à jour.", "3dssavesync is up to date."));
     return 0;
 }
 
-static char download_version[32]; /* version en cours de téléchargement ou d'installation */
+static char download_version[32]; /* version being downloaded or installed */
 
 static void download_progress(size_t done, size_t total)
 {
     show_progress((int)(done / 1024), (int)(total / 1024), T("Téléchargement de la version %s (Ko)", "Downloading version %s (KB)"), download_version);
 }
 
-/* .cia par AM, comme FBI : sur tout échec, l'installation est annulée et l'ancienne version reste. */
+/* .cia through AM, like FBI: on any failure, the install is canceled and the old version stays. */
 static Result install_cia(const char *bytes, size_t size)
 {
     Handle h;
@@ -1359,9 +1359,9 @@ static Result install_cia(const char *bytes, size_t size)
     return r;
 }
 
-/* Télécharge r, vérifie son SHA-256 dans SHA256SUMS, puis l'installe : .cia par AM, ou .3dsx remplacé s'il a été lancé
- * depuis le Homebrew Launcher (3dslink, argv vide : refusé, le fichier en marche est inconnu). Échec : update_detail, et l'ancienne version reste. Réussite : quitter. Les Sauvegardes ne
- * sont jamais touchées. */
+/* Downloads r, checks its SHA-256 in SHA256SUMS, then installs it: .cia through AM, or .3dsx replaced if it was started
+ * from the Homebrew Launcher (3dslink, empty argv: refused, the running file is unknown). Failure: update_detail, and the
+ * old version stays. Success: should_quit. The Saves are never touched. */
 static void install_update(const release_t *r)
 {
     const int dsx = envIsHomebrew();
@@ -1388,7 +1388,7 @@ static void install_update(const release_t *r)
     }
     status = net_github(r->checksums, download_progress, &checksums, &n);
     if (status != 200) {
-        github_failure(T("Impossible de télécharger SHA256SUMS.", "Couldn't download SHA256SUMS."), status); /* « Réessayez » : dans github_text */
+        github_failure(T("Impossible de télécharger SHA256SUMS.", "Couldn't download SHA256SUMS."), status); /* "Try again": in github_text */
         goto end;
     }
     if (find_checksum(checksums, name, expected)) {
@@ -1410,7 +1410,7 @@ static void install_update(const release_t *r)
                  actual, expected);
         goto end;
     }
-    /* .cia : place du titre installé ; .3dsx : le .tmp à côté de l'ancien (renommé .bak). Le double de la taille suffit dans les deux cas. */
+    /* .cia: room for the installed title; .3dsx: the .tmp next to the old one (renamed .bak). Twice the size is enough in both cases. */
     if (R_SUCCEEDED(FSUSER_GetSdmcArchiveResource(&sd)) && (u64)sd.freeClusters * sd.clusterSize < 2 * (u64)size) {
         u64 free_bytes = (u64)sd.freeClusters * sd.clusterSize;
         snprintf(update_detail, sizeof update_detail, T("Pas assez de place sur la carte SD. Libérez %llu Mo et réessayez.\nlibre : %llu Ko, requis : %llu Ko",
@@ -1457,7 +1457,7 @@ end:
     free(bytes);
 }
 
-/* Réglages, ligne Mise à jour : vérification, puis installation si l'utilisateur la choisit. */
+/* Settings, Update line: check, then install if the user chooses it. */
 static void update_app(void)
 {
     release_t r;
@@ -1469,9 +1469,9 @@ static void update_app(void)
     if (confirm(T("Mettre à jour 3dssavesync ?", "Update 3dssavesync?"), NULL, t, NULL, T("Mettre à jour", "Update"))) install_update(&r);
 }
 
-/* Jeux 3DS synchronisés : applications installées et cartouche, cochées si elles sont dans titres.ini.
- * Seul un jeu dont l'archive ne contient que /main peut être coché (title_main_only) : la synchronisation ne copie
- * que ce fichier. Les jeux de titres.ini absents de la console restent listés (pour les décocher). */
+/* Synced 3DS games: installed applications and game card, ticked if they are in titres.ini.
+ * Only a game whose Save archive holds only /main can be ticked (title_main_only): the sync copies
+ * only this file. The games of titres.ini absent from the console stay listed (to untick them). */
 typedef struct {
     u64 id;
     FS_MediaType media;
@@ -1506,7 +1506,7 @@ static void choose_titles(void)
             medias[n++] = MEDIATYPE_SD;
         }
     }
-    {   /* sans archive de sauvegarde et pas coché : caché (forwarders mGBA ou DS, jeu jamais lancé) */
+    {   /* no Save archive and not ticked: hidden (mGBA or DS forwarders, game never started) */
         int m = 0;
         for (i = 0; i < n; i++) {
             int t = title_index(titles, title_count, ids[i]), main_only;
@@ -1548,7 +1548,7 @@ static void choose_titles(void)
                 screen_rect(0, ly - 1, 400, 15, SEL);
                 screen_rect(0, ly - 1, 2, 15, ACCENT);
             }
-            screen_rect(9, ly + 2, 10, 10, c[i].ticked || c[i].main_only == 1 ? GREY_LIGHT : GREY_DARK); /* case : bord, fond, coche */
+            screen_rect(9, ly + 2, 10, 10, c[i].ticked || c[i].main_only == 1 ? GREY_LIGHT : GREY_DARK); /* box: border, background, tick */
             screen_rect(10, ly + 3, 8, 8, i == cursor ? SEL : RGB(0x0C0E12));
             if (c[i].ticked) screen_rect(11, ly + 4, 6, 6, C_GREEN);
             screen_text(26, ly, 0.5f, c[i].ticked || c[i].main_only == 1 ? WHITE : GREY_DARK, 400 - 26 - 14, c[i].name);
@@ -1605,7 +1605,7 @@ static void choose_titles(void)
     }
 }
 
-/* Lignes de réglage modifiables, puis Jeux 3DS, Connexion et Version (écran des réglages). */
+/* Editable setting lines, then 3DS games, Connection and Version (settings screen). */
 static const struct {
     const char *name, *name_en, *help, *help_en;
     char *value;
@@ -1626,9 +1626,9 @@ static const struct {
       "open_agb_firm (useSavesFolder=true): sdmc:/3ds/open_agb_firm/saves. Empty = next to the ROM.", cfg.saves_gba, sizeof cfg.saves_gba },
 };
 #define SETTING_COUNT ((int)(sizeof SETTINGS / sizeof *SETTINGS))
-static int selected_setting; /* ligne choisie des réglages : aussi pour l'écran du haut pendant une progression */
+static int selected_setting; /* selected settings line: also for the top screen during a progress */
 
-/* État de la version installée, comme sur la ligne Version : « À jour », « 3.7.1 disponible »… */
+/* State of the installed version, as on the Version line: "Up to date", "3.7.1 available"… */
 static const char *version_state(char *t, size_t n, u32 *color)
 {
     if (!strcmp(VERSION, "dev")) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Version de développement", "Development build"));
@@ -1639,7 +1639,7 @@ static const char *version_state(char *t, size_t n, u32 *color)
     return t;
 }
 
-/* « 3.7.0 · À jour » à partir de x : version en blanc, point en gris, état en couleur, coupé avant fin. */
+/* "3.7.0 · Up to date" from x: version in white, dot in grey, State in color, cut before end. */
 static void draw_version_value(float x, float y, float size, float end)
 {
     char e[48];
@@ -1656,14 +1656,14 @@ static const char *setting_label(int i)
          : i == SETTING_COUNT + 1 ? T("Connexion", "Connection") : T("Version", "Version");
 }
 
-/* Ce que fait A sur la ligne i, dessiné à droite de la ligne choisie. */
+/* What A does on line i, drawn on the right of the selected line. */
 static const char *setting_action(int i)
 {
     return i < SETTING_COUNT ? T("Modifier", "Change") : i == SETTING_COUNT ? T("Choisir", "Choose") : i == SETTING_COUNT + 1 ? T("Tester", "Test")
          : update_is_newer(VERSION, latest_version) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
 }
 
-/* Écran du haut des réglages : libellé à gauche, valeur sur une colonne, « Ⓐ action » à droite de la ligne choisie. */
+/* Top screen of the settings: label on the left, value in a column, "Ⓐ action" on the right of the selected line. */
 static void draw_settings_top(void)
 {
     const int total = SETTING_COUNT + 3;
@@ -1673,7 +1673,7 @@ static void draw_settings_top(void)
     screen_text(6, 4, 0.55f, WHITE, 0, T("Réglages", "Settings"));
     screen_rect(0, 23, 400, 1, GREY_DARK);
     for (i = 0; i < total; i++) {
-        char v[96]; /* test_short : 80 */
+        char v[96]; /* test_short: 80 */
         const char *value = v;
         u32 c = WHITE;
         int required = 0;
@@ -1682,7 +1682,7 @@ static void draw_settings_top(void)
             value = SETTINGS[i].value;
             if (i <= 1 && (!value[0] || !strcmp(value, "https://"))) value = T("À remplir", "Required"), c = GREY_LIGHT, required = 1;
             else if (i == 1) value = "\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2"; /* •••••••• */
-            else if (!value[0]) value = T("À côté de la ROM", "Next to the ROM"), c = GREY_LIGHT; /* valeur par défaut */
+            else if (!value[0]) value = T("À côté de la ROM", "Next to the ROM"), c = GREY_LIGHT; /* default value */
         } else if (i == SETTING_COUNT) {
             if (title_count) snprintf(v, sizeof v, plural(title_count, english, T("%d jeu", "%d game"), T("%d jeux", "%d games")), title_count);
             else snprintf(v, sizeof v, "%s", T("Aucun", "None"));
@@ -1704,12 +1704,12 @@ static void draw_settings_top(void)
         screen_text(8, y, 0.46f, i == selected_setting ? WHITE : GREY_LIGHT, 128, setting_label(i));
         if (i == SETTING_COUNT + 2) draw_version_value(142, y, 0.46f, end);
         else screen_text(142, y, 0.46f, c, end - 142, value);
-        y += 17 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groupes : serveur, dossiers, le reste */
+        y += 17 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groups: server, folders, the rest */
     }
 }
 
-/* Écran de réglages : une ligne par réglage, A pour l'action de la ligne, explication en bas. premier : aucun réglage
- * encore. 1 si un réglage ou la liste des jeux 3DS a changé (il faut alors tout relire). */
+/* Settings screen: one line per setting, A for the action of the line, explanation at the bottom. first: no setting
+ * yet. 1 if a setting or the list of 3DS games changed (then everything must be read again). */
 static int settings_screen(int first)
 {
     const int count = SETTING_COUNT, total = count + 3;
@@ -1721,13 +1721,13 @@ static int settings_screen(int first)
     memcpy(before, &cfg, sizeof cfg);
     memcpy(before_titles, titles, sizeof titles);
     selected_setting = 0;
-    draw_current_top = draw_settings_top; /* progression et questions : les réglages restent en haut */
+    draw_current_top = draw_settings_top; /* progress and questions: the settings stay on top */
     clear_message();
     while (aptMainLoop()) {
         const int c = selected_setting;
         u32 k;
         float y = 6;
-        /* Premier lancement : B teste d'abord la connexion ; un second B après un échec continue quand même. */
+        /* First start: B tests the connection first; a second B after a failure continues anyway. */
         button_t t[2] = { { KEY_A, setting_action(c), 1 },
                           { KEY_B, !first || test_state > 0 ? T("Enregistrer et revenir", "Save and go back")
                                    : test_state < 0           ? T("Continuer quand même", "Continue anyway")
@@ -1759,7 +1759,7 @@ static int settings_screen(int first)
                                                                    : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 6;
         }
         if (message[0]) draw_message(BAR_TOP_1);
-        else if (c == count + 2 && update_detail[0]) { /* dernière vérification : texte, puis sa ligne technique (après le dernier saut) */
+        else if (c == count + 2 && update_detail[0]) { /* last check: text, then its technical line (after the last line break) */
             char d[sizeof update_detail];
             char *nl;
             u32 color;
@@ -1786,7 +1786,7 @@ static int settings_screen(int first)
             clear_message();
             if (c < count) {
                 size_t len;
-                test_state = 0; /* l'adresse ou le jeton a pu changer : le dernier test ne vaut plus */
+                test_state = 0; /* the address or the token may have changed: the last test no longer counts */
                 edit_text(T(SETTINGS[c].name, SETTINGS[c].name_en), SETTINGS[c].value, SETTINGS[c].n, c == 1);
                 len = strlen(SETTINGS[c].value);
                 while (len > 0 && SETTINGS[c].value[len - 1] == '/') SETTINGS[c].value[--len] = '\0'; /* "…/saves/" -> "…/saves" */
@@ -1801,13 +1801,13 @@ static int settings_screen(int first)
         }
     }
     draw_current_top = draw_list_top;
-    if (!first) clear_message(); /* premier lancement : le résultat du test reste affiché */
+    if (!first) clear_message(); /* first start: the result of the test stays shown */
     changed = memcmp(before, &cfg, sizeof cfg) || before_count != title_count || memcmp(before_titles, titles, sizeof titles);
     if (memcmp(before, &cfg, sizeof cfg)) write_config();
     return changed;
 }
 
-/* A sur un Jeu : son action, avec confirmation avant tout écrasement (Q5). 1 si une action a été tentée. */
+/* A on a Game: its action, with a confirmation before any overwrite. 1 if an action was tried. */
 static int act(game_t *j)
 {
     char q[500], srv[200], loc[200], t[80];
@@ -1833,13 +1833,13 @@ static int act(game_t *j)
     case CONFLICT: {
         u32 k;
         const button_t b = { KEY_B, T("Ne rien faire", "Do nothing"), 1 };
-        /* Les deux cartes ont la même forme : la version, son temps de jeu (Pokémon), ce qui se passe. */
+        /* Both cards have the same form: the version, its play time (Pokémon), what happens. */
         if (server_progress(j, &p)) {
             server_text(j, t, sizeof t);
             snprintf(srv, sizeof srv, "%s\n", t);
             progress_text(&p, srv + strlen(srv), sizeof srv - strlen(srv));
         } else server_text(j, srv, sizeof srv);
-        if (j->has_progress && j->modified) { /* local_text donne alors le temps de jeu : la date d'abord, comme à droite */
+        if (j->has_progress && j->modified) { /* local_text then gives the play time: the date first, as on the right */
             char d[24];
             format_age((long)(time(NULL) - j->modified), english, 0, d, sizeof d);
             snprintf(loc, sizeof loc, T("Modifiée %s\n", "Modified %s\n"), d);
@@ -1895,10 +1895,10 @@ static int act(game_t *j)
     return done;
 }
 
-/* X sur un Jeu GB/GBA : sa Sauvegarde passe du forwarder mGBA à celle de la ROM (open_agb_firm, TWiLight), ou
- * l'inverse. Celle de la ROM est sav_rom, le fichier que read_local lit sans forwarder (dossier des sauvegardes réglé,
- * ou saves/ du sous-dossier, ADR 0015). Le fichier du forwarder prime dès qu'il existe (read_local) : le retirer
- * suffit à revenir côté ROM. Copie de sécurité du fichier remplacé (files.h). */
+/* X on a GB/GBA Game: its Save moves from the mGBA forwarder to the one of the ROM (open_agb_firm, TWiLight), or
+ * the reverse. The one of the ROM is sav_rom, the file that read_local reads without a forwarder (saves folder set,
+ * or saves/ of the subfolder, ADR 0015). The forwarder file wins as soon as it exists (read_local): removing it
+ * is enough to go back to the ROM side. Backup copy of the replaced file (files.h). */
 static int switch_save_file(game_t *j)
 {
     char fwd[600], backup[700], date[20], q[700], warning_text[200], action[64];
@@ -1938,7 +1938,7 @@ static int switch_save_file(game_t *j)
     return 1;
 }
 
-/* « 2 envois, 1 récupération, 1 ignoré » : seulement ce qui compte. */
+/* "2 uploads, 1 download, 1 skipped": only what counts. */
 static void sync_summary(char *out, size_t n, int uploads, int downloads, int failures, int skipped)
 {
     const int v[4] = { uploads, downloads, failures, skipped };
@@ -1955,8 +1955,8 @@ static void sync_summary(char *out, size_t n, int uploads, int downloads, int fa
     if (!l) snprintf(out, n, "%s", T("Rien à synchroniser.", "Nothing to sync."));
 }
 
-/* START : Envois et Récupérations ; ignore Conflits et Doublons ; une confirmation pour les écrasements. Puis relit le
- * serveur, et le message dit ce qui a été fait. */
+/* START: Uploads and Downloads; skips Conflicts and Duplicates; one confirmation for the overwrites. Then reads the
+ * server again, and the message says what was done. */
 static void sync_all(void)
 {
     char q[1200], first[200] = "", first_detail[200] = "", r[120];
@@ -2002,13 +2002,13 @@ static void sync_all(void)
         int do_download = j->state == TO_DOWNLOAD && (may_overwrite || !j->has_local);
         if (do_upload || do_download) {
             int ok;
-            list_cursor = i; /* l'écran du haut suit le jeu en cours */
+            list_cursor = i; /* the top screen follows the current game */
             progress_color = do_upload ? C_YELLOW : C_CYAN;
             show_progress(++done, total, "%s\n%s", do_upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
             ok = do_upload ? upload_save(j) : download_save(j);
             uploads += do_upload && ok;
             downloads += do_download && ok;
-            if (!ok && !failures++) { /* « jeu : raison », et sa ligne technique */
+            if (!ok && !failures++) { /* "game: reason", and its technical line */
                 snprintf(first, sizeof first, "%.199s", message);
                 snprintf(first_detail, sizeof first_detail, "%s", message_detail);
             }
@@ -2018,20 +2018,20 @@ static void sync_all(void)
     operation = NULL;
     progress_color = C_GREEN;
     if (total) reread_server();
-    /* Résumé, puis le premier échec : le message de la dernière action ne dit rien des autres. */
+    /* Summary, then the first failure: the message of the last action says nothing about the others. */
     sync_summary(r, sizeof r, uploads, downloads, failures, skipped);
     if (total) snprintf(r + strlen(r), sizeof r - strlen(r), " \xC2\xB7 %llu s", (osGetTime() - start) / 1000);
     set_message(failures ? C_RED : total ? C_GREEN : WHITE, first_detail, "%s%s%s%s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first);
 }
 
-/* ---------------------------------------------------------------- boucle */
+/* ---------------------------------------------------------------- loop */
 
 int main(int argc, char **argv)
 {
     int cursor = 0;
 
     gfxInitDefault();
-    osSetSpeedupEnable(true); /* 804 MHz sur New 3DS (sans effet sur Old 3DS) : TLS et SHA-256 plus rapides */
+    osSetSpeedupEnable(true); /* 804 MHz on New 3DS (no effect on Old 3DS): faster TLS and SHA-256 */
     screen_init();
     if (R_SUCCEEDED(cfguInit())) {
         CFGU_GetSystemLanguage(&language);
@@ -2042,13 +2042,13 @@ int main(int argc, char **argv)
         snprintf(message, sizeof message, T("Réglages repris de %s.", "Settings taken from %s."), OLD_DIR);
     snprintf(cfg.roms, sizeof cfg.roms, "sdmc:/roms/nds");
     snprintf(cfg.saves, sizeof cfg.saves, "sdmc:/roms/nds/saves");
-    snprintf(cfg.roms_gb, sizeof cfg.roms_gb, "sdmc:/roms/gb");   /* TWiLight : .sav à côté des ROM */
+    snprintf(cfg.roms_gb, sizeof cfg.roms_gb, "sdmc:/roms/gb");   /* TWiLight: .sav next to the ROMs */
     snprintf(cfg.roms_gba, sizeof cfg.roms_gba, "sdmc:/roms/gba"); /* open_agb_firm, useSavesFolder=false */
     read_ini(APP_DIR "/config.ini", config_entry);
     read_ini(APP_DIR "/base.ini", base_entry);
     title_count = read_titles(APP_DIR "/titres.ini", titles, MAX_TITLES);
     read_ini(APP_DIR "/maj.ini", update_entry);
-    if (strcmp(installed_version, VERSION)) write_update_ini(); /* le PC ne copie pas un .cia plus ancien (carte3ds.go) */
+    if (strcmp(installed_version, VERSION)) write_update_ini(); /* the PC does not copy an older .cia (carte3ds.go) */
     if (argc > 0 && argv[0]) path_3dsx = argv[0];
 
     if (net_init()) {
@@ -2074,14 +2074,14 @@ int main(int argc, char **argv)
         char migration_message[512];
         snprintf(migration_message, sizeof migration_message, "%s", message);
         if (!cfg.url[0]) snprintf(cfg.url, sizeof cfg.url, "https://");
-        settings_screen(1); /* message : résultat du test de la connexion */
+        settings_screen(1); /* message: result of the connection test */
         snprintf(message + strlen(message), sizeof message - strlen(message), "%s%.200s", migration_message[0] && message[0] ? "\n" : "", migration_message);
     }
     if (!should_quit) refresh();
     show_alert();
     if (!should_quit && strcmp(VERSION, "dev") && net_wifi() && update_check_due(last_check_day, time(NULL))) {
         release_t r;
-        check_update(&r); /* échec : détail dans les réglages seulement, la synchronisation marche comme avant */
+        check_update(&r); /* failure: detail in the settings only, the sync works as before */
     }
     while (!should_quit && aptMainLoop()) {
         u32 k;
@@ -2090,13 +2090,13 @@ int main(int argc, char **argv)
         k = read_keys();
 
         if (k & KEY_B) break;
-        if (k & (KEY_UP | KEY_DOWN)) clear_message(); /* le message parle du jeu qu'on quitte */
+        if (k & (KEY_UP | KEY_DOWN)) clear_message(); /* the message is about the game being left */
         if (k & KEY_DOWN && cursor + 1 < visible_count) cursor++;
         if (k & KEY_UP && cursor > 0) cursor--;
         if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT)) {
             int selected = visible_count ? visible[cursor] : -1, i;
             clear_message();
-            /* Tout relire : Y, ou réglages modifiés. Après une action : le Jeu touché est déjà relu, le serveur seul. */
+            /* Read everything again: Y, or settings changed. After an action: the Game it touched is already read again, the server only. */
             if (k & KEY_SELECT) {
                 if (settings_screen(0) && !should_quit) refresh();
             } else if (k & KEY_Y) {

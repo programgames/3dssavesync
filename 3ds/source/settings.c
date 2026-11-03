@@ -29,7 +29,7 @@ int read_titles(const char *path, title_t *t, int max)
     FILE *f = fopen(path, "r");
     char line[128];
     int n = 0;
-    if (!f) { /* coupure entre le retrait de l'ancien et le renommage (replace_file) : le .tmp est complet */
+    if (!f) { /* power cut between the removal of the old file and the rename (replace_file): the .tmp is complete */
         snprintf(line, sizeof line, "%s.tmp", path);
         f = fopen(line, "r");
     }
@@ -52,12 +52,12 @@ int read_titles(const char *path, title_t *t, int max)
 
 int write_titles(const char *path, const title_t *t, int n)
 {
-    char text[MAX_TITLES * 66]; /* "0004000000055D00=" + nom (47 au plus) + "\n" par jeu */
+    char text[MAX_TITLES * 66]; /* "0004000000055D00=" + name (47 at most) + "\n" per game */
     size_t l = 0;
     int i;
     if (n > MAX_TITLES) return -1;
     for (i = 0; i < n; i++) l += snprintf(text + l, sizeof text - l, "%016llX=%s\n", t[i].id, t[i].name);
-    /* .tmp écrit et relu, puis renommé : une coupure ne vide jamais titres.ini (read_titles lit le .tmp au besoin) */
+    /* .tmp written and read back, then renamed: a power cut never empties titres.ini (read_titles reads the .tmp if needed) */
     return replace_file(path, text, l) ? -1 : 0;
 }
 
@@ -86,8 +86,8 @@ int migrate_dir(const char *old_dir, const char *new_dir)
 
     snprintf(src, sizeof src, "%s/config.ini", old_dir);
     if (!exists(src)) return 0;
-    /* Un seul fichier du nouveau dossier, ou son .tmp (coupure pendant replace_file) : installation déjà faite,
-     * jamais remplacée par les anciens fichiers. */
+    /* A single file of the new folder, or its .tmp (power cut during replace_file): install already done,
+     * never replaced by the old files. */
     for (i = 0; i < 6; i++) {
         snprintf(dst, sizeof dst, "%s/%s%s", new_dir, FILES[i / 2], i % 2 ? ".tmp" : "");
         if (exists(dst)) return 0;
@@ -96,7 +96,7 @@ int migrate_dir(const char *old_dir, const char *new_dir)
     for (i = 0; i < 3; i++) {
         snprintf(src, sizeof src, "%s/%s", old_dir, FILES[i]);
         snprintf(dst, sizeof dst, "%s/%s", new_dir, FILES[i]);
-        if (read_file(src, &o, &size)) continue; /* base.ini ou titres.ini absents : rien à copier */
+        if (read_file(src, &o, &size)) continue; /* base.ini or titres.ini missing: nothing to copy */
         if (write_file(dst, o, size)) {
             free(o);
             return -1;
