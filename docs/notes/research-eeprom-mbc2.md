@@ -1,5 +1,7 @@
 # Recherche — EEPROM GBA (ticket #7) et GB MBC2 (ticket #8)
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-02. Méthode : lecture du code source à un commit figé et des pages des auteurs. Aucun émulateur n'a été lancé.
 
 Légende :

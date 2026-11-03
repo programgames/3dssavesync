@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md
+    about: Every message the PC program and the 3DS app can show, with its fix. Most problems are answered there.

@@ -93,7 +93,7 @@ class ApiTest(unittest.TestCase):
 
     def test_if_match_correct_200(self):
         self.envoyer()
-        statut, entetes, _ = self.envoyer(b"nouvelle", If_Match=f'"{HASH}"')
+        statut, _, _ = self.envoyer(b"nouvelle", If_Match=f'"{HASH}"')
         self.assertEqual(statut, 200)
         self.assertEqual(self.requete("GET", f"/saves/{self.cle}")[2], b"nouvelle")
 
@@ -159,7 +159,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", "Pokémon Bleue".encode())[0], 204)
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", " Pokémon - Version Bleue ".encode())[0], 204)
         self.assertEqual({j["code"]: j for j in self.json("/saves")}[self.cle]["nom"], "Pokémon - Version Bleue")
-        for mauvais in (b"", b"   ", b"a\nb", b"a\x7fb", b"\xff", "x".encode() * 201):
+        for mauvais in (b"", b"   ", b"a\nb", b"a\x7fb", b"\xff", b"x" * 201):
             self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", mauvais)[0], 400, mauvais)
         self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", b"x", jeton="faux")[0], 401)
         self.assertEqual(len(self.json(f"/saves/{self.cle}/history")), 1)  # le nom ne crée pas de Version

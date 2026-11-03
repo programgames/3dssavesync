@@ -1,5 +1,7 @@
 # Recherche v2 — 3DS natif, GBA, GB/GBC, forwarders
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-01. Sources primaires (code à un commit fixe, docs officielles, 3dbrew). Les trois rapports détaillés suivent la synthèse.
 Légende : **NON VÉRIFIÉ** = pas de source primaire, ou déduit du code sans test.
 

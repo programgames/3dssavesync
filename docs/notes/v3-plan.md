@@ -1,5 +1,7 @@
 # Plan v3 « 3dssavesync »
 
+> Working notes (French), kept for the record of design decisions.
+
 Recherches : `research-v3-cloud.md`, `research-v3-emulateurs.md`, `research-v3-frontends.md`.
 Règles inchangées : aucune perte de sauvegarde (copie avant tout écrasement), un Conflit n'est jamais résolu seul, synchro à trois points par hash (ADR 0001), le serveur n'efface rien.
 

@@ -1,6 +1,6 @@
 # Home-made tool (server + 3DS homebrew + Launcher) rather than an existing project
 
-Three pieces written for this need: a Python Server, a 3DS homebrew in C, a PowerShell Launcher. No existing project covers 3DS + melonDS + public HTTPS + History + automatic Launcher (research of 2026-10-31, `docs/research.md` part 2 §3, French).
+Three pieces written for this need: a Python Server, a 3DS homebrew in C, a PowerShell Launcher. No existing project covers 3DS + melonDS + public HTTPS + History + automatic Launcher (research of 2026-10-31, `docs/notes/research.md` part 2 §3, French).
 
 ## Rejected options
 

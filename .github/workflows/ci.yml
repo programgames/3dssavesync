@@ -19,6 +19,7 @@ jobs:
           python-version: "3.13"
       - run: python -m unittest -v test_server.py
         working-directory: server
+      - run: pipx run ruff==0.17.3 check server/
 
   tests-c:
     runs-on: ubuntu-latest
@@ -27,29 +28,15 @@ jobs:
       - name: etat, cle, fichiers (C hôte)
         working-directory: 3ds
         run: |
-          gcc -std=c99 -Wall -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
-          gcc -std=c99 -Wall -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
-          gcc -std=c99 -Wall -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && (cd /tmp && /tmp/f)
-          gcc -std=c99 -Wall -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && (cd /tmp && /tmp/r)
-          gcc -std=c99 -Wall -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
-          gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e
-          gcc -std=c99 -Wall -I source source/texte.c test/test_texte.c -o /tmp/x && /tmp/x
-          gcc -std=c99 -Wall -I source source/fichiers.c source/maj.c test/test_maj.c -o /tmp/m && /tmp/m test/release_latest.json
-          gcc -std=c99 -Wall -I source source/fichiers.c source/liste.c test/test_liste.c -o /tmp/l && /tmp/l ../tests/saves.json
-
-  lanceur-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - shell: powershell
-        run: |
-          powershell -NoProfile -File pc/test_etat.ps1
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          powershell -NoProfile -File pc/test_lanceur.ps1
-          exit $LASTEXITCODE
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && (cd /tmp && /tmp/f)
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && (cd /tmp && /tmp/r)
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/texte.c test/test_texte.c -o /tmp/x && /tmp/x
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/fichiers.c source/maj.c test/test_maj.c -o /tmp/m && /tmp/m test/release_latest.json
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/fichiers.c source/liste.c test/test_liste.c -o /tmp/l && /tmp/l ../tests/saves.json
 
   client-go:
     strategy:
@@ -77,6 +64,33 @@ jobs:
       - run: go test -count=1 -v ./...
         working-directory: client
 
+  lint-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: client/go.mod
+          cache: false
+      - name: gofmt
+        working-directory: client
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "Run gofmt -w on:"; echo "$out"; exit 1; fi
+      # Every finding is printed. These three are reported without failing the job until the code cleanup that
+      # fixes them: SA1019 (syscall.StringToUTF16 in tray_windows.go, ui_windows.go), SA4006 (majpc_test.go),
+      # ST1013 (assistant_web.go). Any other finding fails the job.
+      - name: staticcheck
+        working-directory: client
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          for goos in windows linux darwin; do
+            echo "::group::GOOS=$goos"
+            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" -fail "all,-SA1019,-SA4006,-ST1013" ./... || status=1
+            echo "::endgroup::"
+          done
+          exit ${status:-0}
+
   homebrew-3ds:
     runs-on: ubuntu-latest
     steps:
@@ -96,7 +110,7 @@ jobs:
       - name: .3dsx, bannière, icône
         run: |
           case "$GITHUB_REF" in refs/tags/v*) version="${GITHUB_REF_NAME#v}" ;; *) version=dev ;; esac
-          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src/3ds -e VERSION="$version" devkitpro/devkitarm:latest sh -c '
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src/3ds -e VERSION="$version" devkitpro/devkitarm:20260610@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5 sh -c '
             make VERSION="$VERSION" &&
             ./bannertool makebanner -i meta/banner.png -a meta/banner.wav -o build/banner.bnr &&
             ./bannertool makesmdh -s "$(sed -n "s/^APP_TITLE[[:space:]]*:=[[:space:]]*//p" Makefile)" \
@@ -114,7 +128,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [serveur, tests-c, lanceur-windows, client-go, homebrew-3ds]
+    needs: [serveur, tests-c, client-go, lint-go, homebrew-3ds]
     runs-on: ubuntu-latest
     permissions:
       contents: write

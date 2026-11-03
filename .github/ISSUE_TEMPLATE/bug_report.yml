@@ -1,0 +1,58 @@
+name: Bug report
+description: Something went wrong with a sync, the settings page or the 3DS app.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. Please check the [troubleshooting guide](https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md) first: it covers every message.
+
+        If a save looks wrong, don't delete anything. The server keeps every version and the PC and 3DS keep backup copies, so it can almost always be recovered.
+  - type: input
+    id: version
+    attributes:
+      label: 3dssavesync version
+      description: Shown next to the title of the settings page, and in the 3DS app settings.
+      placeholder: v3.7.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: PC system
+      placeholder: Windows 11, Ubuntu 24.04, SteamOS, macOS 15...
+    validations:
+      required: true
+  - type: input
+    id: emulator
+    attributes:
+      label: Emulator and frontend
+      placeholder: melonDS 1.1 from LaunchBox, RetroArch (mGBA core) from ES-DE...
+  - type: input
+    id: console
+    attributes:
+      label: 3DS system and Luma3DS version
+      description: Only if the 3DS is involved. System Settings shows the system version at the bottom of the top screen.
+      placeholder: 11.17.0-50E, Luma3DS v13.3
+  - type: dropdown
+    id: server
+    attributes:
+      label: Server
+      options:
+        - Local server on the PC
+        - My own server (Docker)
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead. Paste the exact message, or attach a photo of the 3DS screen.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: |
+        `3dssavesync.log` sits next to `config.json` in the settings folder (`%APPDATA%\3dssavesync` on Windows, `~/.config/3dssavesync` on Linux, `~/Library/Application Support/3dssavesync` on macOS, or next to the program in the portable version).
+        Read it before you paste it: it shows your folder names, so remove anything private.
+      render: text

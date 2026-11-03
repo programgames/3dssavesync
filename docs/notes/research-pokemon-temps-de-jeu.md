@@ -1,5 +1,7 @@
 # Recherche : temps de jeu et nom du dresseur dans les sauvegardes Pokémon Gen 1 à 5
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-02.
 
 Source unique : le code de PKHeX, dépôt `kwsch/PKHeX`, branche `master`.
