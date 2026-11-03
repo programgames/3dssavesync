@@ -21,7 +21,7 @@ Found a bug? Check [troubleshooting](docs/troubleshooting.md) first, then open a
 
 ### PC program (`client/`)
 
-You need the Go version named in `client/go.mod`, and Python 3 on your `PATH`: the Go tests run the real `server/server.py`.
+You need the Go version named in `client/go.mod`, and Python 3 on your `PATH`: the Go tests run the `server/server.py` suite against the local server, and a Restore test against `server/server.py` itself.
 
 ```bash
 cd client
