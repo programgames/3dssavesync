@@ -1398,7 +1398,7 @@ static int act(game_t *j)
     default:
         r = make_result(RESULT_ALREADY_IN_SYNC, NULL);
     }
-    show_result(&r, j);
+    if (r.code != RESULT_NONE) show_result(&r, j); /* cancelled: the band keeps its previous message */
     if (done) read_local(j);
     return done;
 }

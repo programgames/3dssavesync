@@ -312,8 +312,16 @@ func writeAtomicIn(dir, path string, buf []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp := filepath.Join(dir, filepath.Base(path)+tmpSuffix)
-	os.Remove(tmp) // leftover of a hard stop
+	os.Remove(filepath.Join(dir, filepath.Base(path)+tmpSuffix)) // leftover of a hard stop (fixed name of older versions)
+	// A temporary name of its own: two Launchers of one emulator can write the same Base file at once.
+	// ponytail: a hard stop leaves its random-named file behind; sweep old ones if they ever pile up.
+	f, err := os.CreateTemp(dir, filepath.Base(path)+".*"+tmpSuffix)
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	f.Close()
+	os.Remove(tmp) // writeVerified creates the file itself (O_EXCL)
 	if err := writeVerified(tmp, buf); err != nil {
 		return err
 	}
