@@ -178,3 +178,27 @@ func TestAliasWeb(t *testing.T) {
 		t.Errorf("retrait : %+v", cfg)
 	}
 }
+
+// Page : « Arguments en plus » vide, proposé depuis l'émulateur LaunchBox d'origine ; jamais à la place d'une valeur
+// de config.json.
+func TestAssistantWebOptionsLaunchBox(t *testing.T) {
+	maisonFactice(t)
+	detecterAvant := detecter
+	t.Cleanup(func() { detecter = detecterAvant })
+	detecter = func(string) []Trouve { return nil }
+	lb := filepath.Join(t.TempDir(), "LaunchBox")
+	ecrire(t, filepath.Join(lb, "Data", "Emulators.xml"), []byte(emulatorsXML))
+	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")
+	ecrire(t, melon, []byte("exe"))
+	config := filepath.Join(t.TempDir(), "config.json")
+	a := &AssistantWeb{config: config}
+	for _, c := range []struct {
+		enPlus  []string
+		attendu string
+	}{{nil, "-f"}, {[]string{"-g"}, "-g"}} {
+		ecrireConfig(t, config, Config{Frontends: map[string]string{"launchbox": lb}, Emulateurs: map[string]*Emulateur{"melonds": {Exe: melon, ArgsEnPlus: c.enPlus}}})
+		if e := a.etat().Emulateurs; len(e) != 1 || e[0].EnPlus != c.attendu {
+			t.Errorf("args_en_plus %q : %+v", c.enPlus, e)
+		}
+	}
+}

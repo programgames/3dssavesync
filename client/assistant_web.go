@@ -431,6 +431,19 @@ func (a *AssistantWeb) etat() EtatWeb {
 		}
 		e.Emulateurs = append(e.Emulateurs, emuWeb(t.Profil, &Emulateur{Exe: t.Exe, Processus: t.Processus}, t.Source, cfg.Emulateurs[t.Profil] == nil))
 	}
+	// Arguments en plus vides : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ».
+	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
+		for i := range e.Emulateurs {
+			x := &e.Emulateurs[i]
+			var systemes []string
+			for _, s := range x.Systemes {
+				systemes = append(systemes, s.Systeme)
+			}
+			if !x.Personnalise && x.Erreur == "" && x.EnPlus == "" {
+				x.EnPlus = optionsLaunchBox(string(o), e.LaunchBox, x.Exe, systemes)
+			}
+		}
+	}
 	for p := range profils {
 		e.Profils = append(e.Profils, p)
 	}

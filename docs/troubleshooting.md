@@ -122,7 +122,7 @@ The frontend starts 3dssavesync with an emulator name or a ROM type that the set
 
 ### Games do not start after the program was deleted
 
-The program was deleted without the uninstall, so LaunchBox or ES-DE still start the games through it. Download the program again, open it, then use **Uninstall 3dssavesync** (part **Frontends and install**): it gives LaunchBox and ES-DE their original emulators back. By hand: in LaunchBox, **Tools**, **Manage**, **Emulators**, edit your original emulator and tick **Default Emulator** for its platforms, then delete the "(3dssavesync)" emulators. In ES-DE, delete the `<command label="3dssavesync (…)">` lines from `custom_systems/es_systems.xml`.
+The program was deleted without the uninstall, so LaunchBox or ES-DE still start the games through it. Download the program again, open it, then use **Uninstall 3dssavesync** (part **Frontends and install**): it gives LaunchBox and ES-DE their original emulators back. By hand: in LaunchBox, **Tools**, **Manage**, **Emulators**, edit your original emulator and tick **Default Emulator** for its platforms, then delete the "(3dssavesync)" emulators. An emulator with its own title that still starts 3dssavesync (set up by versions 1 and 2): edit it and set **Application Path** back to the emulator program. In ES-DE, delete the `<command label="3dssavesync (…)">` lines from `custom_systems/es_systems.xml`.
 
 ### Games no longer sync after a frontend update
 

@@ -223,3 +223,29 @@ func TestCommandeEtDecoupage(t *testing.T) {
 		t.Errorf("joindre : %s", j)
 	}
 }
+
+// Shim de Scoop : scoop\shims\SkyEmu.exe (dans le PATH) et SkyEmu.shim à côté, qui nomme l'exe réel. Un seul SkyEmu
+// trouvé, l'exe réel (pas deux, PATH et scoop).
+func TestDetecterShimScoop(t *testing.T) {
+	m := maisonFactice(t)
+	reel, shims := maison("scoop", "apps", "skyemu", "current", "SkyEmu-v5-Windows.exe"), maison("scoop", "shims")
+	ecrire(t, reel, []byte("exe"))
+	ecrire(t, filepath.Join(shims, "SkyEmu.exe"), []byte("shim"))
+	ecrire(t, filepath.Join(shims, "SkyEmu.shim"), []byte("path = \""+reel+"\"\r\n"))
+	t.Setenv("PATH", shims)
+	if c := cibleShim(filepath.Join(shims, "SkyEmu.exe")); c != reel {
+		t.Errorf("cible du shim : %q", c)
+	}
+	if c := cibleShim(reel); c != reel {
+		t.Errorf("exe sans shim : %q", c)
+	}
+	var l []Trouve
+	for _, x := range detecter("") {
+		if x.Profil == "skyemu" && strings.HasPrefix(x.Exe, m) {
+			l = append(l, x)
+		}
+	}
+	if len(l) != 1 || l[0].Exe != reel {
+		t.Errorf("un seul SkyEmu, l'exe réel : %+v", l)
+	}
+}

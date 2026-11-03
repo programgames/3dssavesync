@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
@@ -483,6 +484,7 @@ var detecter = func(dossierLB string) []Trouve {
 	var t []Trouve
 	vus := map[string]bool{}
 	ajouter := func(profil, exe, processus, source string) {
+		exe = cibleShim(exe)
 		if exe == "" || !existe(exe) || vus[strings.ToLower(exe)] {
 			return
 		}
@@ -539,6 +541,21 @@ var detecter = func(dossierLB string) []Trouve {
 		}
 	}
 	return t
+}
+
+var reShim = regexp.MustCompile(`(?m)^path\s*=\s*"?([^"\r\n]+?)"?\s*$`)
+
+// cibleShim : l'exe réel derrière un shim de Scoop (scoop\shims\x.exe, et x.shim à côté : path = "…") ; sinon exe.
+// Sans cela, le même émulateur apparaît deux fois (PATH et scoop).
+func cibleShim(exe string) string {
+	if !strings.EqualFold(filepath.Ext(exe), ".exe") {
+		return exe
+	}
+	o, err := os.ReadFile(strings.TrimSuffix(exe, filepath.Ext(exe)) + ".shim")
+	if m := reShim.FindSubmatch(o); err == nil && m != nil {
+		return filepath.Clean(string(m[1]))
+	}
+	return exe
 }
 
 // Cœurs RetroArch trouvés près de l'exe ou dans le dossier de configuration : Système -> cœur préféré.

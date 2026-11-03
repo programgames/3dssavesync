@@ -234,3 +234,28 @@ func TestPortable(t *testing.T) {
 		t.Errorf("dossier où rien ne s'écrit : message attendu, %v", err)
 	}
 }
+
+// Options de l'émulateur LaunchBox d'origine (ligne de l'émulateur, puis de ses plateformes des systèmes) : pour
+// args_en_plus, car la copie « (3dssavesync) » a une ligne vide.
+func TestOptionsLaunchBox(t *testing.T) {
+	lb, lanceur := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
+	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")
+	if o := optionsLaunchBox(emulatorsXML, lb, melon, []string{"DS"}); o != "-f" {
+		t.Errorf("options de MelonDS : %q", o)
+	}
+	plateforme := strings.Replace(emulatorsXML, "<CommandLine />", "<CommandLine>--plein-ecran</CommandLine>", 1)
+	if o := optionsLaunchBox(plateforme, lb, melon, []string{"DS"}); o != "-f --plein-ecran" {
+		t.Errorf("options de l'émulateur et de la plateforme DS : %q", o)
+	}
+	if o := optionsLaunchBox(plateforme, lb, melon, []string{"GB"}); o != "-f" {
+		t.Errorf("plateforme d'un autre système ignorée : %q", o)
+	}
+	installe, _ := launchbox(emulatorsXML, lb, lanceur, []EntreeLB{{"melonds", melon, []string{"DS"}}})
+	if o := optionsLaunchBox(installe, lb, melon, []string{"DS"}); o != "-f" {
+		t.Errorf("après l'installation, lu dans l'émulateur d'origine : %q", o)
+	}
+	surPlace := strings.Replace(emulatorsXML, `Emulators\MelonDS\melonDS.exe`, lanceur, 1)
+	if o := optionsLaunchBox(surPlace, lb, melon, []string{"DS"}); o != "" {
+		t.Errorf("émulateur modifié sur place : rien à reprendre : %q", o)
+	}
+}

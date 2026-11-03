@@ -17,14 +17,14 @@ func TestDefaireLaunchBox(t *testing.T) {
 	if installe == emulatorsXML {
 		t.Fatal("l'installation doit changer Emulators.xml")
 	}
-	defait, rapport := defaireLaunchbox(installe, lanceur)
+	defait, rapport := defaireLaunchbox(installe, lb, lanceur, &Config{})
 	if defait != emulatorsXML {
 		t.Errorf("Emulators.xml doit revenir à l'identique :\n%s", defait)
 	}
 	if len(rapport) != 1 || !strings.Contains(rapport[0], "MelonDS & co") {
 		t.Errorf("rapport : %q", rapport)
 	}
-	if encore, r := defaireLaunchbox(emulatorsXML, lanceur); encore != emulatorsXML || len(r) != 0 {
+	if encore, r := defaireLaunchbox(emulatorsXML, lb, lanceur, &Config{}); encore != emulatorsXML || len(r) != 0 {
 		t.Errorf("rien à retirer : rien ne change (%q)", r)
 	}
 
@@ -35,7 +35,7 @@ func TestDefaireLaunchBox(t *testing.T) {
 		}
 		return b
 	})
-	d, r := defaireLaunchbox(sansOrigine, lanceur)
+	d, r := defaireLaunchbox(sansOrigine, lb, lanceur, &Config{})
 	xmlValide(t, "Emulators.xml sans origine", d)
 	if strings.Contains(d, "3dssavesync") || len(r) != 1 || !strings.Contains(r[0], "choisissez un émulateur par défaut") {
 		t.Errorf("rapport %q :\n%s", r, d)
@@ -151,5 +151,75 @@ func TestDesinstallerPortable(t *testing.T) {
 	}
 	if strings.Join(raccourcisPour, "|") != exe || !strings.Contains(texte, "Supprimez ce dossier vous-même") || !strings.Contains(texte, dossier) {
 		t.Errorf("raccourcis %q, rapport :\n%s", raccourcisPour, texte)
+	}
+}
+
+// Assistant des versions 1 et 2 : MelonDS, Mgba et Azahar modifiés sur place (exe = Lanceur, titre d'origine), plus
+// deux copies « (3dssavesync) » par défaut sur les mêmes plateformes. Les émulateurs modifiés restent, avec leurs
+// plateformes, et retrouvent leur exe ; les copies partent ; exe inconnu : émulateur laissé tel quel, rapport.
+func TestDefaireLaunchBoxSurPlace(t *testing.T) {
+	tmp := t.TempDir()
+	lb := filepath.Join(tmp, "LaunchBox")
+	lanceur := filepath.Join(tmp, "Programs", "3dssavesync", "3dssavesync.exe")
+	melon, mgba := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), filepath.Join(tmp, "mGBA", "mGBA.exe")
+	ecrire(t, melon, []byte("exe"))
+	ecrire(t, mgba, []byte("exe"))
+	cfg := &Config{Emulateurs: map[string]*Emulateur{"melonds": {Exe: melon}, "mgba": {Exe: mgba}, "azahar": {Exe: filepath.Join(tmp, "absent", "azahar.exe")}}}
+	plat := func(emu, p, cmd, def string) string {
+		c := "<CommandLine />"
+		if cmd != "" {
+			c = "<CommandLine>" + cmd + "</CommandLine>"
+		}
+		return "  <EmulatorPlatform>\r\n    <Emulator>" + emu + "</Emulator>\r\n    <Platform>" + p + "</Platform>\r\n    " + c +
+			"\r\n    <Default>" + def + "</Default>\r\n    <AutoExtract>false</AutoExtract>\r\n  </EmulatorPlatform>\r\n"
+	}
+	emu := func(id, titre, app string) string {
+		return "  <Emulator>\r\n    <ApplicationPath>" + app + "</ApplicationPath>\r\n    <CommandLine />\r\n    <ID>" + id +
+			"</ID>\r\n    <Title>" + titre + "</Title>\r\n  </Emulator>\r\n"
+	}
+	xmlLB := "<?xml version=\"1.0\" standalone=\"yes\"?>\r\n<LaunchBox>\r\n" +
+		plat("m1", "Nintendo DS", "run --emulator melonds", "true") + plat("m1", "Nintendo DSi", "run --emulator melonds", "true") +
+		plat("m1", "Nintendo Entertainment System", "", "false") +
+		plat("m2", "Nintendo Game Boy", "run --emulator mgba", "true") + plat("m2", "Nintendo Game Boy Advance", "run --emulator mgba", "true") +
+		plat("m2", "Nintendo Game Boy Color", "run --emulator mgba", "true") + plat("m3", "Nintendo 3DS", "run --emulator azahar", "true") +
+		plat("r0", "Nintendo Game Boy Advance", "", "false") + plat("r1", "Nintendo Game Boy Advance", "run --emulator retroarch", "true") +
+		plat("s0", "Nintendo Game Boy", "", "false") + plat("s1", "Nintendo Game Boy", "run --emulator sameboy", "true") +
+		emu("m1", "MelonDS", lanceur) + emu("m2", "Mgba", lanceur) + emu("m3", "Azahar", lanceur) +
+		emu("r0", "RetroArch", `C:\RetroArch\retroarch.exe`) + emu("r1", "RetroArch (3dssavesync)", lanceur) +
+		emu("s0", "Sameboy", `C:\SameBoy\sameboy.exe`) + emu("s1", "Sameboy (3dssavesync)", lanceur) +
+		"</LaunchBox>"
+
+	d, rapport := defaireLaunchbox(xmlLB, lb, lanceur, cfg)
+	xmlValide(t, "Emulators.xml", d)
+	emus := map[string]string{}
+	for _, b := range blocEmulateurLB.FindAllString(d, -1) {
+		emus[champ(b, "Title")] = b
+	}
+	if len(emus) != 5 || emus["RetroArch (3dssavesync)"] != "" || emus["Sameboy (3dssavesync)"] != "" {
+		t.Fatalf("copies retirées, MelonDS, Mgba, Azahar, RetroArch, Sameboy gardés :\n%s", d)
+	}
+	if a := champ(emus["MelonDS"], "ApplicationPath"); a != filepath.Join("Emulators", "MelonDS", "melonDS.exe") {
+		t.Errorf("MelonDS : exe réel, relatif au dossier de LaunchBox : %q", a)
+	}
+	if a := champ(emus["Mgba"], "ApplicationPath"); a != mgba {
+		t.Errorf("Mgba : exe réel : %q", a)
+	}
+	if emus["Azahar"] != emu("m3", "Azahar", lanceur) {
+		t.Errorf("Azahar (exe absent) : laissé tel quel :\n%s", emus["Azahar"])
+	}
+	plats := blocPlateformeLB.FindAllString(d, -1)
+	if len(plats) != 9 || !strings.Contains(d, plat("m3", "Nintendo 3DS", "run --emulator azahar", "true")) {
+		t.Fatalf("plateformes de MelonDS, Mgba et Azahar gardées :\n%s", d)
+	}
+	for _, p := range []string{plat("m1", "Nintendo DS", "", "true"), plat("m1", "Nintendo DSi", "", "true"), plat("m1", "Nintendo Entertainment System", "", "false"),
+		plat("m2", "Nintendo Game Boy", "", "true"), plat("m2", "Nintendo Game Boy Advance", "", "true"), plat("m2", "Nintendo Game Boy Color", "", "true"),
+		plat("r0", "Nintendo Game Boy Advance", "", "true"), plat("s0", "Nintendo Game Boy", "", "true")} {
+		if !strings.Contains(d, p) {
+			t.Errorf("plateforme attendue :\n%s", p)
+		}
+	}
+	texte := strings.Join(rapport, "\n")
+	if len(rapport) != 5 || !strings.Contains(texte, "Azahar") || !strings.Contains(texte, "Tools, Manage, Emulators") || !strings.Contains(texte, mgba) {
+		t.Errorf("rapport :\n%s", texte)
 	}
 }

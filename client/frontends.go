@@ -10,6 +10,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -101,6 +102,41 @@ func fixerChamp(bloc, nom, valeur string) string {
 	return r.ReplaceAllLiteralString(bloc, "<"+nom+">"+echapperXML(valeur)+"</"+nom+">")
 }
 
+// cheminLB : chemin complet d'un ApplicationPath de LaunchBox (relatif à son dossier quand il est dedans).
+func cheminLB(dossierLB, app string) string {
+	app = filepath.FromSlash(strings.ReplaceAll(html.UnescapeString(app), `\`, "/")) // chemins Windows, même lus ailleurs (Wine)
+	if app != "" && !filepath.IsAbs(app) && !strings.Contains(app, ":") {
+		app = filepath.Join(dossierLB, app)
+	}
+	return filepath.Clean(app)
+}
+
+// optionsLaunchBox : les options de l'utilisateur dans l'émulateur LaunchBox d'origine de exe (sa ligne de commande,
+// puis celles de ses plateformes de systemes), pour args_en_plus : la copie « (3dssavesync) » a une ligne vide.
+// Émulateur modifié sur place (versions 1 et 2) : son exe est le Lanceur, rien n'est trouvé.
+func optionsLaunchBox(texte, dossierLB, exe string, systemes []string) string {
+	for _, b := range blocEmulateurLB.FindAllString(texte, -1) {
+		app := cheminLB(dossierLB, champ(b, "ApplicationPath"))
+		if !strings.EqualFold(app, filepath.Clean(exe)) && !strings.EqualFold(filepath.Base(app), filepath.Base(exe)) {
+			continue
+		}
+		var options []string
+		ajouter := func(o string) {
+			if o = strings.TrimSpace(html.UnescapeString(o)); o != "" && !slices.Contains(options, o) {
+				options = append(options, o)
+			}
+		}
+		ajouter(champ(b, "CommandLine"))
+		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
+			if champ(p, "Emulator") == champ(b, "ID") && slices.Contains(systemes, plateformesLB[html.UnescapeString(champ(p, "Platform"))]) {
+				ajouter(champ(p, "CommandLine"))
+			}
+		}
+		return strings.Join(options, " ")
+	}
+	return ""
+}
+
 // EntreeLB : un émulateur de la configuration, à faire passer par 3dssavesync dans LaunchBox.
 type EntreeLB struct {
 	Nom, Exe string // nom dans config.json, exécutable de l'émulateur réel
@@ -113,13 +149,7 @@ type EntreeLB struct {
 func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []string) {
 	var rapport []string
 	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
-	chemin := func(app string) string {
-		app = filepath.FromSlash(strings.ReplaceAll(unescape(app), `\`, "/")) // chemins Windows, même lus ailleurs (Wine)
-		if app != "" && !filepath.IsAbs(app) && !strings.Contains(app, ":") {
-			app = filepath.Join(dossierLB, app)
-		}
-		return filepath.Clean(app)
-	}
+	chemin := func(app string) string { return cheminLB(dossierLB, app) }
 	for _, e := range entrees {
 		emus := blocEmulateurLB.FindAllString(texte, -1)
 		plats := blocPlateformeLB.FindAllString(texte, -1)

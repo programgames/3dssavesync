@@ -207,6 +207,10 @@ h1 small { font-size: 13px; font-weight: normal; color: var(--doux); }
     <h2>{{t "Émulateurs" "Emulators"}}</h2>
     <p class="aide">{{t "Sauvegardes : vide ou valeur proposée = le réglage de l'émulateur. ROM : seulement pour les raccourcis (synchroniser tous les jeux)." "Saves: empty or suggested value = the emulator setting. ROMs: only for shortcuts (sync all games)."}}</p>
     <div id="emulateurs"></div>
+    <details id="autresEmus" class="masque" style="margin-top:12px">
+      <summary>{{t "Autres émulateurs trouvés sur ce PC" "Other emulators found on this PC"}} (<span id="nbAutres"></span>)</summary>
+      <div id="emulateursAutres" style="margin-top:8px"></div>
+    </details>
     <details style="margin-top:12px">
       <summary>{{t "Ajouter un émulateur à la main" "Add an emulator by hand"}}</summary>
       <div class="ligne" style="margin-top:8px">
@@ -443,8 +447,11 @@ function etatEmu(x) {
   return ["ok", T.pret];
 }
 
+// Toutes les cartes : émulateurs utilisés, puis les autres trouvés sur ce PC (partie repliée).
+function cartesEmus() { return [...$("emulateurs").children, ...$("emulateursAutres").children].map(d => d.emu); }
+
 function bandeauEmus() {
-  const l = [...$("emulateurs").children].map(d => d.emu);
+  const l = cartesEmus();
   const actifs = l.filter(x => x.Actif);
   $("etatEmus").textContent = actifs.filter(x => etatEmu(x)[1] === T.pret).length + " " + T.sur + " " + actifs.length;
   $("menu").querySelector('[data-page="emulateurs"]').classList.toggle("attention", actifs.some(x => etatEmu(x)[1] !== T.pret));
@@ -546,7 +553,7 @@ function choix() {
   return {
     Local: type() === "local", URL: $("url").value.trim(), Jeton: $("jeton").value, Port: +$("port").value,
     Installer: $("installer").checked,
-    Emulateurs: [...$("emulateurs").children].map(d => d.emu),
+    Emulateurs: cartesEmus(),
     LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
     EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked, Maj: $("majAuto").checked
   };
@@ -582,7 +589,11 @@ async function charger() {
   const enPlace = etat.Courant.toLowerCase() === etat.Installe.toLowerCase();
   $("sectionProgramme").classList.toggle("masque", enPlace);
   $("installer").checked = !enPlace;
-  $("emulateurs").replaceChildren(...(etat.Emulateurs || []).map(carte));
+  const emus = etat.Emulateurs || [], autres = emus.filter(x => !x.Actif); // trouvés, pas cochés : repliés sous les cartes
+  $("emulateurs").replaceChildren(...emus.filter(x => x.Actif).map(carte));
+  $("emulateursAutres").replaceChildren(...autres.map(carte));
+  $("nbAutres").textContent = autres.length;
+  $("autresEmus").classList.toggle("masque", !autres.length);
   const perso = texte("option", T.perso);
   perso.value = "";
   $("profil").replaceChildren(...etat.Profils.map(p => texte("option", p)), perso);

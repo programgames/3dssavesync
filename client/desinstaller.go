@@ -22,22 +22,66 @@ var (
 	regleESDE    = regexp.MustCompile(`(?s)  <emulator name="3DSSAVESYNC">.*?</emulator>\r?\n`)
 	commandeESDE = regexp.MustCompile(`<command label="3dssavesync \([^"]*\)">[^<]*</command>\r?\n[ \t]*`)
 	systemeESDE  = regexp.MustCompile(`(?s)[ \t]*<system>.*?</system>\r?\n?`)
+	// Ligne de commande LaunchBox d'un émulateur qui passe par le Lanceur : « run --emulator <nom> ».
+	optionEmulateur = regexp.MustCompile(`--emulator (\S+)`)
 )
 
 // Adaptateurs remplacés par les tests (PowerShell, Corbeille, processus détaché).
 var retirerRaccourcis, retirerProgramme = retirerRaccourcisSysteme, retirerProgrammeSysteme
 
-// defaireLaunchbox : retire chaque émulateur qui lance le Lanceur, et ses plateformes ; l'émulateur dont il est la
-// copie (même titre sans « (3dssavesync) ») redevient l'émulateur par défaut de ces plateformes.
-func defaireLaunchbox(texte, lanceur string) (string, []string) {
+// defaireLaunchbox : retire chaque copie « <titre> (3dssavesync) » qui lance le Lanceur, et ses plateformes ;
+// l'émulateur dont elle est la copie (même titre sans « (3dssavesync) ») redevient l'émulateur par défaut de ces
+// plateformes. Un émulateur qui lance le Lanceur sous son titre d'origine a été modifié sur place (assistant des
+// versions 1 et 2) : il reste avec ses plateformes, et retrouve l'exe réel de config.json (nom lu dans
+// « --emulator <nom> ») ; exe inconnu ou absent : laissé tel quel, le rapport dit de le corriger à la main.
+func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []string) {
 	var rapport []string
 	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
 	notre := func(b string) bool {
 		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(champ(b, "ApplicationPath")), `\`, "/")), filepath.Base(lanceur))
 	}
+	copie := func(b string) bool { return strings.HasSuffix(champ(b, "Title"), " (3dssavesync)") }
+	for _, b := range blocEmulateurLB.FindAllString(texte, -1) {
+		if !notre(b) || copie(b) {
+			continue
+		}
+		titre, nom := unescape(champ(b, "Title")), ""
+		blocs := []string{b}
+		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
+			if champ(p, "Emulator") == champ(b, "ID") {
+				blocs = append(blocs, p)
+			}
+		}
+		for _, x := range blocs {
+			if m := optionEmulateur.FindStringSubmatch(unescape(champ(x, "CommandLine"))); m != nil && nom == "" {
+				nom = m[1]
+			}
+		}
+		e := cfg.Emulateurs[nom]
+		if e == nil || !existe(e.Exe) {
+			rapport = append(rapport, fmt.Sprintf(tr("émulateur « %[1]s » laissé tel quel : il lance encore 3dssavesync et son vrai exe est inconnu. Corrigez-le à la main dans LaunchBox : Tools, Manage, Emulators, « %[1]s » : Application Path",
+				"emulator \"%[1]s\" left as is: it still starts 3dssavesync and its real exe is unknown. Fix it by hand in LaunchBox: Tools, Manage, Emulators, \"%[1]s\": Application Path"), titre))
+			continue
+		}
+		app := e.Exe // relatif sous le dossier de LaunchBox, comme LaunchBox l'écrit
+		if r, err := filepath.Rel(dossierLB, e.Exe); err == nil && !strings.HasPrefix(r, "..") {
+			app = r
+		}
+		for i, x := range blocs {
+			n := x
+			if i == 0 {
+				n = fixerChamp(n, "ApplicationPath", app)
+			}
+			if optionEmulateur.MatchString(champ(n, "CommandLine")) {
+				n = fixerChamp(n, "CommandLine", "")
+			}
+			texte = strings.Replace(texte, x, n, 1)
+		}
+		rapport = append(rapport, fmt.Sprintf(tr("émulateur « %s » de nouveau sur %s", "emulator \"%s\" back to %s"), titre, e.Exe))
+	}
 	emus := blocEmulateurLB.FindAllString(texte, -1)
 	for _, b := range emus {
-		if !notre(b) {
+		if !notre(b) || !copie(b) {
 			continue
 		}
 		id, titre := champ(b, "ID"), strings.TrimSuffix(champ(b, "Title"), " (3dssavesync)")
@@ -119,7 +163,7 @@ func desinstaller(cfg *Config, config string) ([]string, error) {
 	if lb != "" {
 		f := filepath.Join(lb, "Data", "Emulators.xml")
 		if o, err := os.ReadFile(f); err == nil {
-			n, r := defaireLaunchbox(string(o), lanceur)
+			n, r := defaireLaunchbox(string(o), lb, lanceur, cfg)
 			rapport = append(rapport, prefixer("LaunchBox", r)...)
 			ecrire("LaunchBox", f, string(o), n)
 		}
