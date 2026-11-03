@@ -39,9 +39,13 @@ type HistoryLine struct {
 	Current  bool   `json:"Courante"`
 }
 
+// HistoryGame is one game of the page's list. Age: seconds since its last Upload, by the server clock (-1: unknown,
+// older server); Client: the device of that Upload.
 type HistoryGame struct {
-	Key  string `json:"Cle"`
-	Name string `json:"Nom"`
+	Key    string `json:"Cle"`
+	Name   string `json:"Nom"`
+	Age    int64
+	Client string
 }
 
 const (
@@ -74,7 +78,11 @@ func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 		if name == "" {
 			name = v.Name
 		}
-		games = append(games, HistoryGame{v.Code, name})
+		age := int64(-1)
+		if v.Age != nil {
+			age = *v.Age
+		}
+		games = append(games, HistoryGame{v.Code, name, age, v.Client})
 	}
 	sort.SliceStable(games, func(a, b int) bool { return games[a].Name+games[a].Key < games[b].Name+games[b].Key })
 	return games, nil

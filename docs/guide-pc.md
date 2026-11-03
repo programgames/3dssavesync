@@ -17,7 +17,7 @@ At the top, four badges show the state at a glance: server reachable or not, emu
 3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS). Portable version: this part is hidden, the program stays where it is.
 4. **Emulators**: one line per emulator of your settings, with a switch, its consoles, its state (**Ready**, **To check** with the same reason as in **Checks**, or **Not used**), **Open** (starts it without a game, with a sync before and after) and **Configure** (its save and ROM folders). Emulators found on the PC but not in your settings (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators) are off, under **Other emulators found on this PC**: turn on the ones to sync. **Add an emulator by hand** adds another one.
 5. **Frontends and install**: LaunchBox (Windows), ES-DE, **Repair frontends**, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), the **3dssavesync settings** shortcut, and **Show the icon near the clock** (see [The icon near the clock](#the-icon-near-the-clock)).
-6. **History**: search for a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
+6. **Games**: all your games on the server, by console, with a search and a sort by name or last save. Pick one to get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
 7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
 8. **Uninstall** (red box at the bottom of Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin (portable version: the program and its folder stay). See [ADR 0019](adr/0019-desinstallation.md).
 9. **Checks** ("Is everything ready?"): the lines left to do come first, each with a button that opens the right part; the good ones are folded under "N checks are fine". The server answers and accepts the token; each save folder of your emulators exists; LaunchBox has the "(3dssavesync)" emulator as default; ES-DE is set up; the 3DS SD card was prepared from this PC (date of the last success); the icon near the clock runs; a new version is out. Nothing is changed. **Check again** reads everything again.
@@ -184,7 +184,7 @@ The upload after a game failed (network cut, server off)? The save is written in
 
 The server keeps every version of every save. To make an old version the current one again:
 
-1. Open **3dssavesync settings**, part **History**.
+1. Open **3dssavesync settings**, part **Games**.
 2. Choose the game. The page lists its last 30 versions: date, device, size, and play time and trainer for a Pokémon game.
 3. Click **Restore this version**, then confirm.
 

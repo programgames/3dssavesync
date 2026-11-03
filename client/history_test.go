@@ -170,7 +170,8 @@ func TestWebSetupHistory(t *testing.T) {
 		Games []HistoryGame `json:"Jeux"`
 	}
 	request("jeux", "{}", &games)
-	if len(games.Games) != 1 || games.Games[0] != (HistoryGame{"CPUF", "Pokemon Platine"}) {
+	if len(games.Games) != 1 || games.Games[0].Key != "CPUF" || games.Games[0].Name != "Pokemon Platine" ||
+		games.Games[0].Client != "3ds" || games.Games[0].Age < 0 || games.Games[0].Age > 60 {
 		t.Errorf("jeux : %+v", games)
 	}
 	var v struct{ Versions []HistoryLine }
