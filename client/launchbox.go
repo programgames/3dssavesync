@@ -15,13 +15,15 @@ import (
 
 // lbPlatforms maps LaunchBox platforms -> System.
 var lbPlatforms = map[string]System{
-	"Nintendo DS": "DS", "Nintendo DSi": "DS", "Nintendo Game Boy": "GB", "Nintendo Game Boy Color": "GB",
-	"Nintendo Game Boy Advance": "GBA", "Nintendo 3DS": "3DS",
+	"Nintendo DS": DS, "Nintendo DSi": DS, "Nintendo Game Boy": GB, "Nintendo Game Boy Color": GB,
+	"Nintendo Game Boy Advance": GBA, "Nintendo 3DS": N3DS,
 }
 
 var (
 	lbEmulatorBlock = regexp.MustCompile(`(?s)  <Emulator>\r?\n.*?  </Emulator>\r?\n`)
 	lbPlatformBlock = regexp.MustCompile(`(?s)  <EmulatorPlatform>\r?\n.*?  </EmulatorPlatform>\r?\n`)
+	// Command line of an emulator that goes through the Launcher: "run --emulator <name>".
+	emulatorOption = regexp.MustCompile(`--emulator (\S+)`)
 )
 
 // lbPath returns the full path of a LaunchBox ApplicationPath (relative to its folder when it is inside).
@@ -132,9 +134,6 @@ func launchbox(text, lbDir, launcher string, entries []LBEntry) (string, []strin
 	}
 	return text, report
 }
-
-// LaunchBox command line of an emulator that goes through the Launcher: "run --emulator <name>".
-var emulatorOption = regexp.MustCompile(`--emulator (\S+)`)
 
 func newID() string {
 	o := make([]byte, 16)
