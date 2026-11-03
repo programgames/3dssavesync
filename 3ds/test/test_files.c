@@ -1,155 +1,155 @@
-/* Vérifie deplacer_sauvegarde (bascule forwarder mGBA <-> .sav à côté de la ROM) : jamais de perte.
- * Compilé sur PC : gcc -std=c99 -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && /tmp/f */
+/* Vérifie move_save (bascule forwarder mGBA <-> .sav à côté de la ROM) : jamais de perte.
+ * Compilé sur PC : gcc -std=c99 -I source source/files.c test/test_files.c -o /tmp/f && /tmp/f */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include "files.h"
 
-static int echecs;
+static int failures;
 
-static void verifier(int ok, const char *quoi)
+static void check(int ok, const char *what)
 {
     if (!ok) {
-        printf("ECHEC  %s\n", quoi);
-        echecs++;
+        printf("ECHEC  %s\n", what);
+        failures++;
     }
 }
 
-static void ecrire(const char *chemin, const char *texte)
+static void write_text(const char *path, const char *text)
 {
-    ecrire_fichier(chemin, texte, strlen(texte));
+    write_file(path, text, strlen(text));
 }
 
 /* 1 si le fichier contient exactement texte. */
-static int contient(const char *chemin, const char *texte)
+static int contains(const char *path, const char *text)
 {
     unsigned char *o;
     size_t n;
     int ok;
-    if (lire_fichier(chemin, &o, &n)) return 0;
-    ok = n == strlen(texte) && !memcmp(o, texte, n);
+    if (read_file(path, &o, &n)) return 0;
+    ok = n == strlen(text) && !memcmp(o, text, n);
     free(o);
     return ok;
 }
 
-static int existe(const char *chemin)
+static int exists(const char *path)
 {
-    FILE *f = fopen(chemin, "rb");
+    FILE *f = fopen(path, "rb");
     if (f) fclose(f);
     return f != NULL;
 }
 
 int main(void)
 {
-    const char *src = "test-src.sav", *dst = "test-dst.sav", *copie = "test-copie.sav";
-    remove(src), remove(dst), remove(copie);
+    const char *src = "test-src.sav", *dst = "test-dst.sav", *backup = "test-copie.sav";
+    remove(src), remove(dst), remove(backup);
 
-    ecrire(src, "partie forwarder");
-    ecrire(dst, "ancienne partie rom");
-    verifier(deplacer_sauvegarde(src, dst, copie, 1) == 0, "vers la ROM : fait");
-    verifier(contient(dst, "partie forwarder"), "vers la ROM : la ROM a la partie du forwarder");
-    verifier(contient(copie, "ancienne partie rom"), "vers la ROM : copie de l'ancien .sav");
-    verifier(!existe(src), "vers la ROM : le fichier du forwarder est retiré");
+    write_text(src, "partie forwarder");
+    write_text(dst, "ancienne partie rom");
+    check(move_save(src, dst, backup, 1) == 0, "vers la ROM : fait");
+    check(contains(dst, "partie forwarder"), "vers la ROM : la ROM a la partie du forwarder");
+    check(contains(backup, "ancienne partie rom"), "vers la ROM : copie de l'ancien .sav");
+    check(!exists(src), "vers la ROM : le fichier du forwarder est retiré");
 
-    remove(copie);
-    ecrire(src, "partie rom");
-    verifier(deplacer_sauvegarde(src, dst, copie, 0) == 0, "vers le forwarder : fait");
-    verifier(contient(dst, "partie rom") && contient(src, "partie rom"), "vers le forwarder : les deux fichiers ont la partie");
-    verifier(contient(copie, "partie forwarder"), "vers le forwarder : copie de l'ancien fichier");
+    remove(backup);
+    write_text(src, "partie rom");
+    check(move_save(src, dst, backup, 0) == 0, "vers le forwarder : fait");
+    check(contains(dst, "partie rom") && contains(src, "partie rom"), "vers le forwarder : les deux fichiers ont la partie");
+    check(contains(backup, "partie forwarder"), "vers le forwarder : copie de l'ancien fichier");
 
-    remove(copie);
+    remove(backup);
     remove(dst);
-    verifier(deplacer_sauvegarde(src, dst, copie, 1) == 0 && contient(dst, "partie rom") && !existe(copie),
+    check(move_save(src, dst, backup, 1) == 0 && contains(dst, "partie rom") && !exists(backup),
              "cible absente : pas de copie nécessaire");
 
-    verifier(deplacer_sauvegarde("absent.sav", dst, copie, 1) != 0 && contient(dst, "partie rom"),
+    check(move_save("absent.sav", dst, backup, 1) != 0 && contains(dst, "partie rom"),
              "source absente : refus, rien ne change");
 
-    ecrire(src, "nouvelle");
-    verifier(deplacer_sauvegarde(src, dst, "dossier-absent/copie.sav", 1) != 0, "copie impossible : refus");
-    verifier(contient(dst, "partie rom") && contient(src, "nouvelle"), "copie impossible : rien ne change");
+    write_text(src, "nouvelle");
+    check(move_save(src, dst, "dossier-absent/copie.sav", 1) != 0, "copie impossible : refus");
+    check(contains(dst, "partie rom") && contains(src, "nouvelle"), "copie impossible : rien ne change");
 
     /* base.ini, config.ini : remplacés par un .tmp vérifié */
-    verifier(remplacer_fichier(dst, "IRBF=ab\n", 8) == 0 && contient(dst, "IRBF=ab\n") && !existe("test-dst.sav.tmp"),
+    check(replace_file(dst, "IRBF=ab\n", 8) == 0 && contains(dst, "IRBF=ab\n") && !exists("test-dst.sav.tmp"),
              "remplacement : fait, sans .tmp restant");
-    verifier(remplacer_fichier("dossier-absent/base.ini", "x", 1) != 0, "remplacement impossible : échec signalé");
+    check(replace_file("dossier-absent/base.ini", "x", 1) != 0, "remplacement impossible : échec signalé");
     mkdir("test-dst.sav.tmp", 0777); /* .tmp impossible à écrire */
-    verifier(remplacer_fichier(dst, "nouveau", 7) == -1 && contient(dst, "IRBF=ab\n"), ".tmp impossible : -1, l'ancien reste intact");
-    remove(src), remove(dst), remove(copie), remove("test-dst.sav.tmp");
+    check(replace_file(dst, "nouveau", 7) == -1 && contains(dst, "IRBF=ab\n"), ".tmp impossible : -1, l'ancien reste intact");
+    remove(src), remove(dst), remove(backup), remove("test-dst.sav.tmp");
     /* Renommage impossible (cible = dossier non vide) : -2, le .tmp vérifié reste */
     mkdir("test-dossier.sav", 0777);
-    ecrire("test-dossier.sav/x", "x");
-    verifier(remplacer_fichier("test-dossier.sav", "recu", 4) == -2 && contient("test-dossier.sav.tmp", "recu"), "renommage impossible : -2, .tmp gardé");
+    write_text("test-dossier.sav/x", "x");
+    check(replace_file("test-dossier.sav", "recu", 4) == -2 && contains("test-dossier.sav.tmp", "recu"), "renommage impossible : -2, .tmp gardé");
     remove("test-dossier.sav.tmp"), remove("test-dossier.sav/x"), remove("test-dossier.sav");
 
     /* Mise à jour du .3dsx : l'ancien devient .bak, le nouveau prend sa place, puis .bak est retiré */
     remove("test.3dsx.bak");
-    ecrire("test.3dsx", "v1");
-    ecrire("test.3dsx.bak", "reste d'avant");
-    verifier(remplacer_programme("test.3dsx", "v2", 2) == 0 && contient("test.3dsx", "v2") && !existe("test.3dsx.tmp") && !existe("test.3dsx.bak"),
+    write_text("test.3dsx", "v1");
+    write_text("test.3dsx.bak", "reste d'avant");
+    check(replace_program("test.3dsx", "v2", 2) == 0 && contains("test.3dsx", "v2") && !exists("test.3dsx.tmp") && !exists("test.3dsx.bak"),
              ".3dsx : remplacé, ni .tmp ni .bak restant");
     mkdir("test.3dsx.tmp", 0777); /* .tmp impossible à écrire */
-    verifier(remplacer_programme("test.3dsx", "v3", 2) == -1 && contient("test.3dsx", "v2") && !existe("test.3dsx.bak"), ".3dsx, .tmp impossible : -1, l'ancien en place");
+    check(replace_program("test.3dsx", "v3", 2) == -1 && contains("test.3dsx", "v2") && !exists("test.3dsx.bak"), ".3dsx, .tmp impossible : -1, l'ancien en place");
     remove("test.3dsx.tmp"), remove("test.3dsx");
-    ecrire("test.3dsx.bak", "seule copie"); /* coupure entre les deux renommages */
-    verifier(remplacer_programme("test.3dsx", "v3", 2) == -1 && contient("test.3dsx.bak", "seule copie") && !existe("test.3dsx.tmp"),
+    write_text("test.3dsx.bak", "seule copie"); /* coupure entre les deux renommages */
+    check(replace_program("test.3dsx", "v3", 2) == -1 && contains("test.3dsx.bak", "seule copie") && !exists("test.3dsx.tmp"),
              ".3dsx absent : -1, .bak (seule copie) jamais retiré");
     remove("test.3dsx.bak");
-    verifier(lance_depuis_sd("sdmc:/3ds/3dssavesync.3dsx") && lance_depuis_sd("sdmc:/3ds/apps/Sync.3DSX"), "Homebrew Launcher : .3dsx de la carte SD");
-    verifier(!lance_depuis_sd("3dslink:/3dssavesync.3dsx") && !lance_depuis_sd("") && !lance_depuis_sd("sdmc:/.3dsx") &&
-                 !lance_depuis_sd("sdmc:/3ds/3dssavesync.3dsx.tmp"),
+    check(launched_from_sd("sdmc:/3ds/3dssavesync.3dsx") && launched_from_sd("sdmc:/3ds/apps/Sync.3DSX"), "Homebrew Launcher : .3dsx de la carte SD");
+    check(!launched_from_sd("3dslink:/3dssavesync.3dsx") && !launched_from_sd("") && !launched_from_sd("sdmc:/.3dsx") &&
+                 !launched_from_sd("sdmc:/3ds/3dssavesync.3dsx.tmp"),
              "3dslink, argv vide, chemin incomplet : refusé");
 
     /* Copie de sécurité relue (recuperer) */
-    verifier(ecrire_relu(copie, "partie", 6) == 0 && contient(copie, "partie"), "écriture relue : faite");
-    verifier(ecrire_relu("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");
-    remove(copie);
+    check(write_verified(backup, "partie", 6) == 0 && contains(backup, "partie"), "écriture relue : faite");
+    check(write_verified("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");
+    remove(backup);
 
     /* Deux ROM, un fichier de Sauvegarde : Doublon (forwarder mGBA nommé comme la ROM, quel que soit le dossier) */
-    verifier(meme_sauvegarde(SYS_GBA, "Pokemon", "sdmc:/roms/gba/USA/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/EUR/Pokemon.sav"),
+    check(same_save(SYS_GBA, "Pokemon", "sdmc:/roms/gba/USA/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/EUR/Pokemon.sav"),
              "GBA, même nom dans deux dossiers : forwarder partagé");
-    verifier(meme_sauvegarde(SYS_GB, "Tetris", "sdmc:/roms/gb/Tetris.sav", SYS_GBA, "TETRIS", "sdmc:/roms/gba/TETRIS.sav"),
+    check(same_save(SYS_GB, "Tetris", "sdmc:/roms/gb/Tetris.sav", SYS_GBA, "TETRIS", "sdmc:/roms/gba/TETRIS.sav"),
              "GB et GBA de même nom (casse ignorée) : forwarder partagé");
-    verifier(meme_sauvegarde(SYS_DS, "A", "sdmc:/saves/A.sav", SYS_DS, "a", "sdmc:/saves/a.sav"), "DS, même .sav");
-    verifier(!meme_sauvegarde(SYS_DS, "Pokemon", "sdmc:/roms/nds/USA/Pokemon.sav", SYS_DS, "Pokemon", "sdmc:/roms/nds/EUR/Pokemon.sav"),
+    check(same_save(SYS_DS, "A", "sdmc:/saves/A.sav", SYS_DS, "a", "sdmc:/saves/a.sav"), "DS, même .sav");
+    check(!same_save(SYS_DS, "Pokemon", "sdmc:/roms/nds/USA/Pokemon.sav", SYS_DS, "Pokemon", "sdmc:/roms/nds/EUR/Pokemon.sav"),
              "DS, même nom dans deux dossiers à côté de la ROM : deux .sav");
-    verifier(!meme_sauvegarde(SYS_DS, "Pokemon", "sdmc:/roms/nds/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/Pokemon.sav"),
+    check(!same_save(SYS_DS, "Pokemon", "sdmc:/roms/nds/Pokemon.sav", SYS_GBA, "Pokemon", "sdmc:/roms/gba/Pokemon.sav"),
              "DS et GBA de même nom : pas de forwarder pour la DS");
 
     /* Sauvegarde d'une ROM en sous-dossier (ADR 0015) */
     {
         char c[64];
-        const char *r = "sdmc:/roms/nds", *sous = "sdmc:/roms/nds/Pokemon";
-        verifier(!chemin_sauvegarde(r, "sdmc:/roms/nds/saves", r, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/saves/X.sav"), "racine, saves de TWiLight");
-        verifier(!chemin_sauvegarde(r, "sdmc:/roms/nds/saves", sous, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/saves/X.sav"),
+        const char *r = "sdmc:/roms/nds", *full_tex = "sdmc:/roms/nds/Pokemon";
+        check(!save_path(r, "sdmc:/roms/nds/saves", r, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/saves/X.sav"), "racine, saves de TWiLight");
+        check(!save_path(r, "sdmc:/roms/nds/saves", full_tex, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/saves/X.sav"),
                  "sous-dossier, saves de TWiLight : saves du sous-dossier");
-        verifier(!chemin_sauvegarde(r, "", sous, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/X.sav"), "sous-dossier, à côté de la ROM");
-        verifier(!chemin_sauvegarde(r, r, sous, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/X.sav"), "saves = roms : à côté de la ROM");
-        verifier(!chemin_sauvegarde("sdmc:/roms/gba", "sdmc:/3ds/open_agb_firm/saves", "sdmc:/roms/gba/Hacks", "X", c, sizeof c) &&
+        check(!save_path(r, "", full_tex, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/X.sav"), "sous-dossier, à côté de la ROM");
+        check(!save_path(r, r, full_tex, "X", c, sizeof c) && !strcmp(c, "sdmc:/roms/nds/Pokemon/X.sav"), "saves = roms : à côté de la ROM");
+        check(!save_path("sdmc:/roms/gba", "sdmc:/3ds/open_agb_firm/saves", "sdmc:/roms/gba/Hacks", "X", c, sizeof c) &&
                      !strcmp(c, "sdmc:/3ds/open_agb_firm/saves/X.sav"), "autre dossier (open_agb_firm) : gardé");
-        verifier(chemin_sauvegarde(r, "", sous, "un nom bien trop long pour ce petit tampon", c, sizeof c) != 0, "chemin trop long : refusé");
+        check(save_path(r, "", full_tex, "un nom bien trop long pour ce petit tampon", c, sizeof c) != 0, "chemin trop long : refusé");
     }
     /* Copie de sécurité : jamais d'écrasement d'une copie de la même seconde */
     {
         char c[64];
         mkdir("test-copies", 0777);
-        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.sav"),
+        check(!backup_path("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.sav"),
                  "première copie : nom-date.ext");
-        ecrire("test-copies/Pokemon-20261103-101500.sav", "a");
-        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-1.sav"),
+        write_text("test-copies/Pokemon-20261103-101500.sav", "a");
+        check(!backup_path("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-1.sav"),
                  "copie de la même seconde : -1");
-        ecrire("test-copies/Pokemon-20261103-101500-1.sav", "b");
-        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "main", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.main"),
+        write_text("test-copies/Pokemon-20261103-101500-1.sav", "b");
+        check(!backup_path("test-copies", "Pokemon", "20261103-101500", "main", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.main"),
                  "autre extension : pas de collision");
-        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-2.sav"),
+        check(!backup_path("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-2.sav"),
                  "troisième copie : -2");
-        verifier(chemin_copie("test-copies", "un nom bien trop long pour ce petit tampon", "20261103-101500", "sav", c, sizeof c) != 0,
+        check(backup_path("test-copies", "un nom bien trop long pour ce petit tampon", "20261103-101500", "sav", c, sizeof c) != 0,
                  "chemin trop long : refusé");
-        verifier(contient("test-copies/Pokemon-20261103-101500.sav", "a") && contient("test-copies/Pokemon-20261103-101500-1.sav", "b"),
+        check(contains("test-copies/Pokemon-20261103-101500.sav", "a") && contains("test-copies/Pokemon-20261103-101500-1.sav", "b"),
                  "copies existantes intactes");
         remove("test-copies/Pokemon-20261103-101500.sav"), remove("test-copies/Pokemon-20261103-101500-1.sav"), remove("test-copies");
     }
-    printf("%s\n", echecs ? "ECHECS" : "fichiers : OK");
-    return echecs != 0;
+    printf("%s\n", failures ? "ECHECS" : "fichiers : OK");
+    return failures != 0;
 }

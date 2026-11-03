@@ -2,7 +2,7 @@
 #include <string.h>
 #include "key.h"
 
-static int alnum_maj(unsigned char c)
+static int is_upper_alnum(unsigned char c)
 {
     return (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
 }
@@ -10,33 +10,33 @@ static int alnum_maj(unsigned char c)
 /* 4 caractères [A-Z0-9] à partir de p. */
 static int code4(const unsigned char *p)
 {
-    return alnum_maj(p[0]) && alnum_maj(p[1]) && alnum_maj(p[2]) && alnum_maj(p[3]);
+    return is_upper_alnum(p[0]) && is_upper_alnum(p[1]) && is_upper_alnum(p[2]) && is_upper_alnum(p[3]);
 }
 
-int cle_rom(systeme_t s, const unsigned char *e, char cle[CLE_MAX])
+int rom_key(system_t s, const unsigned char *e, char key[KEY_MAX])
 {
-    char titre[16];
+    char title[16];
     int i;
 
     switch (s) {
     case SYS_DS:
         if (!code4(e + 0x0C)) return -1;
-        snprintf(cle, CLE_MAX, "%.4s", (const char *)e + 0x0C);
+        snprintf(key, KEY_MAX, "%.4s", (const char *)e + 0x0C);
         return 0;
     case SYS_GBA:
         if (!code4(e + 0xAC)) return -1;
-        snprintf(cle, CLE_MAX, "GBA-%.4s", (const char *)e + 0xAC);
+        snprintf(key, KEY_MAX, "GBA-%.4s", (const char *)e + 0xAC);
         return 0;
     case SYS_GB:
         /* titre 0x134-0x142 jusqu'au premier 0x00, en majuscules, autre caractère -> '_' */
         for (i = 0; i < 15 && e[0x134 + i]; i++) {
             unsigned char c = e[0x134 + i];
             if (c >= 'a' && c <= 'z') c -= 'a' - 'A';
-            titre[i] = alnum_maj(c) ? (char)c : '_';
+            title[i] = is_upper_alnum(c) ? (char)c : '_';
         }
-        titre[i] = '\0';
+        title[i] = '\0';
         if (!i) return -1;
-        snprintf(cle, CLE_MAX, "GB-%s-%02X%02X", titre, e[0x14E], e[0x14F]);
+        snprintf(key, KEY_MAX, "GB-%s-%02X%02X", title, e[0x14E], e[0x14F]);
         return 0;
     default:
         return -1;
@@ -51,14 +51,14 @@ static int hex4(const char *p)
     return 1;
 }
 
-int cle_alias(systeme_t s, const char *v, char cle[CLE_MAX])
+int alias_key(system_t s, const char *v, char key[KEY_MAX])
 {
-    char t[CLE_MAX];
+    char t[KEY_MAX];
     size_t n = 0, i;
     int ok = 0;
 
     while (*v == ' ' || *v == '\t') v++;
-    for (; v[n] && n < CLE_MAX - 1; n++) t[n] = v[n] >= 'a' && v[n] <= 'z' ? (char)(v[n] - ('a' - 'A')) : v[n];
+    for (; v[n] && n < KEY_MAX - 1; n++) t[n] = v[n] >= 'a' && v[n] <= 'z' ? (char)(v[n] - ('a' - 'A')) : v[n];
     if (v[n]) return -1; /* trop long pour une Clé */
     while (n && (t[n - 1] == ' ' || t[n - 1] == '\t')) n--;
     t[n] = '\0';
@@ -71,29 +71,29 @@ int cle_alias(systeme_t s, const char *v, char cle[CLE_MAX])
         break;
     case SYS_GB: /* GB-<titre de 1 à 15 [A-Z0-9_]>-<4 hexa> */
         ok = n >= 9 && n <= 23 && !strncmp(t, "GB-", 3) && t[n - 5] == '-' && hex4(t + n - 4);
-        for (i = 3; ok && i < n - 5; i++) ok = alnum_maj((unsigned char)t[i]) || t[i] == '_';
+        for (i = 3; ok && i < n - 5; i++) ok = is_upper_alnum((unsigned char)t[i]) || t[i] == '_';
         break;
     default:
         break;
     }
     if (!ok) return -1;
-    memcpy(cle, t, n + 1);
+    memcpy(key, t, n + 1);
     return 0;
 }
 
-void cle_3ds(unsigned long long title_id, char cle[CLE_MAX])
+void key_3ds(unsigned long long title_id, char key[KEY_MAX])
 {
-    snprintf(cle, CLE_MAX, "3DS-%016llX", title_id);
+    snprintf(key, KEY_MAX, "3DS-%016llX", title_id);
 }
 
-size_t sram_taille(systeme_t s, size_t t)
+size_t sram_size(system_t s, size_t t)
 {
     size_t r = t % 512; /* Trailer d'horloge : 16, 44 ou 48 octets après la SRAM (ADR 0010) */
     if ((s == SYS_GB || s == SYS_GBA) && t > r && (r == 16 || r == 44 || r == 48)) return t - r;
     return t;
 }
 
-int eeprom_inverser(unsigned char *o, size_t t)
+int eeprom_swap(unsigned char *o, size_t t)
 {
     size_t i, k;
     if (t != 512 && t != 8192) return 0; /* SRAM 32 Kio, Flash 64 ou 128 Kio : pas une EEPROM */
@@ -110,27 +110,27 @@ int rom_mbc2(const unsigned char *e) { return e[0x147] == 0x05 || e[0x147] == 0x
 
 /* docs/research-eeprom-mbc2.md : mGBA, deux valeurs par octet, adresse paire dans le quartet bas ; SameBoy, VBA-M, BGB,
  * une valeur par octet (quartet haut sans valeur) ; GameYob, les 512 premiers octets d'un fichier de 8 Kio. */
-int mbc2_normaliser(const unsigned char *f, size_t t, unsigned char s[MBC2_SERVEUR])
+int mbc2_normalize(const unsigned char *f, size_t t, unsigned char s[MBC2_SERVER])
 {
     size_t i;
     if (t != 256 && t != 512 && t != 8192) return -1;
-    for (i = 0; i < MBC2_SERVEUR; i++) s[i] = (t == 256 ? f[i / 2] >> (i % 2 * 4) : f[i]) & 0x0F;
+    for (i = 0; i < MBC2_SERVER; i++) s[i] = (t == 256 ? f[i / 2] >> (i % 2 * 4) : f[i]) & 0x0F;
     return 0;
 }
 
-int mbc2_fichier(const unsigned char s[MBC2_SERVEUR], unsigned char *f, size_t t)
+int mbc2_to_file(const unsigned char s[MBC2_SERVER], unsigned char *f, size_t t)
 {
     size_t i;
     if (t != 256 && t != 512 && t != 8192) return -1;
     memset(f, 0, t);
-    for (i = 0; i < MBC2_SERVEUR; i++) {
+    for (i = 0; i < MBC2_SERVER; i++) {
         if (t == 256) f[i / 2] |= (unsigned char)((s[i] & 0x0F) << (i % 2 * 4));
         else f[i] = (unsigned char)((s[i] & 0x0F) | (t == 512 ? 0xF0 : 0)); /* VBA-M écrit 0xF, GameYob 0 */
     }
     return 0;
 }
 
-int sauvegarde_vide(systeme_t s, const unsigned char *o, size_t t)
+int is_blank_save(system_t s, const unsigned char *o, size_t t)
 {
     size_t i;
     if (s == SYS_3DS) return 0;

@@ -19,4 +19,4 @@ The X key (switch between the mGBA forwarder and the ROM launcher) moves the Sav
 ## Consequences
 
 - Paths deduced from the launchers' code, not verified on the 3DS for a ROM in a subfolder.
-- The 512-game limit (`MAX_JEUX`) also counts ROMs in subfolders; beyond it, ROMs are skipped and reported.
+- The 512-game limit (`MAX_GAMES`) also counts ROMs in subfolders; beyond it, ROMs are skipped and reported.

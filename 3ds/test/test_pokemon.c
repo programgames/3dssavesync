@@ -5,24 +5,24 @@
 #include <string.h>
 #include "pokemon.h"
 
-static int echecs;
+static int failures;
 
-static void verifie(const unsigned char *d, size_t taille, int h, int m, const char *nom, const char *quoi)
+static void expect_progress(const unsigned char *d, size_t size, int h, int m, const char *name, const char *what)
 {
-    partie_t p;
-    int r = pokemon_partie(d, taille, &p);
-    if (r != 0 || p.heures != h || p.minutes != m || strcmp(p.dresseur, nom)) {
-        printf("ÉCHEC : %s (%d, %d h %d, « %s »)\n", quoi, r, p.heures, p.minutes, p.dresseur);
-        echecs++;
+    progress_t p;
+    int r = pokemon_progress(d, size, &p);
+    if (r != 0 || p.hours != h || p.minutes != m || strcmp(p.trainer, name)) {
+        printf("ÉCHEC : %s (%d, %d h %d, « %s »)\n", what, r, p.hours, p.minutes, p.trainer);
+        failures++;
     }
 }
 
-static void refuse(const unsigned char *d, size_t taille, const char *quoi)
+static void expect_rejected(const unsigned char *d, size_t size, const char *what)
 {
-    partie_t p;
-    if (pokemon_partie(d, taille, &p) != -1) {
-        printf("ÉCHEC : %s reconnu à tort\n", quoi);
-        echecs++;
+    progress_t p;
+    if (pokemon_progress(d, size, &p) != -1) {
+        printf("ÉCHEC : %s reconnu à tort\n", what);
+        failures++;
     }
 }
 
@@ -50,11 +50,11 @@ int main(void)
     d[0x2CED] = 57, d[0x2CEF] = 32;
     for (s = 0, i = 0x2598; i < 0x3523; i++) s += d[i];
     d[0x3523] = ~s & 0xFF;
-    verifie(d, 0x8000, 57, 32, "J?\xC3\xA9", "Gen 1");
+    expect_progress(d, 0x8000, 57, 32, "J?\xC3\xA9", "Gen 1");
     d[0x2CEF] = 246; /* somme de contrôle juste, minutes impossibles : un autre fichier, pas une partie */
     for (s = 0, i = 0x2598; i < 0x3523; i++) s += d[i];
     d[0x3523] = ~s & 0xFF;
-    refuse(d, 0x8000, "Gen 1 à 57 h 246");
+    expect_rejected(d, 0x8000, "Gen 1 à 57 h 246");
 
     /* Gen 2 Cristal : « Jean » ; 295 h 10 (heures big-endian) ; somme 0x2009..0x2B82 à 0x2D0D. */
     memset(d, 0, 0x8000);
@@ -62,9 +62,9 @@ int main(void)
     d[0x2052] = 295 >> 8, d[0x2053] = 295 & 0xFF, d[0x2054] = 10;
     for (s = 0, i = 0x2009; i <= 0x2B82; i++) s += d[i];
     le16(d + 0x2D0D, s & 0xFFFF);
-    verifie(d, 0x8000, 295, 10, "Jean", "Gen 2 Cristal");
+    expect_progress(d, 0x8000, 295, 10, "Jean", "Gen 2 Cristal");
     memset(d, 0, 0x8000);
-    refuse(d, 0x8000, "32 Kio vierges");
+    expect_rejected(d, 0x8000, "32 Kio vierges");
 
     /* Gen 3 : deux moitiés valides, secteurs décalés ; la moitié 1 a le plus grand compteur. */
     memset(d, 0, 0x20000);
@@ -81,9 +81,9 @@ int main(void)
             sec[0x10] = m ? 48 : 2;
         }
     }
-    verifie(d, 0x20000, 576, 48, "J\xC3\xA9", "Gen 3, moitié au plus grand compteur");
+    expect_progress(d, 0x20000, 576, 48, "J\xC3\xA9", "Gen 3, moitié au plus grand compteur");
     memset(d, 0, 0x20000);
-    refuse(d, 0x20000, "128 Kio vierges");
+    expect_rejected(d, 0x20000, "128 Kio vierges");
 
     /* Gen 4 Platine : pied de la partition 1 (taille, signature) ; partition 1 plus récente. */
     memset(d, 0, 0x80000);
@@ -94,7 +94,7 @@ int main(void)
     le16(d + 0x40000 + 0x68, 0x134), le16(d + 0x40000 + 0x6A, 0x188), le16(d + 0x40000 + 0x6C, 0xFFFF); /* J, é */
     le16(d + 0x40000 + 0x68 + 0x22, 35);
     d[0x40000 + 0x68 + 0x24] = 7;
-    verifie(d, 0x80000, 35, 7, "J\xC3\xA9", "Gen 4 Platine");
+    expect_progress(d, 0x80000, 35, 7, "J\xC3\xA9", "Gen 4 Platine");
 
     /* Gen 5 Noir 2/Blanc 2 : CRC16-CCITT du bloc 0x25F00 ; nom UTF-16. */
     memset(d, 0, 0x80000);
@@ -103,22 +103,22 @@ int main(void)
     le16(d + 0x19404, 'J'), le16(d + 0x19406, 0xE9), le16(d + 0x19408, 0xFFFF);
     le16(d + 0x19424, 15);
     d[0x19426] = 41;
-    verifie(d, 0x80000, 15, 41, "J\xC3\xA9", "Gen 5 Noir 2/Blanc 2");
+    expect_progress(d, 0x80000, 15, 41, "J\xC3\xA9", "Gen 5 Noir 2/Blanc 2");
     memset(d, 0, 0x80000);
-    refuse(d, 0x80000, "512 Kio vierges");
+    expect_rejected(d, 0x80000, "512 Kio vierges");
 
     /* Gen 6/7 : reconnues par la taille ; nom de 13 caractères au plus. */
     memset(d, 0, 0x6CC00);
     le16(d + 0x41000, 999), d[0x41002] = 30;
     for (i = 0; i < 15; i++) le16(d + 0x1438 + 2 * i, 'A' + i);
-    verifie(d, 0x6CC00, 999, 30, "ABCDEFGHIJKLM", "Ultra-Soleil/Ultra-Lune");
+    expect_progress(d, 0x6CC00, 999, 30, "ABCDEFGHIJKLM", "Ultra-Soleil/Ultra-Lune");
     le16(d + 0x41000, 1000);
-    refuse(d, 0x6CC00, "Ultra-Soleil à 1000 h");
+    expect_rejected(d, 0x6CC00, "Ultra-Soleil à 1000 h");
     memset(d, 0, 0x6BE00);
-    verifie(d, 0x6BE00, 0, 0, "", "Soleil/Lune jamais commencé");
+    expect_progress(d, 0x6BE00, 0, 0, "", "Soleil/Lune jamais commencé");
 
-    refuse(d, 16, "taille inconnue");
+    expect_rejected(d, 16, "taille inconnue");
     free(d);
-    printf(echecs ? "%d échec(s)\n" : "pokemon : OK\n", echecs);
-    return echecs != 0;
+    printf(failures ? "%d échec(s)\n" : "pokemon : OK\n", failures);
+    return failures != 0;
 }

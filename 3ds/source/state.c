@@ -1,18 +1,18 @@
 #include <string.h>
 #include "state.h"
 
-static int egal(const char *a, const char *b)
+static int equal(const char *a, const char *b)
 {
     return a && b && strcmp(a, b) == 0;
 }
 
-etat_t etat(const obs_t *local, const obs_t *serveur, const char *base)
+state_t sync_state(const obs_t *local, const obs_t *server, const char *base)
 {
-    if (local && serveur && egal(local->hash, serveur->hash)) return A_JOUR;
-    if (!serveur) return A_ENVOYER;
-    if (!local) return A_RECUPERER;
-    if (local->taille != serveur->taille) return CONFLIT;
-    if (egal(local->hash, base)) return A_RECUPERER;
-    if (egal(serveur->hash, base)) return A_ENVOYER;
-    return CONFLIT;
+    if (local && server && equal(local->hash, server->hash)) return IN_SYNC;
+    if (!server) return TO_UPLOAD;
+    if (!local) return TO_DOWNLOAD;
+    if (local->size != server->size) return CONFLICT;
+    if (equal(local->hash, base)) return TO_DOWNLOAD;
+    if (equal(server->hash, base)) return TO_UPLOAD;
+    return CONFLICT;
 }

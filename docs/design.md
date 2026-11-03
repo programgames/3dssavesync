@@ -112,9 +112,9 @@ C + libctru, text console, `3ds-curl` + `3ds-mbedtls`.
 | File | Role |
 |---|---|
 | `source/main.c` | configuration (`swkbd`), scan, list, actions, Backup copies |
-| `source/etat.c` / `etat.h` | the `etat` module (no libctru dependency) |
+| `source/state.c` / `state.h` | the `sync_state` module (no libctru dependency) |
 | `source/net.c` | the 4 HTTP calls with curl, ISRG Root X1 embedded |
-| `test/test_etat.c` | reads `tests/cas_etat.csv`, compiled with `gcc` on the PC |
+| `test/test_state.c` | reads `tests/cas_etat.csv`, compiled with `gcc` on the PC |
 
 Files on the SD card, in `sd:/3ds/3dssavesync/` (before v3: `sd:/3ds/nds-save-sync/`, taken over at first start): `config.ini` (URL, token, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba`; empty saves = next to the ROM), `titres.ini` (synced 3DS games, `<title ID>=<name>`; absent = the 8 Pokémon), `base.ini` (`KEY=hash`), `alias.ini` (optional, `<ROM name>=KEY`, ADR 0014), `copies/`.
 
@@ -139,6 +139,6 @@ The core does not change (`etat`, conditional Upload, Backup copy). What is adde
 
 - **Key per System**, read in the ROM: DS `ADAF`, GBA `GBA-BPEF`, GB `GB-<title>-<checksum>`, 3DS `3DS-<title ID>` (ADR 0007). The server accepts only these forms.
 - **GB/GBA**: `.sav` files next to the ROMs on the 3DS (TWiLight, open_agb_firm), `<save folder>\GB` / `GBA` folders on the PC (mGBA, `-C savegamePath=…` per launch). Hash, size and Upload cover the **SRAM only**; at Download each machine puts back its own Clock trailer (ADR 0008). Trailer = remainder of `size mod 512` if it is 16, 44 or 48 bytes (ADR 0010).
-- **3DS**: the `main` file of the save archive (8 Pokémon, fixed table), read and written by `titres3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
+- **3DS**: the `main` file of the save archive (8 Pokémon, fixed table), read and written by `titles3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
 - **Launcher**: one profile per emulator (executable, process, save folder, extensions); everything else is shared.
 - **Homebrew**: sources `sd:/roms/nds`, `sd:/roms/gb`, `sd:/roms/gba` (`config.ini`: `roms_gb`, `roms_gba`) and the 3DS archives; the System is shown in the list.

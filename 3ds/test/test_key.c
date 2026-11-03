@@ -1,84 +1,84 @@
-/* Vérifie cle_rom, cle_3ds, sram_taille, EEPROM et MBC2 (ADR 0007, 0008, 0010, 0012). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
- * Compilé sur PC : gcc -I source source/cle.c test/test_cle.c -o test_cle && ./test_cle */
+/* Vérifie rom_key, key_3ds, sram_size, EEPROM et MBC2 (ADR 0007, 0008, 0010, 0012). Mêmes Clés que pc/sync.ps1 (test_lanceur.ps1).
+ * Compilé sur PC : gcc -I source source/key.c test/test_key.c -o test_cle && ./test_cle */
 #include <stdio.h>
 #include <string.h>
 #include "key.h"
 
-static int echecs;
+static int failures;
 
-static void verifier(int ok, const char *quoi)
+static void check(int ok, const char *what)
 {
     if (!ok) {
-        printf("ECHEC  %s\n", quoi);
-        echecs++;
+        printf("ECHEC  %s\n", what);
+        failures++;
     }
 }
 
-static void cas_rom(systeme_t s, int offset, const char *texte, int somme, const char *attendu)
+static void check_rom(system_t s, int offset, const char *text, int checksum, const char *expected)
 {
     unsigned char e[0x200] = { 0 };
-    char cle[CLE_MAX] = "";
-    memcpy(e + offset, texte, strlen(texte));
-    e[0x14E] = (unsigned char)(somme >> 8);
-    e[0x14F] = (unsigned char)somme;
-    if (attendu) verifier(cle_rom(s, e, cle) == 0 && !strcmp(cle, attendu), attendu);
-    else verifier(cle_rom(s, e, cle) != 0, texte);
+    char key[KEY_MAX] = "";
+    memcpy(e + offset, text, strlen(text));
+    e[0x14E] = (unsigned char)(checksum >> 8);
+    e[0x14F] = (unsigned char)checksum;
+    if (expected) check(rom_key(s, e, key) == 0 && !strcmp(key, expected), expected);
+    else check(rom_key(s, e, key) != 0, text);
 }
 
 int main(void)
 {
-    char cle[CLE_MAX];
+    char key[KEY_MAX];
 
-    cas_rom(SYS_GB, 0x134, "POKEMON RED", 0x91E6, "GB-POKEMON_RED-91E6");
-    cas_rom(SYS_GB, 0x134, "PM_CRYSTAL", 0xF2E2, "GB-PM_CRYSTAL-F2E2");
-    cas_rom(SYS_GB, 0x134, "pokemon yel", 0x0001, "GB-POKEMON_YEL-0001");
-    cas_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 caractères, sans 0x00 */
-    cas_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* octets >= 0x80 : même Clé que client/profils_test.go */
-    cas_rom(SYS_GB, 0x134, "", 0x1234, NULL);
-    cas_rom(SYS_GBA, 0xAC, "BPEF", 0, "GBA-BPEF");
-    cas_rom(SYS_GBA, 0xAC, "bp f", 0, NULL);
-    cas_rom(SYS_DS, 0x0C, "ADAF", 0, "ADAF");
-    cas_rom(SYS_DS, 0x0C, "####", 0, NULL);
+    check_rom(SYS_GB, 0x134, "POKEMON RED", 0x91E6, "GB-POKEMON_RED-91E6");
+    check_rom(SYS_GB, 0x134, "PM_CRYSTAL", 0xF2E2, "GB-PM_CRYSTAL-F2E2");
+    check_rom(SYS_GB, 0x134, "pokemon yel", 0x0001, "GB-POKEMON_YEL-0001");
+    check_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 caractères, sans 0x00 */
+    check_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* octets >= 0x80 : même Clé que client/profils_test.go */
+    check_rom(SYS_GB, 0x134, "", 0x1234, NULL);
+    check_rom(SYS_GBA, 0xAC, "BPEF", 0, "GBA-BPEF");
+    check_rom(SYS_GBA, 0xAC, "bp f", 0, NULL);
+    check_rom(SYS_DS, 0x0C, "ADAF", 0, "ADAF");
+    check_rom(SYS_DS, 0x0C, "####", 0, NULL);
 
-    cle_3ds(0x00040000001B5000ULL, cle);
-    verifier(!strcmp(cle, "3DS-00040000001B5000"), "3DS-00040000001B5000");
+    key_3ds(0x00040000001B5000ULL, key);
+    check(!strcmp(key, "3DS-00040000001B5000"), "3DS-00040000001B5000");
 
     /* Alias (ADR 0014) : mêmes cas que TestCleAlias dans client/cas_test.go */
-    verifier(cle_alias(SYS_DS, "0rad", cle) == 0 && !strcmp(cle, "0RAD"), "alias DS 0rad -> 0RAD");
-    verifier(cle_alias(SYS_GBA, " GBA-0RAD ", cle) == 0 && !strcmp(cle, "GBA-0RAD"), "alias GBA avec espaces");
-    verifier(cle_alias(SYS_GB, "GB-MONHACK-0001", cle) == 0 && !strcmp(cle, "GB-MONHACK-0001"), "alias GB");
-    verifier(cle_alias(SYS_GB, "GB-POKEMON_GLDAAUF-6FC6", cle) == 0, "alias GB, titre de 15 caractères");
-    verifier(cle_alias(SYS_GBA, "GBA-BPRE-RADICALRED", cle) != 0, "alias GBA trop long : refusé");
-    verifier(cle_alias(SYS_GBA, "0RAD", cle) != 0, "alias d'un autre Système : refusé");
-    verifier(cle_alias(SYS_GB, "GB-MON-HACK-0001", cle) != 0, "alias GB avec un tiret dans le titre : refusé");
-    verifier(cle_alias(SYS_GB, "GB--0001", cle) != 0, "alias GB sans titre : refusé");
-    verifier(cle_alias(SYS_GB, "GB-MONHACK-00G1", cle) != 0, "alias GB, somme non hexadécimale : refusée");
-    verifier(cle_alias(SYS_DS, "", cle) != 0, "alias vide : refusé");
-    verifier(cle_alias(SYS_3DS, "3DS-00040000001B5000", cle) != 0, "pas d'alias 3DS");
+    check(alias_key(SYS_DS, "0rad", key) == 0 && !strcmp(key, "0RAD"), "alias DS 0rad -> 0RAD");
+    check(alias_key(SYS_GBA, " GBA-0RAD ", key) == 0 && !strcmp(key, "GBA-0RAD"), "alias GBA avec espaces");
+    check(alias_key(SYS_GB, "GB-MONHACK-0001", key) == 0 && !strcmp(key, "GB-MONHACK-0001"), "alias GB");
+    check(alias_key(SYS_GB, "GB-POKEMON_GLDAAUF-6FC6", key) == 0, "alias GB, titre de 15 caractères");
+    check(alias_key(SYS_GBA, "GBA-BPRE-RADICALRED", key) != 0, "alias GBA trop long : refusé");
+    check(alias_key(SYS_GBA, "0RAD", key) != 0, "alias d'un autre Système : refusé");
+    check(alias_key(SYS_GB, "GB-MON-HACK-0001", key) != 0, "alias GB avec un tiret dans le titre : refusé");
+    check(alias_key(SYS_GB, "GB--0001", key) != 0, "alias GB sans titre : refusé");
+    check(alias_key(SYS_GB, "GB-MONHACK-00G1", key) != 0, "alias GB, somme non hexadécimale : refusée");
+    check(alias_key(SYS_DS, "", key) != 0, "alias vide : refusé");
+    check(alias_key(SYS_3DS, "3DS-00040000001B5000", key) != 0, "pas d'alias 3DS");
 
-    verifier(sram_taille(SYS_GB, 32816) == 32768, "GB 32816 -> 32768 (trailer mGBA 48 o)");
-    verifier(sram_taille(SYS_GB, 32768) == 32768, "GB 32768 inchangé");
-    verifier(sram_taille(SYS_GBA, 131088) == 131072, "GBA 131088 -> 131072 (trailer mGBA 16 o)");
-    verifier(sram_taille(SYS_GB, 32812) == 32768, "GB 32812 -> 32768 (trailer VBA 44 o)");
-    verifier(sram_taille(SYS_GB, 512) == 512, "GB 512 inchangé (MBC2)");
-    verifier(sram_taille(SYS_GBA, 528) == 512, "GBA 528 -> 512 (EEPROM 4 Kbit + trailer 16 o)");
-    verifier(sram_taille(SYS_GB, 560) == 512, "GB 560 -> 512 (trailer 48 o)");
-    verifier(sram_taille(SYS_GBA, 8208) == 8192, "GBA 8208 -> 8192 (EEPROM 64 Kbit + trailer 16 o)");
-    verifier(sram_taille(SYS_GB, 1536) == 1536, "GB 1536 inchangé (pas un trailer)");
-    verifier(sram_taille(SYS_GB, 48) == 48, "GB 48 inchangé (pas de SRAM)");
-    verifier(sram_taille(SYS_DS, 524298) == 524298, "DS jamais coupé");
+    check(sram_size(SYS_GB, 32816) == 32768, "GB 32816 -> 32768 (trailer mGBA 48 o)");
+    check(sram_size(SYS_GB, 32768) == 32768, "GB 32768 inchangé");
+    check(sram_size(SYS_GBA, 131088) == 131072, "GBA 131088 -> 131072 (trailer mGBA 16 o)");
+    check(sram_size(SYS_GB, 32812) == 32768, "GB 32812 -> 32768 (trailer VBA 44 o)");
+    check(sram_size(SYS_GB, 512) == 512, "GB 512 inchangé (MBC2)");
+    check(sram_size(SYS_GBA, 528) == 512, "GBA 528 -> 512 (EEPROM 4 Kbit + trailer 16 o)");
+    check(sram_size(SYS_GB, 560) == 512, "GB 560 -> 512 (trailer 48 o)");
+    check(sram_size(SYS_GBA, 8208) == 8192, "GBA 8208 -> 8192 (EEPROM 64 Kbit + trailer 16 o)");
+    check(sram_size(SYS_GB, 1536) == 1536, "GB 1536 inchangé (pas un trailer)");
+    check(sram_size(SYS_GB, 48) == 48, "GB 48 inchangé (pas de SRAM)");
+    check(sram_size(SYS_DS, 524298) == 524298, "DS jamais coupé");
 
     {
         static unsigned char s[1024];
-        verifier(sauvegarde_vide(SYS_GB, s, sizeof s), "GB que des 0x00 : vierge");
+        check(is_blank_save(SYS_GB, s, sizeof s), "GB que des 0x00 : vierge");
         memset(s, 0xFF, sizeof s);
-        verifier(sauvegarde_vide(SYS_DS, s, sizeof s), "DS que des 0xFF : vierge");
-        verifier(!sauvegarde_vide(SYS_3DS, s, sizeof s), "3DS jamais vierge");
+        check(is_blank_save(SYS_DS, s, sizeof s), "DS que des 0xFF : vierge");
+        check(!is_blank_save(SYS_3DS, s, sizeof s), "3DS jamais vierge");
         s[700] = 0;
-        verifier(!sauvegarde_vide(SYS_GBA, s, sizeof s), "GBA avec un octet différent : pas vierge");
+        check(!is_blank_save(SYS_GBA, s, sizeof s), "GBA avec un octet différent : pas vierge");
         memset(s, 0x42, sizeof s);
-        verifier(!sauvegarde_vide(SYS_DS, s, sizeof s), "DS que des 0x42 : pas vierge");
-        verifier(sauvegarde_vide(SYS_DS, s, 0), "fichier vide : vierge");
+        check(!is_blank_save(SYS_DS, s, sizeof s), "DS que des 0x42 : pas vierge");
+        check(is_blank_save(SYS_DS, s, 0), "fichier vide : vierge");
     }
 
     { /* EEPROM (ADR 0012) : open_agb_firm 01..08 = mGBA 08..01 */
@@ -86,31 +86,31 @@ int main(void)
         static const unsigned char agb[8] = { 1, 2, 3, 4, 5, 6, 7, 8 }, mgba[8] = { 8, 7, 6, 5, 4, 3, 2, 1 };
         memcpy(e, agb, 8);
         memcpy(e + 8184, agb, 8);
-        verifier(eeprom_inverser(e, 512) && !memcmp(e, mgba, 8), "EEPROM 512 o : bloc inversé");
-        verifier(!memcmp(e + 8184, agb, 8), "EEPROM 512 o : rien après 512 o");
-        verifier(eeprom_inverser(e, 512) && !memcmp(e, agb, 8), "EEPROM : son propre inverse");
-        verifier(eeprom_inverser(e, 8192) && !memcmp(e + 8184, mgba, 8), "EEPROM 8 Kio : dernier bloc inversé");
-        verifier(!eeprom_inverser(e, 32768), "SRAM 32 Kio : pas une EEPROM");
+        check(eeprom_swap(e, 512) && !memcmp(e, mgba, 8), "EEPROM 512 o : bloc inversé");
+        check(!memcmp(e + 8184, agb, 8), "EEPROM 512 o : rien après 512 o");
+        check(eeprom_swap(e, 512) && !memcmp(e, agb, 8), "EEPROM : son propre inverse");
+        check(eeprom_swap(e, 8192) && !memcmp(e + 8184, mgba, 8), "EEPROM 8 Kio : dernier bloc inversé");
+        check(!eeprom_swap(e, 32768), "SRAM 32 Kio : pas une EEPROM");
     }
 
     { /* MBC2 (ADR 0012) : forme du serveur = 512 o, quartet haut à 0 */
-        static unsigned char f[8192], s[MBC2_SERVEUR], g[8192];
+        static unsigned char f[8192], s[MBC2_SERVER], g[8192];
         unsigned char e[0x200] = { 0 };
         e[0x147] = 0x06;
-        verifier(rom_mbc2(e), "0x147 = 0x06 : MBC2 + pile");
+        check(rom_mbc2(e), "0x147 = 0x06 : MBC2 + pile");
         e[0x147] = 0x03;
-        verifier(!rom_mbc2(e), "0x147 = 0x03 : MBC1, pas MBC2");
+        check(!rom_mbc2(e), "0x147 = 0x03 : MBC1, pas MBC2");
 
         f[0] = 0x21; f[255] = 0xA5; /* mGBA : adresse paire dans le quartet bas */
-        verifier(!mbc2_normaliser(f, 256, s) && s[0] == 1 && s[1] == 2 && s[510] == 5 && s[511] == 0xA, "MBC2 mGBA 256 o -> serveur");
-        verifier(!mbc2_fichier(s, g, 256) && !memcmp(f, g, 256), "MBC2 serveur -> mGBA 256 o");
-        verifier(!mbc2_fichier(s, g, 512) && g[0] == 0xF1 && g[1] == 0xF2 && g[511] == 0xFA, "MBC2 serveur -> 512 o (quartet haut 0xF, VBA-M)");
-        verifier(!mbc2_normaliser(g, 512, f) && !memcmp(f, s, MBC2_SERVEUR), "MBC2 512 o -> serveur");
-        verifier(!mbc2_fichier(s, g, 8192) && g[0] == 1 && g[511] == 0xA && g[512] == 0 && g[8191] == 0, "MBC2 serveur -> GameYob 8 Kio");
-        verifier(!mbc2_normaliser(g, 8192, f) && !memcmp(f, s, MBC2_SERVEUR), "MBC2 GameYob 8 Kio -> serveur");
-        verifier(mbc2_normaliser(g, 1024, f) && mbc2_fichier(s, g, 32768), "MBC2 : autre taille refusée");
+        check(!mbc2_normalize(f, 256, s) && s[0] == 1 && s[1] == 2 && s[510] == 5 && s[511] == 0xA, "MBC2 mGBA 256 o -> serveur");
+        check(!mbc2_to_file(s, g, 256) && !memcmp(f, g, 256), "MBC2 serveur -> mGBA 256 o");
+        check(!mbc2_to_file(s, g, 512) && g[0] == 0xF1 && g[1] == 0xF2 && g[511] == 0xFA, "MBC2 serveur -> 512 o (quartet haut 0xF, VBA-M)");
+        check(!mbc2_normalize(g, 512, f) && !memcmp(f, s, MBC2_SERVER), "MBC2 512 o -> serveur");
+        check(!mbc2_to_file(s, g, 8192) && g[0] == 1 && g[511] == 0xA && g[512] == 0 && g[8191] == 0, "MBC2 serveur -> GameYob 8 Kio");
+        check(!mbc2_normalize(g, 8192, f) && !memcmp(f, s, MBC2_SERVER), "MBC2 GameYob 8 Kio -> serveur");
+        check(mbc2_normalize(g, 1024, f) && mbc2_to_file(s, g, 32768), "MBC2 : autre taille refusée");
     }
 
-    printf("%s\n", echecs ? "ECHECS" : "cle : OK");
-    return echecs != 0;
+    printf("%s\n", failures ? "ECHECS" : "cle : OK");
+    return failures != 0;
 }
