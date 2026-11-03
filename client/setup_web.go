@@ -88,6 +88,7 @@ type WebState struct {
 	IconAvailable bool     `json:"IconeDisponible"` // tray icon (tray.go)
 	Version       string   // of this program (selfupdate.go)
 	Update        bool     `json:"Maj"` // update check
+	AutoSync      bool     `json:"SynchroAuto"`
 }
 
 // openDetached opens an emulator without a game, with Sync (launch), apart from the page. Tests replace it.
@@ -105,6 +106,7 @@ type WebChoices struct {
 	Shortcuts bool `json:"Raccourcis"`
 	Icon      bool `json:"Icone"`
 	Update    bool `json:"Maj"`
+	AutoSync  bool `json:"SynchroAuto"`
 }
 
 func cmdSetupWeb(config string, noBrowser bool) (int, error) {
@@ -440,7 +442,7 @@ func (a *WebSetup) state() WebState {
 		e.URL = ""
 	}
 	e.Icon, e.IconAvailable = cfg.trayIcon(), trayAvailable
-	e.Version, e.Update = version, cfg.checkUpdate()
+	e.Version, e.Update, e.AutoSync = version, cfg.checkUpdate(), cfg.autoSync()
 	e.LaunchBox = cfg.Frontends["launchbox"]
 	if e.LaunchBox == "" && e.Windows {
 		e.LaunchBox = findLaunchBox()
@@ -599,6 +601,10 @@ func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 	cfg.CheckUpdates = nil
 	if !c.Update {
 		cfg.CheckUpdates = &c.Update
+	}
+	cfg.AutoSync = nil
+	if !c.AutoSync {
+		cfg.AutoSync = &c.AutoSync
 	}
 
 	var output bytes.Buffer
