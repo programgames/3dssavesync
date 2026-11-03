@@ -681,14 +681,15 @@ $("reverifier").onclick = verifs;
 $("caseVerifs").onclick = () => { montrer("verifs"); window.scrollTo(0, 0); };
 $("majBouton").onclick = async () => {
   if (!confirm(T.confirmerMaj.replace("%s", $("majBouton").dataset.version))) return;
-  $("majBouton").disabled = true;
+  const barre = document.querySelectorAll(".barre button"); // rien d'autre pendant la mise à jour
+  $("majBouton").disabled = true; barre.forEach(b => b.disabled = true);
   $("majEtat").textContent = T.attente; $("majEtat").className = "lignes";
   try {
     const r = await api("mettreajour");
     $("majEtat").textContent = r.Message; $("majEtat").className = "lignes " + (r.Ok ? "ok" : "erreur");
     if (r.Ok) { document.querySelector(".barre").remove(); return; } // ce programme s'arrête, le nouveau ouvre un onglet
   } catch (e) { $("majEtat").textContent = T.erreur + e.message; $("majEtat").className = "lignes erreur"; }
-  $("majBouton").disabled = false;
+  $("majBouton").disabled = false; barre.forEach(b => b.disabled = false);
 };
 
 // Cartes SD de 3DS branchées sur le PC (racine avec un dossier « Nintendo 3DS »).

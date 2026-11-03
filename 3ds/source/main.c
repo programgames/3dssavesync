@@ -95,9 +95,10 @@ static char message[512];
 /* Mise à jour (ADR 0021). VERSION vient du Makefile : "3.7.0" pour un tag, "dev" sinon (jamais de mise à jour). */
 static long maj_jour = -1;   /* jour de la dernière vérification (maj.ini) */
 static char maj_version[32]; /* dernière version vue sur GitHub (maj.ini) */
+static char maj_installee[32]; /* version qui a tourné en dernier (maj.ini) : lue par le PC avant de copier un .cia */
 static char maj_detail[400]; /* résultat de la dernière vérification ou installation : écran des réglages */
 static int maj_echec;        /* maj_detail décrit un échec */
-static const char *chemin_3dsx = "sdmc:/3ds/3dssavesync.3dsx"; /* lancé en .3dsx : argv[0] */
+static const char *chemin_3dsx = ""; /* argv[0] : le .3dsx lancé depuis le Homebrew Launcher (lance_depuis_sd) */
 static int quitter;          /* mise à jour installée : l'application se ferme */
 static char alerte[300]; /* problème vu pendant une lecture ou une action : ajouté au message à la fin */
 
@@ -1142,6 +1143,16 @@ static void cle_maj(const char *k, const char *v)
 {
     if (!strcmp(k, "jour")) maj_jour = strtol(v, NULL, 10);
     else if (!strcmp(k, "version")) snprintf(maj_version, sizeof maj_version, "%s", v);
+    else if (!strcmp(k, "installee")) snprintf(maj_installee, sizeof maj_installee, "%s", v);
+}
+
+/* maj.ini : jour de la vérification, dernière version vue, version en marche. Échec : réécrit au prochain lancement. */
+static void ecrire_maj_ini(void)
+{
+    char t[120];
+    snprintf(t, sizeof t, "jour=%ld\nversion=%s\ninstallee=%s\n", maj_jour, maj_version, VERSION);
+    mkdir(DOSSIER, 0777);
+    remplacer_fichier(DOSSIER "/maj.ini", t, strlen(t));
 }
 
 /* Échec d'une requête à GitHub : ce qui n'est pas fait, le texte de texte_github, puis le code curl ou HTTP. */
@@ -1155,7 +1166,7 @@ static void echec_github(const char *quoi, long statut)
 /* GET /releases/latest : r, maj_version, maj_detail et maj.ini à jour. 1 si une version plus récente existe. */
 static int verifier_maj(release_t *r)
 {
-    char *corps, t[80];
+    char *corps;
     size_t taille;
     long statut;
     int ok;
@@ -1166,9 +1177,7 @@ static int verifier_maj(release_t *r)
     if (statut > 0) free(corps);
     if (ok) snprintf(maj_version, sizeof maj_version, "%s", r->version);
     maj_jour = (long)(time(NULL) / 86400);
-    snprintf(t, sizeof t, "jour=%ld\nversion=%s\n", maj_jour, maj_version);
-    mkdir(DOSSIER, 0777);
-    remplacer_fichier(DOSSIER "/maj.ini", t, strlen(t)); /* échec : vérifié de nouveau au prochain lancement */
+    ecrire_maj_ini(); /* échec : vérifié de nouveau au prochain lancement */
     if (!ok) {
         echec_github("", statut);
         return 0;
@@ -1215,7 +1224,7 @@ static Result installer_cia(const char *octets, size_t taille)
 }
 
 /* Télécharge r, vérifie son SHA-256 dans SHA256SUMS, puis l'installe : .cia par AM, ou .3dsx remplacé s'il a été lancé
- * depuis le Homebrew Launcher. Échec : maj_detail, et l'ancienne version reste. Réussite : quitter. Les Sauvegardes ne
+ * depuis le Homebrew Launcher (3dslink, argv vide : refusé, le fichier en marche est inconnu). Échec : maj_detail, et l'ancienne version reste. Réussite : quitter. Les Sauvegardes ne
  * sont jamais touchées. */
 static void installer(const release_t *r)
 {
@@ -1229,6 +1238,12 @@ static void installer(const release_t *r)
 
     maj_echec = 1;
     snprintf(version_dl, sizeof version_dl, "%s", r->version);
+    if (dsx && !lance_depuis_sd(chemin_3dsx)) {
+        snprintf(maj_detail, sizeof maj_detail, T("Mise à jour impossible ici : lancez 3dssavesync depuis le Homebrew Launcher, ou installez le .cia.\nargv[0] : %.200s",
+                                                  "Update not possible here: start 3dssavesync from the Homebrew Launcher, or install the .cia.\nargv[0]: %.200s"),
+                 chemin_3dsx[0] ? chemin_3dsx : "-");
+        return;
+    }
     if (!url[0] || !r->sommes[0]) {
         snprintf(maj_detail, sizeof maj_detail, T("Version %s incomplète sur GitHub : rien n'est installé. Installez-la à la main (guide de la 3DS).\nabsent : %s",
                                                   "Version %s incomplete on GitHub: nothing is installed. Install it by hand (3DS guide).\nmissing: %s"),
@@ -1259,7 +1274,7 @@ static void installer(const release_t *r)
                  obtenu, attendu);
         goto fin;
     }
-    /* .cia : place du titre installé ; .3dsx : le .tmp à côté de l'ancien. Le double de la taille suffit dans les deux cas. */
+    /* .cia : place du titre installé ; .3dsx : le .tmp à côté de l'ancien (renommé .bak). Le double de la taille suffit dans les deux cas. */
     if (R_SUCCEEDED(FSUSER_GetSdmcArchiveResource(&sd)) && (u64)sd.freeClusters * sd.clusterSize < 2 * (u64)taille) {
         u64 libre = (u64)sd.freeClusters * sd.clusterSize;
         snprintf(maj_detail, sizeof maj_detail, T("Pas assez de place sur la carte SD : libérez %llu Mo, puis réessayez. Rien n'est installé.\nlibre : %llu Ko, requis : %llu Ko",
@@ -1270,11 +1285,11 @@ static void installer(const release_t *r)
     if (dsx) {
         int e;
         progression(0, 0, T("Installation de la version %s…", "Installing version %s…"), version_dl);
-        if ((e = remplacer_fichier(chemin_3dsx, octets, taille))) {
+        if ((e = remplacer_programme(chemin_3dsx, octets, taille))) {
             if (e == -1) snprintf(maj_detail, sizeof maj_detail, T("Écriture sur la carte SD impossible : l'ancienne version reste. Vérifiez la carte SD, puis réessayez.\n%s",
                                                                    "Cannot write to the SD card: the old version stays. Check the SD card, then try again.\n%s"), chemin_3dsx);
-            else snprintf(maj_detail, sizeof maj_detail, T("Nouvelle version vérifiée mais pas renommée : sur un PC, renommez %s.tmp en %s.",
-                                                           "New version checked but not renamed: on a PC, rename %s.tmp to %s."), chemin_3dsx, nom);
+            else snprintf(maj_detail, sizeof maj_detail, T("Nouvelle version pas mise en place, ancienne pas remise : sur un PC, renommez %s.bak en %s.",
+                                                           "New version not put in place, old one not put back: on a PC, rename %s.bak to %s."), chemin_3dsx, strrchr(chemin_3dsx, '/') + 1);
             goto fin;
         }
     } else if (R_FAILED(res = installer_cia(octets, taille))) {
@@ -1764,7 +1779,8 @@ int main(int argc, char **argv)
     lire_cles(DOSSIER "/base.ini", cle_base);
     nb_titres = titres_lire(DOSSIER "/titres.ini", titres, MAX_TITRES);
     lire_cles(DOSSIER "/maj.ini", cle_maj);
-    if (argc > 0 && !strncmp(argv[0], "sdmc:/", 6) && strstr(argv[0], ".3dsx")) chemin_3dsx = argv[0]; /* Homebrew Launcher */
+    if (strcmp(maj_installee, VERSION)) ecrire_maj_ini(); /* le PC ne copie pas un .cia plus ancien (carte3ds.go) */
+    if (argc > 0 && argv[0]) chemin_3dsx = argv[0];
 
     if (net_init()) {
         const touche_t b = { KEY_B, T("Quitter", "Quit"), 1 };

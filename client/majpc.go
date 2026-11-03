@@ -5,11 +5,16 @@ package main
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,7 +36,7 @@ var (
 // pageVersion : la page GitHub de cette version (« dev » : la dernière).
 func pageVersion() string {
 	if version == "dev" {
-		return "https://github.com/programgames/3dssavesync/releases/latest"
+		return pageReleases
 	}
 	return "https://github.com/programgames/3dssavesync/releases/tag/v" + version
 }
@@ -95,16 +100,75 @@ func telecharger(url string, max int64) ([]byte, error) {
 	}
 	o, err := io.ReadAll(io.LimitReader(rep.Body, max+1))
 	if err == nil && int64(len(o)) > max {
-		err = fmt.Errorf("GET %s : plus de %d octets", url, max)
+		err = fmt.Errorf("GET %s : %w (%d)", url, errTropGrand, max)
 	}
 	return o, err
 }
 
-// erreurGitHub : la recherche ou le téléchargement a échoué ; quoi faire, puis le détail.
+// Échecs de GitHub reconnus par erreurGitHub.
+var (
+	errTropGrand = errors.New("réponse trop grande")
+	errIllisible = errors.New("réponse illisible")
+)
+
+const pageReleases = "https://github.com/programgames/3dssavesync/releases/latest"
+
+// erreurGitHub : la recherche ou le téléchargement a échoué ; ce qui s'est passé et quoi faire, puis le détail.
 func erreurGitHub(err error) string {
-	return tr("GitHub ne répond pas (pas d'Internet, ou trop de demandes depuis cette adresse). Vérifiez la connexion Internet, puis réessayez plus tard.",
-		"GitHub does not answer (no Internet, or too many requests from this address). Check the Internet connection, then try again later.") +
-		"\n" + tr("Détail : ", "Detail: ") + err.Error()
+	var h *erreurHTTP
+	var cert *tls.CertificateVerificationError
+	var dns *net.DNSError
+	var reseau net.Error
+	var ue *neturl.Error
+	var t string
+	switch {
+	case errors.As(err, &h) && (h.code == 403 || h.code == 429):
+		t = tr("GitHub refuse pour l'instant : trop de demandes depuis cette adresse Internet. Réessayez dans une heure.",
+			"GitHub refuses for now: too many requests from this Internet address. Try again in an hour.")
+	case errors.As(err, &h) && h.code == 404:
+		t = fmt.Sprintf(tr("Fichier absent de la version sur GitHub : rien n'est changé. Téléchargez la version à la main depuis %s.",
+			"File missing from the version on GitHub: nothing is changed. Download the version by hand from %s."), pageReleases)
+	case errors.As(err, &h):
+		t = tr("GitHub a un problème pour l'instant : rien n'est changé. Réessayez plus tard.",
+			"GitHub has a problem right now: nothing is changed. Try again later.")
+	case errors.Is(err, errTropGrand):
+		t = fmt.Sprintf(tr("Fichier de GitHub plus grand que prévu : rien n'est changé. Téléchargez la version à la main depuis %s.",
+			"File from GitHub larger than expected: nothing is changed. Download the version by hand from %s."), pageReleases)
+	case errors.Is(err, errIllisible):
+		t = fmt.Sprintf(tr("Réponse de GitHub illisible : rien n'est changé. Réessayez plus tard ; si cela dure, téléchargez la version à la main depuis %s.",
+			"Unreadable answer from GitHub: nothing is changed. Try again later; if it lasts, download the version by hand from %s."), pageReleases)
+	case errors.As(err, &cert):
+		t = tr("Connexion sécurisée à GitHub refusée. Vérifiez la date et l'heure du PC, puis réessayez.",
+			"Secure connection to GitHub refused. Check the date and time of the PC, then try again.")
+	case errors.As(err, &dns), errors.As(err, &reseau), errors.As(err, &ue):
+		t = tr("GitHub ne répond pas : pas d'Internet, ou connexion coupée. Vérifiez la connexion Internet, puis réessayez.",
+			"GitHub does not answer: no Internet, or connection cut. Check the Internet connection, then try again.")
+	default:
+		t = tr("Échange avec GitHub impossible : rien n'est changé. Réessayez plus tard.", "Exchange with GitHub failed: nothing is changed. Try again later.")
+	}
+	return t + "\n" + tr("Détail : ", "Detail: ") + err.Error()
+}
+
+// verrouMaj : maj-pc.verrou, créé seul (O_EXCL) dans le dossier des réglages : une mise à jour à la fois (deux onglets,
+// deux fenêtres de réglages). Un verrou de plus de 15 minutes vient d'un programme arrêté en route : il est remplacé.
+// Rend la fonction qui le retire.
+func verrouMaj(dossier string) (func(), error) {
+	f := filepath.Join(dossier, "maj-pc.verrou")
+	if i, err := os.Stat(f); err == nil && time.Since(i.ModTime()) > 15*time.Minute {
+		os.Remove(f)
+	}
+	os.MkdirAll(dossier, 0o755)
+	v, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if errors.Is(err, fs.ErrExist) {
+		return nil, fmt.Errorf("%s\n%s%s", tr("Une mise à jour est déjà en cours (autre onglet ou autre fenêtre de 3dssavesync). Attendez sa fin, puis rechargez cette page.",
+			"An update is already running (other tab or other 3dssavesync window). Wait for its end, then reload this page."), tr("Détail : ", "Detail: "), f)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s\n%s%v", tr("Mise à jour impossible : le dossier des réglages refuse l'écriture. Vérifiez les droits de ce dossier, puis réessayez.",
+			"Update failed: the settings folder refuses writing. Check the rights of this folder, then try again."), tr("Détail : ", "Detail: "), err)
+	}
+	v.Close()
+	return func() { os.Remove(f) }, nil
 }
 
 // Dernière recherche, dans le dossier des réglages : le jour et la release vue.
@@ -127,7 +191,7 @@ func derniereRelease(dossier string, forcer bool) (*Release, error) {
 	}
 	var r Release
 	if err := json.Unmarshal(o, &r); err != nil || r.Tag == "" {
-		return nil, fmt.Errorf("GET %s : %s", adresseRelease, tr("réponse sans tag_name", "answer without tag_name"))
+		return nil, fmt.Errorf("GET %s : %w (%v, tag_name %q)", adresseRelease, errIllisible, err, r.Tag)
 	}
 	ecrireJSON(f, RechercheMaj{jour, r}, true) // pas écrit (deux recherches en même temps) : une recherche de plus, sans gêne
 	return &r, nil
@@ -173,6 +237,11 @@ func mettreAJour(r *Release, exe, goos, goarch string) (string, error) {
 	s, err := telecharger(sommes, 1<<20)
 	if err != nil {
 		return "", fmt.Errorf("%s", erreurGitHub(err))
+	}
+	// Déjà fait (autre fenêtre, onglet resté ouvert) : l'exe sur le disque est celui de la release.
+	if o, err := os.ReadFile(exe); err == nil && sommeValide(string(s), nom, o) {
+		return "", fmt.Errorf(tr("Le programme sur le disque est déjà la version %s (mise à jour faite depuis une autre fenêtre) : rien n'est changé. Fermez cet onglet, puis ouvrez le raccourci « 3dssavesync réglages ».\nDétail : %s",
+			"The program on the disk is already version %s (updated from another window): nothing is changed. Close this tab, then open the \"3dssavesync settings\" shortcut.\nDetail: %s"), strings.TrimPrefix(r.Tag, "v"), exe)
 	}
 	o, err := telecharger(url, 256<<20)
 	if err != nil {
@@ -231,6 +300,11 @@ func remplacerExe(exe string, neuf []byte, ancienne string) (string, error) {
 func (a *AssistantWeb) mettreAJourWeb() map[string]any {
 	dossier := filepath.Dir(a.config)
 	exe := executable()
+	liberer, err := verrouMaj(dossier)
+	if err != nil {
+		return map[string]any{"Ok": false, "Message": err.Error()}
+	}
+	defer liberer()
 	r, err := derniereRelease(dossier, true)
 	if err != nil {
 		return map[string]any{"Ok": false, "Message": erreurGitHub(err)}

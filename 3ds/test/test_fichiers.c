@@ -83,6 +83,24 @@ int main(void)
     verifier(remplacer_fichier("test-dossier.sav", "recu", 4) == -2 && contient("test-dossier.sav.tmp", "recu"), "renommage impossible : -2, .tmp gardé");
     remove("test-dossier.sav.tmp"), remove("test-dossier.sav/x"), remove("test-dossier.sav");
 
+    /* Mise à jour du .3dsx : l'ancien devient .bak, le nouveau prend sa place, puis .bak est retiré */
+    remove("test.3dsx.bak");
+    ecrire("test.3dsx", "v1");
+    ecrire("test.3dsx.bak", "reste d'avant");
+    verifier(remplacer_programme("test.3dsx", "v2", 2) == 0 && contient("test.3dsx", "v2") && !existe("test.3dsx.tmp") && !existe("test.3dsx.bak"),
+             ".3dsx : remplacé, ni .tmp ni .bak restant");
+    mkdir("test.3dsx.tmp", 0777); /* .tmp impossible à écrire */
+    verifier(remplacer_programme("test.3dsx", "v3", 2) == -1 && contient("test.3dsx", "v2") && !existe("test.3dsx.bak"), ".3dsx, .tmp impossible : -1, l'ancien en place");
+    remove("test.3dsx.tmp"), remove("test.3dsx");
+    ecrire("test.3dsx.bak", "seule copie"); /* coupure entre les deux renommages */
+    verifier(remplacer_programme("test.3dsx", "v3", 2) == -1 && contient("test.3dsx.bak", "seule copie") && !existe("test.3dsx.tmp"),
+             ".3dsx absent : -1, .bak (seule copie) jamais retiré");
+    remove("test.3dsx.bak");
+    verifier(lance_depuis_sd("sdmc:/3ds/3dssavesync.3dsx") && lance_depuis_sd("sdmc:/3ds/apps/Sync.3DSX"), "Homebrew Launcher : .3dsx de la carte SD");
+    verifier(!lance_depuis_sd("3dslink:/3dssavesync.3dsx") && !lance_depuis_sd("") && !lance_depuis_sd("sdmc:/.3dsx") &&
+                 !lance_depuis_sd("sdmc:/3ds/3dssavesync.3dsx.tmp"),
+             "3dslink, argv vide, chemin incomplet : refusé");
+
     /* Copie de sécurité relue (recuperer) */
     verifier(ecrire_relu(copie, "partie", 6) == 0 && contient(copie, "partie"), "écriture relue : faite");
     verifier(ecrire_relu("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");

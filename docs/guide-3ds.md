@@ -71,7 +71,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `base.ini` | the last synced state of each game. Do not delete it: without it, every changed game shows a conflict. |
 | `titres.ini` | the 3DS games to sync (absent = the 8 Pokémon games) |
 | `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
-| `maj.ini` | the day of the last update check and the latest version seen on GitHub |
+| `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |
 | `copies/` | backup copies made before a save is replaced |
 
 ## Updates
@@ -90,7 +90,7 @@ To install it:
 
 Nothing is installed without your choice. The update does not touch your saves, your settings, or `base.ini`.
 
-- The installed `.cia` is replaced by the new `.cia`. If you started the `.3dsx` from the Homebrew Launcher, that `.3dsx` file is replaced instead.
+- The installed `.cia` is replaced by the new `.cia`. If you started the `.3dsx` from the Homebrew Launcher, that `.3dsx` file is replaced instead (the old one is kept as `.bak` until the new one is in place). Started with 3dslink, the app does not update itself.
 - Before it installs, the app compares the SHA-256 of the downloaded file with the `SHA256SUMS` file of the same GitHub release. If they differ, nothing is installed.
 - If something fails, the old version stays. The **Update** line of the settings shows what happened, what to do, and a code: see [Troubleshooting](troubleshooting.md#update-messages).
 - No network, or GitHub does not answer: the app works as before. It tries again the next day, or when you press **A** on **Update**.

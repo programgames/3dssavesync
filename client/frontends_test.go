@@ -219,7 +219,7 @@ func TestPortable(t *testing.T) {
 		t.Errorf("frontends et raccourcis vers l'exe en cours attendus : %s, %s", emplacementInstalle(), lanceurDe(&Config{Lanceur: "x"}))
 	}
 	cfg := &Config{}
-	if l := installerExe(cfg); !strings.Contains(l, "Exe en place") || cfg.Lanceur != exe || existe(normal) {
+	if l := installerExe(cfg, t.TempDir()); !strings.Contains(l, "Exe en place") || cfg.Lanceur != exe || existe(normal) {
 		t.Errorf("l'exe ne doit pas être copié : %q, Lanceur %q", l, cfg.Lanceur)
 	}
 	if err := verifierPortable(dossier); err != nil {

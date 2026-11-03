@@ -255,6 +255,12 @@ The lock switch is on the left side of a full-size SD card or adapter. Slide it 
 
 Only a note: the card is prepared. FBI is the 3DS app that installs `.cia` files. If it is on your HOME menu, ignore the note. Otherwise, download `FBI.3dsx` from [FBI releases](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder of the card, and open it from the Homebrew Launcher.
 
+### The 3DS already has a newer version
+
+> The 3DS already has a newer version (3.8.0): this 3dssavesync.cia (version 3.7.0) is not copied. Nothing to install on the 3DS. *(La 3DS a déjà une version plus récente …)*
+
+Only a note: `config.ini` is written. The 3DS app updated itself; the PC program is older. Update the PC program when the settings page offers it.
+
 ### This program does not include 3dssavesync.cia
 
 > This program does not include 3dssavesync.cia (version dev). Download it from … *(Ce programme ne contient pas 3dssavesync.cia …)*
@@ -275,9 +281,29 @@ The **Checks** list (settings page) says what to do on each line. The usual ones
 
 After any of these failures, the old program stays in place and works as before.
 
-> GitHub does not answer (no Internet, or too many requests from this address). … *(GitHub ne répond pas …)*
+> GitHub does not answer: no Internet, or connection cut. … *(GitHub ne répond pas : pas d'Internet, ou connexion coupée. …)*
 
-Check the Internet connection. GitHub accepts 60 checks per hour from one Internet address: wait one hour, then try again.
+Check the Internet connection, then try again.
+
+> GitHub refuses for now: too many requests from this Internet address. Try again in an hour. *(GitHub refuse pour l'instant : trop de demandes depuis cette adresse Internet. …)*
+
+GitHub accepts 60 checks per hour from one Internet address (the **Detail** line shows HTTP 403 or 429). Wait one hour, then try again.
+
+> File missing from the version on GitHub: nothing is changed. … *(Fichier absent de la version sur GitHub : …)*
+> Unreadable answer from GitHub: nothing is changed. … *(Réponse de GitHub illisible : …)*
+> File from GitHub larger than expected: nothing is changed. … *(Fichier de GitHub plus grand que prévu : …)*
+> Secure connection to GitHub refused. Check the date and time of the PC, then try again. *(Connexion sécurisée à GitHub refusée. …)*
+
+Try again later. If the message stays, download the program by hand from the [releases page](https://github.com/programgames/3dssavesync/releases) and replace the old one.
+
+> An update is already running (other tab or other 3dssavesync window). Wait for its end, then reload this page. *(Une mise à jour est déjà en cours …)*
+> The program on the disk is already version 3.7.0 (updated from another window): nothing is changed. … *(Le programme sur le disque est déjà la version 3.7.0 …)*
+
+Another settings page did the update. Close this tab, then open the "3dssavesync settings" shortcut.
+
+> Copying the program failed: the installed program is still running. Quit the icon near the clock and close the other 3dssavesync windows, then save again. *(Copie du programme impossible : le programme installé tourne encore. …)*
+
+The settings page stops the icon near the clock before it copies the program, but another 3dssavesync window still uses the installed file. Right-click the icon near the clock, **Quit**, close the other settings pages, then click **Save** again.
 
 > Version 3.7.0 has no 3dssavesync-windows-amd64.exe or SHA256SUMS file on GitHub: nothing is changed. … *(La version 3.7.0 n'a pas de fichier …)*
 > The downloaded file is damaged (size or SHA-256 differs from SHA256SUMS): nothing is changed. … *(Le fichier téléchargé est abîmé …)*
@@ -466,9 +492,13 @@ The release has no `SHA256SUMS` file, or no file for your 3DS. The app installs 
 
 Only with the `.3dsx`. The SD card is full, locked (lock switch), or damaged.
 
-> New version checked but not renamed: on a PC, rename …/3dssavesync.3dsx.tmp to 3dssavesync.3dsx. *(Nouvelle version vérifiée mais pas renommée : …)*
+> New version not put in place, old one not put back: on a PC, rename …/3dssavesync.3dsx.bak to 3dssavesync.3dsx. *(Nouvelle version pas mise en place, ancienne pas remise : …)*
 
-Only with the `.3dsx`. The new file is complete and checked, but it kept its `.tmp` name. Put the SD card in a PC, and rename the file as the message says.
+Only with the `.3dsx`. The old version is complete in the `.bak` file. Put the SD card in a PC, and rename the file as the message says.
+
+> Update not possible here: start 3dssavesync from the Homebrew Launcher, or install the .cia. *(Mise à jour impossible ici : lancez 3dssavesync depuis le Homebrew Launcher, ou installez le .cia.)*
+
+The app was started with 3dslink (or without its file path), so it does not know which `.3dsx` file to replace. Start it from the Homebrew Launcher, or install the `.cia`.
 
 > Development build: no update offered. *(Version de développement : aucune mise à jour proposée.)*
 

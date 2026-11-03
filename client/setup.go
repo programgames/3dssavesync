@@ -227,7 +227,7 @@ func assistant(q *Questions, config string) error {
 		case "serveur":
 			err = etapeServeur(q, &cfg)
 		case "installation":
-			etapeInstallation(q, &cfg)
+			etapeInstallation(q, &cfg, config)
 		case "emulateurs":
 			etapeEmulateurs(q, &cfg)
 		case "frontends":
@@ -243,13 +243,13 @@ func assistant(q *Questions, config string) error {
 	if err := enregistrerConfig(q, config, &cfg); err != nil {
 		return err
 	}
-	if cfg.ServeurLocal != nil && slices.Contains(etapes, "serveur") {
+	if slices.Contains(etapes, "serveur") { // icône près de l'horloge (arrêtée par installerExe) et serveur local, comme la page
 		if err := serveurLocal(q, &cfg, config); err != nil {
 			return err
 		}
-		dire3DS(q, &cfg)
-	}
-	if slices.Contains(etapes, "serveur") {
+		if cfg.ServeurLocal != nil {
+			dire3DS(q, &cfg)
+		}
 		etapeCarteSD(q, &cfg, config)
 	}
 	q.dire("\n%s", tr("Terminé.", "Done."))
@@ -400,7 +400,7 @@ func testerServeur(cfg *Config) error {
 }
 
 // Copie de l'exe à l'emplacement fixe (un exe téléchargé reste où il est sinon).
-func etapeInstallation(q *Questions, cfg *Config) {
+func etapeInstallation(q *Questions, cfg *Config, config string) {
 	q.dire("\n== %s ==", tr("Installation", "Install"))
 	courant, cible := executable(), emplacementInstalle()
 	cfg.Lanceur = courant
@@ -411,11 +411,13 @@ func etapeInstallation(q *Questions, cfg *Config) {
 	if !q.oui(fmt.Sprintf(tr("Copier le programme dans %s ?", "Copy the program to %s?"), cible), true) {
 		return
 	}
-	q.dire("%s", installerExe(cfg))
+	q.dire("%s", installerExe(cfg, filepath.Dir(config)))
 }
 
-// Copie de l'exe en cours à l'emplacement fixe ; cfg.Lanceur suit. Rend la ligne à afficher.
-func installerExe(cfg *Config) string {
+// Copie de l'exe en cours à l'emplacement fixe ; cfg.Lanceur suit. Rend la ligne à afficher. L'icône près de l'horloge
+// (dossier des réglages) tourne souvent depuis l'exe installé : elle s'arrête avant la copie (Windows refuse de
+// remplacer un exe en marche) ; serveurLocal la redémarre ensuite.
+func installerExe(cfg *Config, dossier string) string {
 	courant, cible := executable(), emplacementInstalle()
 	if cfg.Lanceur == "" {
 		cfg.Lanceur = courant
@@ -424,6 +426,7 @@ func installerExe(cfg *Config) string {
 		cfg.Lanceur = courant
 		return tr("Exe en place : ", "Exe in place: ") + courant
 	}
+	arreterTray(dossier) // échec : l'exe installé reste peut-être pris, le message de la copie dit quoi faire
 	o, err := os.ReadFile(courant)
 	if err == nil {
 		err = os.MkdirAll(filepath.Dir(cible), 0o755)
@@ -432,7 +435,12 @@ func installerExe(cfg *Config) string {
 		os.Remove(cible + ".3dssavesync-tmp")
 		if err = ecrireVerifie(cible+".3dssavesync-tmp", o); err == nil {
 			os.Chmod(cible+".3dssavesync-tmp", 0o755)
-			err = os.Rename(cible+".3dssavesync-tmp", cible)
+			if err = renommer(cible+".3dssavesync-tmp", cible); err != nil { // exe installé en marche
+				os.Remove(cible + ".3dssavesync-tmp")
+				return tr("Copie du programme impossible : le programme installé tourne encore. Quittez l'icône près de l'horloge et fermez les autres fenêtres de 3dssavesync, puis enregistrez de nouveau.",
+					"Copying the program failed: the installed program is still running. Quit the icon near the clock and close the other 3dssavesync windows, then save again.") +
+					"\n" + tr("Détail : ", "Detail: ") + err.Error()
+			}
 		}
 	}
 	if err != nil {

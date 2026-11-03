@@ -546,11 +546,6 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	var sortie bytes.Buffer
 	q := &Questions{out: &sortie}
 	lignes := []string{}
-	if c.Installer {
-		lignes = append(lignes, installerExe(&cfg))
-	} else if cfg.Lanceur == "" {
-		cfg.Lanceur = executable()
-	}
 	if cfg.Frontends == nil {
 		cfg.Frontends = map[string]string{}
 	}
@@ -568,6 +563,11 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			esde = maison("ES-DE")
 		}
 		cfg.Frontends["esde"] = esde
+	}
+	if c.Installer { // après les vérifications : installerExe arrête l'icône, serveurLocal la redémarre
+		lignes = append(lignes, installerExe(&cfg, filepath.Dir(a.config)))
+	} else if cfg.Lanceur == "" {
+		cfg.Lanceur = executable()
 	}
 	if err := enregistrerConfig(q, a.config, &cfg); err != nil {
 		return nil, err

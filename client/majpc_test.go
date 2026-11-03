@@ -144,8 +144,83 @@ func TestMettreAJour(t *testing.T) {
 		t.Fatalf("mise à jour : %v, %s", err, copie)
 	}
 	reste("programme 3.7.0")
-	// Encore une fois (même ancienne version) : la première copie n'est jamais écrasée.
-	if copie, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH); err != nil || copie != filepath.Join(d, "3dssavesync-3.6.1-1"+ext) {
+	// Encore une fois (onglet resté ouvert, autre fenêtre) : l'exe sur le disque est déjà celui de la release.
+	if _, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH); err == nil || !strings.HasPrefix(err.Error(), "Le programme sur le disque est déjà la version 3.7.0") {
+		t.Errorf("déjà à jour : %v", err)
+	}
+	reste("programme 3.7.0")
+	// Encore depuis la même ancienne version : la première copie n'est jamais écrasée.
+	ecrire(t, exe, []byte("programme 3.6.1 bis"))
+	if copie, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH); err != nil || copie != filepath.Join(d, "3dssavesync-3.6.1-1"+ext) ||
+		string(lire(filepath.Join(d, "3dssavesync-3.6.1"+ext))) != "programme 3.6.1" || string(lire(copie)) != "programme 3.6.1 bis" {
 		t.Errorf("deuxième copie : %v, %s", err, copie)
+	}
+}
+
+// Une mise à jour à la fois (deux onglets, deux fenêtres) ; un verrou de plus de 15 minutes est remplacé.
+func TestVerrouMaj(t *testing.T) {
+	ferme := httptest.NewServer(http.NotFoundHandler()) // jamais GitHub, même si le verrou laissait passer
+	ferme.Close()
+	aa := adresseRelease
+	t.Cleanup(func() { adresseRelease = aa })
+	adresseRelease = ferme.URL
+	d := t.TempDir()
+	liberer, err := verrouMaj(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verrouMaj(d); err == nil || !strings.HasPrefix(err.Error(), "Une mise à jour est déjà en cours") || !strings.Contains(err.Error(), "\nDétail : ") {
+		t.Errorf("deuxième mise à jour : refus attendu, %v", err)
+	}
+	a := &AssistantWeb{config: filepath.Join(d, "config.json"), fin: make(chan struct{})}
+	if m := a.mettreAJourWeb()["Message"].(string); !strings.HasPrefix(m, "Une mise à jour est déjà en cours") {
+		t.Errorf("page : %q", m)
+	}
+	liberer()
+	if existe(filepath.Join(d, "maj-pc.verrou")) {
+		t.Error("verrou retiré attendu")
+	}
+	liberer, _ = verrouMaj(d)
+	vieux := time.Now().Add(-16 * time.Minute)
+	os.Chtimes(filepath.Join(d, "maj-pc.verrou"), vieux, vieux)
+	if l, err := verrouMaj(d); err != nil {
+		t.Errorf("verrou abandonné : remplacé attendu, %v", err)
+	} else {
+		l()
+	}
+}
+
+// Échecs de GitHub : un texte par cas (quoi faire), puis le détail technique.
+func TestErreurGitHub(t *testing.T) {
+	var reponse func(w http.ResponseWriter)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { reponse(w) }))
+	defer srv.Close()
+	ferme := httptest.NewServer(http.NotFoundHandler())
+	ferme.Close()
+	aa := adresseRelease
+	t.Cleanup(func() { adresseRelease = aa })
+	for _, c := range []struct {
+		quoi, adresse string
+		reponse       func(w http.ResponseWriter)
+		debut, detail string
+	}{
+		{"pas de réseau", ferme.URL, nil, "GitHub ne répond pas : pas d'Internet, ou connexion coupée.", "\nDétail : Get \"" + ferme.URL + "\""},
+		{"403", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(403) }, "GitHub refuse pour l'instant : trop de demandes depuis cette adresse Internet. Réessayez dans une heure.", "\nDétail : GET " + srv.URL + " : 403"},
+		{"429", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(429) }, "GitHub refuse pour l'instant", " : 429"},
+		{"404", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(404) }, "Fichier absent de la version sur GitHub : rien n'est changé. Téléchargez la version à la main depuis https://github.com/programgames/3dssavesync/releases/latest.", " : 404"},
+		{"500", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(500) }, "GitHub a un problème pour l'instant", " : 500"},
+		{"pas du JSON", srv.URL, func(w http.ResponseWriter) { w.Write([]byte("<html>")) }, "Réponse de GitHub illisible : rien n'est changé.", "réponse illisible"},
+		{"sans tag_name", srv.URL, func(w http.ResponseWriter) { w.Write([]byte(`{"assets":[]}`)) }, "Réponse de GitHub illisible", `tag_name ""`},
+		{"trop grand", srv.URL, func(w http.ResponseWriter) { w.Write(make([]byte, 4<<20+1)) }, "Fichier de GitHub plus grand que prévu : rien n'est changé.", "réponse trop grande (4194304)"},
+	} {
+		adresseRelease, reponse = c.adresse, c.reponse
+		_, err := derniereRelease(t.TempDir(), true)
+		if err == nil {
+			t.Errorf("%s : échec attendu", c.quoi)
+			continue
+		}
+		if e := erreurGitHub(err); !strings.HasPrefix(e, c.debut) || !strings.Contains(e, c.detail) || !strings.Contains(e, "\nDétail : ") {
+			t.Errorf("%s : %q", c.quoi, e)
+		}
 	}
 }

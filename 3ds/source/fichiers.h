@@ -19,6 +19,15 @@ int ecrire_relu(const char *chemin, const void *octets, size_t taille);
  * la relecture a échoué (chemin.tmp, vérifié, reste si le renommage a échoué). */
 int remplacer_fichier(const char *chemin, const void *octets, size_t taille);
 
+/* Remplace le programme chemin (.3dsx) : chemin.tmp écrit et relu, chemin renommé chemin.bak, chemin.tmp renommé
+ * chemin et relu, puis chemin.bak retiré. Une coupure laisse toujours un programme entier (chemin ou chemin.bak).
+ * 0 si fait ; -1 si l'ancien est en place (chemin absent : rien n'est touché) ; -2 si l'ancien n'a pas pu revenir :
+ * il reste dans chemin.bak. */
+int remplacer_programme(const char *chemin, const void *octets, size_t taille);
+
+/* 1 si argv[0] est un .3dsx de la carte SD (Homebrew Launcher) ; 0 pour 3dslink (3dslink:/…), un .cia ou rien. */
+int lance_depuis_sd(const char *argv0);
+
 /* Met le contenu de src dans dst sans perte : copie de dst dans copie s'il existe, dst.tmp relu
  * et vérifié, puis remplacement. supprimer_src : retire src ensuite (dst a le même contenu).
  * 0 si fait ; -1 sinon, sans rien perdre (au pire, dst.tmp reste). */

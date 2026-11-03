@@ -61,6 +61,38 @@ int remplacer_fichier(const char *chemin, const void *octets, size_t taille)
     return rename(tmp, chemin) || !identique(chemin, octets, taille) ? -2 : 0;
 }
 
+int remplacer_programme(const char *chemin, const void *octets, size_t taille)
+{
+    char tmp[700], bak[700];
+    FILE *f;
+    snprintf(tmp, sizeof tmp, "%s.tmp", chemin);
+    snprintf(bak, sizeof bak, "%s.bak", chemin);
+    if (ecrire_relu(tmp, octets, taille) || !(f = fopen(chemin, "rb"))) { /* chemin absent : .bak est peut-être la seule copie */
+        remove(tmp);
+        return -1;
+    }
+    fclose(f);
+    remove(bak); /* reste d'une mise à jour d'avant : chemin est là */
+    if (rename(chemin, bak)) {
+        remove(tmp);
+        return -1;
+    }
+    if (!rename(tmp, chemin) && identique(chemin, octets, taille)) {
+        remove(bak);
+        return 0;
+    }
+    remove(chemin);
+    if (rename(bak, chemin)) return -2;
+    remove(tmp);
+    return -1;
+}
+
+int lance_depuis_sd(const char *argv0)
+{
+    size_t n = strlen(argv0);
+    return n > 11 && !strncmp(argv0, "sdmc:/", 6) && !strcasecmp(argv0 + n - 5, ".3dsx");
+}
+
 int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int supprimer_src)
 {
     unsigned char *octets, *ancien;

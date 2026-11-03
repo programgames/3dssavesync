@@ -192,7 +192,7 @@ func TestCopierCia(t *testing.T) {
 		!strings.Contains(l[1], "FBI n'est pas sur la carte") || existe(filepath.Join(sd, "cias")) {
 		t.Errorf("sans .cia dans le programme : %v %q", err, l)
 	}
-	if l, err := copierCia(sd, []byte("cia 1")); err != nil || len(l) != 2 || l[0] != "3dssavesync.cia copié : "+cia || string(lire(cia)) != "cia 1" {
+	if l, err := copierCia(sd, []byte("cia 1")); err != nil || len(l) != 2 || l[0] != "3dssavesync.cia version dev copié : "+cia || string(lire(cia)) != "cia 1" {
 		t.Errorf("carte neuve : %v %q", err, l)
 	}
 	ecrire(t, filepath.Join(sd, "3ds", "FBI.3dsx"), []byte("fbi"))
@@ -228,8 +228,24 @@ func TestCopierCia(t *testing.T) {
 	ciaEmbarque = []byte("cia 3")
 	ok, l := preparerEtNoter(config, sd)
 	lireJSON(config, &cfg)
-	if !ok || len(l) != 3 || !strings.HasPrefix(l[0], "config.ini écrit") || !strings.HasPrefix(l[1], "3dssavesync.cia copié") ||
+	if !ok || len(l) != 3 || !strings.HasPrefix(l[0], "config.ini écrit") || !strings.HasPrefix(l[1], "3dssavesync.cia version dev copié") ||
 		!strings.Contains(l[2], "FBI, SD, cias, 3dssavesync.cia, « Install and delete CIA »") || string(lire(cia)) != "cia 3" || len(cfg.CartePreparee) != 16 {
 		t.Errorf("carte préparée : %v %q %+v", ok, l, cfg)
+	}
+
+	// La 3DS s'est mise à jour seule (installee= de maj.ini) : un .cia plus ancien n'est pas copié, config.ini l'est.
+	va := version
+	t.Cleanup(func() { version = va })
+	version, ciaEmbarque = "3.7.0", []byte("cia 3.7.0")
+	ecrire(t, filepath.Join(sd, "3ds", "3dssavesync", "maj.ini"), []byte("jour=20000\r\nversion=3.8.0\r\ninstallee=3.8.0\r\n"))
+	ok, l = preparerEtNoter(config, sd)
+	if !ok || len(l) != 3 || !strings.HasPrefix(l[0], "config.ini écrit") ||
+		l[1] != "La 3DS a déjà une version plus récente (3.8.0) : ce 3dssavesync.cia (version 3.7.0) n'est pas copié. Rien à installer sur la 3DS." ||
+		strings.Contains(l[2], "FBI") || string(lire(cia)) != "cia 3" {
+		t.Errorf("3DS plus récente : %v %q", ok, l)
+	}
+	ecrire(t, filepath.Join(sd, "3ds", "3dssavesync", "maj.ini"), []byte("jour=20000\nversion=3.8.0\ninstallee=3.6.1\n"))
+	if l, err := copierCia(sd, ciaEmbarque); err != nil || l[0] != "3dssavesync.cia version 3.7.0 copié : "+cia || string(lire(cia)) != "cia 3.7.0" {
+		t.Errorf("3DS plus ancienne (même si GitHub a plus récent) : %v %q", err, l)
 	}
 }

@@ -128,11 +128,27 @@ func racineCarte(racine string) (string, error) {
 	return racine, nil
 }
 
-// copierCia : <racine>/cias/3dssavesync.cia, le .cia inclus dans ce programme. Rend les lignes à afficher : fichier
-// écrit ou déjà là, .cia absent de ce programme (où le télécharger), FBI absent de la carte (pas une erreur).
+// versionInstallee : la version qui a tourné en dernier sur la 3DS (installee= de maj.ini, écrit par main.c), ou "".
+func versionInstallee(racine string) string {
+	o, _ := os.ReadFile(filepath.Join(racine, "3ds", "3dssavesync", "maj.ini"))
+	for _, l := range strings.Split(string(o), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(l), "installee="); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// copierCia : <racine>/cias/3dssavesync.cia, le .cia inclus dans ce programme (même version), sauf si la 3DS a déjà
+// une version plus récente (mise à jour depuis la 3DS). Rend les lignes à afficher : fichier écrit ou déjà là, .cia
+// absent de ce programme (où le télécharger), FBI absent de la carte (pas une erreur).
 func copierCia(racine string, cia []byte) ([]string, error) {
 	var lignes []string
 	chemin := filepath.Join(racine, "cias", "3dssavesync.cia")
+	if v := versionInstallee(racine); plusRecente(version, v) {
+		return []string{fmt.Sprintf(tr("La 3DS a déjà une version plus récente (%s) : ce 3dssavesync.cia (version %s) n'est pas copié. Rien à installer sur la 3DS.",
+			"The 3DS already has a newer version (%s): this 3dssavesync.cia (version %s) is not copied. Nothing to install on the 3DS."), v, version)}, nil
+	}
 	if len(cia) == 0 {
 		lignes = append(lignes, fmt.Sprintf(tr("Ce programme ne contient pas 3dssavesync.cia (version %s). Téléchargez-le depuis %s, puis copiez-le dans le dossier cias de la carte SD.",
 			"This program does not include 3dssavesync.cia (version %s). Download it from %s, then copy it to the cias folder of the SD card."), version, pageVersion()))
@@ -142,7 +158,7 @@ func copierCia(racine string, cia []byte) ([]string, error) {
 			return nil, err
 		}
 		if bytes.Equal(ancien, cia) {
-			lignes = append(lignes, tr("3dssavesync.cia déjà sur la carte (même version) : ", "3dssavesync.cia already on the card (same version): ")+chemin)
+			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia version %s déjà sur la carte : ", "3dssavesync.cia version %s already on the card: "), version)+chemin)
 		} else {
 			besoin := uint64(len(cia)+len(ancien)) + 1<<20 // fichier temporaire, copie datée de l'ancien, 1 Mo de marge
 			if libre, err := espaceLibre(racine); err == nil && libre < besoin {
@@ -152,7 +168,7 @@ func copierCia(racine string, cia []byte) ([]string, error) {
 			if err := ecrireCarte(chemin, cia); err != nil {
 				return nil, err
 			}
-			lignes = append(lignes, tr("3dssavesync.cia copié : ", "3dssavesync.cia copied: ")+chemin)
+			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia version %s copié : ", "3dssavesync.cia version %s copied: "), version)+chemin)
 		}
 	}
 	if !existe(filepath.Join(racine, "3ds", "FBI.3dsx")) && !existe(filepath.Join(racine, "3ds", "FBI")) {
@@ -184,6 +200,10 @@ func preparerEtNoter(config, racine string) (bool, []string) {
 	cfg.CartePreparee = time.Now().Format("2006-01-02 15:04")
 	if err := ecrireConfigCopie(config, &cfg); err != nil {
 		lignes = append(lignes, tr("Date de préparation non notée dans config.json : ", "Preparation date not noted in config.json: ")+erreurCarte(err))
+	}
+	if plusRecente(version, versionInstallee(racine)) { // .cia pas copié : rien à installer
+		return true, append(lignes, tr("Remettez la carte dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
+			"Put the card back in the 3DS, then start 3dssavesync: it connects without typing anything."))
 	}
 	return true, append(lignes, tr("Remettez la carte dans la 3DS. Sur la 3DS : FBI, SD, cias, 3dssavesync.cia, « Install and delete CIA ». Puis lancez 3dssavesync depuis le menu HOME : il se connecte sans rien taper.",
 		"Put the card back in the 3DS. On the 3DS: FBI, SD, cias, 3dssavesync.cia, \"Install and delete CIA\". Then start 3dssavesync from the HOME menu: it connects without typing anything."))

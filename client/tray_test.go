@@ -173,3 +173,42 @@ func TestImageIco(t *testing.T) {
 		t.Error(".ico tronqué : aucune image")
 	}
 }
+
+// Copie vers l'emplacement installé : l'icône, qui tourne souvent depuis l'exe installé, s'arrête avant la copie
+// (Windows refuse de remplacer un exe en marche). Exe installé encore pris : le message dit quoi faire, puis le détail.
+func TestInstallerExeArreteIcone(t *testing.T) {
+	maisonFactice(t)
+	exe := filepath.Join(t.TempDir(), "3dssavesync.exe")
+	ecrire(t, exe, []byte("nouveau"))
+	ea, ra := executable, renommer
+	t.Cleanup(func() { executable, renommer = ea, ra })
+	executable = func() string { return exe }
+	cible := emplacementInstalle()
+	ecrire(t, cible, []byte("ancien"))
+	d := t.TempDir() // dossier des réglages
+	liberer := verrouTray(d)
+	arretee, fin := make(chan string, 1), make(chan struct{})
+	t.Cleanup(func() { close(fin) })
+	go surveillerArret(d, func() { arretee <- string(lire(cible)); liberer() }, fin)
+	if l := installerExe(&Config{}, d); !strings.HasPrefix(l, "Programme copié") || string(lire(cible)) != "nouveau" {
+		t.Fatalf("copie : %q, %q", l, lire(cible))
+	}
+	select {
+	case avant := <-arretee:
+		if avant != "ancien" {
+			t.Errorf("icône arrêtée après la copie : exe %q", avant)
+		}
+	default:
+		t.Fatal("icône près de l'horloge non arrêtée avant la copie")
+	}
+
+	renommer = func(a, b string) error {
+		return &os.LinkError{Op: "rename", Old: a, New: b, Err: errors.New("Accès refusé.")}
+	}
+	ecrire(t, exe, []byte("encore"))
+	l := installerExe(&Config{}, d)
+	if !strings.HasPrefix(l, "Copie du programme impossible : le programme installé tourne encore. Quittez l'icône près de l'horloge et fermez les autres fenêtres de 3dssavesync, puis enregistrez de nouveau.\nDétail : rename ") ||
+		string(lire(cible)) != "nouveau" || existe(cible+".3dssavesync-tmp") {
+		t.Errorf("exe installé pris : %q, exe %q", l, lire(cible))
+	}
+}
