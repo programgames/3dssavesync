@@ -8,6 +8,6 @@ import "errors"
 var trayDisponible = false
 
 func afficherIcone(func() []ElementMenu, func(string), <-chan struct{}) error {
-	return errors.New(tr("L'icône près de l'horloge n'existe pas encore sur ce système. Ouvrez les réglages par « 3dssavesync réglages ».",
-		"The icon near the clock is not available on this system yet. Open the settings with \"3dssavesync settings\"."))
+	return errors.New(tr("L'icône près de l'horloge n'est pas encore disponible sur ce système. Ouvrez les réglages avec « 3dssavesync réglages ».",
+		"The icon near the clock isn't available on this system yet. Open the settings with \"3dssavesync settings\"."))
 }

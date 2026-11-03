@@ -307,8 +307,8 @@ func commandeServe(config string) (int, error) {
 		return 1, err
 	}
 	if cfg.ServeurLocal == nil {
-		return 1, fmt.Errorf("%s", tr("pas de serveur local dans la configuration : choisissez « Serveur local sur ce PC » dans « 3dssavesync réglages ».",
-			"no local server in the configuration: choose \"Local server on this PC\" in \"3dssavesync settings\"."))
+		return 1, fmt.Errorf("%s", tr("aucun serveur local n'est configuré. Choisissez « Serveur local sur ce PC » dans les réglages.",
+			"no local server is set up. Choose \"Local server on this PC\" in the settings."))
 	}
 	data := cfg.ServeurLocal.Donnees
 	if data == "" {
@@ -329,8 +329,8 @@ func commandeServe(config string) (int, error) {
 			(&Session{dossier: filepath.Dir(config)}).journal("serveur local déjà en marche")
 			return 0, nil
 		}
-		return 1, fmt.Errorf(tr("le port %d est déjà pris par un autre programme : le serveur local ne démarre pas. Choisissez un autre port dans « 3dssavesync réglages », puis entrez la nouvelle adresse sur la 3DS.",
-			"port %d is already used by another program: the local server does not start. Choose another port in \"3dssavesync settings\", then enter the new address on the 3DS."), cfg.ServeurLocal.Port)
+		return 1, fmt.Errorf(tr("le serveur local ne démarre pas : un autre programme utilise déjà le port %d. Choisissez un autre port dans les réglages et entrez la nouvelle adresse sur la 3DS.",
+			"the local server can't start: another program is already using port %d. Choose another port in the settings and enter the new address on the 3DS."), cfg.ServeurLocal.Port)
 	}
 	return 1, err
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -49,6 +50,7 @@ func TestAssistantWeb(t *testing.T) {
 
 	var etat EtatWeb
 	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.Bytes(), &etat)
+	// Premier lancement : l'émulateur trouvé est coché (rien à choisir avant). Avec une configuration, il ne l'est pas.
 	if etat.Existe || len(etat.Emulateurs) != 1 || !etat.Emulateurs[0].Actif || etat.Emulateurs[0].Systemes[0].Systeme != "DS" {
 		t.Fatalf("état initial : %+v", etat)
 	}
@@ -60,6 +62,7 @@ func TestAssistantWeb(t *testing.T) {
 	}
 
 	emu := etat.Emulateurs[0]
+	emu.Actif = true // coché par l'utilisateur
 	emu.Systemes[0].Sauvegardes = filepath.Join(t.TempDir(), "saves")
 	choix := ChoixWeb{URL: serveur.URL, Jeton: "jeton-web", Emulateurs: []EmuWeb{emu}}
 	corps, _ := json.Marshal(choix)
@@ -88,6 +91,14 @@ func TestAssistantWeb(t *testing.T) {
 	json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.Bytes(), &etat)
 	if !etat.Existe || !etat.JetonPresent || etat.URL != serveur.URL || strings.Contains(requete("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.String(), "jeton-web") {
 		t.Errorf("état après enregistrement (jamais le jeton) : %+v", etat)
+	}
+	// Dossier des sauvegardes absent : la ligne de l'émulateur dit ce que dit Vérifications, jamais « Prêt ».
+	if p := etat.Emulateurs[0].Problemes; len(p) != 1 || !strings.Contains(p[0], "melonds DS : dossier des sauvegardes introuvable") {
+		t.Errorf("problème de melonds attendu : %q", p)
+	}
+	os.MkdirAll(emu.Systemes[0].Sauvegardes, 0o755)
+	if json.Unmarshal(requete("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.Bytes(), &etat); etat.Emulateurs[0].Problemes != nil {
+		t.Errorf("dossier créé : plus de problème attendu (%q)", etat.Emulateurs[0].Problemes)
 	}
 
 	// « Ouvrir » : l'émulateur configuré, sans jeu, par launch ; un nom inconnu ne lance rien.

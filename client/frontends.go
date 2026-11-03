@@ -171,8 +171,8 @@ func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []
 			rapport = append(rapport, fmt.Sprintf(tr("%s : déjà en place", "%s: already set up"), e.Nom))
 			continue
 		case original == "":
-			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox (ajoutez-le dans LaunchBox, puis relancez la réparation)",
-				"%s: emulator not in LaunchBox (add it in LaunchBox, then run the repair again)"), e.Nom))
+			rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur absent de LaunchBox. Ajoutez-le dans LaunchBox et relancez la réparation.",
+				"%s: emulator not found in LaunchBox. Add it in LaunchBox and run the repair again."), e.Nom))
 			continue
 		}
 		idOrig, id := champ(original, "ID"), nouvelID()
@@ -204,8 +204,8 @@ func launchbox(texte, dossierLB, lanceur string, entrees []EntreeLB) (string, []
 		}
 		i := strings.LastIndex(texte, "</LaunchBox>")
 		texte = texte[:i] + nouveau + strings.Join(ajout, "") + texte[i:]
-		rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur « %s (3dssavesync) » ajouté, par défaut pour %d plateforme(s)",
-			"%s: emulator \"%s (3dssavesync)\" added, default for %d platform(s)"), e.Nom, unescape(champ(original, "Title")), len(ajout)))
+		rapport = append(rapport, fmt.Sprintf(tr("%s : émulateur « %s (3dssavesync) » ajouté et mis par défaut. Plateformes : %d",
+			"%s: added the \"%s (3dssavesync)\" emulator as the default. Platforms: %d"), e.Nom, unescape(champ(original, "Title")), len(ajout)))
 	}
 	return texte, rapport
 }
@@ -259,7 +259,7 @@ func esde(systems, regles, lanceur string, emus map[string]string) (string, stri
 		case bloc != "" && strings.Contains(bloc, "<command"):
 			i := strings.Index(bloc, "<command")
 			systems = strings.Replace(systems, bloc, bloc[:i]+commande+"\n        "+bloc[i:], 1)
-			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : commande ajoutée en premier", "ES-DE %s: command added first"), n))
+			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : commande ajoutée en tête de liste", "ES-DE %s: command added at the top of the list"), n))
 		default:
 			ext := d[2]
 			if bloc != "" {
@@ -272,7 +272,7 @@ func esde(systems, regles, lanceur string, emus map[string]string) (string, stri
 				"</path>\n        <extension>" + ext + "</extension>\n        " + commande + "\n        <platform>" + n +
 				"</platform>\n        <theme>" + n + "</theme>\n    </system>\n"
 			systems = strings.Replace(systems, "</systemList>", nouveau+"</systemList>", 1)
-			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : système ajouté (seulement la commande 3dssavesync)", "ES-DE %s: system added (3dssavesync command only)"), n))
+			rapport = append(rapport, fmt.Sprintf(tr("ES-DE %s : système ajouté, avec seulement la commande 3dssavesync", "ES-DE %s: system added, with the 3dssavesync command only"), n))
 		}
 	}
 	return systems, regles, rapport
@@ -391,8 +391,8 @@ func reparer(cfg *Config, lanceur string) []string {
 		o, err := os.ReadFile(f)
 		switch {
 		case emulateurActif("LaunchBox") || emulateurActif("BigBox"):
-			rapport = append(rapport, tr("LaunchBox : ouvert, rien n'est fait. Fermez LaunchBox et BigBox, puis relancez la réparation.",
-				"LaunchBox: open, nothing done. Close LaunchBox and BigBox, then run the repair again."))
+			rapport = append(rapport, tr("LaunchBox est ouvert, rien n'a été modifié. Fermez LaunchBox et BigBox, puis relancez la réparation.",
+				"LaunchBox is open, so nothing was changed. Close LaunchBox and BigBox, then run the repair again."))
 		case err != nil:
 			rapport = append(rapport, "LaunchBox : "+texteErreur(err))
 		default:
@@ -410,8 +410,8 @@ func reparer(cfg *Config, lanceur string) []string {
 		s, _ := os.ReadFile(fs)
 		r, _ := os.ReadFile(fr)
 		if emulateurActif("ES-DE") {
-			rapport = append(rapport, tr("ES-DE : ouvert, rien n'est fait. Fermez ES-DE, puis relancez la réparation.",
-				"ES-DE: open, nothing done. Close ES-DE, then run the repair again."))
+			rapport = append(rapport, tr("ES-DE est ouvert, rien n'a été modifié. Fermez-le et relancez la réparation.",
+				"ES-DE is open, so nothing was changed. Close it and run the repair again."))
 		} else {
 			ns, nr, rap := esde(string(s), string(r), lanceur, emus)
 			rapport = append(rapport, rap...)
@@ -489,8 +489,8 @@ func prefixer(p string, l []string) []string {
 func avertissementEmuDeck() string {
 	o, err := os.ReadFile(maison("emudeck", "settings.sh"))
 	if err == nil && regexp.MustCompile(`(?m)^cloud_sync_status="?true"?`).Match(o) {
-		return tr("EmuDeck : CloudSync semble actif. Désactivez-le pour DS, GB, GBA et 3DS : deux outils enverraient les mêmes sauvegardes.",
-			"EmuDeck: CloudSync seems active. Turn it off for DS, GB, GBA and 3DS: two tools would upload the same saves.")
+		return tr("EmuDeck CloudSync semble actif. Désactivez-le pour DS, GB, GBA et 3DS, sinon les deux outils enverront les mêmes sauvegardes.",
+			"EmuDeck CloudSync seems to be on. Turn it off for DS, GB, GBA and 3DS, or both tools will upload the same saves.")
 	}
 	return ""
 }

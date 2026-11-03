@@ -123,28 +123,28 @@ func erreurGitHub(err error) string {
 	var t string
 	switch {
 	case errors.As(err, &h) && (h.code == 403 || h.code == 429):
-		t = tr("GitHub refuse pour l'instant : trop de demandes depuis cette adresse Internet. Réessayez dans une heure.",
-			"GitHub refuses for now: too many requests from this Internet address. Try again in an hour.")
+		t = tr("GitHub limite pour l'instant les demandes venant de votre connexion. Réessayez dans une heure.",
+			"GitHub is limiting requests from your connection for now. Try again in an hour.")
 	case errors.As(err, &h) && h.code == 404:
-		t = fmt.Sprintf(tr("Fichier absent de la version sur GitHub : rien n'est changé. Téléchargez la version à la main depuis %s.",
-			"File missing from the version on GitHub: nothing is changed. Download the version by hand from %s."), pageReleases)
+		t = fmt.Sprintf(tr("Il manque un fichier dans cette version sur GitHub, la mise à jour n'a pas été faite. Téléchargez-la vous-même sur %s.",
+			"A file is missing from this version on GitHub, so the update wasn't installed. Download it yourself from %s."), pageReleases)
 	case errors.As(err, &h):
-		t = tr("GitHub a un problème pour l'instant : rien n'est changé. Réessayez plus tard.",
-			"GitHub has a problem right now: nothing is changed. Try again later.")
+		t = tr("GitHub rencontre un problème. Réessayez plus tard.",
+			"GitHub is having problems. Try again later.")
 	case errors.Is(err, errTropGrand):
-		t = fmt.Sprintf(tr("Fichier de GitHub plus grand que prévu : rien n'est changé. Téléchargez la version à la main depuis %s.",
-			"File from GitHub larger than expected: nothing is changed. Download the version by hand from %s."), pageReleases)
+		t = fmt.Sprintf(tr("Le fichier de GitHub est plus gros que prévu, la mise à jour n'a pas été faite. Téléchargez la version vous-même sur %s.",
+			"The file from GitHub is bigger than expected, so the update wasn't installed. Download the version yourself from %s."), pageReleases)
 	case errors.Is(err, errIllisible):
-		t = fmt.Sprintf(tr("Réponse de GitHub illisible : rien n'est changé. Réessayez plus tard ; si cela dure, téléchargez la version à la main depuis %s.",
-			"Unreadable answer from GitHub: nothing is changed. Try again later; if it lasts, download the version by hand from %s."), pageReleases)
+		t = fmt.Sprintf(tr("GitHub a envoyé une réponse illisible. Réessayez plus tard. Si le problème continue, téléchargez la version vous-même sur %s.",
+			"GitHub sent a response that couldn't be read. Try again later. If it keeps happening, download the version yourself from %s."), pageReleases)
 	case errors.As(err, &cert):
-		t = tr("Connexion sécurisée à GitHub refusée. Vérifiez la date et l'heure du PC, puis réessayez.",
-			"Secure connection to GitHub refused. Check the date and time of the PC, then try again.")
+		t = tr("Impossible d'établir une connexion sécurisée avec GitHub. Vérifiez la date et l'heure du PC et réessayez.",
+			"Couldn't make a secure connection to GitHub. Check the PC's date and time and try again.")
 	case errors.As(err, &dns), errors.As(err, &reseau), errors.As(err, &ue):
-		t = tr("GitHub ne répond pas : pas d'Internet, ou connexion coupée. Vérifiez la connexion Internet, puis réessayez.",
-			"GitHub does not answer: no Internet, or connection cut. Check the Internet connection, then try again.")
+		t = tr("GitHub ne répond pas. Vérifiez votre connexion Internet et réessayez.",
+			"GitHub isn't responding. Check your Internet connection and try again.")
 	default:
-		t = tr("Échange avec GitHub impossible : rien n'est changé. Réessayez plus tard.", "Exchange with GitHub failed: nothing is changed. Try again later.")
+		t = tr("Impossible de joindre GitHub. Réessayez plus tard.", "Couldn't reach GitHub. Try again later.")
 	}
 	return t + "\n" + tr("Détail : ", "Detail: ") + err.Error()
 }
@@ -160,12 +160,12 @@ func verrouMaj(dossier string) (func(), error) {
 	os.MkdirAll(dossier, 0o755)
 	v, err := os.OpenFile(f, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if errors.Is(err, fs.ErrExist) {
-		return nil, fmt.Errorf("%s\n%s%s", tr("Une mise à jour est déjà en cours (autre onglet ou autre fenêtre de 3dssavesync). Attendez sa fin, puis rechargez cette page.",
-			"An update is already running (other tab or other 3dssavesync window). Wait for its end, then reload this page."), tr("Détail : ", "Detail: "), f)
+		return nil, fmt.Errorf("%s\n%s%s", tr("Une mise à jour est déjà en cours dans un autre onglet ou une autre fenêtre. Attendez qu'elle se termine, puis rechargez cette page.",
+			"An update is already running in another tab or window. Wait for it to finish, then reload this page."), tr("Détail : ", "Detail: "), f)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("%s\n%s%v", tr("Mise à jour impossible : le dossier des réglages refuse l'écriture. Vérifiez les droits de ce dossier, puis réessayez.",
-			"Update failed: the settings folder refuses writing. Check the rights of this folder, then try again."), tr("Détail : ", "Detail: "), err)
+		return nil, fmt.Errorf("%s\n%s%v", tr("Impossible de mettre à jour : 3dssavesync ne peut pas écrire dans le dossier des réglages. Vérifiez les autorisations de ce dossier et réessayez.",
+			"Couldn't update: 3dssavesync can't write to the settings folder. Check this folder's permissions and try again."), tr("Détail : ", "Detail: "), err)
 	}
 	v.Close()
 	return func() { os.Remove(f) }, nil
@@ -231,8 +231,8 @@ func mettreAJour(r *Release, exe, goos, goarch string) (string, error) {
 		}
 	}
 	if url == "" || sommes == "" {
-		return "", fmt.Errorf(tr("La version %s n'a pas de fichier %s ou SHA256SUMS sur GitHub : rien n'est changé. Téléchargez-la depuis %s.",
-			"Version %s has no %s or SHA256SUMS file on GitHub: nothing is changed. Download it from %s."), r.Tag, nom, r.Page)
+		return "", fmt.Errorf(tr("La version %s sur GitHub est incomplète (fichier %s ou SHA256SUMS manquant). La mise à jour n'a pas été faite. Téléchargez-la vous-même sur %s.",
+			"Version %s on GitHub is incomplete (%s or SHA256SUMS is missing). The update wasn't installed. Download it yourself from %s."), r.Tag, nom, r.Page)
 	}
 	s, err := telecharger(sommes, 1<<20)
 	if err != nil {
@@ -240,20 +240,20 @@ func mettreAJour(r *Release, exe, goos, goarch string) (string, error) {
 	}
 	// Déjà fait (autre fenêtre, onglet resté ouvert) : l'exe sur le disque est celui de la release.
 	if o, err := os.ReadFile(exe); err == nil && sommeValide(string(s), nom, o) {
-		return "", fmt.Errorf(tr("Le programme sur le disque est déjà la version %s (mise à jour faite depuis une autre fenêtre) : rien n'est changé. Fermez cet onglet, puis ouvrez le raccourci « 3dssavesync réglages ».\nDétail : %s",
-			"The program on the disk is already version %s (updated from another window): nothing is changed. Close this tab, then open the \"3dssavesync settings\" shortcut.\nDetail: %s"), strings.TrimPrefix(r.Tag, "v"), exe)
+		return "", fmt.Errorf(tr("La version %s est déjà installée, depuis une autre fenêtre. Fermez cet onglet et rouvrez le raccourci « 3dssavesync réglages ».\nDétail : %s",
+			"Version %s is already installed from another window. Close this tab and open the \"3dssavesync settings\" shortcut again.\nDetail: %s"), strings.TrimPrefix(r.Tag, "v"), exe)
 	}
 	o, err := telecharger(url, 256<<20)
 	if err != nil {
 		return "", fmt.Errorf("%s", erreurGitHub(err))
 	}
 	if int64(len(o)) != taille || !sommeValide(string(s), nom, o) {
-		return "", fmt.Errorf(tr("Le fichier téléchargé est abîmé (taille ou SHA-256 différent de SHA256SUMS) : rien n'est changé. Réessayez plus tard.\nDétail : %s, %d octets, %d attendus",
-			"The downloaded file is damaged (size or SHA-256 differs from SHA256SUMS): nothing is changed. Try again later.\nDetail: %s, %d bytes, %d expected"), nom, len(o), taille)
+		return "", fmt.Errorf(tr("Le fichier téléchargé est abîmé, la mise à jour n'a pas été faite. Réessayez plus tard.\nDétail : %s, %d octets, %d attendus",
+			"The downloaded file is damaged, so the update wasn't installed. Try again later.\nDetail: %s, %d bytes, %d expected"), nom, len(o), taille)
 	}
 	if libre, err := espaceLibre(filepath.Dir(exe)); err == nil && libre < uint64(len(o))+1<<20 {
-		return "", fmt.Errorf(tr("Pas assez de place sur le disque pour la mise à jour : %d Mo libres, %d Mo nécessaires. Libérez de la place, puis recommencez.\nDétail : %s",
-			"Not enough disk space for the update: %d MB free, %d MB needed. Free some space, then try again.\nDetail: %s"), libre>>20, len(o)>>20+1, filepath.Dir(exe))
+		return "", fmt.Errorf(tr("Pas assez de place sur le disque pour la mise à jour (%d Mo libres, %d Mo nécessaires). Libérez de la place et réessayez.\nDétail : %s",
+			"Not enough disk space for the update (%d MB free, %d MB needed). Free up some space and try again.\nDetail: %s"), libre>>20, len(o)>>20+1, filepath.Dir(exe))
 	}
 	return remplacerExe(exe, o, version)
 }
@@ -273,8 +273,8 @@ func remplacerExe(exe string, neuf []byte, ancienne string) (string, error) {
 	tmp := exe + ".3dssavesync-tmp"
 	os.Remove(tmp)
 	echec := func(err error) error {
-		return fmt.Errorf("%s\n%s%v", tr("La mise à jour n'a pas pu remplacer le programme : l'ancien reste en place. Fermez les autres fenêtres de 3dssavesync, puis réessayez.",
-			"The update could not replace the program: the old one stays in place. Close the other 3dssavesync windows, then try again."), tr("Détail : ", "Detail: "), err)
+		return fmt.Errorf("%s\n%s%v", tr("La mise à jour n'a pas pu remplacer le programme, l'ancien reste en place. Fermez les autres fenêtres de 3dssavesync et réessayez.",
+			"The update couldn't replace the program, so the old one is still in place. Close the other 3dssavesync windows and try again."), tr("Détail : ", "Detail: "), err)
 	}
 	if err := ecrireVerifie(tmp, neuf); err != nil {
 		return "", echec(err)
@@ -287,8 +287,8 @@ func remplacerExe(exe string, neuf []byte, ancienne string) (string, error) {
 	if err := renommer(tmp, exe); err != nil {
 		os.Remove(tmp)
 		if e := renommer(copie, exe); e != nil {
-			return "", fmt.Errorf(tr("La mise à jour a échoué, et l'ancien programme n'a pas pu reprendre sa place. Renommez %s en %s.\nDétail : %v ; %v",
-				"The update failed, and the old program could not get its place back. Rename %s to %s.\nDetail: %v; %v"), copie, filepath.Base(exe), err, e)
+			return "", fmt.Errorf(tr("La mise à jour a échoué et l'ancien programme n'a pas pu être remis en place. Pour le récupérer, renommez %s en %s.\nDétail : %v ; %v",
+				"The update failed and the old program couldn't be put back. To get it back, rename %s to %s.\nDetail: %v; %v"), copie, filepath.Base(exe), err, e)
 		}
 		return "", echec(err)
 	}
@@ -310,27 +310,27 @@ func (a *AssistantWeb) mettreAJourWeb() map[string]any {
 		return map[string]any{"Ok": false, "Message": erreurGitHub(err)}
 	}
 	if exe == "" || !plusRecente(version, r.Tag) {
-		return map[string]any{"Ok": false, "Message": fmt.Sprintf(tr("Pas de mise à jour : cette version (%s) est la dernière.", "No update: this version (%s) is the latest."), version)}
+		return map[string]any{"Ok": false, "Message": fmt.Sprintf(tr("Vous avez déjà la dernière version (%s).", "You already have the latest version (%s)."), version)}
 	}
 	copie, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return map[string]any{"Ok": false, "Message": err.Error()}
 	}
 	(&Session{dossier: dossier}).journal("mise à jour : " + version + " -> " + r.Tag + ", ancien exe : " + copie)
-	lignes := []string{fmt.Sprintf(tr("Mis à jour vers %s : les réglages redémarrent dans un nouvel onglet. Fermez celui-ci.",
-		"Updated to %s: the settings page restarts in a new tab. Close this one."), strings.TrimPrefix(r.Tag, "v")),
-		tr("Version d'avant gardée : ", "Previous version kept: ") + copie}
+	lignes := []string{fmt.Sprintf(tr("Mise à jour vers %s terminée. Les réglages se rouvrent dans un nouvel onglet, vous pouvez fermer celui-ci.",
+		"Updated to %s. The settings page reopens in a new tab, so you can close this one."), strings.TrimPrefix(r.Tag, "v")),
+		tr("Ancienne version conservée : ", "Previous version kept: ") + copie}
 	if trayActif(dossier) {
 		if err := arreterTray(dossier); err != nil {
 			lignes = append(lignes, err.Error())
 		} else if err := lancerServeur(exe, avecConfig([]string{"tray"}, a.config)); err != nil {
-			lignes = append(lignes, tr("L'icône près de l'horloge ne redémarre pas : elle revient à la prochaine session.", "The icon near the clock does not restart: it comes back at the next session.")+
+			lignes = append(lignes, tr("L'icône près de l'horloge n'a pas pu redémarrer. Elle reviendra à votre prochaine ouverture de session.", "The icon near the clock couldn't restart. It'll come back the next time you sign in.")+
 				"\n"+tr("Détail : ", "Detail: ")+err.Error())
 		}
 	}
 	if err := ouvrirDetache(exe, avecConfig([]string{"setup"}, a.config)); err != nil {
-		lignes[0] = fmt.Sprintf(tr("Mis à jour vers %s. Les réglages ne redémarrent pas : ouvrez le raccourci « 3dssavesync réglages ».",
-			"Updated to %s. The settings page does not restart: open the \"3dssavesync settings\" shortcut."), strings.TrimPrefix(r.Tag, "v")) +
+		lignes[0] = fmt.Sprintf(tr("Mise à jour vers %s terminée. Les réglages n'ont pas pu se rouvrir : ouvrez le raccourci « 3dssavesync réglages ».",
+			"Updated to %s. The settings page couldn't reopen. Open the \"3dssavesync settings\" shortcut."), strings.TrimPrefix(r.Tag, "v")) +
 			"\n" + tr("Détail : ", "Detail: ") + err.Error()
 	}
 	a.finir()

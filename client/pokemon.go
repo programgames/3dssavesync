@@ -197,7 +197,7 @@ func partiePokemon(d []byte) (string, bool) {
 		return "", false
 	}
 	if nom == "" {
-		return fmt.Sprintf(tr("%d h %02d · partie jamais commencée", "%d h %02d · game never started"), h, m), true
+		return fmt.Sprintf(tr("%d h %02d · partie non commencée", "%d h %02d · not started yet"), h, m), true
 	}
 	return fmt.Sprintf("%d h %02d · %s", h, m, nom), true
 }

@@ -117,8 +117,8 @@ func afficherIcone(menu func() []ElementMenu, choisir func(string), fin <-chan s
 	defer runtime.UnlockOSThread()
 	trayMenu, trayChoisir = menu, choisir
 	echec := func(quoi string, err error) error {
-		return fmt.Errorf("%s\n%s%s : %v", tr("L'icône près de l'horloge ne peut pas s'afficher. Ouvrez les réglages par le raccourci « 3dssavesync réglages ».",
-			"The icon near the clock cannot be shown. Open the settings with the \"3dssavesync settings\" shortcut."), tr("Détail : ", "Detail: "), quoi, err)
+		return fmt.Errorf("%s\n%s%s : %v", tr("Impossible d'afficher l'icône près de l'horloge. Ouvrez les réglages avec le raccourci « 3dssavesync réglages ».",
+			"Can't show the icon near the clock. Open the settings with the \"3dssavesync settings\" shortcut."), tr("Détail : ", "Detail: "), quoi, err)
 	}
 	instance, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
 	classe := u16("3dssavesync-tray")

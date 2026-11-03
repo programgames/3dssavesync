@@ -85,7 +85,7 @@ func verifierRestauration(t *testing.T, adresse string) {
 	}
 
 	envoiAutre(t, s, cle, v3, v2) // un appareil envoie après l'affichage de la liste
-	if _, err := s.restaurer(cle, lignes[1].Fichier, lignes[0].Hash); err == nil || !strings.Contains(err.Error(), "a changé sur le serveur") {
+	if _, err := s.restaurer(cle, lignes[1].Fichier, lignes[0].Hash); err == nil || !strings.Contains(err.Error(), "vient de changer sur le serveur") {
 		t.Errorf("Envoi concurrent : refus attendu (%v)", err)
 	}
 	if !bytes.Equal(couranteDe(s, cle), v3) {
@@ -128,10 +128,10 @@ func TestCommandeRestore(t *testing.T) {
 	if o, err := commande("", "adaf"); err != nil || !strings.Contains(o, "   2  ") || !strings.Contains(o, "(actuelle)") || !strings.Contains(o, "   1  ") {
 		t.Errorf("liste des versions : %v\n%s", err, o)
 	}
-	if o, _ := commande("n\n", "ADAF", "1"); !strings.Contains(o, "Rien n'est changé.") || string(couranteDe(s, "ADAF")) != "deux" {
+	if o, _ := commande("n\n", "ADAF", "1"); !strings.Contains(o, "Rien n'a été modifié.") || string(couranteDe(s, "ADAF")) != "deux" {
 		t.Errorf("réponse non : rien ne change\n%s", o)
 	}
-	if o, _ := commande("", "ADAF", "2"); !strings.Contains(o, "même contenu") {
+	if o, _ := commande("", "ADAF", "2"); !strings.Contains(o, "identique à la version actuelle") {
 		t.Errorf("version actuelle : rien à faire\n%s", o)
 	}
 	if o, err := commande("", "ADAF", "1", "--oui"); err != nil || !strings.Contains(o, "Version restaurée") || string(couranteDe(s, "ADAF")) != "un" {
@@ -185,7 +185,7 @@ func TestAssistantWebHistorique(t *testing.T) {
 		t.Errorf("restauration : %+v", r)
 	}
 	requete("restaurer", string(corps), &r) // même liste, mais la Version courante a changé depuis
-	if r.Ok || !strings.Contains(r.Message, "a changé") {
+	if r.Ok || !strings.Contains(r.Message, "vient de changer") {
 		t.Errorf("liste périmée : refus attendu, %+v", r)
 	}
 }

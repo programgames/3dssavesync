@@ -96,7 +96,7 @@ func TestPartiePokemon(t *testing.T) {
 	cas["Soleil/Lune jamais commencé"] = struct {
 		d       []byte
 		attendu string
-	}{make([]byte, 0x6BE00), "0 h 00 · partie jamais commencée"}
+	}{make([]byte, 0x6BE00), "0 h 00 · partie non commencée"}
 
 	for nom, c := range cas {
 		if r, ok := partiePokemon(c.d); !ok || r != c.attendu {
@@ -129,7 +129,7 @@ func TestConflitTempsDeJeu(t *testing.T) {
 	srv := &Version{Hash: strings.Repeat("b", 64), Client: "azahar", Age: new(int64)}
 	resoudreConflit(&Jeu{Nom: "Pokemon Lune", Systeme: "3DS"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}, Brut: pc, SRAM: pc},
 		srv, mainSoleilLune(0, 0, ""), false)
-	if len(questions) != 1 || !strings.Contains(questions[0], "152 h 30 · Julien") || !strings.Contains(questions[0], "0 h 00 · partie jamais commencée") {
+	if len(questions) != 1 || !strings.Contains(questions[0], "152 h 30 · Julien") || !strings.Contains(questions[0], "0 h 00 · partie non commencée") {
 		t.Errorf("temps de jeu des deux Versions attendu : %q", questions)
 	}
 }

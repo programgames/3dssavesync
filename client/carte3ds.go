@@ -82,7 +82,7 @@ func preparerCarte(racine, url, jeton string, alias map[string]string) (string, 
 		return "", errors.New(tr("Enregistrez d'abord le serveur.", "Save the server first."))
 	}
 	if len(url) > 255 || len(jeton) > 255 || strings.ContainsAny(url+jeton, "\r\n") { // tailles de cfg dans main.c
-		return "", errors.New(tr("Adresse ou jeton trop long pour la 3DS.", "Address or token too long for the 3DS."))
+		return "", errors.New(tr("L'adresse ou le jeton est trop long pour la 3DS.", "The address or token is too long for the 3DS."))
 	}
 	racine, err := racineCarte(racine)
 	if err != nil {
@@ -122,8 +122,8 @@ func racineCarte(racine string) (string, error) {
 		racine += `\` // « E: » seul = dossier courant du lecteur E
 	}
 	if !filepath.IsAbs(racine) || !existe(filepath.Join(racine, "Nintendo 3DS")) {
-		return "", fmt.Errorf(tr("%s n'est pas une carte SD de 3DS : pas de dossier « Nintendo 3DS ». Choisissez la racine de la carte.",
-			"%s is not a 3DS SD card: no \"Nintendo 3DS\" folder. Choose the root of the card."), racine)
+		return "", fmt.Errorf(tr("%s n'est pas une carte SD de 3DS (il manque le dossier « Nintendo 3DS »). Choisissez la racine de la carte.",
+			"%s isn't a 3DS SD card (there's no \"Nintendo 3DS\" folder). Choose the root of the card."), racine)
 	}
 	return racine, nil
 }
@@ -146,34 +146,34 @@ func copierCia(racine string, cia []byte) ([]string, error) {
 	var lignes []string
 	chemin := filepath.Join(racine, "cias", "3dssavesync.cia")
 	if v := versionInstallee(racine); plusRecente(version, v) {
-		return []string{fmt.Sprintf(tr("La 3DS a déjà une version plus récente (%s) : ce 3dssavesync.cia (version %s) n'est pas copié. Rien à installer sur la 3DS.",
-			"The 3DS already has a newer version (%s): this 3dssavesync.cia (version %s) is not copied. Nothing to install on the 3DS."), v, version)}, nil
+		return []string{fmt.Sprintf(tr("La 3DS a déjà une version plus récente de 3dssavesync (%s). Inutile d'installer la version %s.",
+			"The 3DS already has a newer 3dssavesync (%s). There's no need to install version %s."), v, version)}, nil
 	}
 	if len(cia) == 0 {
-		lignes = append(lignes, fmt.Sprintf(tr("Ce programme ne contient pas 3dssavesync.cia (version %s). Téléchargez-le depuis %s, puis copiez-le dans le dossier cias de la carte SD.",
-			"This program does not include 3dssavesync.cia (version %s). Download it from %s, then copy it to the cias folder of the SD card."), version, pageVersion()))
+		lignes = append(lignes, fmt.Sprintf(tr("Ce programme ne contient pas 3dssavesync.cia (version %s). Téléchargez-le sur %s et copiez-le dans le dossier cias de la carte SD.",
+			"This program doesn't include 3dssavesync.cia (version %s). Download it from %s and copy it to the cias folder on the SD card."), version, pageVersion()))
 	} else {
 		ancien, err := os.ReadFile(chemin)
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
 		if bytes.Equal(ancien, cia) {
-			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia version %s déjà sur la carte : ", "3dssavesync.cia version %s already on the card: "), version)+chemin)
+			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia %s déjà sur la carte : ", "3dssavesync.cia %s is already on the card: "), version)+chemin)
 		} else {
 			besoin := uint64(len(cia)+len(ancien)) + 1<<20 // fichier temporaire, copie datée de l'ancien, 1 Mo de marge
 			if libre, err := espaceLibre(racine); err == nil && libre < besoin {
-				return nil, fmt.Errorf(tr("Pas assez de place sur la carte SD pour 3dssavesync.cia : %d Mo libres, %d Mo nécessaires. Libérez de la place sur la carte, puis recommencez.\nDétail : %s",
-					"Not enough space on the SD card for 3dssavesync.cia: %d MB free, %d MB needed. Free some space on the card, then try again.\nDetail: %s"), libre>>20, (besoin+1<<20-1)>>20, racine)
+				return nil, fmt.Errorf(tr("Pas assez de place sur la carte SD (%d Mo libres, %d Mo nécessaires). Libérez de la place et réessayez.\nDétail : %s",
+					"Not enough space on the SD card (%d MB free, %d MB needed). Free up some space and try again.\nDetail: %s"), libre>>20, (besoin+1<<20-1)>>20, racine)
 			}
 			if err := ecrireCarte(chemin, cia); err != nil {
 				return nil, err
 			}
-			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia version %s copié : ", "3dssavesync.cia version %s copied: "), version)+chemin)
+			lignes = append(lignes, fmt.Sprintf(tr("3dssavesync.cia %s copié : ", "3dssavesync.cia %s copied: "), version)+chemin)
 		}
 	}
 	if !existe(filepath.Join(racine, "3ds", "FBI.3dsx")) && !existe(filepath.Join(racine, "3ds", "FBI")) {
-		lignes = append(lignes, fmt.Sprintf(tr("FBI n'est pas sur la carte (ni 3ds/FBI.3dsx, ni le dossier 3ds/FBI). Déjà installé dans le menu HOME : ignorez ce message. Sinon, téléchargez FBI.3dsx depuis %s, copiez-le dans le dossier 3ds de la carte, puis ouvrez-le depuis le Homebrew Launcher.",
-			"FBI was not found on the card (no 3ds/FBI.3dsx, no 3ds/FBI folder). Already installed on the HOME menu: ignore this message. Otherwise, download FBI.3dsx from %s, copy it to the 3ds folder of the card, then open it from the Homebrew Launcher."), pageFBI))
+		lignes = append(lignes, fmt.Sprintf(tr("FBI n'est pas sur la carte. S'il est déjà installé sur le menu HOME, ignorez ce message. Sinon, téléchargez FBI.3dsx sur %s, copiez-le dans le dossier 3ds de la carte et ouvrez-le depuis le Homebrew Launcher.",
+			"FBI isn't on the card. If it's already installed on the HOME Menu, ignore this message. Otherwise, download FBI.3dsx from %s, copy it to the 3ds folder on the card and open it from the Homebrew Launcher."), pageFBI))
 	}
 	return lignes, nil
 }
@@ -199,22 +199,22 @@ func preparerEtNoter(config, racine string) (bool, []string) {
 	}
 	cfg.CartePreparee = time.Now().Format("2006-01-02 15:04")
 	if err := ecrireConfigCopie(config, &cfg); err != nil {
-		lignes = append(lignes, tr("Date de préparation non notée dans config.json : ", "Preparation date not noted in config.json: ")+erreurCarte(err))
+		lignes = append(lignes, tr("La date de préparation n'a pas pu être notée : ", "Couldn't record the preparation date: ")+erreurCarte(err))
 	}
 	if plusRecente(version, versionInstallee(racine)) { // .cia pas copié : rien à installer
-		return true, append(lignes, tr("Remettez la carte dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
-			"Put the card back in the 3DS, then start 3dssavesync: it connects without typing anything."))
+		return true, append(lignes, tr("Remettez la carte dans la 3DS et lancez 3dssavesync : il se connecte tout seul.",
+			"Put the card back in the 3DS and start 3dssavesync. It connects by itself."))
 	}
-	return true, append(lignes, tr("Remettez la carte dans la 3DS. Sur la 3DS : FBI, SD, cias, 3dssavesync.cia, « Install and delete CIA ». Puis lancez 3dssavesync depuis le menu HOME : il se connecte sans rien taper.",
-		"Put the card back in the 3DS. On the 3DS: FBI, SD, cias, 3dssavesync.cia, \"Install and delete CIA\". Then start 3dssavesync from the HOME menu: it connects without typing anything."))
+	return true, append(lignes, tr("Remettez la carte dans la 3DS. Dans FBI, ouvrez SD, cias, 3dssavesync.cia et choisissez « Install and delete CIA ». Lancez ensuite 3dssavesync depuis le menu HOME : il se connecte tout seul.",
+		"Put the card back in the 3DS. In FBI, open SD, cias, 3dssavesync.cia and choose \"Install and delete CIA\". Then start 3dssavesync from the HOME Menu. It connects by itself."))
 }
 
 // erreurCarte : ce qui s'est passé et quoi faire, puis le détail technique sur sa ligne.
 func erreurCarte(err error) string {
 	t := texteErreur(err)
 	if protegee(err) {
-		t = tr("La carte SD est verrouillée : rien ne peut y être écrit. Retirez-la, glissez vers le haut le petit interrupteur de verrouillage sur son côté (ou sur l'adaptateur microSD), remettez-la, puis recommencez.",
-			"The SD card is locked: nothing can be written to it. Take it out, slide the small lock switch on its side (or on the microSD adapter) up, put it back, then try again.")
+		t = tr("La carte SD est verrouillée en écriture. Retirez-la, poussez vers le haut le petit loquet sur le côté (ou sur l'adaptateur microSD), remettez-la et réessayez.",
+			"The SD card is write-protected. Take it out, slide the small lock switch on its side (or on the microSD adapter) up, put it back and try again.")
 	}
 	if t != err.Error() {
 		t += "\n" + tr("Détail : ", "Detail: ") + err.Error()
@@ -237,7 +237,7 @@ func ecrireCarte(chemin string, contenu []byte) error {
 		return err
 	}
 	if relu, err := os.ReadFile(chemin); err != nil || !bytes.Equal(relu, contenu) {
-		return fmt.Errorf(tr("%s relu différent. Vérifiez la carte SD, puis recommencez.", "%s read back differently. Check the SD card, then try again."), chemin)
+		return fmt.Errorf(tr("%s ne s'est pas écrit correctement. Vérifiez la carte SD et réessayez.", "%s wasn't written correctly. Check the SD card and try again."), chemin)
 	}
 	return nil
 }
@@ -268,13 +268,13 @@ func etapeCarteSD(q *Questions, cfg *Config, config string) {
 		return
 	}
 	q.dire("\n== %s ==", tr("Carte SD de la 3DS", "3DS SD card"))
-	q.dire("%s", tr("Mettez la carte SD de la 3DS dans le PC : son config.ini reçoit l'adresse et le jeton, et 3dssavesync.cia est copié dans cias.",
-		"Put the 3DS SD card in the PC: its config.ini gets the address and the token, and 3dssavesync.cia is copied to cias."))
+	q.dire("%s", tr("Mettez la carte SD de la 3DS dans le PC. 3dssavesync y écrit l'adresse et le jeton, et copie l'application 3DS dans cias.",
+		"Put the 3DS SD card in the PC. 3dssavesync writes the address and token to it, and copies the 3DS app to cias."))
 	cartes := detecterCartes()
 	for i, c := range cartes {
 		q.dire("  %d. %s", i+1, c)
 	}
-	r := q.texte(tr("Numéro ou dossier de la carte (Entrée = pas maintenant)", "Card number or folder (Enter = not now)"), "")
+	r := q.texte(tr("Numéro ou dossier de la carte (Entrée pour passer)", "Card number or folder (Enter to skip)"), "")
 	if i, err := strconv.Atoi(r); err == nil && i >= 1 && i <= len(cartes) {
 		r = cartes[i-1]
 	}

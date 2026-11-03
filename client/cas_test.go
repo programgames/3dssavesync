@@ -89,7 +89,7 @@ func TestRomHackEtAlias(t *testing.T) {
 	if run(rr) != 0 || !joue {
 		t.Error("le hack doit démarrer")
 	}
-	if len(questions) != 1 || !strings.Contains(questions[0], "Pokemon Radical Red.gba est vu comme le même jeu que Pokemon Rouge Feu.gba") {
+	if len(questions) != 1 || !strings.Contains(questions[0], "Pokemon Radical Red.gba ressemble à Pokemon Rouge Feu.gba") {
 		t.Errorf("question : %q", questions)
 	}
 	if len(notifications) != 1 || !contient(notifications, "Synchroniser à part") || !contient(notifications, "ROM hacks") {
@@ -101,7 +101,7 @@ func TestRomHackEtAlias(t *testing.T) {
 
 	t.Log("Le hack, Synchroniser à part : alias créé dans config.json (copie avant), le hack part sous sa propre Clé")
 	reinitialiser()
-	reponses = []string{"Synchroniser à part (ROM hack)"}
+	reponses = []string{"Synchroniser à part"}
 	run(rr)
 	var avecAlias Config
 	lireJSON(config, &avecAlias)
@@ -146,7 +146,7 @@ func TestRomHackEtAlias(t *testing.T) {
 	ecrireConfig(t, config, cfg)
 	partie = func() { ecrire(t, savRR, aleatoire(131072, 4)) }
 	run(rr)
-	if !joue || !contient(notifications, "« GBA-BPRE-RADICALRED » de Pokemon Radical Red est invalide") || !contient(notifications, "GBA-0RAD") {
+	if !joue || !contient(notifications, "« GBA-BPRE-RADICALRED » de Pokemon Radical Red n'est pas valable") || !contient(notifications, "GBA-0RAD") {
 		t.Errorf("notification : %q", notifications)
 	}
 	if hachage(courante("GBA-BPRE")) != hachage(f1) || hachage(courante("GBA-0RAD")) != hachage(r2) {
@@ -254,10 +254,10 @@ func TestEnvoisEnAttente(t *testing.T) {
 		t.Errorf("%d requêtes, questions %q, attente %+v", r.essais, questions, attente())
 	}
 
-	t.Log("Réseau revenu, Conflit, Garder le PC : la Sauvegarde jouée part")
+	t.Log("Réseau revenu, Conflit, Garder celle du PC : la Sauvegarde jouée part")
 	reinitialiser()
 	r.coupe = false
-	reponses = []string{"Garder le PC"}
+	reponses = []string{"Garder celle du PC"}
 	run(emeraude)
 	if hachage(courante("IRBF")) != hachage(a5) || len(attente()) != 0 {
 		t.Errorf("attente %+v, questions %q", attente(), questions)
@@ -330,7 +330,7 @@ func TestRomRetenueGlobale(t *testing.T) {
 	t.Log("Le hack dans un autre émulateur, sans sauvegarde : refusé, la ROM d'origine est retenue pour tout le PC")
 	reinitialiser()
 	run("autre", rr)
-	if !joue || !contient(notifications, "est vu comme le même jeu que Pokemon Rouge Feu.gba") || existe(filepath.Join(gba2, "Pokemon Radical Red.sav")) ||
+	if !joue || !contient(notifications, "ressemble à Pokemon Rouge Feu.gba") || existe(filepath.Join(gba2, "Pokemon Radical Red.sav")) ||
 		len(historique("GBA-BPRE")) != 1 {
 		t.Errorf("notifications %q, le hack ne doit pas recevoir la partie d'origine", notifications)
 	}
@@ -353,7 +353,7 @@ func TestRomRetenueGlobale(t *testing.T) {
 	}
 	reinitialiser()
 	run("autre", rr) // la question propose « Synchroniser à part » ; sans réponse, le hack part sans synchronisation
-	if len(questions) != 1 || !contient(notifications, "est vu comme le même jeu") {
+	if len(questions) != 1 || !contient(notifications, "ressemble à") {
 		t.Errorf("questions %q, notifications %q", questions, notifications)
 	}
 }
@@ -415,7 +415,7 @@ func TestEchecsEnAttente(t *testing.T) {
 	partie = func() { ecrire(t, sav, suite(2, 201)); p.refus = true }
 	run(noire)
 	p.refus = false
-	if !contient(notifications, "partira au prochain lancement") || len(attente()) != 1 {
+	if !contient(notifications, "sera envoyée au prochain lancement") || len(attente()) != 1 {
 		t.Errorf("attente %+v, notifications %q", attente(), notifications)
 	}
 
@@ -426,7 +426,7 @@ func TestEchecsEnAttente(t *testing.T) {
 	run(noire)
 	p.portail = false
 	cote := nomsDans(filepath.Join(tmp, "cfg"), "en-attente.json.illisible-*")
-	if len(cote) != 1 || string(lire(cote[0])) != "{pas du json" || len(attente()) != 1 || !contient(notifications, "Réponse inattendue du serveur") ||
+	if len(cote) != 1 || string(lire(cote[0])) != "{pas du json" || len(attente()) != 1 || !contient(notifications, "Le serveur a répondu de façon inattendue") ||
 		!contient(notifications, "était illisible") {
 		t.Errorf("copie %q, attente %+v, notifications %q", cote, attente(), notifications)
 	}
@@ -445,7 +445,7 @@ func TestFormatNonLuAlias(t *testing.T) {
 	ecrire(t, filepath.Join(saves, "Jeu.sav"), suite(1, 200))
 	reinitialiser()
 	principal([]string{"run", "--config", config, "--emulator", "melonds", rom})
-	if !joue || codes() != "" || !contient(notifications, "format de ROM non lu") {
+	if !joue || codes() != "" || !contient(notifications, "ne sait pas lire ce format de ROM") {
 		t.Errorf("serveur %q, notifications %q", codes(), notifications)
 	}
 }

@@ -59,9 +59,15 @@ func TestVerifications(t *testing.T) {
 		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Sauvegardes: map[string]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
 	}, Frontends: map[string]string{"esde": esde}}
 	ecrireJSON(config, &cfg, true)
-	ok, afaire := textes(func() []Verif { l, _ := verifications(config); return l }())
-	for _, attendu := range []string{"serveur:Serveur injoignable : Le serveur répond, mais refuse ce jeton", "emulateurs:mgba GB : dossier des sauvegardes introuvable (" + filepath.Join(m, "absent"),
-		"frontends:ES-DE : pas encore configuré", "carte:Carte SD de la 3DS pas encore préparée"} {
+	l, _ := verifications(config)
+	ok, afaire := textes(l)
+	for _, v := range l { // la ligne de l'émulateur dans la page reprend ces lignes (EmuWeb.Problemes)
+		if strings.HasPrefix(v.Texte, "mgba ") != (v.Emulateur == "mgba") || strings.HasPrefix(v.Texte, "melonds ") != (v.Emulateur == "melonds") {
+			t.Errorf("émulateur de la ligne %q : %q", v.Texte, v.Emulateur)
+		}
+	}
+	for _, attendu := range []string{"serveur:Serveur injoignable : Le serveur refuse ce jeton", "emulateurs:mgba GB\u00a0: dossier des sauvegardes introuvable (" + filepath.Join(m, "absent"),
+		"frontends:ES-DE n'est pas encore configuré", "carte:La carte SD de la 3DS n'a pas encore été préparée"} {
 		if !strings.Contains(afaire, attendu) {
 			t.Errorf("à faire : %q absent de\n%s", attendu, afaire)
 		}
@@ -81,7 +87,7 @@ func TestVerifications(t *testing.T) {
 			t.Errorf("bon : %q absent de\n%s", attendu, ok)
 		}
 	}
-	if trayDisponible && !strings.Contains(afaire, "frontends:L'icône près de l'horloge ne tourne pas") || !trayDisponible && afaire != "" {
+	if trayDisponible && !strings.Contains(afaire, "frontends:L'icône près de l'horloge n'est pas lancée") || !trayDisponible && afaire != "" {
 		t.Errorf("seule l'icône (pas lancée en test) reste à faire : %s", afaire)
 	}
 }

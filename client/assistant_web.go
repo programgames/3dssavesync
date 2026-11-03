@@ -43,6 +43,7 @@ type EmuWeb struct {
 	Actif                               bool
 	Systemes                            []SysWeb
 	Conseil, Erreur                     string
+	Problemes                           []string // lignes à faire de Vérifications pour cet émulateur de config.json
 	Coeurs                              map[string]string
 	EnPlus                              string // profil intégré : arguments en plus, avant la ROM
 	// Émulateur personnalisé : ligne de commande ({rom}, {sauvegardes}), extension, nom du fichier dans le zip.
@@ -101,7 +102,7 @@ func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
 		fmt.Println(adresse)
 	} else if err := ouvrirNavigateur(adresse); err != nil {
 		fmt.Println(adresse)
-		notifier(tr("Ouvrez cette adresse dans le navigateur : ", "Open this address in the browser: ") + adresse)
+		notifier(tr("Ouvrez cette adresse dans votre navigateur : ", "Open this address in your browser: ") + adresse)
 	}
 	// Fin : bouton « Terminer », ou plus de signe de vie de la page (onglet fermé) pendant 2 minutes.
 	for {
@@ -285,7 +286,7 @@ func (a *AssistantWeb) aliasWeb(nom, systeme string, retirer bool) map[string]an
 		noms = append(noms, n)
 	}
 	sort.Slice(noms, func(i, j int) bool { return strings.ToLower(noms[i]) < strings.ToLower(noms[j]) })
-	x := map[string]any{"Noms": noms}
+	x := map[string]any{"Noms": noms, "Cles": cfg.Alias} // Clé : la console dans la liste
 	if err != nil {
 		x["Erreur"] = texteErreur(err)
 	}
@@ -346,15 +347,15 @@ func emulateurDe(x EmuWeb) (*Emulateur, error) {
 		return e, nil
 	}
 	if _, integre := profils[x.Nom]; integre || !reNomEmulateur.MatchString(x.Nom) {
-		return nil, fmt.Errorf(tr("nom « %s » : lettres minuscules, chiffres et tirets, différent des profils intégrés",
-			"name \"%s\": lowercase letters, digits and dashes, different from the built-in profiles"), x.Nom)
+		return nil, fmt.Errorf(tr("Le nom « %s » ne convient pas. Utilisez des minuscules, des chiffres et des tirets, et un nom différent des profils intégrés.",
+			"The name \"%s\" can't be used. Use lowercase letters, digits and dashes, and a name that isn't a built-in profile."), x.Nom)
 	}
 	e.Args = decouper(x.Commande)
 	if !strings.Contains(x.Commande, "{rom}") {
-		return nil, fmt.Errorf(tr("%s : la ligne de commande doit contenir {rom}", "%s: the command line must contain {rom}"), x.Nom)
+		return nil, fmt.Errorf(tr("%s : ajoutez {rom} à la ligne de commande.", "%s: add {rom} to the command line."), x.Nom)
 	}
 	if len(x.Systemes) == 0 {
-		return nil, fmt.Errorf(tr("%s : cochez au moins un système", "%s: tick at least one system"), x.Nom)
+		return nil, fmt.Errorf(tr("%s : cochez au moins un système.", "%s: tick at least one system."), x.Nom)
 	}
 	e.Extension = strings.TrimSpace(x.Extension)
 	if e.Extension != "" && !strings.HasPrefix(e.Extension, ".") {
@@ -422,14 +423,24 @@ func (a *AssistantWeb) etat() EtatWeb {
 	}
 	sort.Strings(noms)
 	e.Configures = noms
-	for _, n := range noms {
-		e.Emulateurs = append(e.Emulateurs, emuWeb(n, cfg.Emulateurs[n], tr("configuré", "set up"), true))
+	problemes := map[string][]string{} // même état que Vérifications (azahar sans dossier sdmc : « À vérifier »)
+	for _, v := range verifsEmulateurs(&cfg) {
+		if !v.Ok {
+			problemes[v.Emulateur] = append(problemes[v.Emulateur], v.Texte)
+		}
 	}
+	for _, n := range noms {
+		x := emuWeb(n, cfg.Emulateurs[n], tr("configuré", "set up"), true)
+		x.Problemes = problemes[n]
+		e.Emulateurs = append(e.Emulateurs, x)
+	}
+	// Trouvés sur ce PC, absents de config.json : cochés au premier lancement (rien à choisir avant), sinon pas cochés,
+	// dans la partie repliée de la page : rien n'est ajouté à une configuration existante sans un choix.
 	for _, t := range detecter(e.LaunchBox) {
 		if c := cfg.Emulateurs[t.Profil]; c != nil && strings.EqualFold(c.Exe, t.Exe) {
 			continue
 		}
-		e.Emulateurs = append(e.Emulateurs, emuWeb(t.Profil, &Emulateur{Exe: t.Exe, Processus: t.Processus}, t.Source, cfg.Emulateurs[t.Profil] == nil))
+		e.Emulateurs = append(e.Emulateurs, emuWeb(t.Profil, &Emulateur{Exe: t.Exe, Processus: t.Processus}, t.Source, !existeCfg))
 	}
 	// Arguments en plus vides : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ».
 	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
@@ -456,13 +467,13 @@ func (a *AssistantWeb) etat() EtatWeb {
 func (a *AssistantWeb) ouvrir(nom string) map[string]any {
 	var cfg Config
 	if err := lireJSON(a.config, &cfg); err != nil || cfg.Emulateurs[nom] == nil {
-		return map[string]any{"Ok": false, "Message": tr("Émulateur absent de la configuration : ", "Emulator missing from the configuration: ") + nom}
+		return map[string]any{"Ok": false, "Message": tr("Cet émulateur n'est pas configuré : ", "This emulator isn't set up: ") + nom}
 	}
 	if err := ouvrirDetache(lanceurDe(&cfg), []string{"launch", "--config", a.config, nom}); err != nil {
 		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
-	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre : ses jeux sont synchronisés avant, puis envoyés à sa fermeture.",
-		"%s is opening: its games are synced first, then uploaded when it closes."), nom)}
+	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre avec vos sauvegardes à jour. Elles seront envoyées quand vous le fermerez.",
+		"%s is opening with your saves up to date. They'll be uploaded when you close it."), nom)}
 }
 
 func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
@@ -475,7 +486,7 @@ func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
 	if err := testerServeur(&cfg); err != nil {
 		return map[string]any{"Ok": false, "Message": texteErreur(err)}
 	}
-	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connection OK.")}
+	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connected.")}
 }
 
 // appliquer : config.json (copie avant), programme, frontends, raccourcis, serveur local. Rien n'est écrit si le
@@ -487,7 +498,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	}
 	if c.Local {
 		if c.Port <= 0 || c.Port > 65535 {
-			return nil, fmt.Errorf("%s", tr("port invalide", "invalid port"))
+			return nil, fmt.Errorf("%s", tr("Le port doit être un nombre entre 1 et 65535.", "The port must be a number from 1 to 65535."))
 		}
 		cfg.ServeurLocal = &ServeurLocal{Port: c.Port}
 		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", c.Port)
@@ -506,7 +517,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			cfg.Jeton = c.Jeton
 		}
 		if err := testerServeur(&cfg); err != nil {
-			return nil, fmt.Errorf("%s %s", texteErreur(err), tr("Rien n'est écrit.", "Nothing is written."))
+			return nil, fmt.Errorf("%s %s", texteErreur(err), tr("Les réglages ne sont pas enregistrés.", "Your settings weren't saved."))
 		}
 	}
 
@@ -516,7 +527,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			continue
 		}
 		if emus[x.Nom] != nil {
-			return nil, fmt.Errorf(tr("deux émulateurs « %s » sont cochés : gardez-en un seul", "two \"%s\" emulators are ticked: keep only one"), x.Nom)
+			return nil, fmt.Errorf(tr("Deux émulateurs « %s » sont cochés. Gardez-en un seul.", "Two \"%s\" emulators are ticked. Keep only one."), x.Nom)
 		}
 		e, err := emulateurDe(x)
 		if err != nil {
@@ -536,7 +547,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 			e.Sauvegardes = map[string]string{}
 			for _, s := range x.Systemes {
 				if s.Sauvegardes == "" {
-					return nil, fmt.Errorf(tr("%s : dossier des sauvegardes %s vide", "%s: empty %s save folder"), x.Nom, s.Systeme)
+					return nil, fmt.Errorf(tr("%s : indiquez le dossier des sauvegardes %s.", "%s: enter the %s save folder."), x.Nom, s.Systeme)
 				}
 				e.Sauvegardes[s.Systeme] = s.Sauvegardes
 			}
@@ -565,7 +576,7 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	delete(cfg.Frontends, "launchbox")
 	if c.LaunchBox != "" {
 		if !existe(filepath.Join(c.LaunchBox, "Data", "Emulators.xml")) {
-			return nil, fmt.Errorf(tr("Emulators.xml introuvable dans %s", "Emulators.xml not found in %s"), c.LaunchBox)
+			return nil, fmt.Errorf(tr("LaunchBox introuvable dans %s. Choisissez le dossier principal de LaunchBox.", "Couldn't find LaunchBox in %s. Choose the main LaunchBox folder."), c.LaunchBox)
 		}
 		cfg.Frontends["launchbox"] = c.LaunchBox
 	}

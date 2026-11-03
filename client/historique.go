@@ -98,8 +98,8 @@ func nomsRoms(cfg *Config) map[string]string {
 // ponytail: jusqu'à 30 lectures de 512 Kio par liste ; à lire à la demande si un serveur distant lent le rend pénible.
 func (s *Session) lignesHisto(cle string) ([]LigneHisto, error) {
 	if !cleValide(cle) {
-		return nil, fmt.Errorf(tr("clé de jeu invalide : %s. « 3dssavesync restore » affiche les clés des jeux du serveur.",
-			"invalid game key: %s. \"3dssavesync restore\" shows the keys of the server games."), cle)
+		return nil, fmt.Errorf(tr("Clé de jeu inconnue : %s. « 3dssavesync restore » affiche les clés des jeux du serveur.",
+			"Unknown game key: %s. \"3dssavesync restore\" lists the keys of the games on the server."), cle)
 	}
 	st, o, err := s.api("GET", "/saves/"+cle+"/history", nil, nil)
 	if err != nil {
@@ -155,7 +155,7 @@ func (s *Session) restaurer(cle, fichier, courant string) (deja bool, err error)
 		}
 	}()
 	if !cleValide(cle) || !reVersion.MatchString(fichier) {
-		return false, fmt.Errorf(tr("version inconnue : %s %s", "unknown version: %s %s"), cle, fichier)
+		return false, fmt.Errorf(tr("Version introuvable : %s %s", "Version not found: %s %s"), cle, fichier)
 	}
 	if hashDe(fichier) == courant {
 		return true, nil
@@ -168,16 +168,16 @@ func (s *Session) restaurer(cle, fichier, courant string) (deja bool, err error)
 		return false, &erreurHTTP{"GET /saves/" + cle + "/history/" + fichier, st}
 	}
 	if hachage(o) != hashDe(fichier) {
-		return false, errors.New(tr("la version reçue du serveur est abîmée (transfert incomplet) : rien n'est restauré. Réessayez.",
-			"the version received from the server is damaged (incomplete transfer): nothing is restored. Try again."))
+		return false, errors.New(tr("La version reçue du serveur est incomplète, rien n'a été restauré. Réessayez.",
+			"The version from the server arrived incomplete, so nothing was restored. Try again."))
 	}
 	st, _, err = s.api("PUT", "/saves/"+cle, o, map[string]string{"If-Match": `"` + courant + `"`})
 	if err != nil {
 		return false, err
 	}
 	if st == 412 {
-		return false, errors.New(tr("la sauvegarde a changé sur le serveur entre-temps (un appareil vient de l'envoyer) : rien n'est restauré. Affichez de nouveau la liste des versions, puis choisissez.",
-			"the save changed on the server in the meantime (a device just uploaded it): nothing is restored. Show the version list again, then choose."))
+		return false, errors.New(tr("Cette sauvegarde vient de changer sur le serveur (un appareil l'a envoyée entre-temps). Rien n'a été restauré : rouvrez la liste des versions et choisissez de nouveau.",
+			"This save just changed on the server (a device uploaded it meanwhile). Nothing was restored. Open the version list again and choose again."))
 	}
 	if st != 200 {
 		return false, &erreurHTTP{"PUT /saves/" + cle, st}
@@ -187,13 +187,13 @@ func (s *Session) restaurer(cle, fichier, courant string) (deja bool, err error)
 }
 
 func texteRestaure() string {
-	return tr("Version restaurée : elle est maintenant la version actuelle sur le serveur. Chaque appareil la reçoit à sa prochaine synchronisation.",
-		"Version restored: it is now the current version on the server. Each device gets it at its next sync.")
+	return tr("Version restaurée. C'est maintenant la version actuelle du serveur, et chaque appareil la recevra à sa prochaine synchronisation.",
+		"Version restored. It's now the current version on the server, and each device gets it at its next sync.")
 }
 
 func texteDeja() string {
-	return tr("Cette version a le même contenu que la version actuelle : rien n'est changé.",
-		"This version has the same content as the current version: nothing is changed.")
+	return tr("Cette version est identique à la version actuelle. Il n'y a rien à restaurer.",
+		"This version is the same as the current one. There's nothing to restore.")
 }
 
 // Session de la Restauration : la configuration, et le nom de Client « restauration ».
@@ -232,7 +232,7 @@ func commandeRestore(config string, args []string, oui bool, q *Questions) (int,
 		}
 	}
 	if len(reste) > 2 {
-		return 2, errors.New(tr("restore : une clé de jeu, puis le numéro de la version", "restore: one game key, then the version number"))
+		return 2, errors.New(tr("restore attend une clé de jeu, puis un numéro de version", "restore needs a game key, then a version number"))
 	}
 	s, err := sessionRestauration(config)
 	if err != nil {
@@ -246,7 +246,7 @@ func commandeRestore(config string, args []string, oui bool, q *Questions) (int,
 		for _, j := range jeux {
 			q.dire("%-22s %s", j.Cle, j.Nom)
 		}
-		q.dire(tr("Versions d'un jeu : 3dssavesync restore <clé>", "Versions of a game: 3dssavesync restore <key>"))
+		q.dire(tr("Voir les versions d'un jeu : 3dssavesync restore <clé>", "See the versions of a game: 3dssavesync restore <key>"))
 		return 0, nil
 	}
 	cle := strings.ToUpper(reste[0])
@@ -255,8 +255,8 @@ func commandeRestore(config string, args []string, oui bool, q *Questions) (int,
 		return 1, err
 	}
 	if len(lignes) == 0 {
-		return 1, fmt.Errorf(tr("aucune version de %s sur le serveur. « 3dssavesync restore » affiche les jeux du serveur.",
-			"no version of %s on the server. \"3dssavesync restore\" shows the server games."), cle)
+		return 1, fmt.Errorf(tr("Aucune version de %s sur le serveur. « 3dssavesync restore » affiche les jeux du serveur.",
+			"No versions of %s on the server. \"3dssavesync restore\" lists the games on the server."), cle)
 	}
 	ligne := func(l LigneHisto) string {
 		t := fmt.Sprintf("%4d  %s  %-12s %8s", l.N, l.Date, l.Client, l.Taille)
@@ -278,21 +278,21 @@ func commandeRestore(config string, args []string, oui bool, q *Questions) (int,
 	n, _ := strconv.Atoi(reste[1])
 	i := slices.IndexFunc(lignes, func(l LigneHisto) bool { return l.N == n })
 	if i < 0 {
-		return 1, fmt.Errorf(tr("pas de version n° %s parmi les %d dernières de %s. « 3dssavesync restore %s » affiche la liste.",
-			"no version no. %s among the last %d of %s. \"3dssavesync restore %s\" shows the list."), reste[1], versionsMax, cle, cle)
+		return 1, fmt.Errorf(tr("Pas de version n° %s parmi les %d dernières de %s. « 3dssavesync restore %s » affiche la liste.",
+			"No version %s among the last %d of %s. \"3dssavesync restore %s\" shows the list."), reste[1], versionsMax, cle, cle)
 	}
 	if lignes[i].Hash == lignes[0].Hash {
 		q.dire("%s", texteDeja())
 		return 0, nil
 	}
-	q.dire("%s\n%s", ligne(lignes[i]), tr("Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n"+
-		"Chaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde.\n"+
-		"Synchronisez d'abord les autres appareils : une partie pas encore envoyée peut sinon remplacer cette version, ou afficher un conflit.",
-		"This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n"+
-			"Each device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save.\n"+
-			"Sync the other devices first: otherwise a game not yet uploaded can replace this version, or show a conflict."))
+	q.dire("%s\n%s", ligne(lignes[i]), tr("Cette version deviendra la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n"+
+		"Chaque appareil (3DS, PC) la recevra à sa prochaine synchronisation, après une copie de sécurité de sa sauvegarde.\n"+
+		"Synchronisez d'abord vos autres appareils. Sinon, une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit.",
+		"This version will become the current version on the server. No version is deleted: the current one stays in the history.\n"+
+			"Each device (3DS, PC) gets it at its next sync, after backing up its save.\n"+
+			"Sync your other devices first. Otherwise a game not uploaded yet could replace this version or cause a conflict."))
 	if !oui && !q.oui(tr("Restaurer cette version ?", "Restore this version?"), false) {
-		q.dire(tr("Rien n'est changé.", "Nothing is changed."))
+		q.dire(tr("Rien n'a été modifié.", "Nothing was changed."))
 		return 0, nil
 	}
 	deja, err := s.restaurer(cle, lignes[i].Fichier, lignes[0].Hash)

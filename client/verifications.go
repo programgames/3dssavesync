@@ -11,10 +11,11 @@ import (
 	"strings"
 )
 
-// Verif : un élément de la liste. Page : l'entrée du menu qui reçoit le point orange.
+// Verif : un élément de la liste. Page : l'entrée du menu qui reçoit le compteur ; Emulateur : l'émulateur de
+// config.json concerné (sa ligne dans Émulateurs dit « À vérifier »), "" sinon.
 type Verif struct {
-	Ok          bool
-	Texte, Page string
+	Ok                     bool
+	Texte, Page, Emulateur string
 }
 
 // verifications : la liste, et la mise à jour disponible (Version, Page ; nil sinon). Lectures sur le réseau : la
@@ -22,11 +23,11 @@ type Verif struct {
 func verifications(config string) ([]Verif, map[string]string) {
 	var cfg Config
 	if err := lireConfig(config, &cfg); err != nil {
-		return []Verif{{false, texteErreur(err), "serveur"}}, nil
+		return []Verif{{Texte: texteErreur(err), Page: "serveur"}}, nil
 	}
 	var l []Verif
 	ajouter := func(ok bool, page, format string, a ...any) {
-		l = append(l, Verif{ok, fmt.Sprintf(format, a...), page})
+		l = append(l, Verif{ok, fmt.Sprintf(format, a...), page, ""})
 	}
 	detail := tr("Détail : ", "Detail: ")
 
@@ -36,36 +37,7 @@ func verifications(config string) ([]Verif, map[string]string) {
 		ajouter(true, "serveur", "%s", tr("Serveur joignable, jeton accepté.", "Server reachable, token accepted."))
 	}
 
-	var noms []string
-	for n := range cfg.Emulateurs {
-		noms = append(noms, n)
-	}
-	sort.Strings(noms)
-	if len(noms) == 0 {
-		ajouter(false, "emulateurs", "%s", tr("Aucun émulateur : cochez-en un dans Émulateurs, puis cliquez sur « Enregistrer ».",
-			"No emulator: tick one in Emulators, then click \"Save\"."))
-	}
-	for _, n := range noms {
-		e := cfg.Emulateurs[n]
-		p, err := e.profil(n)
-		if err != nil {
-			ajouter(false, "emulateurs", "%s : %v", n, err)
-			continue
-		}
-		for _, s := range e.systemes(p) {
-			switch d := e.dossier(p, s, ""); {
-			case d == "" && s == "3DS":
-				ajouter(false, "emulateurs", tr("%s 3DS : dossier sdmc inconnu. Choisissez-le dans Émulateurs, « Régler ».", "%s 3DS: sdmc folder unknown. Choose it in Emulators, \"Settings\"."), n)
-			case d == "":
-				ajouter(true, "emulateurs", tr("%s %s : sauvegardes à côté de chaque ROM.", "%s %s: saves next to each ROM."), n, s)
-			case existe(d):
-				ajouter(true, "emulateurs", tr("%s %s : dossier des sauvegardes trouvé (%s).", "%s %s: save folder found (%s)."), n, s, d)
-			default:
-				ajouter(false, "emulateurs", tr("%s %s : dossier des sauvegardes introuvable (%s). Lancez un jeu une fois dans l'émulateur, ou choisissez le bon dossier dans Émulateurs, « Régler ».",
-					"%s %s: save folder not found (%s). Start a game once in the emulator, or choose the right folder in Emulators, \"Settings\"."), n, s, d)
-			}
-		}
-	}
+	l = append(l, verifsEmulateurs(&cfg)...)
 
 	lb, emus := entreesFrontends(&cfg)
 	lanceur := lanceurDe(&cfg)
@@ -77,8 +49,8 @@ func verifications(config string) ([]Verif, map[string]string) {
 			ajouter(false, "frontends", "%s\n%s%v", tr("LaunchBox : Emulators.xml illisible. Vérifiez le dossier de LaunchBox dans Frontends.",
 				"LaunchBox: Emulators.xml cannot be read. Check the LaunchBox folder in Frontends."), detail, err)
 		case len(m) > 0:
-			ajouter(false, "frontends", tr("LaunchBox : %s pas encore par défaut. Fermez LaunchBox, puis cliquez sur « Réparer les frontends ».",
-				"LaunchBox: %s not default yet. Close LaunchBox, then click \"Repair frontends\"."), strings.Join(m, ", "))
+			ajouter(false, "frontends", tr("LaunchBox : %s n'est pas encore l'émulateur par défaut. Fermez LaunchBox et cliquez sur « Réparer les frontends ».",
+				"LaunchBox: %s isn't the default emulator yet. Close LaunchBox and click \"Repair frontends\"."), strings.Join(m, ", "))
 		default:
 			ajouter(true, "frontends", "%s", tr("LaunchBox configuré.", "LaunchBox set up."))
 		}
@@ -88,8 +60,8 @@ func verifications(config string) ([]Verif, map[string]string) {
 		s, _ := os.ReadFile(fs)
 		r, _ := os.ReadFile(fr)
 		if ns, nr, _ := esde(string(s), string(r), lanceur, emus); ns != string(s) || nr != string(r) {
-			ajouter(false, "frontends", "%s", tr("ES-DE : pas encore configuré. Fermez ES-DE, puis cliquez sur « Réparer les frontends ».",
-				"ES-DE: not set up yet. Close ES-DE, then click \"Repair frontends\"."))
+			ajouter(false, "frontends", "%s", tr("ES-DE n'est pas encore configuré. Fermez-le et cliquez sur « Réparer les frontends ».",
+				"ES-DE isn't set up yet. Close it and click \"Repair frontends\"."))
 		} else {
 			ajouter(true, "frontends", "%s", tr("ES-DE configuré.", "ES-DE set up."))
 		}
@@ -98,16 +70,16 @@ func verifications(config string) ([]Verif, map[string]string) {
 	if cfg.CartePreparee != "" {
 		ajouter(true, "carte", tr("Carte SD de la 3DS préparée le %s.", "3DS SD card prepared on %s."), cfg.CartePreparee)
 	} else {
-		ajouter(false, "carte", "%s", tr("Carte SD de la 3DS pas encore préparée depuis ce PC : mettez-la dans le PC, puis cliquez sur « Préparer la carte SD de la 3DS ».",
-			"3DS SD card not prepared from this PC yet: put it in the PC, then click \"Prepare the 3DS SD card\"."))
+		ajouter(false, "carte", "%s", tr("La carte SD de la 3DS n'a pas encore été préparée depuis ce PC. Mettez-la dans le PC et cliquez sur « Préparer la carte SD de la 3DS ».",
+			"The 3DS SD card hasn't been prepared from this PC yet. Put it in the PC and click \"Prepare the 3DS SD card\"."))
 	}
 
 	if cfg.iconeHorloge() && trayDisponible {
 		if trayActif(filepath.Dir(config)) {
-			ajouter(true, "frontends", "%s", tr("Icône près de l'horloge en marche.", "Icon near the clock running."))
+			ajouter(true, "frontends", "%s", tr("Icône près de l'horloge en marche.", "Icon near the clock is running."))
 		} else {
-			ajouter(false, "frontends", "%s", tr("L'icône près de l'horloge ne tourne pas. Cliquez sur « Enregistrer » : elle démarre.",
-				"The icon near the clock is not running. Click \"Save\": it starts."))
+			ajouter(false, "frontends", "%s", tr("L'icône près de l'horloge n'est pas lancée. Cliquez sur « Enregistrer » pour la démarrer.",
+				"The icon near the clock isn't running. Click \"Save\" to start it."))
 		}
 	}
 
@@ -121,15 +93,56 @@ func verifications(config string) ([]Verif, map[string]string) {
 		r, err := derniereRelease(filepath.Dir(config), false)
 		switch {
 		case err != nil:
-			ajouter(false, "frontends", "%s %s", tr("Recherche de mise à jour impossible.", "Update check failed."), erreurGitHub(err))
+			ajouter(false, "frontends", "%s %s", tr("Impossible de vérifier les mises à jour.", "Couldn't check for updates."), erreurGitHub(err))
 		case plusRecente(version, r.Tag):
 			v := strings.TrimPrefix(r.Tag, "v")
 			maj = map[string]string{"Version": v, "Page": r.Page}
-			ajouter(false, "frontends", tr("Version %s disponible (vous avez la %s) : cliquez sur « Mettre à jour » en haut de la page.",
-				"Version %s available (you have %s): click \"Update\" at the top of the page."), v, version)
+			ajouter(false, "frontends", tr("La version %s est disponible (vous avez la %s). Cliquez sur « Mettre à jour » en haut de la page.",
+				"Version %s is available (you have %s). Click \"Update\" at the top of the page."), v, version)
 		default:
 			ajouter(true, "frontends", tr("3dssavesync %s est à jour.", "3dssavesync %s is up to date."), version)
 		}
 	}
 	return l, maj
+}
+
+// verifsEmulateurs : les dossiers des sauvegardes des émulateurs de config.json (lectures locales seulement : la page
+// les montre aussi dans Émulateurs, au même état que dans Vérifications).
+func verifsEmulateurs(cfg *Config) []Verif {
+	var l []Verif
+	n := ""
+	ajouter := func(ok bool, page, format string, a ...any) {
+		l = append(l, Verif{ok, fmt.Sprintf(format, a...), page, n})
+	}
+	var noms []string
+	for n := range cfg.Emulateurs {
+		noms = append(noms, n)
+	}
+	sort.Strings(noms)
+	if len(noms) == 0 {
+		ajouter(false, "emulateurs", "%s", tr("Aucun émulateur choisi. Cochez-en un dans Émulateurs et cliquez sur « Enregistrer ».",
+			"No emulator selected. Tick one in Emulators and click \"Save\"."))
+	}
+	for _, n = range noms {
+		e := cfg.Emulateurs[n]
+		p, err := e.profil(n)
+		if err != nil {
+			ajouter(false, "emulateurs", "%s : %v", n, err)
+			continue
+		}
+		for _, s := range e.systemes(p) {
+			switch d := e.dossier(p, s, ""); {
+			case d == "" && s == "3DS":
+				ajouter(false, "emulateurs", tr("%s 3DS : dossier sdmc inconnu. Indiquez-le dans Émulateurs, bouton « Régler ».", "%s 3DS: sdmc folder unknown. Set it in Emulators with the \"Configure\" button."), n)
+			case d == "":
+				ajouter(true, "emulateurs", tr("%s %s : sauvegardes à côté de chaque ROM.", "%s %s: saves next to each ROM."), n, s)
+			case existe(d):
+				ajouter(true, "emulateurs", tr("%s %s : dossier des sauvegardes trouvé (%s).", "%s %s: save folder found (%s)."), n, s, d)
+			default:
+				ajouter(false, "emulateurs", tr("%s %s : dossier des sauvegardes introuvable (%s). Lancez un jeu une fois dans l'émulateur, ou indiquez le bon dossier dans Émulateurs, bouton « Régler ».",
+					"%s %s: save folder not found (%s). Start a game once in the emulator, or set the right folder in Emulators with the \"Configure\" button."), n, s, d)
+			}
+		}
+	}
+	return l
 }
