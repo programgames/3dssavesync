@@ -29,12 +29,14 @@ jobs:
         working-directory: 3ds
         run: |
           gcc -std=c99 -Wall -Wextra -Werror -I source source/state.c test/test_state.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/state.c source/games.c test/test_games.c -o /tmp/g && /tmp/g
           gcc -std=c99 -Wall -Wextra -Werror -I source source/key.c test/test_key.c -o /tmp/c && /tmp/c
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c test/test_files.c -o /tmp/f && (cd /tmp && /tmp/f)
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/settings.c test/test_settings.c -o /tmp/r && (cd /tmp && /tmp/r)
           gcc -std=c99 -Wall -Wextra -Werror -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
           gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c test/test_errors.c -o /tmp/e && /tmp/e
           gcc -std=c99 -Wall -Wextra -Werror -I source source/text.c test/test_text.c -o /tmp/x && /tmp/x
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c source/text.c source/result.c test/test_result.c -o /tmp/s && /tmp/s
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json
 

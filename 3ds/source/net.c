@@ -1,12 +1,21 @@
 #include <3ds.h>
 #include <curl/curl.h>
 #include <malloc.h>
+#include <mbedtls/sha256.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "github_roots.h"
 #include "isrg_root_x1.h"
 #include "net.h"
+
+void hash_hex(const unsigned char *bytes, size_t size, char out[65])
+{
+    unsigned char h[32];
+    int i;
+    mbedtls_sha256_ret(bytes, size, h, 0);
+    for (i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", h[i]);
+}
 
 #define SOC_SIZE 0x100000
 

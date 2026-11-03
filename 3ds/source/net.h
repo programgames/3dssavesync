@@ -22,6 +22,9 @@ long net_github(const char *url, void (*on_progress)(size_t done, size_t total),
  * Returns the HTTP status (> 0) or -<curl code> (< 0). */
 long net_put(const char *url, const char *token, const char *condition, const void *bytes, size_t size);
 
+/* SHA-256 of bytes in lowercase hex: the Hash of a Save, the check of a download. */
+void hash_hex(const unsigned char *bytes, size_t size, char out[65]);
+
 /* 0 if the 3DS is connected to no Wi-Fi access point (network_text, errors.h). */
 int net_wifi(void);
 
