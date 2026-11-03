@@ -5,16 +5,16 @@ import (
 	"testing"
 )
 
-func TestAnglais(t *testing.T) {
-	anglais = true
-	t.Cleanup(func() { anglais = false })
-	reinitialiser()
-	reponses = []string{"Keep PC save"}
+func TestEnglish(t *testing.T) {
+	english = true
+	t.Cleanup(func() { english = false })
+	reset()
+	responses = []string{"Keep PC save"}
 	srv := &Version{Hash: strings.Repeat("b", 64), Client: "3ds", Age: new(int64)}
 	*srv.Age = 7200
-	choix := resoudreConflit(&Jeu{Nom: "Pokemon X"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}}, srv, nil, false)
-	if choix != forcer {
-		t.Errorf("« Keep PC save » : %s, attendu %s", choix, forcer)
+	choice := resolveConflict(&Game{Name: "Pokemon X"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}}, srv, nil, false)
+	if choice != force {
+		t.Errorf("« Keep PC save » : %s, attendu %s", choice, force)
 	}
 	if len(questions) != 1 || !strings.Contains(questions[0], "Conflict on Pokemon X") || !strings.Contains(questions[0], "2 h ago") {
 		t.Errorf("texte du Conflit en anglais attendu : %q", questions)

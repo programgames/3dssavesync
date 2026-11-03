@@ -11,65 +11,65 @@ import (
 
 // LaunchBox prêt : l'émulateur « (3dssavesync) » par défaut sur une plateforme de l'entrée ; un émulateur absent de
 // LaunchBox n'est pas à faire.
-func TestManquantsLaunchBox(t *testing.T) {
-	lb, lanceur := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
-	entrees := []EntreeLB{
+func TestMissingLaunchBox(t *testing.T) {
+	lb, launcher := filepath.Join("L", "LaunchBox"), filepath.Join("P", "3dssavesync.exe")
+	entries := []LBEntry{
 		{"melonds", filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), []string{"DS"}},
 		{"mgba", filepath.Join("x", "mGBA.exe"), []string{"GB", "GBA"}},
 	}
-	if m := manquantsLaunchBox(emulatorsXML, lanceur, entrees); !slices.Equal(m, []string{"melonds"}) {
+	if m := missingLaunchBox(emulatorsXML, launcher, entries); !slices.Equal(m, []string{"melonds"}) {
 		t.Errorf("avant la réparation : %v", m)
 	}
-	nouveau, _ := launchbox(emulatorsXML, lb, lanceur, entrees)
-	if m := manquantsLaunchBox(nouveau, lanceur, entrees); m != nil {
+	newText, _ := launchbox(emulatorsXML, lb, launcher, entries)
+	if m := missingLaunchBox(newText, launcher, entries); m != nil {
 		t.Errorf("après la réparation : %v", m)
 	}
 	// L'utilisateur remet l'émulateur d'origine par défaut dans LaunchBox : à refaire.
-	i := strings.LastIndex(nouveau, "<Default>true</Default>")
-	if m := manquantsLaunchBox(nouveau[:i]+"<Default>false</Default>"+nouveau[i+len("<Default>true</Default>"):], lanceur, entrees); !slices.Equal(m, []string{"melonds"}) {
+	i := strings.LastIndex(newText, "<Default>true</Default>")
+	if m := missingLaunchBox(newText[:i]+"<Default>false</Default>"+newText[i+len("<Default>true</Default>"):], launcher, entries); !slices.Equal(m, []string{"melonds"}) {
 		t.Errorf("plus par défaut : %v", m)
 	}
 }
 
 // Liste « Tout est prêt » : serveur, dossiers des sauvegardes, frontends, carte SD, sans jamais deviner.
-func TestVerifications(t *testing.T) {
-	m := maisonFactice(t)
-	serveur := httptest.NewServer(&Serveur{data: t.TempDir(), jeton: "j"})
-	defer serveur.Close()
+func TestChecks(t *testing.T) {
+	m := fakeHome(t)
+	server := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
+	defer server.Close()
 	config := filepath.Join(t.TempDir(), "config.json")
-	textes := func(l []Verif) (ok, afaire string) {
+	texts := func(l []Check) (ok, todo string) {
 		for _, v := range l {
 			if v.Ok {
-				ok += v.Texte + "|"
+				ok += v.Text + "|"
 			} else {
-				afaire += v.Page + ":" + v.Texte + "|"
+				todo += v.Page + ":" + v.Text + "|"
 			}
 		}
 		return
 	}
-	if l, maj := verifications(config); len(l) != 1 || l[0].Ok || !strings.Contains(l[0].Texte, "pas encore configuré") || maj != nil {
+	if l, update := checks(config); len(l) != 1 || l[0].Ok || !strings.Contains(l[0].Text, "pas encore configuré") || update != nil {
 		t.Errorf("sans config.json : %+v", l)
 	}
 
 	saves := filepath.Join(m, "saves")
 	os.MkdirAll(saves, 0o755)
 	esde := filepath.Join(m, "ES-DE")
-	cfg := Config{URL: serveur.URL, Jeton: "faux", Emulateurs: map[string]*Emulateur{
-		"melonds": {Exe: filepath.Join(m, "melonDS.exe"), Sauvegardes: map[string]string{"DS": saves}},
-		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Sauvegardes: map[string]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
+	cfg := Config{URL: server.URL, Token: "faux", Emulators: map[string]*Emulator{
+		"melonds": {Exe: filepath.Join(m, "melonDS.exe"), Saves: map[string]string{"DS": saves}},
+		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Saves: map[string]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
 	}, Frontends: map[string]string{"esde": esde}}
-	ecrireJSON(config, &cfg, true)
-	l, _ := verifications(config)
-	ok, afaire := textes(l)
+	writeJSON(config, &cfg, true)
+	l, _ := checks(config)
+	ok, todo := texts(l)
 	for _, v := range l { // la ligne de l'émulateur dans la page reprend ces lignes (EmuWeb.Problemes)
-		if strings.HasPrefix(v.Texte, "mgba ") != (v.Emulateur == "mgba") || strings.HasPrefix(v.Texte, "melonds ") != (v.Emulateur == "melonds") {
-			t.Errorf("émulateur de la ligne %q : %q", v.Texte, v.Emulateur)
+		if strings.HasPrefix(v.Text, "mgba ") != (v.Emulator == "mgba") || strings.HasPrefix(v.Text, "melonds ") != (v.Emulator == "melonds") {
+			t.Errorf("émulateur de la ligne %q : %q", v.Text, v.Emulator)
 		}
 	}
-	for _, attendu := range []string{"serveur:Serveur injoignable : Le serveur refuse ce jeton", "emulateurs:mgba GB\u00a0: dossier des sauvegardes introuvable (" + filepath.Join(m, "absent"),
+	for _, expected := range []string{"serveur:Serveur injoignable : Le serveur refuse ce jeton", "emulateurs:mgba GB\u00a0: dossier des sauvegardes introuvable (" + filepath.Join(m, "absent"),
 		"frontends:ES-DE n'est pas encore configuré", "carte:La carte SD de la 3DS n'a pas encore été préparée"} {
-		if !strings.Contains(afaire, attendu) {
-			t.Errorf("à faire : %q absent de\n%s", attendu, afaire)
+		if !strings.Contains(todo, expected) {
+			t.Errorf("à faire : %q absent de\n%s", expected, todo)
 		}
 	}
 	if !strings.Contains(ok, "melonds DS : dossier des sauvegardes trouvé") || !strings.Contains(ok, "mgba GBA : dossier des sauvegardes trouvé") ||
@@ -77,17 +77,17 @@ func TestVerifications(t *testing.T) {
 		t.Errorf("bons : %s", ok)
 	}
 
-	cfg.Jeton, cfg.CartePreparee = "j", "2026-11-03 14:05"
-	cfg.Emulateurs["mgba"].Sauvegardes["GB"] = saves
-	ecrireJSON(config, &cfg, true)
-	reparer(&cfg, lanceurDe(&cfg))
-	ok, afaire = textes(func() []Verif { l, _ := verifications(config); return l }())
-	for _, attendu := range []string{"Serveur joignable, jeton accepté.", "ES-DE configuré.", "Carte SD de la 3DS préparée le 2026-11-03 14:05."} {
-		if !strings.Contains(ok, attendu) {
-			t.Errorf("bon : %q absent de\n%s", attendu, ok)
+	cfg.Token, cfg.PreparedCard = "j", "2026-11-03 14:05"
+	cfg.Emulators["mgba"].Saves["GB"] = saves
+	writeJSON(config, &cfg, true)
+	repair(&cfg, launcherOf(&cfg))
+	ok, todo = texts(func() []Check { l, _ := checks(config); return l }())
+	for _, expected := range []string{"Serveur joignable, jeton accepté.", "ES-DE configuré.", "Carte SD de la 3DS préparée le 2026-11-03 14:05."} {
+		if !strings.Contains(ok, expected) {
+			t.Errorf("bon : %q absent de\n%s", expected, ok)
 		}
 	}
-	if trayDisponible && !strings.Contains(afaire, "frontends:L'icône près de l'horloge n'est pas lancée") || !trayDisponible && afaire != "" {
-		t.Errorf("seule l'icône (pas lancée en test) reste à faire : %s", afaire)
+	if trayAvailable && !strings.Contains(todo, "frontends:L'icône près de l'horloge n'est pas lancée") || !trayAvailable && todo != "" {
+		t.Errorf("seule l'icône (pas lancée en test) reste à faire : %s", todo)
 	}
 }

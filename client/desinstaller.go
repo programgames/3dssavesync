@@ -19,15 +19,15 @@ import (
 )
 
 var (
-	regleESDE    = regexp.MustCompile(`(?s)  <emulator name="3DSSAVESYNC">.*?</emulator>\r?\n`)
-	commandeESDE = regexp.MustCompile(`<command label="3dssavesync \([^"]*\)">[^<]*</command>\r?\n[ \t]*`)
-	systemeESDE  = regexp.MustCompile(`(?s)[ \t]*<system>.*?</system>\r?\n?`)
+	esdeRule    = regexp.MustCompile(`(?s)  <emulator name="3DSSAVESYNC">.*?</emulator>\r?\n`)
+	esdeCommand = regexp.MustCompile(`<command label="3dssavesync \([^"]*\)">[^<]*</command>\r?\n[ \t]*`)
+	esdeSystem  = regexp.MustCompile(`(?s)[ \t]*<system>.*?</system>\r?\n?`)
 	// Ligne de commande LaunchBox d'un émulateur qui passe par le Lanceur : « run --emulator <nom> ».
-	optionEmulateur = regexp.MustCompile(`--emulator (\S+)`)
+	emulatorOption = regexp.MustCompile(`--emulator (\S+)`)
 )
 
 // Adaptateurs remplacés par les tests (PowerShell, Corbeille, processus détaché).
-var retirerRaccourcis, retirerProgramme = retirerRaccourcisSysteme, retirerProgrammeSysteme
+var removeShortcuts, removeProgram = removeShortcutsSystem, removeProgramSystem
 
 // defaireLaunchbox : retire chaque copie « <titre> (3dssavesync) » qui lance le Lanceur, et ses plateformes ;
 // l'émulateur dont elle est la copie (même titre sans « (3dssavesync) ») redevient l'émulateur par défaut de ces
@@ -36,244 +36,244 @@ var retirerRaccourcis, retirerProgramme = retirerRaccourcisSysteme, retirerProgr
 // « --emulator <nom> ») ; exe inconnu ou absent : laissé tel quel, le rapport dit de le corriger à la main. Une
 // plateforme où cet émulateur est par défaut le reste : l'émulateur d'origine de la copie n'y redevient pas par défaut.
 // Deux émulateurs encore par défaut d'une même plateforme : le rapport dit d'en garder un.
-func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []string) {
-	var rapport []string
-	surPlace := map[string]bool{} // ID des émulateurs modifiés sur place
-	unescape := desechapperXML
-	notre := func(b string) bool {
-		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(champ(b, "ApplicationPath")), `\`, "/")), filepath.Base(lanceur))
+func undoLaunchbox(text, lbDir, launcher string, cfg *Config) (string, []string) {
+	var report []string
+	inPlace := map[string]bool{} // ID des émulateurs modifiés sur place
+	unescape := unescapeXML
+	ours := func(b string) bool {
+		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(field(b, "ApplicationPath")), `\`, "/")), filepath.Base(launcher))
 	}
-	copie := func(b string) bool { return strings.HasSuffix(champ(b, "Title"), " (3dssavesync)") }
-	for _, b := range blocEmulateurLB.FindAllString(texte, -1) {
-		if !notre(b) || copie(b) {
+	cp := func(b string) bool { return strings.HasSuffix(field(b, "Title"), " (3dssavesync)") }
+	for _, b := range lbEmulatorBlock.FindAllString(text, -1) {
+		if !ours(b) || cp(b) {
 			continue
 		}
-		titre, nom := unescape(champ(b, "Title")), ""
-		surPlace[champ(b, "ID")] = true
-		blocs := []string{b}
-		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
-			if champ(p, "Emulator") == champ(b, "ID") {
-				blocs = append(blocs, p)
+		title, name := unescape(field(b, "Title")), ""
+		inPlace[field(b, "ID")] = true
+		blocks := []string{b}
+		for _, p := range lbPlatformBlock.FindAllString(text, -1) {
+			if field(p, "Emulator") == field(b, "ID") {
+				blocks = append(blocks, p)
 			}
 		}
-		for _, x := range blocs {
-			if m := optionEmulateur.FindStringSubmatch(unescape(champ(x, "CommandLine"))); m != nil && nom == "" {
-				nom = m[1]
+		for _, x := range blocks {
+			if m := emulatorOption.FindStringSubmatch(unescape(field(x, "CommandLine"))); m != nil && name == "" {
+				name = m[1]
 			}
 		}
-		e := cfg.Emulateurs[nom]
-		if e == nil || !existe(e.Exe) {
-			rapport = append(rapport, fmt.Sprintf(tr("émulateur « %[1]s » laissé tel quel : il lance encore 3dssavesync et son vrai exe est inconnu. Corrigez-le à la main dans LaunchBox : Tools, Manage, Emulators, « %[1]s » : Application Path",
-				"emulator \"%[1]s\" left as is: it still starts 3dssavesync and its real exe is unknown. Fix it by hand in LaunchBox: Tools, Manage, Emulators, \"%[1]s\": Application Path"), titre))
+		e := cfg.Emulators[name]
+		if e == nil || !exists(e.Exe) {
+			report = append(report, fmt.Sprintf(tr("émulateur « %[1]s » laissé tel quel : il lance encore 3dssavesync et son vrai exe est inconnu. Corrigez-le à la main dans LaunchBox : Tools, Manage, Emulators, « %[1]s » : Application Path",
+				"emulator \"%[1]s\" left as is: it still starts 3dssavesync and its real exe is unknown. Fix it by hand in LaunchBox: Tools, Manage, Emulators, \"%[1]s\": Application Path"), title))
 			continue
 		}
 		app := e.Exe // relatif sous le dossier de LaunchBox, comme LaunchBox l'écrit
-		if r, err := filepath.Rel(dossierLB, e.Exe); err == nil && !strings.HasPrefix(r, "..") {
+		if r, err := filepath.Rel(lbDir, e.Exe); err == nil && !strings.HasPrefix(r, "..") {
 			app = r
 		}
-		profil := e.Profil
-		if profil == "" {
-			profil = nom
+		profile := e.Profile
+		if profile == "" {
+			profile = name
 		}
-		for i, x := range blocs {
+		for i, x := range blocks {
 			n := x
 			if i == 0 {
-				n = fixerChamp(n, "ApplicationPath", app)
+				n = setField(n, "ApplicationPath", app)
 			}
-			if optionEmulateur.MatchString(champ(n, "CommandLine")) {
-				ligne := ""
-				if i > 0 && profil == "retroarch" { // le -L du cœur, que « run --emulator » avait remplacé
-					plateforme := unescape(champ(n, "Platform"))
-					if c := e.Coeurs[plateformesLB[plateforme]]; c != "" {
+			if emulatorOption.MatchString(field(n, "CommandLine")) {
+				line := ""
+				if i > 0 && profile == "retroarch" { // le -L du cœur, que « run --emulator » avait remplacé
+					platform := unescape(field(n, "Platform"))
+					if c := e.Cores[lbPlatforms[platform]]; c != "" {
 						if r, err := filepath.Rel(filepath.Dir(e.Exe), c); err == nil && !strings.HasPrefix(r, "..") {
 							c = r // relatif au dossier de RetroArch, comme LaunchBox l'écrit
 						}
-						ligne = `-L "` + c + `"`
+						line = `-L "` + c + `"`
 					} else {
-						rapport = append(rapport, fmt.Sprintf(tr("« %s » : cœur RetroArch inconnu. Choisissez de nouveau le cœur de « %s » dans LaunchBox : Tools, Manage, Emulators, « %s ».",
-							"\"%s\": unknown RetroArch core. Choose the core for \"%s\" again in LaunchBox: Tools, Manage, Emulators, \"%s\"."), titre, plateforme, titre))
+						report = append(report, fmt.Sprintf(tr("« %s » : cœur RetroArch inconnu. Choisissez de nouveau le cœur de « %s » dans LaunchBox : Tools, Manage, Emulators, « %s ».",
+							"\"%s\": unknown RetroArch core. Choose the core for \"%s\" again in LaunchBox: Tools, Manage, Emulators, \"%s\"."), title, platform, title))
 					}
 				}
-				n = fixerChamp(n, "CommandLine", ligne)
+				n = setField(n, "CommandLine", line)
 			}
-			texte = strings.Replace(texte, x, n, 1)
+			text = strings.Replace(text, x, n, 1)
 		}
-		rapport = append(rapport, fmt.Sprintf(tr("émulateur « %s » de nouveau sur %s", "emulator \"%s\" back to %s"), titre, e.Exe))
+		report = append(report, fmt.Sprintf(tr("émulateur « %s » de nouveau sur %s", "emulator \"%s\" back to %s"), title, e.Exe))
 	}
-	emus := blocEmulateurLB.FindAllString(texte, -1)
+	emus := lbEmulatorBlock.FindAllString(text, -1)
 	for _, b := range emus {
-		if !notre(b) || !copie(b) {
+		if !ours(b) || !cp(b) {
 			continue
 		}
-		id, titre := champ(b, "ID"), strings.TrimSuffix(champ(b, "Title"), " (3dssavesync)")
+		id, title := field(b, "ID"), strings.TrimSuffix(field(b, "Title"), " (3dssavesync)")
 		idOrig := ""
 		for _, o := range emus {
-			if !notre(o) && unescape(champ(o, "Title")) == unescape(titre) { // &#39; (echapperXML) contre ' (LaunchBox)
-				idOrig = champ(o, "ID")
+			if !ours(o) && unescape(field(o, "Title")) == unescape(title) { // &#39; (echapperXML) contre ' (LaunchBox)
+				idOrig = field(o, "ID")
 			}
 		}
-		restaure, garde := false, false // origine de nouveau par défaut ; émulateur modifié sur place resté par défaut
-		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
-			if champ(p, "Emulator") != id {
+		restored, kept := false, false // origine de nouveau par défaut ; émulateur modifié sur place resté par défaut
+		for _, p := range lbPlatformBlock.FindAllString(text, -1) {
+			if field(p, "Emulator") != id {
 				continue
 			}
-			defautSurPlace := false
-			for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
-				defautSurPlace = defautSurPlace || surPlace[champ(q, "Emulator")] && champ(q, "Platform") == champ(p, "Platform") && champ(q, "Default") == "true"
+			defaultInPlace := false
+			for _, q := range lbPlatformBlock.FindAllString(text, -1) {
+				defaultInPlace = defaultInPlace || inPlace[field(q, "Emulator")] && field(q, "Platform") == field(p, "Platform") && field(q, "Default") == "true"
 			}
-			garde = garde || defautSurPlace
-			if champ(p, "Default") == "true" && !defautSurPlace {
-				for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
-					if idOrig != "" && champ(q, "Emulator") == idOrig && champ(q, "Platform") == champ(p, "Platform") {
-						texte = strings.Replace(texte, q, fixerChamp(q, "Default", "true"), 1)
-						restaure = true
+			kept = kept || defaultInPlace
+			if field(p, "Default") == "true" && !defaultInPlace {
+				for _, q := range lbPlatformBlock.FindAllString(text, -1) {
+					if idOrig != "" && field(q, "Emulator") == idOrig && field(q, "Platform") == field(p, "Platform") {
+						text = strings.Replace(text, q, setField(q, "Default", "true"), 1)
+						restored = true
 						break
 					}
 				}
 			}
-			texte = strings.Replace(texte, p, "", 1)
+			text = strings.Replace(text, p, "", 1)
 		}
-		texte = strings.Replace(texte, b, "", 1)
+		text = strings.Replace(text, b, "", 1)
 		switch {
-		case restaure:
-			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré, « %s » est de nouveau celui par défaut", "Removed the \"%s\" emulator. \"%s\" is the default again"),
-				unescape(champ(b, "Title")), unescape(titre)))
-		case idOrig == "" && !garde:
-			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré. Son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox.",
-				"Removed the \"%s\" emulator. Its original emulator no longer exists, so choose a default emulator in LaunchBox."), unescape(champ(b, "Title"))))
+		case restored:
+			report = append(report, fmt.Sprintf(tr("Émulateur « %s » retiré, « %s » est de nouveau celui par défaut", "Removed the \"%s\" emulator. \"%s\" is the default again"),
+				unescape(field(b, "Title")), unescape(title)))
+		case idOrig == "" && !kept:
+			report = append(report, fmt.Sprintf(tr("Émulateur « %s » retiré. Son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox.",
+				"Removed the \"%s\" emulator. Its original emulator no longer exists, so choose a default emulator in LaunchBox."), unescape(field(b, "Title"))))
 		default:
-			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré.", "Removed the \"%s\" emulator."), unescape(champ(b, "Title"))))
+			report = append(report, fmt.Sprintf(tr("Émulateur « %s » retiré.", "Removed the \"%s\" emulator."), unescape(field(b, "Title"))))
 		}
 	}
-	defauts := map[string]int{}
-	var plateformes []string
-	for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
-		if p := unescape(champ(q, "Platform")); champ(q, "Default") == "true" {
-			if defauts[p]++; defauts[p] == 2 {
-				plateformes = append(plateformes, p)
+	defaults := map[string]int{}
+	var platforms []string
+	for _, q := range lbPlatformBlock.FindAllString(text, -1) {
+		if p := unescape(field(q, "Platform")); field(q, "Default") == "true" {
+			if defaults[p]++; defaults[p] == 2 {
+				platforms = append(platforms, p)
 			}
 		}
 	}
-	for _, p := range plateformes {
-		rapport = append(rapport, fmt.Sprintf(tr("%d émulateurs sont par défaut pour « %s ». Gardez-en un seul dans LaunchBox : Tools, Manage, Emulators.",
-			"%d emulators are the default for \"%s\". Keep only one in LaunchBox: Tools, Manage, Emulators."), defauts[p], p))
+	for _, p := range platforms {
+		report = append(report, fmt.Sprintf(tr("%d émulateurs sont par défaut pour « %s ». Gardez-en un seul dans LaunchBox : Tools, Manage, Emulators.",
+			"%d emulators are the default for \"%s\". Keep only one in LaunchBox: Tools, Manage, Emulators."), defaults[p], p))
 	}
-	return texte, rapport
+	return text, report
 }
 
 // defaireEsde : retire la règle 3DSSAVESYNC et les commandes 3dssavesync. Un système qui n'a plus de commande est un
 // bloc minimal ajouté par esde : il est retiré, et ES-DE reprend son propre réglage pour ce système.
-func defaireEsde(systems, regles string) (string, string, []string) {
-	var rapport []string
-	if regleESDE.MatchString(regles) {
-		regles = regleESDE.ReplaceAllLiteralString(regles, "")
+func undoEsde(systems, rules string) (string, string, []string) {
+	var report []string
+	if esdeRule.MatchString(rules) {
+		rules = esdeRule.ReplaceAllLiteralString(rules, "")
 	}
-	systems = systemeESDE.ReplaceAllStringFunc(systems, func(b string) string {
-		if !commandeESDE.MatchString(b) {
+	systems = esdeSystem.ReplaceAllStringFunc(systems, func(b string) string {
+		if !esdeCommand.MatchString(b) {
 			return b
 		}
-		n := champ(b, "name")
-		b = commandeESDE.ReplaceAllLiteralString(b, "")
+		n := field(b, "name")
+		b = esdeCommand.ReplaceAllLiteralString(b, "")
 		if !strings.Contains(b, "<command") {
-			rapport = append(rapport, fmt.Sprintf(tr("%s : système ajouté par 3dssavesync retiré", "%s: removed the system added by 3dssavesync"), n))
+			report = append(report, fmt.Sprintf(tr("%s : système ajouté par 3dssavesync retiré", "%s: removed the system added by 3dssavesync"), n))
 			return ""
 		}
-		rapport = append(rapport, fmt.Sprintf(tr("%s : commande 3dssavesync retirée", "%s: removed the 3dssavesync command"), n))
+		report = append(report, fmt.Sprintf(tr("%s : commande 3dssavesync retirée", "%s: removed the 3dssavesync command"), n))
 		return b
 	})
-	return systems, regles, rapport
+	return systems, rules, report
 }
 
 // desinstaller : frontends, raccourcis, démarrage automatique, puis le programme installé. Erreur : un frontend est
 // ouvert, rien n'est fait (il garderait en mémoire l'émulateur 3dssavesync et le réécrirait en se fermant).
-func desinstaller(cfg *Config, config string) ([]string, error) {
+func uninstall(cfg *Config, config string) ([]string, error) {
 	lb, es := cfg.Frontends["launchbox"], cfg.Frontends["esde"]
 	switch {
-	case lb != "" && (emulateurActif("LaunchBox") || emulateurActif("BigBox")):
+	case lb != "" && (activeEmulator("LaunchBox") || activeEmulator("BigBox")):
 		return nil, errors.New(tr("LaunchBox est ouvert. Fermez LaunchBox et BigBox, puis réessayez.",
 			"LaunchBox is open. Close LaunchBox and BigBox, then try again."))
-	case es != "" && emulateurActif("ES-DE"):
+	case es != "" && activeEmulator("ES-DE"):
 		return nil, errors.New(tr("ES-DE est ouvert. Fermez-le et réessayez.", "ES-DE is open. Close it and try again."))
 	}
-	lanceur := lanceurDe(cfg)
-	var rapport []string
-	ecrire := func(nom, f, avant, apres string) {
-		if avant != apres {
-			if err := remplacerFichier(f, []byte(apres)); err != nil {
-				rapport = append(rapport, nom+" : "+texteErreur(err))
+	launcher := launcherOf(cfg)
+	var report []string
+	write := func(name, f, before, after string) {
+		if before != after {
+			if err := replaceFile(f, []byte(after)); err != nil {
+				report = append(report, name+" : "+errorText(err))
 			}
 		}
 	}
 	if lb != "" {
 		f := filepath.Join(lb, "Data", "Emulators.xml")
 		if o, err := os.ReadFile(f); err == nil {
-			n, r := defaireLaunchbox(string(o), lb, lanceur, cfg)
-			rapport = append(rapport, prefixer("LaunchBox", r)...)
-			ecrire("LaunchBox", f, string(o), n)
+			n, r := undoLaunchbox(string(o), lb, launcher, cfg)
+			report = append(report, prefix("LaunchBox", r)...)
+			write("LaunchBox", f, string(o), n)
 		}
 	}
 	if es != "" {
 		fs, fr := filepath.Join(es, "custom_systems", "es_systems.xml"), filepath.Join(es, "custom_systems", "es_find_rules.xml")
 		s, _ := os.ReadFile(fs)
 		r, _ := os.ReadFile(fr)
-		ns, nr, rap := defaireEsde(string(s), string(r))
-		rapport = append(rapport, prefixer("ES-DE", rap)...)
-		ecrire("ES-DE", fs, string(s), ns)
-		ecrire("ES-DE", fr, string(r), nr)
+		ns, nr, rap := undoEsde(string(s), string(r))
+		report = append(report, prefix("ES-DE", rap)...)
+		write("ES-DE", fs, string(s), ns)
+		write("ES-DE", fr, string(r), nr)
 	}
-	cibles := []string{lanceur}
-	if installe := emplacementInstalle(); !strings.EqualFold(installe, lanceur) {
-		cibles = append(cibles, installe) // désinstallation lancée depuis un autre exe (téléchargé à nouveau)
+	targets := []string{launcher}
+	if installed := installedLocation(); !strings.EqualFold(installed, launcher) {
+		targets = append(targets, installed) // désinstallation lancée depuis un autre exe (téléchargé à nouveau)
 	}
-	retires := 0
-	for _, c := range cibles {
-		l, err := retirerRaccourcis(c)
+	removed := 0
+	for _, c := range targets {
+		l, err := removeShortcuts(c)
 		if err != nil {
-			rapport = append(rapport, tr("Raccourcis : ", "Shortcuts: ")+texteErreur(err))
+			report = append(report, tr("Raccourcis : ", "Shortcuts: ")+errorText(err))
 		}
-		retires += len(l)
+		removed += len(l)
 	}
-	if retires > 0 {
-		rapport = append(rapport, fmt.Sprintf(tr("Raccourcis mis à la Corbeille : %d", "Shortcuts moved to the Recycle Bin: %d"), retires))
+	if removed > 0 {
+		report = append(report, fmt.Sprintf(tr("Raccourcis mis à la Corbeille : %d", "Shortcuts moved to the Recycle Bin: %d"), removed))
 	}
-	if err := arreterTray(filepath.Dir(config)); err != nil { // sinon l'exe de l'icône ne peut pas aller à la Corbeille
-		rapport = append(rapport, err.Error())
+	if err := stopTray(filepath.Dir(config)); err != nil { // sinon l'exe de l'icône ne peut pas aller à la Corbeille
+		report = append(report, err.Error())
 	}
-	if portable := dossierPortable(); portable != "" {
-		rapport = append(rapport, fmt.Sprintf(tr("Version portable : le programme reste dans %s. Supprimez ce dossier quand vous n'en aurez plus besoin. Il contient aussi vos réglages.",
+	if portable := portableDir(); portable != "" {
+		report = append(report, fmt.Sprintf(tr("Version portable : le programme reste dans %s. Supprimez ce dossier quand vous n'en aurez plus besoin. Il contient aussi vos réglages.",
 			"Portable version: the program stays in %s. Delete this folder when you no longer need it. It also holds your settings."), portable))
-	} else if installe := emplacementInstalle(); existe(installe) {
-		if err := retirerProgramme(installe); err != nil {
-			rapport = append(rapport, tr("Programme : ", "Program: ")+texteErreur(err))
+	} else if installed := installedLocation(); exists(installed) {
+		if err := removeProgram(installed); err != nil {
+			report = append(report, tr("Programme : ", "Program: ")+errorText(err))
 		} else {
-			rapport = append(rapport, fmt.Sprintf(tr("Programme : %s ira à la Corbeille dès sa fermeture", "Program: %s goes to the Recycle Bin when it closes"), installe))
+			report = append(report, fmt.Sprintf(tr("Programme : %s ira à la Corbeille dès sa fermeture", "Program: %s goes to the Recycle Bin when it closes"), installed))
 		}
 	}
-	rapport = append(rapport, fmt.Sprintf(tr("Conservés : vos réglages (%s) et vos copies de sécurité (%s)", "Kept: your settings (%s) and your backups (%s)"),
-		filepath.Dir(config), cfg.dossierCopies(filepath.Dir(config))))
-	if cfg.ServeurLocal != nil {
-		donnees := cfg.ServeurLocal.Donnees
-		if donnees == "" {
-			donnees = filepath.Join(filepath.Dir(config), "serveur")
+	report = append(report, fmt.Sprintf(tr("Conservés : vos réglages (%s) et vos copies de sécurité (%s)", "Kept: your settings (%s) and your backups (%s)"),
+		filepath.Dir(config), cfg.copiesDir(filepath.Dir(config))))
+	if cfg.LocalServer != nil {
+		dataDir := cfg.LocalServer.Data
+		if dataDir == "" {
+			dataDir = filepath.Join(filepath.Dir(config), "serveur")
 		}
-		rapport = append(rapport, fmt.Sprintf(tr("Conservées : les versions du serveur local (%s). Le serveur local s'arrêtera au prochain redémarrage du PC.",
-			"Kept: the local server versions (%s). The local server stops the next time you restart the PC."), donnees))
+		report = append(report, fmt.Sprintf(tr("Conservées : les versions du serveur local (%s). Le serveur local s'arrêtera au prochain redémarrage du PC.",
+			"Kept: the local server versions (%s). The local server stops the next time you restart the PC."), dataDir))
 	}
-	rapport = append(rapport, tr("Sur la 3DS : dans FBI, ouvrez Titles, 3dssavesync et choisissez Delete Title. Vos sauvegardes de la 3DS restent.",
+	report = append(report, tr("Sur la 3DS : dans FBI, ouvrez Titles, 3dssavesync et choisissez Delete Title. Vos sauvegardes de la 3DS restent.",
 		"On the 3DS: in FBI, open Titles, 3dssavesync and choose Delete Title. Your 3DS saves stay."))
-	return rapport, nil
+	return report, nil
 }
 
 // retirerRaccourcisSysteme : les raccourcis qui lancent le Lanceur (bureau, menu, démarrage automatique). Windows :
 // Corbeille ; Linux et macOS : fichiers créés par raccourci et demarrageAuto, retirés.
-func retirerRaccourcisSysteme(lanceur string) ([]string, error) {
+func removeShortcutsSystem(launcher string) ([]string, error) {
 	if runtime.GOOS == "windows" {
 		c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 			`[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName Microsoft.VisualBasic; $s=New-Object -ComObject WScript.Shell; `+
 				`foreach ($d in 'Desktop','Startup','Programs') { Get-ChildItem -LiteralPath ([Environment]::GetFolderPath($d)) -Filter *.lnk -ErrorAction SilentlyContinue | `+
 				`Where-Object { $s.CreateShortcut($_.FullName).TargetPath -ieq $env:R_CIBLE } | ForEach-Object { `+
 				`[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($_.FullName,'OnlyErrorDialogs','SendToRecycleBin'); $_.FullName } }`)
-		c.Env = append(os.Environ(), "R_CIBLE="+lanceur)
+		c.Env = append(os.Environ(), "R_CIBLE="+launcher)
 		o, err := c.Output()
 		var l []string // un chemin par ligne (des espaces dans les noms)
 		for _, x := range strings.Split(strings.TrimSpace(string(o)), "\n") {
@@ -283,34 +283,34 @@ func retirerRaccourcisSysteme(lanceur string) ([]string, error) {
 		}
 		return l, err
 	}
-	motifs := []string{xdgData("applications", "3dssavesync*.desktop"), xdgConfig("autostart", "3dssavesync-serveur.desktop")}
+	patterns := []string{xdgData("applications", "3dssavesync*.desktop"), xdgConfig("autostart", "3dssavesync-serveur.desktop")}
 	if runtime.GOOS == "darwin" {
-		motifs = []string{maison("Applications", "3dssavesync*.app"), maison("Library", "LaunchAgents", "com.3dssavesync.serveur.plist")}
+		patterns = []string{home("Applications", "3dssavesync*.app"), home("Library", "LaunchAgents", "com.3dssavesync.serveur.plist")}
 	}
-	var retires []string
-	for _, m := range motifs {
+	var removed []string
+	for _, m := range patterns {
 		l, _ := filepath.Glob(m)
 		for _, f := range l {
 			if err := os.RemoveAll(f); err != nil {
-				return retires, err
+				return removed, err
 			}
-			retires = append(retires, f)
+			removed = append(removed, f)
 		}
 	}
-	return retires, nil
+	return removed, nil
 }
 
 // retirerProgrammeSysteme : Windows ne retire pas un exe en cours : un PowerShell détaché attend sa fermeture, puis le
 // met à la Corbeille et retire son dossier s'il est vide. Linux et macOS : retiré tout de suite.
-func retirerProgrammeSysteme(installe string) error {
+func removeProgramSystem(installed string) error {
 	if runtime.GOOS != "windows" {
-		return os.Remove(installe)
+		return os.Remove(installed)
 	}
 	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command",
 		`Add-Type -AssemblyName Microsoft.VisualBasic; for ($i=0; $i -lt 60; $i++) { Start-Sleep 2; `+
 			`try { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($env:R_EXE,'OnlyErrorDialogs','SendToRecycleBin'); break } catch {} }; `+
 			`try { [IO.Directory]::Delete((Split-Path $env:R_EXE)) } catch {}`)
-	c.Env = append(os.Environ(), "R_EXE="+installe)
+	c.Env = append(os.Environ(), "R_EXE="+installed)
 	if err := c.Start(); err != nil {
 		return err
 	}

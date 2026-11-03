@@ -30,41 +30,41 @@ import (
 )
 
 var (
-	tmp, url                           string
-	reponses, questions, notifications []string
-	partie                             func()
-	joue                               bool
-	actifs                             int // processus de l'émulateur en cours
-	commandeLancee                     []string
+	tmp, url                            string
+	responses, questions, notifications []string
+	play                                func()
+	played                              bool
+	running                             int // processus de l'émulateur en cours
+	launchedCommand                     []string
 )
 
-func reinitialiser() {
-	reponses, questions, notifications, partie, joue, actifs, commandeLancee = nil, nil, nil, nil, false, 0, nil
+func reset() {
+	responses, questions, notifications, play, played, running, launchedCommand = nil, nil, nil, nil, false, 0, nil
 }
 
 func init() {
-	anglais = false // les vérifications lisent les textes français, quelle que soit la langue de la machine de test
-	demander = func(texte string, boutons []string) string {
-		questions = append(questions, texte)
-		if len(reponses) == 0 {
-			return boutons[len(boutons)-1] + " (question inattendue)"
+	english = false // les vérifications lisent les textes français, quelle que soit la langue de la machine de test
+	ask = func(text string, buttons []string) string {
+		questions = append(questions, text)
+		if len(responses) == 0 {
+			return buttons[len(buttons)-1] + " (question inattendue)"
 		}
-		r := reponses[0]
-		reponses = reponses[1:]
+		r := responses[0]
+		responses = responses[1:]
 		return r
 	}
-	notifier = func(texte string) { notifications = append(notifications, texte) }
-	lancer = func(c []string) error {
-		joue, commandeLancee = true, c
-		if partie != nil {
-			partie()
+	notify = func(text string) { notifications = append(notifications, text) }
+	launch = func(c []string) error {
+		played, launchedCommand = true, c
+		if play != nil {
+			play()
 		}
 		return nil
 	}
-	instances = func(string) int { return actifs }
+	instances = func(string) int { return running }
 }
 
-func demarrerServeur(t *testing.T) {
+func startTestServer(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -80,23 +80,23 @@ func demarrerServeur(t *testing.T) {
 	// retardaient le démarrage de ~35 s par adresse (~70 s sur 0.0.0.0, 2026-11-02).
 	c := exec.Command(py, "-c", "import socket, server; socket.getfqdn = lambda nom='': nom; server.creer(('127.0.0.1', "+fmt.Sprint(port)+"), r'"+filepath.Join(tmp, "data")+"', 'jeton-test').serve_forever()")
 	c.Dir = filepath.Join("..", "server")
-	sortie, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
+	output, err := os.Create(filepath.Join(t.TempDir(), "serveur.log"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer sortie.Close()
-	c.Stdout, c.Stderr = sortie, sortie
+	defer output.Close()
+	c.Stdout, c.Stderr = output, output
 	if err := c.Start(); err != nil {
 		t.Fatal(err)
 	}
-	fini := make(chan struct{})
-	go func() { c.Wait(); close(fini) }()
-	t.Cleanup(func() { c.Process.Kill(); <-fini })
+	finished := make(chan struct{})
+	go func() { c.Wait(); close(finished) }()
+	t.Cleanup(func() { c.Process.Kill(); <-finished })
 	url = fmt.Sprintf("http://127.0.0.1:%d", port)
 	// Le premier Python lancé sur une machine Windows neuve de la CI a dépassé 10 s (2026-11-02) :
 	// on attend tant que le processus vit, avec une limite large, et on s'arrête tout de suite s'il meurt.
 	// Délai court par essai : une connexion sans réponse ne doit pas manger toute la limite.
-	limite := time.After(time.Minute)
+	limit := time.After(time.Minute)
 	for {
 		r, err := (&http.Client{Timeout: time.Second}).Get(url + "/saves")
 		if err == nil {
@@ -104,24 +104,24 @@ func demarrerServeur(t *testing.T) {
 			return
 		}
 		select {
-		case <-fini:
-			t.Fatalf("serveur arrêté au démarrage : %v\n%s", c.ProcessState, lire(sortie.Name()))
-		case <-limite:
-			t.Fatalf("serveur injoignable (%v)\n%s", err, lire(sortie.Name()))
+		case <-finished:
+			t.Fatalf("serveur arrêté au démarrage : %v\n%s", c.ProcessState, read(output.Name()))
+		case <-limit:
+			t.Fatalf("serveur injoignable (%v)\n%s", err, read(output.Name()))
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
 }
 
 // Requêtes directes au serveur, pour jouer « l'autre Client ».
-func api(methode, chemin string, corps []byte, entetes map[string]string) (int, []byte) {
+func api(method, path string, body []byte, headers map[string]string) (int, []byte) {
 	var r io.Reader
-	if corps != nil {
-		r = bytes.NewReader(corps)
+	if body != nil {
+		r = bytes.NewReader(body)
 	}
-	req, _ := http.NewRequest(methode, url+chemin, r)
+	req, _ := http.NewRequest(method, url+path, r)
 	req.Header.Set("Authorization", "Bearer jeton-test")
-	for k, v := range entetes {
+	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 	rep, err := http.DefaultClient.Do(req)
@@ -133,10 +133,10 @@ func api(methode, chemin string, corps []byte, entetes map[string]string) (int, 
 	return rep.StatusCode, o
 }
 
-func courante(cle string) []byte { _, o := api("GET", "/saves/"+cle, nil, nil); return o }
+func current(key string) []byte { _, o := api("GET", "/saves/"+key, nil, nil); return o }
 
-func historique(cle string) (hashes []string) {
-	_, o := api("GET", "/saves/"+cle+"/history", nil, nil)
+func history(key string) (hashes []string) {
+	_, o := api("GET", "/saves/"+key+"/history", nil, nil)
 	var h []Version
 	json.Unmarshal(o, &h)
 	for _, v := range h {
@@ -156,104 +156,104 @@ func codes() string {
 	return strings.Join(c, ",")
 }
 
-func envoi3ds(cle string, octets, avant []byte) int {
+func upload3ds(key string, buf, before []byte) int {
 	cond := map[string]string{"If-None-Match": "*", "X-Client": "3ds"}
-	if avant != nil {
-		cond = map[string]string{"If-Match": `"` + hachage(avant) + `"`, "X-Client": "3ds"}
+	if before != nil {
+		cond = map[string]string{"If-Match": `"` + sha256Hex(before) + `"`, "X-Client": "3ds"}
 	}
-	st, _ := api("PUT", "/saves/"+cle, octets, cond)
+	st, _ := api("PUT", "/saves/"+key, buf, cond)
 	return st
 }
 
-func suite(debut, fin int) []byte { // [byte[]](debut..fin) de PowerShell
+func byteRange(start, end int) []byte { // [byte[]](debut..fin) de PowerShell
 	o := []byte{}
-	for i := debut; i <= fin; i++ {
+	for i := start; i <= end; i++ {
 		o = append(o, byte(i))
 	}
 	return o
 }
 
-func aleatoire(n int, graine int64) []byte {
+func random(n int, seed int64) []byte {
 	o := make([]byte, n)
-	rand.New(rand.NewSource(graine)).Read(o)
+	rand.New(rand.NewSource(seed)).Read(o)
 	return o
 }
 
-func ecrire(t *testing.T, chemin string, o []byte) {
+func write(t *testing.T, path string, o []byte) {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(chemin), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(chemin, o, 0o644); err != nil {
+	if err := os.WriteFile(path, o, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func lire(chemin string) []byte { o, _ := os.ReadFile(chemin); return o }
+func read(path string) []byte { o, _ := os.ReadFile(path); return o }
 
-func romDS(t *testing.T, nom, code string) string {
+func romDS(t *testing.T, name, code string) string {
 	o := make([]byte, 0x200)
 	copy(o[0x0C:], code)
-	c := filepath.Join(tmp, "roms", nom+".nds")
-	ecrire(t, c, o)
+	c := filepath.Join(tmp, "roms", name+".nds")
+	write(t, c, o)
 	return c
 }
 
 // Fausse ROM dans un .zip au nom No-Intro.
-func romZip(t *testing.T, nom, interne string, o []byte) string {
-	c := filepath.Join(tmp, "roms", nom+".zip")
+func romZip(t *testing.T, name, internal string, o []byte) string {
+	c := filepath.Join(tmp, "roms", name+".zip")
 	os.MkdirAll(filepath.Dir(c), 0o755)
 	f, err := os.Create(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	z := zip.NewWriter(f)
-	w, _ := z.Create(interne)
+	w, _ := z.Create(internal)
 	w.Write(o)
 	z.Close()
 	f.Close()
 	return c
 }
 
-func enteteGB(titre string, somme uint16) []byte {
+func gbHeader(title string, sum uint16) []byte {
 	o := make([]byte, 0x150)
-	copy(o[0x134:], titre)
-	o[0x14E], o[0x14F] = byte(somme>>8), byte(somme)
+	copy(o[0x134:], title)
+	o[0x14E], o[0x14F] = byte(sum>>8), byte(sum)
 	return o
 }
 
-func enteteGBA(code string) []byte { o := make([]byte, 0xC0); copy(o[0xAC:], code); return o }
+func gbaHeader(code string) []byte { o := make([]byte, 0xC0); copy(o[0xAC:], code); return o }
 
 // Fausse ROM 3DS : NCSD, partition 0 à 0x200, program_id à NCCH + 0x118.
-func rom3DS(t *testing.T, nom string, id uint64) string {
+func rom3DS(t *testing.T, name string, id uint64) string {
 	o := make([]byte, 0x400)
 	copy(o[0x100:], "NCSD")
 	binary.LittleEndian.PutUint32(o[0x120:], 1)
 	binary.LittleEndian.PutUint64(o[0x200+0x118:], id)
-	c := filepath.Join(tmp, "roms", nom+".3ds")
-	ecrire(t, c, o)
+	c := filepath.Join(tmp, "roms", name+".3ds")
+	write(t, c, o)
 	return c
 }
 
-func dossierAzahar(id uint64) string {
+func azaharDir(id uint64) string {
 	z := strings.Repeat("0", 32)
 	return filepath.Join(tmp, "azahar", "Nintendo 3DS", z, z, "title", fmt.Sprintf("%08x", id>>32), fmt.Sprintf("%08x", uint32(id)), "data", "00000001")
 }
 
-func ecrireConfig(t *testing.T, chemin string, c Config) string {
+func writeConfig(t *testing.T, path string, c Config) string {
 	o, _ := json.Marshal(c)
-	ecrire(t, chemin, o)
-	return chemin
+	write(t, path, o)
+	return path
 }
 
-func nomsDans(dossier, motif string) []string {
-	m, _ := filepath.Glob(filepath.Join(dossier, motif))
+func namesIn(dir, pattern string) []string {
+	m, _ := filepath.Glob(filepath.Join(dir, pattern))
 	return m
 }
 
-func contient(liste []string, texte string) bool {
-	for _, s := range liste {
-		if strings.Contains(s, texte) {
+func contains(list []string, text string) bool {
+	for _, s := range list {
+		if strings.Contains(s, text) {
 			return true
 		}
 	}
@@ -261,535 +261,535 @@ func contient(liste []string, texte string) bool {
 }
 
 // Transport qui fait envoyer la 3DS juste après le premier GET /saves du PC (course GET/PUT).
-type course struct{ apres func() }
+type raceTransport struct{ after func() }
 
-func (c *course) RoundTrip(r *http.Request) (*http.Response, error) {
+func (c *raceTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	rep, err := http.DefaultTransport.RoundTrip(r)
-	if c.apres != nil && r.Method == "GET" && r.URL.Path == "/saves" {
-		c.apres()
-		c.apres = nil
+	if c.after != nil && r.Method == "GET" && r.URL.Path == "/saves" {
+		c.after()
+		c.after = nil
 	}
 	return rep, err
 }
 
-func TestLanceur(t *testing.T) {
+func TestLauncher(t *testing.T) {
 	tmp = t.TempDir()
-	maisonFactice(t)
-	demarrerServeur(t)
-	verifications := 0
-	verifier := func(ok bool, message string) {
+	fakeHome(t)
+	startTestServer(t)
+	checks := 0
+	verify := func(ok bool, message string) {
 		t.Helper()
-		verifications++
+		checks++
 		if !ok {
 			t.Errorf("ECHEC %s", message)
 		}
 	}
 	saves, copies := filepath.Join(tmp, "saves"), filepath.Join(tmp, "copies")
-	config := ecrireConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{
-		URL: url, Jeton: "jeton-test", Copies: copies,
-		Emulateurs: map[string]*Emulateur{
-			"melonds": {Exe: "inutilise.exe", Sauvegardes: map[string]string{"DS": saves}},
-			"mgba":    {Exe: "inutilise.exe", Sauvegardes: map[string]string{"GB": filepath.Join(tmp, "gb"), "GBA": filepath.Join(tmp, "gba")}},
-			"azahar":  {Exe: "inutilise.exe", Sauvegardes: map[string]string{"3DS": filepath.Join(tmp, "azahar")}},
+	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{
+		URL: url, Token: "jeton-test", Copies: copies,
+		Emulators: map[string]*Emulator{
+			"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": saves}},
+			"mgba":    {Exe: "inutilise.exe", Saves: map[string]string{"GB": filepath.Join(tmp, "gb"), "GBA": filepath.Join(tmp, "gba")}},
+			"azahar":  {Exe: "inutilise.exe", Saves: map[string]string{"3DS": filepath.Join(tmp, "azahar")}},
 		},
 	})
-	run := func(args ...string) int { return principal(append([]string{"run", "--config", config}, args...)) }
-	sav := func(nom string) string { return filepath.Join(saves, nom+".sav") }
-	noire := sav("Pokemon Noire")
-	localHash := func() string { return hachage(lire(noire)) }
+	run := func(args ...string) int { return realMain(append([]string{"run", "--config", config}, args...)) }
+	sav := func(name string) string { return filepath.Join(saves, name+".sav") }
+	black := sav("Pokemon Noire")
+	localHash := func() string { return sha256Hex(read(black)) }
 
 	t.Log("Premier lancement : la Sauvegarde locale part sur le serveur")
-	reinitialiser()
+	reset()
 	rom := romDS(t, "Pokemon Noire", "IRBF")
-	v1 := suite(1, 200)
-	ecrire(t, noire, v1)
-	verifier(run(rom) == 0, "code de sortie 0")
-	verifier(joue, "melonDS lancé")
-	verifier(hachage(courante("IRBF")) == hachage(v1), "le serveur a la Sauvegarde du PC")
+	v1 := byteRange(1, 200)
+	write(t, black, v1)
+	verify(run(rom) == 0, "code de sortie 0")
+	verify(played, "melonDS lancé")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v1), "le serveur a la Sauvegarde du PC")
 	_, o := api("GET", "/saves", nil, nil)
-	verifier(strings.Contains(string(o), `"nom": "Pokemon Noire"`), "premier Envoi : le serveur connaît aussi le nom du jeu (ADR 0018)")
-	verifier(len(questions) == 0, "aucune question")
-	verifier(strings.Join(commandeLancee, "|") == "inutilise.exe|"+rom, "melonDS reçoit la ROM")
+	verify(strings.Contains(string(o), `"nom": "Pokemon Noire"`), "premier Envoi : le serveur connaît aussi le nom du jeu (ADR 0018)")
+	verify(len(questions) == 0, "aucune question")
+	verify(strings.Join(launchedCommand, "|") == "inutilise.exe|"+rom, "melonDS reçoit la ROM")
 
 	t.Log("La partie modifie la Sauvegarde : Envoi après la partie")
-	reinitialiser()
-	v2 := suite(2, 201)
-	partie = func() { ecrire(t, noire, v2) }
+	reset()
+	v2 := byteRange(2, 201)
+	play = func() { write(t, black, v2) }
 	run(rom)
-	verifier(hachage(courante("IRBF")) == hachage(v2), "le serveur a la Sauvegarde jouée")
-	verifier(len(historique("IRBF")) == 2, "l'Historique garde les 2 Versions")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v2), "le serveur a la Sauvegarde jouée")
+	verify(len(history("IRBF")) == 2, "l'Historique garde les 2 Versions")
 	_, o = api("GET", "/saves", nil, nil)
-	verifier(strings.Contains(string(o), `"code": "IRBF"`) && strings.Contains(string(o), `"nom": "Pokemon Noire"`),
+	verify(strings.Contains(string(o), `"code": "IRBF"`) && strings.Contains(string(o), `"nom": "Pokemon Noire"`),
 		"le serveur connaît le nom du jeu (ADR 0018)")
 
 	t.Log("La 3DS a joué : Récupération avec Copie de sécurité")
-	reinitialiser()
-	v3 := suite(3, 202)
-	verifier(envoi3ds("IRBF", v3, v2) == 200, "la 3DS envoie")
+	reset()
+	v3 := byteRange(3, 202)
+	verify(upload3ds("IRBF", v3, v2) == 200, "la 3DS envoie")
 	run(rom)
-	verifier(localHash() == hachage(v3), "le PC a la Sauvegarde de la 3DS")
-	c := nomsDans(filepath.Join(copies, "melonds"), "*.sav")
-	verifier(len(c) == 1 && hachage(lire(c[0])) == hachage(v2), "Copie de sécurité de l'ancienne Sauvegarde")
-	verifier(len(questions) == 0, "aucune question")
+	verify(localHash() == sha256Hex(v3), "le PC a la Sauvegarde de la 3DS")
+	c := namesIn(filepath.Join(copies, "melonds"), "*.sav")
+	verify(len(c) == 1 && sha256Hex(read(c[0])) == sha256Hex(v2), "Copie de sécurité de l'ancienne Sauvegarde")
+	verify(len(questions) == 0, "aucune question")
 
 	t.Log("Conflit avant la partie, Ne pas jouer : rien ne bouge, pas de partie")
-	reinitialiser()
-	v4, v5 := suite(4, 203), suite(5, 204)
-	ecrire(t, noire, v4)
-	envoi3ds("IRBF", v5, v3)
-	reponses = []string{"Ne pas jouer"}
+	reset()
+	v4, v5 := byteRange(4, 203), byteRange(5, 204)
+	write(t, black, v4)
+	upload3ds("IRBF", v5, v3)
+	responses = []string{"Ne pas jouer"}
 	run(rom)
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit")
-	verifier(!joue, "melonDS non lancé")
-	verifier(localHash() == hachage(v4), "le PC garde sa Sauvegarde")
-	verifier(hachage(courante("IRBF")) == hachage(v5), "le serveur garde la sienne")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit")
+	verify(!played, "melonDS non lancé")
+	verify(localHash() == sha256Hex(v4), "le PC garde sa Sauvegarde")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v5), "le serveur garde la sienne")
 
 	t.Log("Conflit avant la partie, Prendre celle du serveur")
-	reinitialiser()
-	reponses = []string{"Prendre celle du serveur"}
+	reset()
+	responses = []string{"Prendre celle du serveur"}
 	run(rom)
-	verifier(joue, "melonDS lancé")
-	verifier(localHash() == hachage(v5), "le PC a la Version du serveur")
-	copie := false
-	for _, f := range nomsDans(filepath.Join(copies, "melonds"), "*.sav") {
-		copie = copie || hachage(lire(f)) == hachage(v4)
+	verify(played, "melonDS lancé")
+	verify(localHash() == sha256Hex(v5), "le PC a la Version du serveur")
+	cp := false
+	for _, f := range namesIn(filepath.Join(copies, "melonds"), "*.sav") {
+		cp = cp || sha256Hex(read(f)) == sha256Hex(v4)
 	}
-	verifier(copie, "Copie de sécurité de la Sauvegarde du PC")
+	verify(cp, "Copie de sécurité de la Sauvegarde du PC")
 
 	t.Log("Conflit avant la partie, Garder celle du PC : il envoie la sienne")
-	reinitialiser()
-	v6, v7 := suite(6, 205), suite(7, 206)
-	ecrire(t, noire, v6)
-	envoi3ds("IRBF", v7, v5)
-	reponses = []string{"Garder celle du PC"}
+	reset()
+	v6, v7 := byteRange(6, 205), byteRange(7, 206)
+	write(t, black, v6)
+	upload3ds("IRBF", v7, v5)
+	responses = []string{"Garder celle du PC"}
 	run(rom)
-	verifier(joue, "melonDS lancé")
-	verifier(hachage(courante("IRBF")) == hachage(v6), "le serveur a la Sauvegarde du PC")
-	verifier(contient(historique("IRBF"), hachage(v7)), "la Version de la 3DS reste dans l'Historique")
+	verify(played, "melonDS lancé")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v6), "le serveur a la Sauvegarde du PC")
+	verify(contains(history("IRBF"), sha256Hex(v7)), "la Version de la 3DS reste dans l'Historique")
 
 	t.Log("La 3DS envoie pendant la partie (412), Ne rien faire : rien n'est écrasé")
-	reinitialiser()
-	v8, v9 := suite(8, 207), suite(9, 208)
-	partie = func() { envoi3ds("IRBF", v8, v6); ecrire(t, noire, v9) }
-	reponses = []string{"Ne rien faire"}
+	reset()
+	v8, v9 := byteRange(8, 207), byteRange(9, 208)
+	play = func() { upload3ds("IRBF", v8, v6); write(t, black, v9) }
+	responses = []string{"Ne rien faire"}
 	run(rom)
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit après la partie")
-	verifier(hachage(courante("IRBF")) == hachage(v8), "le serveur garde la Version de la 3DS")
-	verifier(localHash() == hachage(v9), "le PC garde la Sauvegarde jouée")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit après la partie")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v8), "le serveur garde la Version de la 3DS")
+	verify(localHash() == sha256Hex(v9), "le PC garde la Sauvegarde jouée")
 
 	t.Log("Conflit après la partie, Garder celle du PC : il envoie la sienne")
-	reinitialiser()
-	v10, v11 := suite(10, 209), suite(11, 210)
-	partie = func() { envoi3ds("IRBF", v10, v8); ecrire(t, noire, v11) }
-	reponses = []string{"Prendre celle du serveur", "Garder celle du PC"}
+	reset()
+	v10, v11 := byteRange(10, 209), byteRange(11, 210)
+	play = func() { upload3ds("IRBF", v10, v8); write(t, black, v11) }
+	responses = []string{"Prendre celle du serveur", "Garder celle du PC"}
 	run(rom)
-	verifier(len(questions) == 2, "deux questions de Conflit")
-	verifier(hachage(courante("IRBF")) == hachage(v11), "le serveur a la Sauvegarde du PC")
-	verifier(contient(historique("IRBF"), hachage(v10)), "la Version de la 3DS reste dans l'Historique")
+	verify(len(questions) == 2, "deux questions de Conflit")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v11), "le serveur a la Sauvegarde du PC")
+	verify(contains(history("IRBF"), sha256Hex(v10)), "la Version de la 3DS reste dans l'Historique")
 
 	t.Log("Sauvegarde tronquée pendant la partie : Conflit, rien n'est envoyé")
-	reinitialiser()
-	partie = func() { ecrire(t, noire, suite(1, 100)) }
-	reponses = []string{"Ne rien faire"}
+	reset()
+	play = func() { write(t, black, byteRange(1, 100)) }
+	responses = []string{"Ne rien faire"}
 	run(rom)
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit")
-	verifier(hachage(courante("IRBF")) == hachage(v11), "le serveur garde la Version entière")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "une question de Conflit")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v11), "le serveur garde la Version entière")
 
 	t.Log("Course : la 3DS envoie entre le GET et le PUT du PC (412)")
-	reinitialiser()
-	ecrire(t, noire, v11) // retour à l'état synchronisé
+	reset()
+	write(t, black, v11) // retour à l'état synchronisé
 	run(rom)
-	v12, v13 := suite(12, 211), suite(13, 212)
-	ecrire(t, noire, v12)
-	reinitialiser()
-	transport = &course{apres: func() { envoi3ds("IRBF", v13, v11) }}
-	reponses = []string{"Ne pas jouer"}
+	v12, v13 := byteRange(12, 211), byteRange(13, 212)
+	write(t, black, v12)
+	reset()
+	transport = &raceTransport{after: func() { upload3ds("IRBF", v13, v11) }}
+	responses = []string{"Ne pas jouer"}
 	run(rom)
 	transport = http.DefaultTransport
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "le 412 devient une question de Conflit")
-	verifier(hachage(courante("IRBF")) == hachage(v13), "la Version de la 3DS n'est pas écrasée")
-	verifier(localHash() == hachage(v12), "le PC garde sa Sauvegarde")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Conflit"), "le 412 devient une question de Conflit")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v13), "la Version de la 3DS n'est pas écrasée")
+	verify(localHash() == sha256Hex(v12), "le PC garde sa Sauvegarde")
 
 	t.Log("Conflit sans fenêtre possible (Q16) : rien n'est remplacé, partie, notification")
-	reinitialiser()
-	reponses = []string{"", ""}
+	reset()
+	responses = []string{"", ""}
 	run(rom)
-	verifier(joue, "melonDS lancé")
-	verifier(contient(notifications, "rien n'a été remplacé"), "notification")
-	verifier(localHash() == hachage(v12) && hachage(courante("IRBF")) == hachage(v13), "rien n'a bougé")
+	verify(played, "melonDS lancé")
+	verify(contains(notifications, "rien n'a été remplacé"), "notification")
+	verify(localHash() == sha256Hex(v12) && sha256Hex(current("IRBF")) == sha256Hex(v13), "rien n'a bougé")
 
 	t.Log("melonDS ouvert hors de 3dssavesync : son jeu est inconnu, refus")
-	reinitialiser()
-	actifs = 1
-	verifier(run(rom) == 1, "code de sortie 1")
-	verifier(len(questions) == 0 && contient(notifications, "sans passer par 3dssavesync"), "notification, aucune fenêtre")
-	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg", "3dssavesync.log"))), "refus"), "le refus est écrit dans 3dssavesync.log")
-	verifier(!joue, "melonDS non lancé")
+	reset()
+	running = 1
+	verify(run(rom) == 1, "code de sortie 1")
+	verify(len(questions) == 0 && contains(notifications, "sans passer par 3dssavesync"), "notification, aucune fenêtre")
+	verify(strings.Contains(string(read(filepath.Join(tmp, "cfg", "3dssavesync.log"))), "refus"), "le refus est écrit dans 3dssavesync.log")
+	verify(!played, "melonDS non lancé")
 
 	// Verrou d'un autre Lanceur pour ce même émulateur (pid vivant : celui de ce test).
-	verrou := func(cle string) string {
+	lock := func(key string) string {
 		f := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", os.Getpid()))
-		ecrire(t, f, []byte(cle))
+		write(t, f, []byte(key))
 		return f
 	}
 
 	t.Log("Un autre jeu lancé par 3dssavesync tourne dans melonDS : partie possible (échange entre deux jeux)")
-	reinitialiser()
-	actifs = 1
-	f := verrou("XXXX")
-	verifier(run(rom) == 0 && joue, "melonDS lancé à côté de l'autre jeu")
-	verifier(!existe(f), "le verrou de ce Lanceur est retiré après l'envoi")
+	reset()
+	running = 1
+	f := lock("XXXX")
+	verify(run(rom) == 0 && played, "melonDS lancé à côté de l'autre jeu")
+	verify(!exists(f), "le verrou de ce Lanceur est retiré après l'envoi")
 
 	t.Log("Le même jeu tourne déjà, lancé par 3dssavesync : refus")
-	reinitialiser()
-	actifs = 1
-	f = verrou("IRBF")
-	verifier(run(rom) == 1 && !joue && contient(notifications, "est déjà ouvert dans"), "refus du même jeu")
+	reset()
+	running = 1
+	f = lock("IRBF")
+	verify(run(rom) == 1 && !played && contains(notifications, "est déjà ouvert dans"), "refus du même jeu")
 	os.Remove(f)
 
 	t.Log("Verrou d'un Lanceur disparu (plantage) : retiré ; l'instance est alors inconnue, refus")
-	reinitialiser()
-	actifs = 1
-	fini := exec.Command(os.Args[0], "-test.run=^$")
-	if err := fini.Run(); err != nil {
+	reset()
+	running = 1
+	finished := exec.Command(os.Args[0], "-test.run=^$")
+	if err := finished.Run(); err != nil {
 		t.Fatal(err)
 	}
-	mort := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", fini.Process.Pid))
-	ecrire(t, mort, []byte("XXXX"))
-	verifier(run(rom) == 1 && !joue && !existe(mort) && contient(notifications, "sans passer par 3dssavesync"), "verrou périmé retiré, refus")
+	dead := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", finished.Process.Pid))
+	write(t, dead, []byte("XXXX"))
+	verify(run(rom) == 1 && !played && !exists(dead) && contains(notifications, "sans passer par 3dssavesync"), "verrou périmé retiré, refus")
 
 	t.Log("Homebrew (code ####) : partie sans Synchronisation")
-	reinitialiser()
+	reset()
 	homebrew := romDS(t, "Homebrew", "####")
-	ecrire(t, sav("Homebrew"), suite(1, 10))
-	avant := codes()
+	write(t, sav("Homebrew"), byteRange(1, 10))
+	before := codes()
 	run(homebrew)
-	verifier(joue, "melonDS lancé")
-	verifier(codes() == avant && len(questions) == 0, "rien envoyé, aucune question")
+	verify(played, "melonDS lancé")
+	verify(codes() == before && len(questions) == 0, "rien envoyé, aucune question")
 
 	t.Log("ROM en .7z (LaunchBox, AutoExtract désactivé) : partie sans Synchronisation, une notification")
-	reinitialiser()
-	sept := filepath.Join(tmp, "roms", "Pokemon Noire.7z")
-	ecrire(t, sept, []byte("7z\xbc\xaf\x27\x1c"))
-	avant = codes()
-	verifier(run("--emulator", "melonds", sept) == 0 && joue && commandeLancee[len(commandeLancee)-1] == sept, "melonDS lancé avec le .7z")
-	verifier(codes() == avant && len(questions) == 0 && len(notifications) == 1 &&
-		contient(notifications, "ne sait pas lire ce format de ROM (.7z)"), "rien envoyé, une seule notification")
-	reinitialiser()
-	verifier(run(sept) == 1 && !joue, "sans --emulator et plusieurs émulateurs : refus")
+	reset()
+	seven := filepath.Join(tmp, "roms", "Pokemon Noire.7z")
+	write(t, seven, []byte("7z\xbc\xaf\x27\x1c"))
+	before = codes()
+	verify(run("--emulator", "melonds", seven) == 0 && played && launchedCommand[len(launchedCommand)-1] == seven, "melonDS lancé avec le .7z")
+	verify(codes() == before && len(questions) == 0 && len(notifications) == 1 &&
+		contains(notifications, "ne sait pas lire ce format de ROM (.7z)"), "rien envoyé, une seule notification")
+	reset()
+	verify(run(seven) == 1 && !played, "sans --emulator et plusieurs émulateurs : refus")
 
 	t.Log("ROM en .zip : Code jeu et nom lus dans l'archive")
-	reinitialiser()
+	reset()
 	nds := make([]byte, 0x200)
 	copy(nds[0x0C:], "IRAF")
 	z := romZip(t, "Pokemon Blanche (archive)", "Pokemon Blanche.nds", nds)
-	blanche := suite(20, 219)
-	ecrire(t, sav("Pokemon Blanche"), blanche)
+	white := byteRange(20, 219)
+	write(t, sav("Pokemon Blanche"), white)
 	run(z)
-	verifier(hachage(courante("IRAF")) == hachage(blanche), "le serveur a la Sauvegarde de Pokemon Blanche.sav")
+	verify(sha256Hex(current("IRAF")) == sha256Hex(white), "le serveur a la Sauvegarde de Pokemon Blanche.sav")
 
 	t.Log("Serveur injoignable avant la partie, Non : pas de partie")
-	reinitialiser()
-	hors := ecrireConfig(t, filepath.Join(tmp, "cfg-hors", "config.json"), Config{URL: "http://127.0.0.1:1", Jeton: "x",
-		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "inutilise.exe", Sauvegardes: map[string]string{"DS": saves}}}})
-	reponses = []string{"Non"}
-	principal([]string{"run", "--config", hors, rom})
-	verifier(strings.Contains(strings.Join(questions, ""), "Le serveur refuse la connexion") && !strings.Contains(strings.Join(questions, ""), "dial tcp"),
+	reset()
+	outside := writeConfig(t, filepath.Join(tmp, "cfg-hors", "config.json"), Config{URL: "http://127.0.0.1:1", Token: "x",
+		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": saves}}}})
+	responses = []string{"Non"}
+	realMain([]string{"run", "--config", outside, rom})
+	verify(strings.Contains(strings.Join(questions, ""), "Le serveur refuse la connexion") && !strings.Contains(strings.Join(questions, ""), "dial tcp"),
 		"message clair, sans le texte de Go : "+strings.Join(questions, ""))
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
-	verifier(!joue, "melonDS non lancé")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
+	verify(!played, "melonDS non lancé")
 
 	t.Log("Serveur injoignable, Oui : partie, puis simple information")
-	reinitialiser()
-	reponses = []string{"Oui"}
-	partie = func() { ecrire(t, noire, v13) }
-	principal([]string{"run", "--config", hors, rom})
-	verifier(joue, "melonDS lancé")
-	verifier(len(questions) == 1 && contient(notifications, "reste sur le PC"), "notification après la partie, pas de fenêtre")
-	verifier(localHash() == hachage(v13), "la Sauvegarde jouée reste sur le PC")
+	reset()
+	responses = []string{"Oui"}
+	play = func() { write(t, black, v13) }
+	realMain([]string{"run", "--config", outside, rom})
+	verify(played, "melonDS lancé")
+	verify(len(questions) == 1 && contains(notifications, "reste sur le PC"), "notification après la partie, pas de fenêtre")
+	verify(localHash() == sha256Hex(v13), "la Sauvegarde jouée reste sur le PC")
 
 	t.Log("Copie de sécurité impossible : rien n'est écrasé")
-	reinitialiser()
-	bloque := filepath.Join(tmp, "copies-impossibles")
-	ecrire(t, bloque, []byte("un fichier, pas un dossier"))
-	cfg2 := ecrireConfig(t, filepath.Join(tmp, "cfg2", "config.json"), Config{URL: url, Jeton: "jeton-test", Copies: bloque,
-		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "inutilise.exe", Sauvegardes: map[string]string{"DS": filepath.Join(tmp, "saves2")}}}})
-	platine := romDS(t, "Pokemon Platine", "CPUF")
-	p1, p2 := suite(30, 229), suite(31, 230)
-	ecrire(t, filepath.Join(tmp, "saves2", "Pokemon Platine.sav"), p1)
-	principal([]string{"run", "--config", cfg2, platine}) // premier Envoi : Base = p1
-	envoi3ds("CPUF", p2, p1)
-	reinitialiser()
-	reponses = []string{"Non"}
-	principal([]string{"run", "--config", cfg2, platine})
-	verifier(hachage(lire(filepath.Join(tmp, "saves2", "Pokemon Platine.sav"))) == hachage(p1), "la Sauvegarde du PC est intacte")
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
-	verifier(!joue, "melonDS non lancé")
+	reset()
+	blocked := filepath.Join(tmp, "copies-impossibles")
+	write(t, blocked, []byte("un fichier, pas un dossier"))
+	cfg2 := writeConfig(t, filepath.Join(tmp, "cfg2", "config.json"), Config{URL: url, Token: "jeton-test", Copies: blocked,
+		Emulators: map[string]*Emulator{"melonds": {Exe: "inutilise.exe", Saves: map[string]string{"DS": filepath.Join(tmp, "saves2")}}}})
+	platinum := romDS(t, "Pokemon Platine", "CPUF")
+	p1, p2 := byteRange(30, 229), byteRange(31, 230)
+	write(t, filepath.Join(tmp, "saves2", "Pokemon Platine.sav"), p1)
+	realMain([]string{"run", "--config", cfg2, platinum}) // premier Envoi : Base = p1
+	upload3ds("CPUF", p2, p1)
+	reset()
+	responses = []string{"Non"}
+	realMain([]string{"run", "--config", cfg2, platinum})
+	verify(sha256Hex(read(filepath.Join(tmp, "saves2", "Pokemon Platine.sav"))) == sha256Hex(p1), "la Sauvegarde du PC est intacte")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Synchronisation impossible"), "question « Synchronisation impossible »")
+	verify(!played, "melonDS non lancé")
 
 	// --- GB / GBA (ADR 0007, 0008) ----------------------------------------------------------
 	t.Log("GB : Clé lue dans l'en-tête, seule la SRAM part sur le serveur")
-	reinitialiser()
-	nomRouge := "Pokemon - Version Rouge (France) (SGB Enhanced)"
-	rouge := romZip(t, nomRouge, nomRouge+".gb", enteteGB("POKEMON RED", 0x91E6))
-	savRouge := filepath.Join(tmp, "gb", nomRouge+".sav")
-	sram1, horloge := aleatoire(32768, 40), suite(1, 48)
-	ecrire(t, savRouge, append(append([]byte{}, sram1...), horloge...))
-	run(rouge)
-	cr := courante("GB-POKEMON_RED-91E6")
-	verifier(len(cr) == 32768 && hachage(cr) == hachage(sram1), "le serveur a la SRAM seule (32 768 o), sous GB-POKEMON_RED-91E6")
-	verifier(joue, "mGBA lancé")
-	verifier(strings.Join(commandeLancee, "|") == "inutilise.exe|-C|savegamePath="+filepath.Join(tmp, "gb")+"|"+rouge, "mGBA reçoit le dossier GB et la ROM")
+	reset()
+	nameRed := "Pokemon - Version Rouge (France) (SGB Enhanced)"
+	red := romZip(t, nameRed, nameRed+".gb", gbHeader("POKEMON RED", 0x91E6))
+	savRed := filepath.Join(tmp, "gb", nameRed+".sav")
+	sram1, clock := random(32768, 40), byteRange(1, 48)
+	write(t, savRed, append(append([]byte{}, sram1...), clock...))
+	run(red)
+	cr := current("GB-POKEMON_RED-91E6")
+	verify(len(cr) == 32768 && sha256Hex(cr) == sha256Hex(sram1), "le serveur a la SRAM seule (32 768 o), sous GB-POKEMON_RED-91E6")
+	verify(played, "mGBA lancé")
+	verify(strings.Join(launchedCommand, "|") == "inutilise.exe|-C|savegamePath="+filepath.Join(tmp, "gb")+"|"+red, "mGBA reçoit le dossier GB et la ROM")
 
 	t.Log("GB : la Récupération garde le Trailer d'horloge du PC")
-	reinitialiser()
-	sram2 := aleatoire(32768, 41)
-	envoi3ds("GB-POKEMON_RED-91E6", sram2, sram1)
-	run(rouge)
-	l := lire(savRouge)
-	verifier(len(l) == 32816, "le fichier garde sa taille avec horloge (32 816 o)")
-	verifier(len(l) == 32816 && hachage(l[:32768]) == hachage(sram2), "la SRAM est celle de la 3DS")
-	verifier(len(l) == 32816 && bytes.Equal(l[32768:], horloge), "le Trailer d'horloge du PC est intact")
-	verifier(len(nomsDans(filepath.Join(copies, "mgba"), "*.sav")) == 1, "Copie de sécurité faite")
-	verifier(len(questions) == 0, "aucune question (horloge ignorée dans la comparaison)")
+	reset()
+	sram2 := random(32768, 41)
+	upload3ds("GB-POKEMON_RED-91E6", sram2, sram1)
+	run(red)
+	l := read(savRed)
+	verify(len(l) == 32816, "le fichier garde sa taille avec horloge (32 816 o)")
+	verify(len(l) == 32816 && sha256Hex(l[:32768]) == sha256Hex(sram2), "la SRAM est celle de la 3DS")
+	verify(len(l) == 32816 && bytes.Equal(l[32768:], clock), "le Trailer d'horloge du PC est intact")
+	verify(len(namesIn(filepath.Join(copies, "mgba"), "*.sav")) == 1, "Copie de sécurité faite")
+	verify(len(questions) == 0, "aucune question (horloge ignorée dans la comparaison)")
 
 	t.Log("GBA : Clé GBA-<code>, .sav nommé comme le zip (règle mGBA)")
-	reinitialiser()
-	nomEm := "Pokemon - Version Emeraude (France)"
-	emeraude := romZip(t, nomEm, nomEm+".gba", enteteGBA("BPEF"))
-	g1 := aleatoire(131072, 42)
-	ecrire(t, filepath.Join(tmp, "gba", nomEm+".sav"), append(append([]byte{}, g1...), suite(1, 16)...))
-	run(emeraude)
-	verifier(hachage(courante("GBA-BPEF")) == hachage(g1), "le serveur a la SRAM d'Émeraude sous GBA-BPEF")
+	reset()
+	emuName := "Pokemon - Version Emeraude (France)"
+	emerald := romZip(t, emuName, emuName+".gba", gbaHeader("BPEF"))
+	g1 := random(131072, 42)
+	write(t, filepath.Join(tmp, "gba", emuName+".sav"), append(append([]byte{}, g1...), byteRange(1, 16)...))
+	run(emerald)
+	verify(sha256Hex(current("GBA-BPEF")) == sha256Hex(g1), "le serveur a la SRAM d'Émeraude sous GBA-BPEF")
 
 	t.Log("Jeu neuf, sauvegarde créée pendant la partie : le premier Envoi donne aussi le nom (ADR 0018)")
-	reinitialiser()
-	neuf := romZip(t, "Radical Red", "Radical Red.gba", enteteGBA("ZZRR"))
-	partie = func() { ecrire(t, filepath.Join(tmp, "gba", "Radical Red.sav"), aleatoire(131072, 43)) }
-	run(neuf)
+	reset()
+	fresh := romZip(t, "Radical Red", "Radical Red.gba", gbaHeader("ZZRR"))
+	play = func() { write(t, filepath.Join(tmp, "gba", "Radical Red.sav"), random(131072, 43)) }
+	run(fresh)
 	_, o = api("GET", "/saves", nil, nil)
-	verifier(strings.Contains(string(o), `"code": "GBA-ZZRR"`) && strings.Contains(string(o), `"nom": "Radical Red"`), "le serveur connaît le nom du jeu neuf")
+	verify(strings.Contains(string(o), `"code": "GBA-ZZRR"`) && strings.Contains(string(o), `"nom": "Radical Red"`), "le serveur connaît le nom du jeu neuf")
 
 	// --- 3DS (ADR 0009) -------------------------------------------------------------------
 	t.Log("3DS : Clé et dossier Azahar lus dans la ROM")
-	reinitialiser()
+	reset()
 	x := rom3DS(t, "Pokemon X (Europe)", 0x0004000000055D00)
-	dx := dossierAzahar(0x0004000000055D00)
-	m1 := aleatoire(415232, 43)
-	ecrire(t, filepath.Join(dx, "main"), m1)
+	dx := azaharDir(0x0004000000055D00)
+	m1 := random(415232, 43)
+	write(t, filepath.Join(dx, "main"), m1)
 	run(x)
-	verifier(hachage(courante("3DS-0004000000055D00")) == hachage(m1), "le serveur a main sous 3DS-0004000000055D00")
-	verifier(joue && strings.Join(commandeLancee, "|") == "inutilise.exe|-f|"+x, "Azahar lancé en plein écran")
+	verify(sha256Hex(current("3DS-0004000000055D00")) == sha256Hex(m1), "le serveur a main sous 3DS-0004000000055D00")
+	verify(played && strings.Join(launchedCommand, "|") == "inutilise.exe|-f|"+x, "Azahar lancé en plein écran")
 
 	t.Log("3DS : la Récupération n'ajoute rien dans l'archive Azahar")
-	reinitialiser()
-	m2 := aleatoire(415232, 44)
-	envoi3ds("3DS-0004000000055D00", m2, m1)
+	reset()
+	m2 := random(415232, 44)
+	upload3ds("3DS-0004000000055D00", m2, m1)
 	run(x)
-	verifier(hachage(lire(filepath.Join(dx, "main"))) == hachage(m2), "main est la Version de la 3DS")
-	verifier(strings.Join(nomsDans(dx, "*"), ",") == filepath.Join(dx, "main"), "l'archive ne contient que main")
-	verifier(strings.Join(nomsDans(filepath.Dir(dx), "*"), ",") == dx, "pas de fichier temporaire oublié")
-	verifier(len(nomsDans(filepath.Join(copies, "azahar"), "*")) == 1, "Copie de sécurité hors de l'archive")
+	verify(sha256Hex(read(filepath.Join(dx, "main"))) == sha256Hex(m2), "main est la Version de la 3DS")
+	verify(strings.Join(namesIn(dx, "*"), ",") == filepath.Join(dx, "main"), "l'archive ne contient que main")
+	verify(strings.Join(namesIn(filepath.Dir(dx), "*"), ",") == dx, "pas de fichier temporaire oublié")
+	verify(len(namesIn(filepath.Join(copies, "azahar"), "*")) == 1, "Copie de sécurité hors de l'archive")
 
 	t.Log("3DS : jeu jamais lancé dans Azahar, format connu : dossier, .metadata et main créés")
-	reinitialiser()
+	reset()
 	y := rom3DS(t, "Pokemon Y (Europe)", 0x0004000000055E00)
-	envoi3ds("3DS-0004000000055E00", m2, nil)
+	upload3ds("3DS-0004000000055E00", m2, nil)
 	run(y)
-	dy := dossierAzahar(0x0004000000055E00)
-	verifier(len(questions) == 0 && joue, "pas de question, partie lancée")
-	verifier(hachage(lire(filepath.Join(dy, "main"))) == hachage(m2), "main est la Version du serveur")
-	verifier(bytes.Equal(lire(dy+".metadata"), []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}), "00000001.metadata écrit (16 octets)")
-	verifier(strings.Join(nomsDans(dy, "*"), ",") == filepath.Join(dy, "main"), "l'archive ne contient que main")
+	dy := azaharDir(0x0004000000055E00)
+	verify(len(questions) == 0 && played, "pas de question, partie lancée")
+	verify(sha256Hex(read(filepath.Join(dy, "main"))) == sha256Hex(m2), "main est la Version du serveur")
+	verify(bytes.Equal(read(dy+".metadata"), []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}), "00000001.metadata écrit (16 octets)")
+	verify(strings.Join(namesIn(dy, "*"), ",") == filepath.Join(dy, "main"), "l'archive ne contient que main")
 
 	t.Log("3DS : jeu jamais lancé dans Azahar, format inconnu (titres_3ds) : rien n'est créé")
-	reinitialiser()
-	titres3DS["00040000000EC300"] = "Jeu a moi"
-	defer delete(titres3DS, "00040000000EC300")
-	autre := rom3DS(t, "Jeu a moi", 0x00040000000EC300)
-	envoi3ds("3DS-00040000000EC300", m2, nil)
-	reponses = []string{"Non"}
-	run(autre)
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "Azahar"), "question qui explique de lancer le jeu une fois")
-	_, err := os.Stat(dossierAzahar(0x00040000000EC300))
-	verifier(err != nil, "aucun dossier créé dans Azahar")
-	_, err = os.Stat(dossierAzahar(0x00040000000EC300) + ".metadata")
-	verifier(err != nil, "aucun .metadata créé")
+	reset()
+	titles3DS["00040000000EC300"] = "Jeu a moi"
+	defer delete(titles3DS, "00040000000EC300")
+	other := rom3DS(t, "Jeu a moi", 0x00040000000EC300)
+	upload3ds("3DS-00040000000EC300", m2, nil)
+	responses = []string{"Non"}
+	run(other)
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Azahar"), "question qui explique de lancer le jeu une fois")
+	_, err := os.Stat(azaharDir(0x00040000000EC300))
+	verify(err != nil, "aucun dossier créé dans Azahar")
+	_, err = os.Stat(azaharDir(0x00040000000EC300) + ".metadata")
+	verify(err != nil, "aucun .metadata créé")
 
 	t.Log("3DS hors des 8 Pokémon : partie sans Synchronisation")
-	reinitialiser()
+	reset()
 	run(rom3DS(t, "Zelda (Europe)", 0x0004000000033500))
-	verifier(joue && len(questions) == 0, "Azahar lancé, aucune question")
+	verify(played && len(questions) == 0, "Azahar lancé, aucune question")
 
 	// --- Sauvegarde vierge = absente --------------------------------------------------------
 	t.Log("Sauvegarde vierge (0xFF) sur le PC, Version sur le serveur : Récupération sans Conflit")
-	reinitialiser()
-	perle := romDS(t, "Pokemon Perle", "APAF")
-	ecrire(t, sav("Pokemon Perle"), bytes.Repeat([]byte{0xFF}, 524288))
-	pe := aleatoire(524288, 45)
-	envoi3ds("APAF", pe, nil)
-	run(perle)
-	verifier(len(questions) == 0, "aucune question de Conflit")
-	verifier(hachage(lire(sav("Pokemon Perle"))) == hachage(pe), "le PC a la Version du serveur")
-	verifier(len(nomsDans(filepath.Join(copies, "melonds"), "Pokemon Perle-*.sav")) == 1, "Copie de sécurité de la Sauvegarde vierge")
+	reset()
+	pearl := romDS(t, "Pokemon Perle", "APAF")
+	write(t, sav("Pokemon Perle"), bytes.Repeat([]byte{0xFF}, 524288))
+	pe := random(524288, 45)
+	upload3ds("APAF", pe, nil)
+	run(pearl)
+	verify(len(questions) == 0, "aucune question de Conflit")
+	verify(sha256Hex(read(sav("Pokemon Perle"))) == sha256Hex(pe), "le PC a la Version du serveur")
+	verify(len(namesIn(filepath.Join(copies, "melonds"), "Pokemon Perle-*.sav")) == 1, "Copie de sécurité de la Sauvegarde vierge")
 
 	t.Log("Sauvegarde vierge (0x00 + Trailer d'horloge), rien sur le serveur : rien n'est envoyé")
-	reinitialiser()
-	nomOr := "Pokemon - Version Or (France)"
-	or := romZip(t, nomOr, nomOr+".gbc", enteteGB("POKEMON_GLDAAUF", 0x6FC6))
-	ecrire(t, filepath.Join(tmp, "gb", nomOr+".sav"), append(make([]byte, 32768), suite(1, 48)...))
+	reset()
+	nameGold := "Pokemon - Version Or (France)"
+	or := romZip(t, nameGold, nameGold+".gbc", gbHeader("POKEMON_GLDAAUF", 0x6FC6))
+	write(t, filepath.Join(tmp, "gb", nameGold+".sav"), append(make([]byte, 32768), byteRange(1, 48)...))
 	run(or)
 	st, _ := api("GET", "/saves/GB-POKEMON_GLDAAUF-6FC6", nil, nil)
-	verifier(st == 404, "le serveur n'a rien reçu")
-	verifier(joue, "mGBA lancé")
+	verify(st == 404, "le serveur n'a rien reçu")
+	verify(played, "mGBA lancé")
 
 	t.Log("3DS : un main à 0x00 n'est pas une Sauvegarde vierge (il part)")
-	reinitialiser()
-	lune := rom3DS(t, "Pokemon Lune (Europe)", 0x0004000000175E00)
-	ecrire(t, filepath.Join(dossierAzahar(0x0004000000175E00), "main"), make([]byte, 1024))
-	run(lune)
+	reset()
+	moon := rom3DS(t, "Pokemon Lune (Europe)", 0x0004000000175E00)
+	write(t, filepath.Join(azaharDir(0x0004000000175E00), "main"), make([]byte, 1024))
+	run(moon)
 	st, _ = api("GET", "/saves/3DS-0004000000175E00", nil, nil)
-	verifier(st == 200, "le serveur a main")
+	verify(st == 200, "le serveur a main")
 
 	// --- Nouveautés v3 ----------------------------------------------------------------------
 	t.Log("run --rom … -- <commande> : la commande quelconque est enveloppée")
-	reinitialiser()
-	v14 := suite(14, 213)
-	partie = func() { ecrire(t, noire, v14) } // avant : v13 sur le PC et sur le serveur, à jour
+	reset()
+	v14 := byteRange(14, 213)
+	play = func() { write(t, black, v14) } // avant : v13 sur le PC et sur le serveur, à jour
 	run("--rom", rom, "--", "lanceur.exe", "-rom", rom)
-	verifier(len(questions) == 0, "aucune question")
-	verifier(strings.Join(commandeLancee, "|") == "lanceur.exe|-rom|"+rom, "la commande donnée est lancée telle quelle")
-	verifier(hachage(courante("IRBF")) == hachage(v14), "la Sauvegarde jouée part sur le serveur")
+	verify(len(questions) == 0, "aucune question")
+	verify(strings.Join(launchedCommand, "|") == "lanceur.exe|-rom|"+rom, "la commande donnée est lancée telle quelle")
+	verify(sha256Hex(current("IRBF")) == sha256Hex(v14), "la Sauvegarde jouée part sur le serveur")
 
 	t.Log("Deux émulateurs pour le même Système sans --emulator : erreur, rien n'est lancé")
-	reinitialiser()
-	double := ecrireConfig(t, filepath.Join(tmp, "cfg-double", "config.json"), Config{URL: url, Jeton: "jeton-test",
-		Emulateurs: map[string]*Emulateur{
-			"melonds":  {Exe: "a.exe", Sauvegardes: map[string]string{"DS": saves}},
-			"portable": {Profil: "melonds", Exe: "b.exe", Sauvegardes: map[string]string{"DS": filepath.Join(tmp, "saves-portable")}},
+	reset()
+	double := writeConfig(t, filepath.Join(tmp, "cfg-double", "config.json"), Config{URL: url, Token: "jeton-test",
+		Emulators: map[string]*Emulator{
+			"melonds":  {Exe: "a.exe", Saves: map[string]string{"DS": saves}},
+			"portable": {Profile: "melonds", Exe: "b.exe", Saves: map[string]string{"DS": filepath.Join(tmp, "saves-portable")}},
 		}})
-	reponses = []string{"OK"}
-	verifier(principal([]string{"run", "--config", double, rom}) == 1, "code de sortie 1")
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "--emulator") && !joue, "message qui demande --emulator")
-	reinitialiser()
-	ecrire(t, filepath.Join(tmp, "saves-portable", "Pokemon Noire.sav"), v14)
-	principal([]string{"run", "--config", double, "--emulator", "portable", rom})
-	verifier(joue && commandeLancee[0] == "b.exe", "--emulator choisit l'émulateur")
-	verifier(len(questions) == 0, "Client distinct : sa Base propre, sans Conflit")
+	responses = []string{"OK"}
+	verify(realMain([]string{"run", "--config", double, rom}) == 1, "code de sortie 1")
+	verify(len(questions) == 1 && strings.Contains(questions[0], "--emulator") && !played, "message qui demande --emulator")
+	reset()
+	write(t, filepath.Join(tmp, "saves-portable", "Pokemon Noire.sav"), v14)
+	realMain([]string{"run", "--config", double, "--emulator", "portable", rom})
+	verify(played && launchedCommand[0] == "b.exe", "--emulator choisit l'émulateur")
+	verify(len(questions) == 0, "Client distinct : sa Base propre, sans Conflit")
 
 	t.Log("launch : tous les jeux de l'émulateur avant et après, l'émulateur sans ROM")
-	reinitialiser()
+	reset()
 	savesL, romsL := filepath.Join(tmp, "saves-launch"), filepath.Join(tmp, "roms-launch")
-	cfgL := ecrireConfig(t, filepath.Join(tmp, "cfg-launch", "config.json"), Config{URL: url, Jeton: "jeton-test",
-		Emulateurs: map[string]*Emulateur{"melonds": {Exe: "melon.exe", Sauvegardes: map[string]string{"DS": savesL}, Roms: map[string]string{"DS": romsL}}}})
-	for nom, code := range map[string]string{"Pokemon Diamant": "ADAF", "Pokemon HeartGold": "IPKF"} {
+	cfgL := writeConfig(t, filepath.Join(tmp, "cfg-launch", "config.json"), Config{URL: url, Token: "jeton-test",
+		Emulators: map[string]*Emulator{"melonds": {Exe: "melon.exe", Saves: map[string]string{"DS": savesL}, Roms: map[string]string{"DS": romsL}}}})
+	for name, code := range map[string]string{"Pokemon Diamant": "ADAF", "Pokemon HeartGold": "IPKF"} {
 		o := make([]byte, 0x200)
 		copy(o[0x0C:], code)
-		ecrire(t, filepath.Join(romsL, "sous-dossier", nom+".nds"), o)
+		write(t, filepath.Join(romsL, "sous-dossier", name+".nds"), o)
 	}
-	ecrire(t, filepath.Join(romsL, "notes.txt"), []byte("pas une ROM"))
-	diamant, hg := suite(40, 239), suite(41, 240)
-	ecrire(t, filepath.Join(savesL, "Pokemon Diamant.sav"), diamant)
-	envoi3ds("IPKF", hg, nil)
-	diamant2 := suite(42, 241)
-	partie = func() {
-		verifier(hachage(lire(filepath.Join(savesL, "Pokemon HeartGold.sav"))) == hachage(hg), "HeartGold récupéré avant la partie")
-		verifier(hachage(courante("ADAF")) == hachage(diamant), "Diamant envoyé avant la partie")
-		ecrire(t, filepath.Join(savesL, "Pokemon Diamant.sav"), diamant2)
+	write(t, filepath.Join(romsL, "notes.txt"), []byte("pas une ROM"))
+	diamond, hg := byteRange(40, 239), byteRange(41, 240)
+	write(t, filepath.Join(savesL, "Pokemon Diamant.sav"), diamond)
+	upload3ds("IPKF", hg, nil)
+	diamond2 := byteRange(42, 241)
+	play = func() {
+		verify(sha256Hex(read(filepath.Join(savesL, "Pokemon HeartGold.sav"))) == sha256Hex(hg), "HeartGold récupéré avant la partie")
+		verify(sha256Hex(current("ADAF")) == sha256Hex(diamond), "Diamant envoyé avant la partie")
+		write(t, filepath.Join(savesL, "Pokemon Diamant.sav"), diamond2)
 	}
-	verifier(principal([]string{"launch", "--config", cfgL, "melonds"}) == 0, "code de sortie 0")
-	verifier(strings.Join(commandeLancee, "|") == "melon.exe", "melonDS lancé sans ROM")
-	verifier(hachage(courante("ADAF")) == hachage(diamant2), "Diamant joué envoyé après la partie")
-	verifier(len(questions) == 0, "aucune question")
+	verify(realMain([]string{"launch", "--config", cfgL, "melonds"}) == 0, "code de sortie 0")
+	verify(strings.Join(launchedCommand, "|") == "melon.exe", "melonDS lancé sans ROM")
+	verify(sha256Hex(current("ADAF")) == sha256Hex(diamond2), "Diamant joué envoyé après la partie")
+	verify(len(questions) == 0, "aucune question")
 
 	// --- Profils (phase 2) -------------------------------------------------------------------
 	t.Log("RetroArch : dossier lu dans retroarch.cfg, .srm dans le sous-dossier du cœur, -L <cœur>")
-	reinitialiser()
+	reset()
 	ra := filepath.Join(tmp, "retroarch")
-	ecrire(t, filepath.Join(ra, "retroarch.cfg"), []byte("savefile_directory = \""+filepath.ToSlash(filepath.Join(tmp, "ra-saves"))+"\"\n"))
-	cfgRA := ecrireConfig(t, filepath.Join(tmp, "cfg-ra", "config.json"), Config{URL: url, Jeton: "jeton-test",
-		Emulateurs: map[string]*Emulateur{"retroarch": {Exe: filepath.Join(ra, "retroarch.exe"), Coeurs: map[string]string{"GB": "gambatte_libretro.dll"}}}})
-	jaune := filepath.Join(tmp, "roms-ra", "Pokemon Jaune.gb")
-	ecrire(t, jaune, enteteGB("POKEMON YELLOW", 0x1234))
-	sj := aleatoire(32768, 50)
-	envoi3ds("GB-POKEMON_YELLOW-1234", sj, nil)
-	principal([]string{"run", "--config", cfgRA, jaune})
-	verifier(hachage(lire(filepath.Join(tmp, "ra-saves", "Gambatte", "Pokemon Jaune.srm"))) == hachage(sj), "Version récupérée dans ra-saves/Gambatte/Pokemon Jaune.srm")
-	verifier(strings.Join(commandeLancee, "|") == filepath.Join(ra, "retroarch.exe")+"|-L|gambatte_libretro.dll|"+jaune, "RetroArch lancé avec le cœur et la ROM")
-	verifier(len(questions) == 0, "aucune question (pas d'état rechargé)")
+	write(t, filepath.Join(ra, "retroarch.cfg"), []byte("savefile_directory = \""+filepath.ToSlash(filepath.Join(tmp, "ra-saves"))+"\"\n"))
+	cfgRA := writeConfig(t, filepath.Join(tmp, "cfg-ra", "config.json"), Config{URL: url, Token: "jeton-test",
+		Emulators: map[string]*Emulator{"retroarch": {Exe: filepath.Join(ra, "retroarch.exe"), Cores: map[string]string{"GB": "gambatte_libretro.dll"}}}})
+	yellow := filepath.Join(tmp, "roms-ra", "Pokemon Jaune.gb")
+	write(t, yellow, gbHeader("POKEMON YELLOW", 0x1234))
+	sj := random(32768, 50)
+	upload3ds("GB-POKEMON_YELLOW-1234", sj, nil)
+	realMain([]string{"run", "--config", cfgRA, yellow})
+	verify(sha256Hex(read(filepath.Join(tmp, "ra-saves", "Gambatte", "Pokemon Jaune.srm"))) == sha256Hex(sj), "Version récupérée dans ra-saves/Gambatte/Pokemon Jaune.srm")
+	verify(strings.Join(launchedCommand, "|") == filepath.Join(ra, "retroarch.exe")+"|-L|gambatte_libretro.dll|"+yellow, "RetroArch lancé avec le cœur et la ROM")
+	verify(len(questions) == 0, "aucune question (pas d'état rechargé)")
 
 	t.Log("mGBA autoload=1 : question après une Récupération, rien sinon")
-	reinitialiser()
+	reset()
 	mg := filepath.Join(tmp, "mgba-auto")
-	ecrire(t, filepath.Join(mg, "portable.ini"), nil)
-	ecrire(t, filepath.Join(mg, "config.ini"), []byte("[ports.qt]\nautoload=1\n"))
-	cfgA := ecrireConfig(t, filepath.Join(tmp, "cfg-auto", "config.json"), Config{URL: url, Jeton: "jeton-test",
-		Emulateurs: map[string]*Emulateur{"mgba": {Exe: filepath.Join(mg, "mGBA.exe"), Sauvegardes: map[string]string{"GBA": filepath.Join(tmp, "gba-auto")}}}})
-	saphir := filepath.Join(tmp, "roms-auto", "Pokemon Saphir.gba")
-	ecrire(t, saphir, enteteGBA("AXPF"))
-	envoi3ds("GBA-AXPF", aleatoire(131072, 51), nil)
-	reponses = []string{"Ne pas jouer"}
-	principal([]string{"run", "--config", cfgA, saphir})
-	verifier(len(questions) == 1 && strings.Contains(questions[0], "autoload=0"), "question qui explique autoload")
-	verifier(!joue, "« Ne pas jouer » : mGBA non lancé")
-	reinitialiser()
-	principal([]string{"run", "--config", cfgA, saphir})
-	verifier(joue && len(questions) == 0, "Sauvegarde à jour : pas de question, mGBA lancé")
-	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg-auto", "3dssavesync.log"))), "avertissement : mGBA"), "l'avertissement est écrit dans le journal")
+	write(t, filepath.Join(mg, "portable.ini"), nil)
+	write(t, filepath.Join(mg, "config.ini"), []byte("[ports.qt]\nautoload=1\n"))
+	cfgA := writeConfig(t, filepath.Join(tmp, "cfg-auto", "config.json"), Config{URL: url, Token: "jeton-test",
+		Emulators: map[string]*Emulator{"mgba": {Exe: filepath.Join(mg, "mGBA.exe"), Saves: map[string]string{"GBA": filepath.Join(tmp, "gba-auto")}}}})
+	sapphire := filepath.Join(tmp, "roms-auto", "Pokemon Saphir.gba")
+	write(t, sapphire, gbaHeader("AXPF"))
+	upload3ds("GBA-AXPF", random(131072, 51), nil)
+	responses = []string{"Ne pas jouer"}
+	realMain([]string{"run", "--config", cfgA, sapphire})
+	verify(len(questions) == 1 && strings.Contains(questions[0], "autoload=0"), "question qui explique autoload")
+	verify(!played, "« Ne pas jouer » : mGBA non lancé")
+	reset()
+	realMain([]string{"run", "--config", cfgA, sapphire})
+	verify(played && len(questions) == 0, "Sauvegarde à jour : pas de question, mGBA lancé")
+	verify(strings.Contains(string(read(filepath.Join(tmp, "cfg-auto", "3dssavesync.log"))), "avertissement : mGBA"), "l'avertissement est écrit dans le journal")
 
 	t.Log("Émulateur personnalisé : commande avec {rom} et {sauvegardes} ; aucune sauvegarde après la partie : avertissement")
-	reinitialiser()
+	reset()
 	savesP := filepath.Join(tmp, "saves-perso")
-	cfgP := ecrireConfig(t, filepath.Join(tmp, "cfg-perso", "config.json"), Config{URL: url, Jeton: "jeton-test",
-		Emulateurs: map[string]*Emulateur{"perso": {Exe: "perso.exe", Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".srm",
-			Sauvegardes: map[string]string{"GBA": savesP}}}})
-	rubis := filepath.Join(tmp, "roms-perso", "Pokemon Rubis.gba")
-	ecrire(t, rubis, enteteGBA("AXVF"))
-	principal([]string{"run", "--config", cfgP, rubis})
-	verifier(strings.Join(commandeLancee, "|") == "perso.exe|--batt="+savesP+"|"+rubis, "commande personnalisée")
-	verifier(contient(notifications, filepath.Join(savesP, "Pokemon Rubis.srm")), "avertissement : aucune sauvegarde après la partie")
-	reinitialiser()
-	partie = func() { ecrire(t, filepath.Join(savesP, "Pokemon Rubis.srm"), aleatoire(131072, 60)) }
-	principal([]string{"run", "--config", cfgP, rubis})
-	verifier(len(notifications) == 0 && hachage(courante("GBA-AXVF")) == hachage(lire(filepath.Join(savesP, "Pokemon Rubis.srm"))),
+	cfgP := writeConfig(t, filepath.Join(tmp, "cfg-perso", "config.json"), Config{URL: url, Token: "jeton-test",
+		Emulators: map[string]*Emulator{"perso": {Exe: "perso.exe", Args: []string{"--batt={sauvegardes}", "{rom}"}, Extension: ".srm",
+			Saves: map[string]string{"GBA": savesP}}}})
+	ruby := filepath.Join(tmp, "roms-perso", "Pokemon Rubis.gba")
+	write(t, ruby, gbaHeader("AXVF"))
+	realMain([]string{"run", "--config", cfgP, ruby})
+	verify(strings.Join(launchedCommand, "|") == "perso.exe|--batt="+savesP+"|"+ruby, "commande personnalisée")
+	verify(contains(notifications, filepath.Join(savesP, "Pokemon Rubis.srm")), "avertissement : aucune sauvegarde après la partie")
+	reset()
+	play = func() { write(t, filepath.Join(savesP, "Pokemon Rubis.srm"), random(131072, 60)) }
+	realMain([]string{"run", "--config", cfgP, ruby})
+	verify(len(notifications) == 0 && sha256Hex(current("GBA-AXVF")) == sha256Hex(read(filepath.Join(savesP, "Pokemon Rubis.srm"))),
 		"sauvegarde écrite pendant la partie : envoyée, aucun avertissement")
 
-	t.Logf("%d vérifications", verifications)
+	t.Logf("%d vérifications", checks)
 }
 
 // Mêmes tailles que sram_taille dans 3ds/test/test_cle.c (ADR 0010).
 func TestSRAM(t *testing.T) {
 	for _, c := range []struct {
-		systeme      string
-		taille, sram int
+		system     string
+		size, sram int
 	}{
 		{"GB", 32816, 32768}, {"GB", 32812, 32768}, {"GB", 32768, 32768}, {"GBA", 131088, 131072},
 		{"GB", 512, 512}, {"GBA", 528, 512}, {"GB", 560, 512}, {"GBA", 8208, 8192},
 		{"GB", 1536, 1536}, {"GB", 48, 48}, {"DS", 524298, 524298},
 	} {
 		f := filepath.Join(t.TempDir(), "s.sav")
-		ecrire(t, f, make([]byte, c.taille))
-		l, err := lireLocal(&Jeu{Systeme: c.systeme, Fichier: f}, nil)
-		if err != nil || len(l.SRAM) != c.sram || len(l.Brut) != c.taille {
-			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.systeme, c.taille, c.sram, l, err)
+		write(t, f, make([]byte, c.size))
+		l, err := readLocal(&Game{System: c.system, File: f}, nil)
+		if err != nil || len(l.SRAM) != c.sram || len(l.Raw) != c.size {
+			t.Errorf("%s %d : SRAM %d attendue (%v, %v)", c.system, c.size, c.sram, l, err)
 		}
 	}
 }
 
 // Erreurs du réseau, du serveur et des fichiers -> texte pour l'utilisateur ; global = un seul message pour la passe.
-func TestClasser(t *testing.T) {
-	type cas struct {
+func TestClassify(t *testing.T) {
+	type tcase struct {
 		err    error
-		texte  string
+		text   string
 		global bool
 	}
 	transport := func(err error) error { return &neturl.Error{Op: "Get", URL: "https://x/saves", Err: err} }
-	l := []cas{
-		{&erreurHTTP{"GET /saves", 401}, "Le serveur refuse ce jeton. Recopiez le jeton exact du serveur.", true},
-		{&erreurHTTP{"GET /saves", 404}, "Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la.", true},
-		{&erreurHTTP{"PUT /saves/IRBF", 413}, "sauvegarde trop grosse pour le serveur", false},
-		{&erreurHTTP{"PUT /saves/IRBF", 400}, "le serveur a refusé cette sauvegarde", false},
-		{&erreurHTTP{"GET /saves", 502}, "Le serveur a rencontré une erreur.", true},
-		{&erreurHTTP{"GET /saves", 418}, "Le serveur a répondu de façon inattendue.", true},
+	l := []tcase{
+		{&httpError{"GET /saves", 401}, "Le serveur refuse ce jeton. Recopiez le jeton exact du serveur.", true},
+		{&httpError{"GET /saves", 404}, "Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la.", true},
+		{&httpError{"PUT /saves/IRBF", 413}, "sauvegarde trop grosse pour le serveur", false},
+		{&httpError{"PUT /saves/IRBF", 400}, "le serveur a refusé cette sauvegarde", false},
+		{&httpError{"GET /saves", 502}, "Le serveur a rencontré une erreur.", true},
+		{&httpError{"GET /saves", 418}, "Le serveur a répondu de façon inattendue.", true},
 		{transport(&net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}), "Serveur introuvable.", true},
 		{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}), "Le serveur refuse la connexion", true},
 		{transport(os.ErrDeadlineExceeded), "Le serveur ne répond pas. Vérifiez votre connexion Internet", true},
@@ -801,24 +801,24 @@ func TestClasser(t *testing.T) {
 	}
 	if runtime.GOOS == "windows" {
 		l = append(l,
-			cas{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier. Fermez l'émulateur", false},
-			cas{&os.LinkError{Op: "rename", Old: "a.tmp", New: "a.sav", Err: syscall.Errno(112)}, "disque plein", false},
-			cas{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connectex", syscall.Errno(10061))}), "Le serveur refuse la connexion", true})
+			tcase{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier. Fermez l'émulateur", false},
+			tcase{&os.LinkError{Op: "rename", Old: "a.tmp", New: "a.sav", Err: syscall.Errno(112)}, "disque plein", false},
+			tcase{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connectex", syscall.Errno(10061))}), "Le serveur refuse la connexion", true})
 	}
 	for _, c := range l {
-		if texte, global := classer(c.err); !strings.Contains(texte, c.texte) || global != c.global {
-			t.Errorf("%v : %q (global %v), attendu %q (global %v)", c.err, texte, global, c.texte, c.global)
+		if text, global := classify(c.err); !strings.Contains(text, c.text) || global != c.global {
+			t.Errorf("%v : %q (global %v), attendu %q (global %v)", c.err, text, global, c.text, c.global)
 		}
 	}
-	if texteErreur(nil) != "" {
+	if errorText(nil) != "" {
 		t.Error("sans erreur : texte vide attendu")
 	}
 
 	// Frontend qui lance un jeu avant l'assistant : pas de « The system cannot find the file specified ».
-	reinitialiser()
-	principal([]string{"run", "--config", filepath.Join(t.TempDir(), "absent", "config.json"), "x.nds"})
+	reset()
+	realMain([]string{"run", "--config", filepath.Join(t.TempDir(), "absent", "config.json"), "x.nds"})
 	if len(questions) != 1 || !strings.Contains(questions[0], "3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync »") ||
-		!strings.Contains(questions[0], pageAide) {
+		!strings.Contains(questions[0], helpPage) {
 		t.Errorf("configuration absente : %q", questions)
 	}
 }

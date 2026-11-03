@@ -18,35 +18,35 @@ import (
 // Le dernier bouton est le plus prudent : bouton par défaut, et choisi quand on ferme la fenêtre.
 // "" = aucune fenêtre possible (pas d'outil, pas d'écran, erreur de l'outil) : un Conflit ne remplace rien (Q16).
 // ponytail: affichage sous Gamescope (Steam Deck, mode Jeu) non vérifié.
-func demanderSysteme(texte string, boutons []string) string {
-	fmt.Fprintln(os.Stderr, texte)
-	outil := outilDialogue()
-	if outil == "" {
+func askSystem(text string, buttons []string) string {
+	fmt.Fprintln(os.Stderr, text)
+	tool := dialogTool()
+	if tool == "" {
 		return ""
 	}
-	sortie, err := exec.Command(outil, argsDialogue(outil, texte, boutons)...).Output()
+	output, err := exec.Command(tool, dialogArgs(tool, text, buttons)...).Output()
 	code := 0
-	var fin *exec.ExitError
-	if errors.As(err, &fin) {
-		code = fin.ExitCode()
+	var end *exec.ExitError
+	if errors.As(err, &end) {
+		code = end.ExitCode()
 	} else if err != nil {
 		return ""
 	}
-	return reponseDialogue(outil, boutons, code, string(sortie))
+	return dialogResponse(tool, buttons, code, string(output))
 }
 
-func outilDialogue() string {
+func dialogTool() string {
 	if runtime.GOOS == "darwin" {
 		return "osascript"
 	}
 	if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
 		return ""
 	}
-	ordre := []string{"zenity", "kdialog"}
+	order := []string{"zenity", "kdialog"}
 	if strings.Contains(os.Getenv("XDG_CURRENT_DESKTOP"), "KDE") {
-		ordre = []string{"kdialog", "zenity"}
+		order = []string{"kdialog", "zenity"}
 	}
-	for _, o := range ordre {
+	for _, o := range order {
 		if _, err := exec.LookPath(o); err == nil {
 			return o
 		}
@@ -55,27 +55,27 @@ func outilDialogue() string {
 }
 
 // Arguments de l'outil. Au plus 3 boutons (limite d'AppleScript et de kdialog).
-func argsDialogue(outil, texte string, b []string) []string {
-	switch outil {
+func dialogArgs(tool, text string, b []string) []string {
+	switch tool {
 	case "osascript": // texte et boutons en arguments : aucun échappement AppleScript
 		return append([]string{"-e", "on run argv", "-e", "set b to items 2 thru -1 of argv", "-e",
 			`button returned of (display dialog (item 1 of argv) with title "3dssavesync" buttons b default button (count of b))`,
-			"-e", "end run", texte}, b...)
+			"-e", "end run", text}, b...)
 	case "kdialog": // codes de sortie : 0, 1, 2 = boutons 1, 2, 3
 		a := []string{"--title", "3dssavesync"}
 		switch len(b) {
 		case 1:
-			return append(a, "--msgbox", texte)
+			return append(a, "--msgbox", text)
 		case 2:
-			return append(a, "--yesno", texte, "--yes-label", b[0], "--no-label", b[1])
+			return append(a, "--yesno", text, "--yes-label", b[0], "--no-label", b[1])
 		}
-		return append(a, "--yesnocancel", texte, "--yes-label", b[0], "--no-label", b[1], "--cancel-label", b[2])
+		return append(a, "--yesnocancel", text, "--yes-label", b[0], "--no-label", b[1], "--cancel-label", b[2])
 	}
 	// zenity : OK = premier bouton, Annuler (et fermeture) = dernier, boutons du milieu en --extra-button.
 	if len(b) == 1 {
-		return []string{"--info", "--no-markup", "--title=3dssavesync", "--text=" + texte, "--ok-label=" + b[0]}
+		return []string{"--info", "--no-markup", "--title=3dssavesync", "--text=" + text, "--ok-label=" + b[0]}
 	}
-	a := []string{"--question", "--no-markup", "--title=3dssavesync", "--text=" + texte, "--ok-label=" + b[0], "--cancel-label=" + b[len(b)-1]}
+	a := []string{"--question", "--no-markup", "--title=3dssavesync", "--text=" + text, "--ok-label=" + b[0], "--cancel-label=" + b[len(b)-1]}
 	for _, x := range b[1 : len(b)-1] {
 		a = append(a, "--extra-button="+x)
 	}
@@ -83,12 +83,12 @@ func argsDialogue(outil, texte string, b []string) []string {
 }
 
 // Bouton choisi d'après le code de sortie et la sortie de l'outil ; "" si l'outil a échoué.
-func reponseDialogue(outil string, b []string, code int, sortie string) string {
-	sortie = strings.TrimSpace(sortie)
-	switch outil {
+func dialogResponse(tool string, b []string, code int, output string) string {
+	output = strings.TrimSpace(output)
+	switch tool {
 	case "osascript":
-		if code == 0 && slices.Contains(b, sortie) {
-			return sortie
+		if code == 0 && slices.Contains(b, output) {
+			return output
 		}
 	case "kdialog":
 		if code >= 0 && code <= 2 {
@@ -98,8 +98,8 @@ func reponseDialogue(outil string, b []string, code int, sortie string) string {
 		switch {
 		case code == 0:
 			return b[0]
-		case code == 1 && slices.Contains(b, sortie):
-			return sortie
+		case code == 1 && slices.Contains(b, output):
+			return output
 		case code == 1:
 			return b[len(b)-1]
 		}
@@ -107,24 +107,24 @@ func reponseDialogue(outil string, b []string, code int, sortie string) string {
 	return ""
 }
 
-func notifierSysteme(texte string) {
-	fmt.Fprintln(os.Stderr, texte)
+func systemNotify(text string) {
+	fmt.Fprintln(os.Stderr, text)
 	if runtime.GOOS == "darwin" {
-		exec.Command("osascript", "-e", "on run argv", "-e", `display notification (item 1 of argv) with title "3dssavesync"`, "-e", "end run", texte).Run()
+		exec.Command("osascript", "-e", "on run argv", "-e", `display notification (item 1 of argv) with title "3dssavesync"`, "-e", "end run", text).Run()
 	} else if p, err := exec.LookPath("notify-send"); err == nil {
-		exec.Command(p, "3dssavesync", texte).Run()
+		exec.Command(p, "3dssavesync", text).Run()
 	}
 }
 
-func attendreNotifications() {} // notify-send et osascript rendent la main une fois la notification affichée
+func waitNotifications() {} // notify-send et osascript rendent la main une fois la notification affichée
 
 // L'assistant se lance dans un terminal : rien à ouvrir.
-func ouvrirConsole() {}
+func openConsole() {}
 
-const consolePropre = false
+const cleanConsole = false
 
 // Saisie sans écho (jeton) par stty ; sans terminal, rien à faire.
-func sansEcho() func() {
+func noEcho() func() {
 	c := exec.Command("stty", "-echo")
 	c.Stdin = os.Stdin
 	if c.Run() != nil {
@@ -138,7 +138,7 @@ func sansEcho() func() {
 }
 
 // Langue : variables de locale, puis la préférence de macOS (une application lancée par le Finder n'a pas LANG).
-func langueSysteme() string {
+func systemLanguage() string {
 	for _, v := range []string{"LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"} {
 		if l := os.Getenv(v); l != "" && l != "C" && l != "POSIX" {
 			return l
@@ -153,14 +153,14 @@ func langueSysteme() string {
 }
 
 // Nombre de processus de ce nom. Linux : /proc/<pid>/comm (15 caractères au plus) ; macOS : ps.
-func compterProcessus(nom string) (n int) {
-	nom = strings.ToLower(nom)
-	if len(nom) > 15 {
-		nom = nom[:15]
+func countProcesses(name string) (n int) {
+	name = strings.ToLower(name)
+	if len(name) > 15 {
+		name = name[:15]
 	}
 	if comms, err := filepath.Glob("/proc/[0-9]*/comm"); err == nil && len(comms) > 0 {
 		for _, c := range comms {
-			if o, err := os.ReadFile(c); err == nil && strings.ToLower(strings.TrimSpace(string(o))) == nom {
+			if o, err := os.ReadFile(c); err == nil && strings.ToLower(strings.TrimSpace(string(o))) == name {
 				n++
 			}
 		}
@@ -171,7 +171,7 @@ func compterProcessus(nom string) (n int) {
 		return 0
 	}
 	for _, l := range strings.Split(string(o), "\n") {
-		if strings.ToLower(filepath.Base(strings.TrimSpace(l))) == nom {
+		if strings.ToLower(filepath.Base(strings.TrimSpace(l))) == name {
 			n++
 		}
 	}
@@ -179,13 +179,13 @@ func compterProcessus(nom string) (n int) {
 }
 
 // Le processus pid tourne encore (signal 0 : vérifie sans rien envoyer ; EPERM = il existe, à un autre utilisateur).
-func processusVivant(pid int) bool {
+func processAlive(pid int) bool {
 	err := syscall.Kill(pid, 0)
 	return err == nil || err == syscall.EPERM
 }
 
 // Processus qui survit à la fermeture du terminal de l'assistant (nouvelle session, sans SIGHUP).
-func demarrerDetache(exe string, args []string) error {
+func startDetached(exe string, args []string) error {
 	c := exec.Command(exe, args...)
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := c.Start(); err != nil {
@@ -195,13 +195,13 @@ func demarrerDetache(exe string, args []string) error {
 }
 
 // Volumes montés (carte SD, clé USB) : /Volumes (macOS), /media/$USER et /run/media/$USER (Linux).
-func racinesAmovibles() []string {
-	motifs := []string{"/Volumes/*"}
+func removableRoots() []string {
+	patterns := []string{"/Volumes/*"}
 	if runtime.GOOS != "darwin" {
-		motifs = []string{filepath.Join("/media", os.Getenv("USER"), "*"), filepath.Join("/run/media", os.Getenv("USER"), "*")}
+		patterns = []string{filepath.Join("/media", os.Getenv("USER"), "*"), filepath.Join("/run/media", os.Getenv("USER"), "*")}
 	}
 	var l []string
-	for _, m := range motifs {
+	for _, m := range patterns {
 		f, _ := filepath.Glob(m)
 		l = append(l, f...)
 	}
@@ -209,9 +209,9 @@ func racinesAmovibles() []string {
 }
 
 // Place libre pour l'utilisateur sur le disque du dossier.
-func espaceLibreSysteme(dossier string) (uint64, error) {
+func systemFreeSpace(dir string) (uint64, error) {
 	var s syscall.Statfs_t
-	if err := syscall.Statfs(dossier, &s); err != nil {
+	if err := syscall.Statfs(dir, &s); err != nil {
 		return 0, err
 	}
 	return uint64(s.Bavail) * uint64(s.Bsize), nil

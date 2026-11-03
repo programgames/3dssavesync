@@ -4,10 +4,10 @@ package main
 // valeurs par octet (adresse paire dans le quartet bas) ; SameBoy, VBA-M et BGB 512 octets, une valeur par octet.
 // Forme du serveur : 512 octets, quartet haut à 0. Sur PC, un fichier GB de 256 ou 512 octets ne peut être que MBC2.
 
-func estMBC2(systeme string, n int) bool { return systeme == "GB" && (n == 256 || n == 512) }
+func isMBC2(system string, n int) bool { return system == "GB" && (n == 256 || n == 512) }
 
 // normaliserMBC2 : fichier de 256 ou 512 octets -> forme du serveur.
-func normaliserMBC2(f []byte) []byte {
+func normalizeMBC2(f []byte) []byte {
 	s := make([]byte, 512)
 	for i := range s {
 		if len(f) == 256 {
@@ -21,7 +21,7 @@ func normaliserMBC2(f []byte) []byte {
 
 // fichierMBC2 : forme du serveur -> fichier de n octets : 256 (mGBA) ou 512 (quartet haut à 0xF, lu par SameBoy,
 // VBA-M et BGB).
-func fichierMBC2(s []byte, n int) []byte {
+func mbc2File(s []byte, n int) []byte {
 	f := make([]byte, n)
 	for i, v := range s {
 		if n == 256 {
@@ -34,12 +34,12 @@ func fichierMBC2(s []byte, n int) []byte {
 }
 
 // Taille d'un fichier MBC2 neuf : 256 octets chez mGBA (application ou cœur RetroArch), 512 ailleurs.
-func (s *Session) tailleMBC2(j *Jeu) int {
-	p := s.profil
-	if e := s.cfg.Emulateurs[p]; e != nil && e.Profil != "" {
-		p = e.Profil
+func (s *Session) mbc2Size(j *Game) int {
+	p := s.profile
+	if e := s.cfg.Emulators[p]; e != nil && e.Profile != "" {
+		p = e.Profile
 	}
-	if p == "mgba" || j.Coeur == "mGBA" {
+	if p == "mgba" || j.Core == "mGBA" {
 		return 256
 	}
 	return 512

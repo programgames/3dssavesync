@@ -20,87 +20,87 @@ import (
 )
 
 //go:embed icone/icone.ico
-var iconeIco []byte
+var iconICO []byte
 
 // Demande d'arrêt (désinstallation, réglages enregistrés) : ce fichier dans le dossier des réglages, lu toutes les 2 s.
-const fichierArret = "arret-tray"
+const stopFile = "arret-tray"
 
 // Entrée « 3dssavesync » du démarrage automatique : tray, ou serve sans l'icône.
-const nomDemarrage = "3dssavesync"
+const startupName = "3dssavesync"
 
 // Adaptateur remplacé par les tests : jamais le vrai dossier Démarrage.
-var retirerAutostart = retirerDemarrageAuto
+var removeAutostart = removeAutostartEntry
 
 // Icône affichée, sauf "icone_horloge": false.
-func (c *Config) iconeHorloge() bool { return c.IconeHorloge == nil || *c.IconeHorloge }
+func (c *Config) trayIcon() bool { return c.TrayIcon == nil || *c.TrayIcon }
 
 // Élément du menu de l'icône. Texte vide : séparateur ; Action vide : ligne d'information, grisée.
-type ElementMenu struct {
-	Texte  string
+type MenuItem struct {
+	Text   string
 	Action string // reglages, envoyer, quitter
 }
 
 // menuTray : le menu d'après l'état. attente : nombre d'Envois en attente ; serveur : ligne du serveur local ("" : aucun) ;
 // maj : version plus récente sur GitHub ("" : aucune), mise à jour depuis les réglages.
-func menuTray(attente int, serveur, maj string) []ElementMenu {
-	m := []ElementMenu{{tr("Ouvrir les réglages", "Open settings"), "reglages"}}
-	if maj != "" {
-		m = append(m, ElementMenu{fmt.Sprintf(tr("Mettre à jour vers la version %s", "Update to version %s"), maj), "reglages"})
+func trayMenuItems(pending int, server, update string) []MenuItem {
+	m := []MenuItem{{tr("Ouvrir les réglages", "Open settings"), "reglages"}}
+	if update != "" {
+		m = append(m, MenuItem{fmt.Sprintf(tr("Mettre à jour vers la version %s", "Update to version %s"), update), "reglages"})
 	}
-	if attente > 0 {
-		m = append(m, ElementMenu{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Upload now (%d pending)"), attente), "envoyer"})
+	if pending > 0 {
+		m = append(m, MenuItem{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Upload now (%d pending)"), pending), "envoyer"})
 	}
-	if serveur != "" {
-		m = append(m, ElementMenu{serveur, ""})
+	if server != "" {
+		m = append(m, MenuItem{server, ""})
 	}
-	return append(m, ElementMenu{"3dssavesync " + version, ""}, ElementMenu{}, ElementMenu{tr("Quitter", "Quit"), "quitter"})
+	return append(m, MenuItem{"3dssavesync " + version, ""}, MenuItem{}, MenuItem{tr("Quitter", "Quit"), "quitter"})
 }
 
 // ligneServeur : "" sans serveur local ; sinon l'adresse à entrer sur la 3DS, ou la première phrase de l'erreur.
-func ligneServeur(cfg *Config, err error) string {
-	if cfg.ServeurLocal == nil {
+func serverLine(cfg *Config, err error) string {
+	if cfg.LocalServer == nil {
 		return ""
 	}
 	if err != nil {
-		t, _, _ := strings.Cut(texteErreur(err), ". ")
+		t, _, _ := strings.Cut(errorText(err), ". ")
 		return tr("Serveur local : arrêté (", "Local server: stopped (") + t + ")"
 	}
-	url, _ := adresse3DS(cfg)
+	url, _ := address3DS(cfg)
 	if url == "" {
-		url = fmt.Sprintf("port %d", cfg.ServeurLocal.Port)
+		url = fmt.Sprintf("port %d", cfg.LocalServer.Port)
 	}
 	return tr("Serveur local : en marche (", "Local server: running (") + url + ")"
 }
 
 // Nombre d'Envois en attente (en-attente.json illisible : 0, la reprise habituelle le mettra de côté).
-func nombreEnAttente(dossier string) int {
-	var l []enAttente
-	lireJSON((&Session{dossier: dossier}).cheminAttente(), &l)
+func pendingCount(dir string) int {
+	var l []pendingEntry
+	readJSON((&Session{dir: dir}).pendingPath(), &l)
 	return len(l)
 }
 
 // envoyerMaintenant : les Envois en attente (même passe qu'au lancement d'un jeu) ; rend le texte de la notification.
-func envoyerMaintenant(config string) string {
-	s, err := nouvelleSession(config)
+func uploadNow(config string) string {
+	s, err := newSession(config)
 	if err != nil {
-		return tr("Envoi impossible. ", "Upload failed. ") + texteErreur(err)
+		return tr("Envoi impossible. ", "Upload failed. ") + errorText(err)
 	}
-	avant := nombreEnAttente(s.dossier)
-	err = s.reprendre()
-	reste := nombreEnAttente(s.dossier)
-	if reste == 0 {
-		return fmt.Sprintf(tr("Sauvegardes envoyées : %d", "Saves uploaded: %d"), avant)
+	before := pendingCount(s.dir)
+	err = s.resume()
+	rest := pendingCount(s.dir)
+	if rest == 0 {
+		return fmt.Sprintf(tr("Sauvegardes envoyées : %d", "Saves uploaded: %d"), before)
 	}
-	texte := fmt.Sprintf(tr("Sauvegardes encore en attente : %d. ", "Saves still pending: %d. "), reste)
+	text := fmt.Sprintf(tr("Sauvegardes encore en attente : %d. ", "Saves still pending: %d. "), rest)
 	if err == nil { // jeu sauté : son émulateur est ouvert
-		return texte + tr("Fermez l'émulateur et réessayez.", "Close the emulator and try again.")
+		return text + tr("Fermez l'émulateur et réessayez.", "Close the emulator and try again.")
 	}
-	return texte + texteErreur(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
+	return text + errorText(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
 }
 
 // avecConfig : args, avec --config quand ce n'est pas le fichier par défaut.
-func avecConfig(args []string, config string) []string {
-	if config != configDefaut() {
+func withConfig(args []string, config string) []string {
+	if config != defaultConfig() {
 		args = append(args, "--config", config)
 	}
 	return args
@@ -108,44 +108,44 @@ func avecConfig(args []string, config string) []string {
 
 // choixDemarrage : le programme lancé à l'ouverture de session (nil : aucun). Icône affichée : tray, qui fait aussi
 // tourner le serveur local ; sinon serve pour le serveur local seul.
-func choixDemarrage(cfg *Config, config string) []string {
+func startupChoice(cfg *Config, config string) []string {
 	switch {
-	case cfg.iconeHorloge() && trayDisponible:
-		return avecConfig([]string{"tray"}, config)
-	case cfg.ServeurLocal != nil:
-		return avecConfig([]string{"serve"}, config)
+	case cfg.trayIcon() && trayAvailable:
+		return withConfig([]string{"tray"}, config)
+	case cfg.LocalServer != nil:
+		return withConfig([]string{"serve"}, config)
 	}
 	return nil
 }
 
 // demarrageAutomatique : une seule entrée « 3dssavesync » (args nil : aucune), et plus celles « 3dssavesync serveur »
 // d'avant la v3.7 (le serveur démarrerait deux fois). L'icône en marche s'arrête : elle redémarre avec les nouveaux réglages.
-func demarrageAutomatique(q *Questions, lanceur string, args []string, dossier string) {
-	if err := arreterTray(dossier); err != nil {
-		q.dire("%s", err.Error())
+func setupAutostart(q *Questions, launcher string, args []string, dir string) {
+	if err := stopTray(dir); err != nil {
+		q.say("%s", err.Error())
 	}
 	if args != nil {
-		f, err := autostart(nomDemarrage, lanceur, args)
+		f, err := autostart(startupName, launcher, args)
 		if err != nil { // l'ancienne entrée reste : mieux qu'aucune
-			q.dire("%s %s", tr("Impossible d'activer le démarrage automatique :", "Couldn't turn on autostart:"), texteErreur(err))
+			q.say("%s %s", tr("Impossible d'activer le démarrage automatique :", "Couldn't turn on autostart:"), errorText(err))
 			return
 		}
-		q.dire("%s %s", tr("Démarrage automatique activé :", "Autostart on:"), f)
+		q.say("%s %s", tr("Démarrage automatique activé :", "Autostart on:"), f)
 	}
-	if err := retirerAutostart(args != nil); err != nil {
-		q.dire("%s %s", tr("Impossible de retirer l'ancien démarrage automatique :", "Couldn't remove the old autostart:"), texteErreur(err))
+	if err := removeAutostart(args != nil); err != nil {
+		q.say("%s %s", tr("Impossible de retirer l'ancien démarrage automatique :", "Couldn't remove the old autostart:"), errorText(err))
 	}
 }
 
 // retirerDemarrageAuto : les entrées « 3dssavesync serveur » d'avant la v3.7, et « 3dssavesync » sauf si garder.
 // Windows : raccourcis de Démarrage à la Corbeille. Linux et macOS : demarrageAuto écrit toujours le même fichier.
-func retirerDemarrageAuto(garder bool) error {
+func removeAutostartEntry(keep bool) error {
 	if runtime.GOOS != "windows" {
 		f := xdgConfig("autostart", "3dssavesync-serveur.desktop")
 		if runtime.GOOS == "darwin" {
-			f = maison("Library", "LaunchAgents", "com.3dssavesync.serveur.plist")
+			f = home("Library", "LaunchAgents", "com.3dssavesync.serveur.plist")
 		}
-		if garder {
+		if keep {
 			return nil
 		}
 		if err := os.Remove(f); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -153,14 +153,14 @@ func retirerDemarrageAuto(garder bool) error {
 		}
 		return nil
 	}
-	noms := "3dssavesync serveur|3dssavesync server"
-	if !garder {
-		noms += "|" + nomDemarrage
+	names := "3dssavesync serveur|3dssavesync server"
+	if !keep {
+		names += "|" + startupName
 	}
 	c := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
 		`Add-Type -AssemblyName Microsoft.VisualBasic; $d=[Environment]::GetFolderPath('Startup'); foreach ($n in $env:R_NOMS.Split('|')) { `+
 			`$f=Join-Path $d ($n+'.lnk'); if (Test-Path -LiteralPath $f) { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($f,'OnlyErrorDialogs','SendToRecycleBin') } }`)
-	c.Env = append(os.Environ(), "R_NOMS="+noms)
+	c.Env = append(os.Environ(), "R_NOMS="+names)
 	if o, err := c.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w : %s", err, strings.TrimSpace(string(o)))
 	}
@@ -169,16 +169,16 @@ func retirerDemarrageAuto(garder bool) error {
 
 // arreterTray : demande l'arrêt de l'icône en marche et attend la fin de son programme (son exe peut alors aller à la
 // Corbeille, son port se libère). Rien à faire si elle ne tourne pas.
-func arreterTray(dossier string) error {
-	if !trayActif(dossier) {
+func stopTray(dir string) error {
+	if !trayActive(dir) {
 		return nil
 	}
-	f := filepath.Join(dossier, fichierArret)
+	f := filepath.Join(dir, stopFile)
 	err := os.WriteFile(f, nil, 0o644)
-	for i := 0; err == nil && i < 30 && trayActif(dossier); i++ {
+	for i := 0; err == nil && i < 30 && trayActive(dir); i++ {
 		time.Sleep(200 * time.Millisecond)
 	}
-	if err == nil && !trayActif(dossier) {
+	if err == nil && !trayActive(dir) {
 		return nil
 	}
 	if err == nil {
@@ -189,16 +189,16 @@ func arreterTray(dossier string) error {
 }
 
 // surveillerArret : appelle quitter quand le fichier d'arrêt apparaît (il est retiré), jusqu'à la fin.
-func surveillerArret(dossier string, quitter func(), fin <-chan struct{}) {
-	f := filepath.Join(dossier, fichierArret)
+func watchStop(dir string, quit func(), end <-chan struct{}) {
+	f := filepath.Join(dir, stopFile)
 	for {
 		select {
-		case <-fin:
+		case <-end:
 			return
 		case <-time.After(2 * time.Second):
-			if existe(f) {
+			if exists(f) {
 				os.Remove(f)
-				quitter()
+				quit()
 				return
 			}
 		}
@@ -207,112 +207,112 @@ func surveillerArret(dossier string, quitter func(), fin <-chan struct{}) {
 
 // imageIco : l'image d'un .ico la plus petite d'au moins taille pixels, sinon la plus grande. En-tête de 6 octets
 // (nombre d'images à l'octet 4), puis 16 octets par image : largeur (0 = 256), taille (octet 8) et début (octet 12).
-func imageIco(ico []byte, taille int) []byte {
-	var choix []byte
-	meilleure := 0
+func imageIco(ico []byte, size int) []byte {
+	var choice []byte
+	bestOne := 0
 	for i := 0; len(ico) >= 6 && i < int(binary.LittleEndian.Uint16(ico[4:])) && 22+16*i <= len(ico); i++ {
 		e := ico[6+16*i:]
-		l, n, debut := int(e[0]), uint64(binary.LittleEndian.Uint32(e[8:])), uint64(binary.LittleEndian.Uint32(e[12:]))
+		l, n, start := int(e[0]), uint64(binary.LittleEndian.Uint32(e[8:])), uint64(binary.LittleEndian.Uint32(e[12:]))
 		if l == 0 {
 			l = 256
 		}
-		if debut+n > uint64(len(ico)) {
+		if start+n > uint64(len(ico)) {
 			continue
 		}
-		if choix == nil || meilleure < taille && l > meilleure || l >= taille && l < meilleure {
-			choix, meilleure = ico[debut:debut+n], l
+		if choice == nil || bestOne < size && l > bestOne || l >= size && l < bestOne {
+			choice, bestOne = ico[start:start+n], l
 		}
 	}
-	return choix
+	return choice
 }
 
 // 3dssavesync tray : l'icône, et le serveur local s'il est configuré. Une deuxième icône s'arrête sans rien dire.
-func commandeTray(config string) (int, error) {
-	dossier := filepath.Dir(config)
-	liberer := verrouTray(dossier)
-	if liberer == nil {
+func cmdTray(config string) (int, error) {
+	dir := filepath.Dir(config)
+	release := trayLock(dir)
+	if release == nil {
 		return 0, nil
 	}
-	defer liberer()
-	os.Remove(filepath.Join(dossier, fichierArret)) // reste d'une demande faite quand l'icône ne tournait pas
-	s := &Session{dossier: dossier}
+	defer release()
+	os.Remove(filepath.Join(dir, stopFile)) // reste d'une demande faite quand l'icône ne tournait pas
+	s := &Session{dir: dir}
 	var cfg Config
-	lireJSON(config, &cfg) // pas encore configuré : seulement « Ouvrir les réglages » et « Quitter »
-	var serveur struct {
+	readJSON(config, &cfg) // pas encore configuré : seulement « Ouvrir les réglages » et « Quitter »
+	var server struct {
 		sync.Mutex
 		err error
 	}
-	if cfg.ServeurLocal != nil {
+	if cfg.LocalServer != nil {
 		go func() {
-			_, err := commandeServe(config) // rend la main seulement sur une erreur, ou s'il tourne déjà ailleurs
+			_, err := cmdServe(config) // rend la main seulement sur une erreur, ou s'il tourne déjà ailleurs
 			if err != nil {
-				s.journal("tray : serveur local : " + err.Error())
-				notifier(tr("Le serveur local ne fonctionne pas : ", "The local server isn't running: ") + texteErreur(err))
-				serveur.Lock()
-				serveur.err = err
-				serveur.Unlock()
+				s.log("tray : serveur local : " + err.Error())
+				notify(tr("Le serveur local ne fonctionne pas : ", "The local server isn't running: ") + errorText(err))
+				server.Lock()
+				server.err = err
+				server.Unlock()
 			}
 		}()
 	}
-	fin := make(chan struct{})
-	var une sync.Once
-	quitter := func() { une.Do(func() { close(fin) }) }
-	go surveillerArret(dossier, quitter, fin)
-	var maj struct {
+	end := make(chan struct{})
+	var one sync.Once
+	quit := func() { one.Do(func() { close(end) }) }
+	go watchStop(dir, quit, end)
+	var update struct {
 		sync.Mutex
 		version string
 	}
-	if version != "dev" && cfg.verifierMaj() { // au plus une recherche par jour (derniereRelease) ; échec : rien dans le menu
+	if version != "dev" && cfg.checkUpdate() { // au plus une recherche par jour (derniereRelease) ; échec : rien dans le menu
 		go func() {
 			for {
-				if r, err := derniereRelease(dossier, false); err == nil && plusRecente(version, r.Tag) {
-					maj.Lock()
-					maj.version = strings.TrimPrefix(r.Tag, "v")
-					maj.Unlock()
+				if r, err := latestRelease(dir, false); err == nil && newest(version, r.Tag) {
+					update.Lock()
+					update.version = strings.TrimPrefix(r.Tag, "v")
+					update.Unlock()
 				}
 				select {
-				case <-fin:
+				case <-end:
 					return
 				case <-time.After(6 * time.Hour):
 				}
 			}
 		}()
 	}
-	var envoi sync.Mutex
-	choisir := func(action string) {
+	var upload sync.Mutex
+	choose := func(action string) {
 		switch action {
 		case "reglages":
-			if err := ouvrirDetache(executable(), avecConfig([]string{"setup"}, config)); err != nil {
-				notifier(tr("Impossible d'ouvrir les réglages. Utilisez le raccourci « 3dssavesync réglages ».", "Couldn't open the settings. Use the \"3dssavesync settings\" shortcut.") +
+			if err := openDetached(executable(), withConfig([]string{"setup"}, config)); err != nil {
+				notify(tr("Impossible d'ouvrir les réglages. Utilisez le raccourci « 3dssavesync réglages ».", "Couldn't open the settings. Use the \"3dssavesync settings\" shortcut.") +
 					"\n" + tr("Détail : ", "Detail: ") + err.Error())
 			}
 		case "envoyer":
-			if envoi.TryLock() { // deux clics : un seul envoi
-				defer envoi.Unlock()
-				notifier(envoyerMaintenant(config))
+			if upload.TryLock() { // deux clics : un seul envoi
+				defer upload.Unlock()
+				notify(uploadNow(config))
 			}
 		case "quitter":
-			quitter()
+			quit()
 		}
 	}
-	menu := func() []ElementMenu {
-		serveur.Lock()
-		defer serveur.Unlock()
-		maj.Lock()
-		defer maj.Unlock()
-		return menuTray(nombreEnAttente(dossier), ligneServeur(&cfg, serveur.err), maj.version)
+	menu := func() []MenuItem {
+		server.Lock()
+		defer server.Unlock()
+		update.Lock()
+		defer update.Unlock()
+		return trayMenuItems(pendingCount(dir), serverLine(&cfg, server.err), update.version)
 
 	}
-	s.journal("tray : icône près de l'horloge")
-	err := afficherIcone(menu, choisir, fin)
+	s.log("tray : icône près de l'horloge")
+	err := showIcon(menu, choose, end)
 	if err == nil {
 		return 0, nil
 	}
-	s.journal("tray : " + err.Error())
-	if cfg.ServeurLocal == nil {
+	s.log("tray : " + err.Error())
+	if cfg.LocalServer == nil {
 		return 1, err
 	}
-	notifier(err.Error() + "\n" + tr("Le serveur local reste en marche.", "The local server is still running."))
-	<-fin
+	notify(err.Error() + "\n" + tr("Le serveur local reste en marche.", "The local server is still running."))
+	<-end
 	return 0, nil
 }

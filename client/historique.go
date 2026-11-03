@@ -21,69 +21,77 @@ import (
 )
 
 // Version de l'Historique, telle que GET /saves/<clé>/history la décrit (server.py, serveur.go).
-type VersionHisto struct {
+type HistoryVersion struct {
 	Version
-	Fichier string `json:"version"`
-	Date    string `json:"date"`
+	File string `json:"version"`
+	Date string `json:"date"`
 }
 
 // Une Version pour la page et la console. N : le <seq> du serveur, jamais renuméroté.
-type LigneHisto struct {
-	N                                           int
-	Fichier, Hash, Date, Client, Taille, Partie string
-	Courante                                    bool
+type HistoryLine struct {
+	N        int
+	File     string `json:"Fichier"`
+	Hash     string
+	Date     string
+	Client   string
+	Size     string `json:"Taille"`
+	PlayInfo string `json:"Partie"`
+	Current  bool   `json:"Courante"`
 }
 
-type JeuHisto struct{ Cle, Nom string }
+type HistoryGame struct {
+	Key  string `json:"Cle"`
+	Name string `json:"Nom"`
+}
 
 const (
-	versionsMax    = 30
-	clientRestaure = "restauration" // X-Client de l'Envoi : l'Historique montre qui a remis cette Version
+	maxVersions   = 30
+	restoreClient = "restauration" // X-Client de l'Envoi : l'Historique montre qui a remis cette Version
 )
 
 var reVersion = regexp.MustCompile(`^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\.sav$`)
 
-func cleValide(cle string) bool { return reCode.MatchString("/saves/" + cle) }
+func validKey(key string) bool { return reCode.MatchString("/saves/" + key) }
 
 // jeuxServeur : les jeux du serveur, avec le nom connu (titres 3DS, ROM trouvée par nomsRoms, ou nom donné au serveur
 // par un Client : ADR 0018).
-func (s *Session) jeuxServeur(noms map[string]string) ([]JeuHisto, error) {
+func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 	st, o, err := s.api("GET", "/saves", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	if st != 200 {
-		return nil, &erreurHTTP{"GET /saves", st}
+		return nil, &httpError{"GET /saves", st}
 	}
 	var l []Version
 	if err := json.Unmarshal(o, &l); err != nil {
 		return nil, err
 	}
-	jeux := []JeuHisto{}
+	games := []HistoryGame{}
 	for _, v := range l {
-		nom := noms[v.Code]
+		name := names[v.Code]
 		if strings.HasPrefix(v.Code, "3DS-") {
-			nom = titres3DS[v.Code[4:]]
+			name = titles3DS[v.Code[4:]]
 		}
-		if nom == "" {
-			nom = v.Nom
+		if name == "" {
+			name = v.Name
 		}
-		jeux = append(jeux, JeuHisto{v.Code, nom})
+		games = append(games, HistoryGame{v.Code, name})
 	}
-	sort.SliceStable(jeux, func(a, b int) bool { return jeux[a].Nom+jeux[a].Cle < jeux[b].Nom+jeux[b].Cle })
-	return jeux, nil
+	sort.SliceStable(games, func(a, b int) bool { return games[a].Name+games[a].Key < games[b].Name+games[b].Key })
+	return games, nil
 }
 
 // nomsRoms : Clé -> nom de la ROM, dans les dossiers des ROM des émulateurs configurés.
 // ponytail: un parcours complet, une seule fois par page ouverte ; un cache sur le disque si des milliers de ROM le rendent lent.
-func nomsRoms(cfg *Config) map[string]string {
+func romNames(cfg *Config) map[string]string {
 	m := map[string]string{}
-	for _, e := range cfg.Emulateurs {
-		for _, racine := range e.Roms {
-			filepath.WalkDir(racine, func(chemin string, d fs.DirEntry, err error) error {
+	for _, e := range cfg.Emulators {
+		for _, root := range e.Roms {
+			filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 				if err == nil && !d.IsDir() {
-					if _, cle, nom, _, err := lireRom(chemin); err == nil && cle != "" && m[cle] == "" {
-						m[cle] = nom
+					if _, key, name, _, err := readRom(path); err == nil && key != "" && m[key] == "" {
+						m[key] = name
 					}
 				}
 				return nil
@@ -96,42 +104,42 @@ func nomsRoms(cfg *Config) map[string]string {
 // lignesHisto : les versionsMax dernières Versions d'un Jeu, la plus récente (la courante) d'abord.
 // Pokémon : temps de jeu et dresseur de chaque Version, lue en entier.
 // ponytail: jusqu'à 30 lectures de 512 Kio par liste ; à lire à la demande si un serveur distant lent le rend pénible.
-func (s *Session) lignesHisto(cle string) ([]LigneHisto, error) {
-	if !cleValide(cle) {
+func (s *Session) historyLines(key string) ([]HistoryLine, error) {
+	if !validKey(key) {
 		return nil, fmt.Errorf(tr("Clé de jeu inconnue : %s. « 3dssavesync restore » affiche les clés des jeux du serveur.",
-			"Unknown game key: %s. \"3dssavesync restore\" lists the keys of the games on the server."), cle)
+			"Unknown game key: %s. \"3dssavesync restore\" lists the keys of the games on the server."), key)
 	}
-	st, o, err := s.api("GET", "/saves/"+cle+"/history", nil, nil)
+	st, o, err := s.api("GET", "/saves/"+key+"/history", nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	if st != 200 {
-		return nil, &erreurHTTP{"GET /saves/" + cle + "/history", st}
+		return nil, &httpError{"GET /saves/" + key + "/history", st}
 	}
-	var l []VersionHisto
+	var l []HistoryVersion
 	if err := json.Unmarshal(o, &l); err != nil {
 		return nil, err
 	}
 	slices.Reverse(l)
-	if len(l) > versionsMax {
-		l = l[:versionsMax]
+	if len(l) > maxVersions {
+		l = l[:maxVersions]
 	}
-	lignes := []LigneHisto{}
+	lines := []HistoryLine{}
 	for i, v := range l {
-		n, _ := strconv.Atoi(strings.SplitN(v.Fichier, "-", 2)[0])
-		x := LigneHisto{n, v.Fichier, v.Hash, dateLocale(v.Date), v.Client, formatTaille(v.Taille), "", i == 0}
-		if _, g67 := formatsPokemon[int(v.Taille)]; g67 || v.Taille == 0x8000 || v.Taille == 0x20000 || v.Taille == 0x80000 {
-			if st, o, err := s.api("GET", "/saves/"+cle+"/history/"+v.Fichier, nil, nil); err == nil && st == 200 {
-				x.Partie, _ = partiePokemon(o)
+		n, _ := strconv.Atoi(strings.SplitN(v.File, "-", 2)[0])
+		x := HistoryLine{n, v.File, v.Hash, localDate(v.Date), v.Client, formatSize(v.Size), "", i == 0}
+		if _, g67 := pokemonFormats[int(v.Size)]; g67 || v.Size == 0x8000 || v.Size == 0x20000 || v.Size == 0x80000 {
+			if st, o, err := s.api("GET", "/saves/"+key+"/history/"+v.File, nil, nil); err == nil && st == 200 {
+				x.PlayInfo, _ = pokemonPlayInfo(o)
 			}
 		}
-		lignes = append(lignes, x)
+		lines = append(lines, x)
 	}
-	return lignes, nil
+	return lines, nil
 }
 
 // Date du serveur (UTC, horloge du serveur) en heure locale.
-func dateLocale(d string) string {
+func localDate(d string) string {
 	t, err := time.Parse("20060102T150405Z", d)
 	if err != nil {
 		return d
@@ -139,7 +147,7 @@ func dateLocale(d string) string {
 	return t.Local().Format(tr("02/01/2006 15:04", "2006-01-02 15:04"))
 }
 
-func formatTaille(n int64) string {
+func formatSize(n int64) string {
 	if n >= 1024 {
 		return fmt.Sprintf(tr("%d Kio", "%d KiB"), (n+512)/1024)
 	}
@@ -148,30 +156,30 @@ func formatTaille(n int64) string {
 
 // restaurer : la Version fichier redevient la Version courante, seulement si la courante est encore courant (le Hash
 // vu par l'utilisateur) : un Envoi arrivé entre-temps est refusé, jamais écrasé. deja : rien à faire, même contenu.
-func (s *Session) restaurer(cle, fichier, courant string) (deja bool, err error) {
+func (s *Session) restore(key, file, current string) (already bool, err error) {
 	defer func() {
 		if err != nil {
-			s.journal("restauration " + cle + " " + fichier + " : " + err.Error())
+			s.log("restauration " + key + " " + file + " : " + err.Error())
 		}
 	}()
-	if !cleValide(cle) || !reVersion.MatchString(fichier) {
-		return false, fmt.Errorf(tr("Version introuvable : %s %s", "Version not found: %s %s"), cle, fichier)
+	if !validKey(key) || !reVersion.MatchString(file) {
+		return false, fmt.Errorf(tr("Version introuvable : %s %s", "Version not found: %s %s"), key, file)
 	}
-	if hashDe(fichier) == courant {
+	if hashOf(file) == current {
 		return true, nil
 	}
-	st, o, err := s.api("GET", "/saves/"+cle+"/history/"+fichier, nil, nil)
+	st, o, err := s.api("GET", "/saves/"+key+"/history/"+file, nil, nil)
 	if err != nil {
 		return false, err
 	}
 	if st != 200 {
-		return false, &erreurHTTP{"GET /saves/" + cle + "/history/" + fichier, st}
+		return false, &httpError{"GET /saves/" + key + "/history/" + file, st}
 	}
-	if hachage(o) != hashDe(fichier) {
+	if sha256Hex(o) != hashOf(file) {
 		return false, errors.New(tr("La version reçue du serveur est incomplète, rien n'a été restauré. Réessayez.",
 			"The version from the server arrived incomplete, so nothing was restored. Try again."))
 	}
-	st, _, err = s.api("PUT", "/saves/"+cle, o, map[string]string{"If-Match": `"` + courant + `"`})
+	st, _, err = s.api("PUT", "/saves/"+key, o, map[string]string{"If-Match": `"` + current + `"`})
 	if err != nil {
 		return false, err
 	}
@@ -180,170 +188,170 @@ func (s *Session) restaurer(cle, fichier, courant string) (deja bool, err error)
 			"This save just changed on the server (a device uploaded it meanwhile). Nothing was restored. Open the version list again and choose again."))
 	}
 	if st != 200 {
-		return false, &erreurHTTP{"PUT /saves/" + cle, st}
+		return false, &httpError{"PUT /saves/" + key, st}
 	}
-	s.journal("restauration " + cle + " : " + fichier + " redevient la Version courante (avant : " + courant + ")")
+	s.log("restauration " + key + " : " + file + " redevient la Version courante (avant : " + current + ")")
 	return false, nil
 }
 
-func texteRestaure() string {
+func restoredText() string {
 	return tr("Version restaurée. C'est maintenant la version actuelle du serveur, et chaque appareil la recevra à sa prochaine synchronisation.",
 		"Version restored. It's now the current version on the server, and each device gets it at its next sync.")
 }
 
-func texteDeja() string {
+func alreadyText() string {
 	return tr("Cette version est identique à la version actuelle. Il n'y a rien à restaurer.",
 		"This version is the same as the current one. There's nothing to restore.")
 }
 
 // Session de la Restauration : la configuration, et le nom de Client « restauration ».
-func sessionRestauration(config string) (*Session, error) {
-	s, err := nouvelleSession(config)
+func restoreSession(config string) (*Session, error) {
+	s, err := newSession(config)
 	if s != nil {
-		s.profil = clientRestaure
+		s.profile = restoreClient
 	}
 	return s, err
 }
 
 // Dans une console (l'exe Windows n'en a pas, comme repair) ; l'erreur y est affichée, sans fenêtre.
-func commandeRestoreConsole(config string, args []string, oui bool) int {
-	ouvrirConsole()
+func cmdRestoreConsole(config string, args []string, yes bool) int {
+	openConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}
-	code, err := commandeRestore(config, args, oui, q)
+	code, err := cmdRestore(config, args, yes, q)
 	if err != nil {
-		q.dire("%s%s", tr("Erreur : ", "Error: "), texteErreur(err))
+		q.say("%s%s", tr("Erreur : ", "Error: "), errorText(err))
 	}
-	if consolePropre {
-		q.dire("\n%s", tr("Appuyez sur Entrée pour fermer.", "Press Enter to close."))
-		q.ligne()
+	if cleanConsole {
+		q.say("\n%s", tr("Appuyez sur Entrée pour fermer.", "Press Enter to close."))
+		q.line()
 	}
 	return code
 }
 
 // 3dssavesync restore [--oui] [<clé> [<n°>]] : sans clé, les jeux du serveur ; sans n°, les Versions ; sinon la
 // Restauration de la Version n°, après confirmation.
-func commandeRestore(config string, args []string, oui bool, q *Questions) (int, error) {
-	var reste []string
+func cmdRestore(config string, args []string, yes bool, q *Questions) (int, error) {
+	var rest []string
 	for _, a := range args {
 		if a == "--oui" || a == "-oui" {
-			oui = true
+			yes = true
 		} else {
-			reste = append(reste, a)
+			rest = append(rest, a)
 		}
 	}
-	if len(reste) > 2 {
+	if len(rest) > 2 {
 		return 2, errors.New(tr("restore attend une clé de jeu, puis un numéro de version", "restore needs a game key, then a version number"))
 	}
-	s, err := sessionRestauration(config)
+	s, err := restoreSession(config)
 	if err != nil {
 		return 1, err
 	}
-	if len(reste) == 0 {
-		jeux, err := s.jeuxServeur(nil)
+	if len(rest) == 0 {
+		games, err := s.serverGames(nil)
 		if err != nil {
 			return 1, err
 		}
-		for _, j := range jeux {
-			q.dire("%-22s %s", j.Cle, j.Nom)
+		for _, j := range games {
+			q.say("%-22s %s", j.Key, j.Name)
 		}
-		q.dire(tr("Voir les versions d'un jeu : 3dssavesync restore <clé>", "See the versions of a game: 3dssavesync restore <key>"))
+		q.say(tr("Voir les versions d'un jeu : 3dssavesync restore <clé>", "See the versions of a game: 3dssavesync restore <key>"))
 		return 0, nil
 	}
-	cle := strings.ToUpper(reste[0])
-	lignes, err := s.lignesHisto(cle)
+	key := strings.ToUpper(rest[0])
+	lines, err := s.historyLines(key)
 	if err != nil {
 		return 1, err
 	}
-	if len(lignes) == 0 {
+	if len(lines) == 0 {
 		return 1, fmt.Errorf(tr("Aucune version de %s sur le serveur. « 3dssavesync restore » affiche les jeux du serveur.",
-			"No versions of %s on the server. \"3dssavesync restore\" lists the games on the server."), cle)
+			"No versions of %s on the server. \"3dssavesync restore\" lists the games on the server."), key)
 	}
-	ligne := func(l LigneHisto) string {
-		t := fmt.Sprintf("%4d  %s  %-12s %8s", l.N, l.Date, l.Client, l.Taille)
-		if l.Partie != "" {
-			t += "  " + l.Partie
+	line := func(l HistoryLine) string {
+		t := fmt.Sprintf("%4d  %s  %-12s %8s", l.N, l.Date, l.Client, l.Size)
+		if l.PlayInfo != "" {
+			t += "  " + l.PlayInfo
 		}
-		if l.Courante {
+		if l.Current {
 			t += tr("  (actuelle)", "  (current)")
 		}
 		return t
 	}
-	if len(reste) == 1 {
-		for _, l := range lignes {
-			q.dire("%s", ligne(l))
+	if len(rest) == 1 {
+		for _, l := range lines {
+			q.say("%s", line(l))
 		}
-		q.dire(tr("Restaurer une version : 3dssavesync restore %s <n°>", "Restore a version: 3dssavesync restore %s <no.>"), cle)
+		q.say(tr("Restaurer une version : 3dssavesync restore %s <n°>", "Restore a version: 3dssavesync restore %s <no.>"), key)
 		return 0, nil
 	}
-	n, _ := strconv.Atoi(reste[1])
-	i := slices.IndexFunc(lignes, func(l LigneHisto) bool { return l.N == n })
+	n, _ := strconv.Atoi(rest[1])
+	i := slices.IndexFunc(lines, func(l HistoryLine) bool { return l.N == n })
 	if i < 0 {
 		return 1, fmt.Errorf(tr("Pas de version n° %s parmi les %d dernières de %s. « 3dssavesync restore %s » affiche la liste.",
-			"No version %s among the last %d of %s. \"3dssavesync restore %s\" shows the list."), reste[1], versionsMax, cle, cle)
+			"No version %s among the last %d of %s. \"3dssavesync restore %s\" shows the list."), rest[1], maxVersions, key, key)
 	}
-	if lignes[i].Hash == lignes[0].Hash {
-		q.dire("%s", texteDeja())
+	if lines[i].Hash == lines[0].Hash {
+		q.say("%s", alreadyText())
 		return 0, nil
 	}
-	q.dire("%s\n%s", ligne(lignes[i]), tr("Cette version deviendra la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n"+
+	q.say("%s\n%s", line(lines[i]), tr("Cette version deviendra la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n"+
 		"Chaque appareil (3DS, PC) la recevra à sa prochaine synchronisation, après une copie de sécurité de sa sauvegarde.\n"+
 		"Synchronisez d'abord vos autres appareils. Sinon, une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit.",
 		"This version will become the current version on the server. No version is deleted: the current one stays in the history.\n"+
 			"Each device (3DS, PC) gets it at its next sync, after backing up its save.\n"+
 			"Sync your other devices first. Otherwise a game not uploaded yet could replace this version or cause a conflict."))
-	if !oui && !q.oui(tr("Restaurer cette version ?", "Restore this version?"), false) {
-		q.dire(tr("Rien n'a été modifié.", "Nothing was changed."))
+	if !yes && !q.yes(tr("Restaurer cette version ?", "Restore this version?"), false) {
+		q.say(tr("Rien n'a été modifié.", "Nothing was changed."))
 		return 0, nil
 	}
-	deja, err := s.restaurer(cle, lignes[i].Fichier, lignes[0].Hash)
+	already, err := s.restore(key, lines[i].File, lines[0].Hash)
 	if err != nil {
 		return 1, err
 	}
-	if deja {
-		q.dire("%s", texteDeja())
+	if already {
+		q.say("%s", alreadyText())
 	} else {
-		q.dire("%s", texteRestaure())
+		q.say("%s", restoredText())
 	}
 	return 0, nil
 }
 
 // Page de l'assistant : jeux, Versions, Restauration.
-func (a *AssistantWeb) jeuxWeb() map[string]any {
-	s, err := sessionRestauration(a.config)
+func (a *WebSetup) webGames() map[string]any {
+	s, err := restoreSession(a.config)
 	if err != nil {
-		return map[string]any{"Erreur": texteErreur(err)}
+		return map[string]any{"Erreur": errorText(err)}
 	}
-	a.nomsLus.Do(func() { a.noms = nomsRoms(s.cfg) }) // hors du verrou de la page : deux appels peuvent arriver ensemble
-	jeux, err := s.jeuxServeur(a.noms)
+	a.namesRead.Do(func() { a.names = romNames(s.cfg) }) // hors du verrou de la page : deux appels peuvent arriver ensemble
+	games, err := s.serverGames(a.names)
 	if err != nil {
-		return map[string]any{"Erreur": texteErreur(err)}
+		return map[string]any{"Erreur": errorText(err)}
 	}
-	return map[string]any{"Jeux": jeux}
+	return map[string]any{"Jeux": games}
 }
 
 // versionsWeb, restaurerWeb : sans le verrou de la page (jusqu'à 30 lectures sur le réseau), ServeHTTP le rend avant.
-func (a *AssistantWeb) versionsWeb(cle string) map[string]any {
-	s, err := sessionRestauration(a.config)
+func (a *WebSetup) versionsWeb(key string) map[string]any {
+	s, err := restoreSession(a.config)
 	if err == nil {
-		var l []LigneHisto
-		if l, err = s.lignesHisto(cle); err == nil {
+		var l []HistoryLine
+		if l, err = s.historyLines(key); err == nil {
 			return map[string]any{"Versions": l}
 		}
 	}
-	return map[string]any{"Erreur": texteErreur(err)}
+	return map[string]any{"Erreur": errorText(err)}
 }
 
-func (a *AssistantWeb) restaurerWeb(cle, fichier, courant string) map[string]any {
-	s, err := sessionRestauration(a.config)
+func (a *WebSetup) restoreWeb(key, file, current string) map[string]any {
+	s, err := restoreSession(a.config)
 	if err != nil {
-		return map[string]any{"Ok": false, "Message": texteErreur(err)}
+		return map[string]any{"Ok": false, "Message": errorText(err)}
 	}
-	deja, err := s.restaurer(cle, fichier, courant)
+	already, err := s.restore(key, file, current)
 	switch {
 	case err != nil:
-		return map[string]any{"Ok": false, "Message": texteErreur(err)}
-	case deja:
-		return map[string]any{"Ok": true, "Message": texteDeja()}
+		return map[string]any{"Ok": false, "Message": errorText(err)}
+	case already:
+		return map[string]any{"Ok": true, "Message": alreadyText()}
 	}
-	return map[string]any{"Ok": true, "Message": texteRestaure()}
+	return map[string]any{"Ok": true, "Message": restoredText()}
 }

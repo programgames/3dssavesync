@@ -26,558 +26,584 @@ import (
 )
 
 //go:embed assistant.html
-var pageAssistant string
+var setupPageHTML string
 
-type AssistantWeb struct {
-	config, secret, hote string
-	verrou               sync.Mutex
-	vu                   time.Time // dernier signe de vie de la page
-	fin                  chan struct{}
-	noms                 map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
-	nomsLus              sync.Once
+type WebSetup struct {
+	config, secret, host string
+	lock                 sync.Mutex
+	seen                 time.Time // dernier signe de vie de la page
+	end                  chan struct{}
+	names                map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
+	namesRead            sync.Once
 }
 
 // Émulateur tel que la page l'affiche et le renvoie.
-type EmuWeb struct {
-	Nom, Profil, Exe, Processus, Source string
-	Actif                               bool
-	Systemes                            []SysWeb
-	Conseil, Erreur                     string
-	Problemes                           []string // lignes à faire de Vérifications pour cet émulateur de config.json
-	Coeurs                              map[string]string
-	EnPlus                              string // profil intégré : arguments en plus, avant la ROM
+type WebEmu struct {
+	Name     string `json:"Nom"`
+	Profile  string `json:"Profil"`
+	Exe      string
+	Process  string `json:"Processus"`
+	Source   string
+	Active   bool              `json:"Actif"`
+	Systems  []WebSystem       `json:"Systemes"`
+	Hint     string            `json:"Conseil"`
+	Error    string            `json:"Erreur"`
+	Problems []string          `json:"Problemes"` // lignes à faire de Vérifications pour cet émulateur de config.json
+	Cores    map[string]string `json:"Coeurs"`
+	Extra    string            `json:"EnPlus"` // profil intégré : arguments en plus, avant la ROM
 	// Émulateur personnalisé : ligne de commande ({rom}, {sauvegardes}), extension, nom du fichier dans le zip.
-	Personnalise bool
-	Commande     string
+	Custom       bool   `json:"Personnalise"`
+	Command      string `json:"Commande"`
 	Extension    string
-	NomInterne   bool
+	InternalName bool `json:"NomInterne"`
 }
 
-type SysWeb struct {
-	Systeme     string
-	Sauvegardes string // valeur affichée (explicite, ou réglage de l'émulateur)
-	Defaut      string // réglage de l'émulateur ; "" = à côté de la ROM
-	Roms        string
+type WebSystem struct {
+	System  string `json:"Systeme"`
+	Saves   string `json:"Sauvegardes"` // valeur affichée (explicite, ou réglage de l'émulateur)
+	Default string `json:"Defaut"`      // réglage de l'émulateur ; "" = à côté de la ROM
+	Roms    string
 }
 
-type EtatWeb struct {
-	Anglais, Windows, Existe, JetonPresent, Local bool
-	URL, Courant, Installe, LaunchBox, EsDe       string
-	Adresse3DS                                    string // écrite sur la carte SD de la 3DS
-	Port                                          int
-	EsDeActif                                     bool
-	Emulateurs                                    []EmuWeb
-	Profils                                       []string
-	Configures                                    []string // émulateurs de config.json : boutons « Ouvrir »
-	Icone, IconeDisponible                        bool     // icône près de l'horloge (tray.go)
-	Version                                       string   // de ce programme (majpc.go)
-	Maj                                           bool     // recherche des mises à jour
+type WebState struct {
+	English       bool `json:"Anglais"`
+	Windows       bool
+	Exists        bool `json:"Existe"`
+	HasToken      bool `json:"JetonPresent"`
+	Local         bool
+	URL           string
+	Current       string `json:"Courant"`
+	Installed     string `json:"Installe"`
+	LaunchBox     string
+	EsDe          string
+	Address3DS    string `json:"Adresse3DS"` // écrite sur la carte SD de la 3DS
+	Port          int
+	EsDeActive    bool     `json:"EsDeActif"`
+	Emulators     []WebEmu `json:"Emulateurs"`
+	Profiles      []string `json:"Profils"`
+	Configured    []string `json:"Configures"` // émulateurs de config.json : boutons « Ouvrir »
+	Icon          bool     `json:"Icone"`
+	IconAvailable bool     `json:"IconeDisponible"` // icône près de l'horloge (tray.go)
+	Version       string   // de ce programme (majpc.go)
+	Update        bool     `json:"Maj"` // recherche des mises à jour
 }
 
 // Ouvre un émulateur sans jeu, avec Synchronisation (launch), indépendant de la page. Remplacé par les tests.
-var ouvrirDetache = demarrerDetache
+var openDetached = startDetached
 
-type ChoixWeb struct {
-	Local            bool
-	URL, Jeton       string
-	Port             int
-	Installer        bool
-	Emulateurs       []EmuWeb
-	LaunchBox        string
-	EsDe, Raccourcis bool
-	Icone, Maj       bool
+type WebChoices struct {
+	Local     bool
+	URL       string
+	Token     string `json:"Jeton"`
+	Port      int
+	Install   bool     `json:"Installer"`
+	Emulators []WebEmu `json:"Emulateurs"`
+	LaunchBox string
+	EsDe      bool
+	Shortcuts bool `json:"Raccourcis"`
+	Icon      bool `json:"Icone"`
+	Update    bool `json:"Maj"`
 }
 
-func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
+func cmdSetupWeb(config string, noBrowser bool) (int, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 1, err
 	}
 	o := make([]byte, 16)
 	rand.Read(o)
-	a := &AssistantWeb{config: config, secret: hex.EncodeToString(o), hote: l.Addr().String(), vu: time.Now(), fin: make(chan struct{})}
+	a := &WebSetup{config: config, secret: hex.EncodeToString(o), host: l.Addr().String(), seen: time.Now(), end: make(chan struct{})}
 	go http.Serve(l, a)
-	adresse := "http://" + a.hote + "/" + a.secret + "/"
-	if sansNavigateur {
-		fmt.Println(adresse)
-	} else if err := ouvrirNavigateur(adresse); err != nil {
-		fmt.Println(adresse)
-		notifier(tr("Ouvrez cette adresse dans votre navigateur : ", "Open this address in your browser: ") + adresse)
+	address := "http://" + a.host + "/" + a.secret + "/"
+	if noBrowser {
+		fmt.Println(address)
+	} else if err := openBrowser(address); err != nil {
+		fmt.Println(address)
+		notify(tr("Ouvrez cette adresse dans votre navigateur : ", "Open this address in your browser: ") + address)
 	}
 	// Fin : bouton « Terminer », ou plus de signe de vie de la page (onglet fermé) pendant 2 minutes.
 	for {
 		select {
-		case <-a.fin:
+		case <-a.end:
 			time.Sleep(300 * time.Millisecond) // la réponse part avant la fin du programme
 			return 0, nil
 		case <-time.After(5 * time.Second):
-			a.verrou.Lock()
-			perdu := time.Since(a.vu) > 2*time.Minute
-			a.verrou.Unlock()
-			if perdu {
+			a.lock.Lock()
+			lost := time.Since(a.seen) > 2*time.Minute
+			a.lock.Unlock()
+			if lost {
 				return 0, nil
 			}
 		}
 	}
 }
 
-func ouvrirNavigateur(adresse string) error {
+func openBrowser(address string) error {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", adresse).Start()
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", address).Start()
 	case "darwin":
-		return exec.Command("open", adresse).Start()
+		return exec.Command("open", address).Start()
 	}
-	return exec.Command("xdg-open", adresse).Start()
+	return exec.Command("xdg-open", address).Start()
 }
 
-func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Seulement la page ouverte par l'assistant : bon hôte (pas de rebinding DNS) et secret dans l'adresse.
-	chemin, ok := strings.CutPrefix(r.URL.Path, "/"+a.secret+"/")
-	if r.Host != a.hote || !ok {
+	path, ok := strings.CutPrefix(r.URL.Path, "/"+a.secret+"/")
+	if r.Host != a.host || !ok {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	a.verrou.Lock()
-	defer a.verrou.Unlock()
-	a.vu = time.Now()
-	if chemin == "" && r.Method == "GET" {
-		t := template.Must(template.New("page").Funcs(template.FuncMap{"t": tr}).Parse(pageAssistant))
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	a.seen = time.Now()
+	if path == "" && r.Method == "GET" {
+		t := template.Must(template.New("page").Funcs(template.FuncMap{"t": tr}).Parse(setupPageHTML))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		t.Execute(w, map[string]any{"Langue": tr("fr", "en")})
 		return
 	}
-	if chemin == "config.ini" && r.Method == "GET" { // à copier par FTP sur la 3DS
+	if path == "config.ini" && r.Method == "GET" { // à copier par FTP sur la 3DS
 		var cfg Config
-		lireJSON(a.config, &cfg)
-		url, _ := adresse3DS(&cfg)
-		if url == "" || cfg.Jeton == "" {
+		readJSON(a.config, &cfg)
+		url, _ := address3DS(&cfg)
+		if url == "" || cfg.Token == "" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="config.ini"`)
-		io.WriteString(w, configIni("", url, cfg.Jeton))
+		io.WriteString(w, configIni("", url, cfg.Token))
 		return
 	}
 	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // une autre page ne peut pas envoyer ce type sans CORS
 		http.Error(w, "", 405)
 		return
 	}
-	var reponse any
-	switch chemin {
+	var response any
+	switch path {
 	case "api/etat":
-		reponse = a.etat()
+		response = a.state()
 	case "api/ping":
-		reponse = true
+		response = true
 	case "api/emulateur":
-		var t Trouve
+		var t Found
 		json.NewDecoder(r.Body).Decode(&t)
-		reponse = emuWeb(t.Profil, &Emulateur{Exe: t.Exe}, "manuel", true)
+		response = webEmu(t.Profile, &Emulator{Exe: t.Exe}, "manuel", true)
 	case "api/apercu":
-		var x EmuWeb
+		var x WebEmu
 		json.NewDecoder(r.Body).Decode(&x)
-		reponse = apercu(x)
+		response = preview(x)
 	case "api/tester":
-		var c ChoixWeb
+		var c WebChoices
 		json.NewDecoder(r.Body).Decode(&c)
-		reponse = a.tester(c)
+		response = a.test(c)
 	case "api/appliquer":
-		var c ChoixWeb
+		var c WebChoices
 		json.NewDecoder(r.Body).Decode(&c)
-		lignes, err := a.appliquer(c)
-		x := map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		lines, err := a.apply(c)
+		x := map[string]any{"Lignes": lines, "Erreur": errorText(err)}
 		var cfg Config
-		if err == nil && lireJSON(a.config, &cfg) == nil && cfg.ServeurLocal != nil { // cadre « à entrer sur la 3DS »
-			x["Adresse"], x["Autres"] = adresse3DS(&cfg)
-			x["Jeton"] = cfg.Jeton
+		if err == nil && readJSON(a.config, &cfg) == nil && cfg.LocalServer != nil { // cadre « à entrer sur la 3DS »
+			x["Adresse"], x["Autres"] = address3DS(&cfg)
+			x["Jeton"] = cfg.Token
 		}
-		reponse = x
+		response = x
 	case "api/cartes":
-		reponse = map[string]any{"Cartes": detecterCartes()}
+		response = map[string]any{"Cartes": detectCards()}
 	case "api/preparer":
-		var x struct{ Racine string }
+		var x struct {
+			Root string `json:"Racine"`
+		}
 		json.NewDecoder(r.Body).Decode(&x)
-		ok, lignes := preparerEtNoter(a.config, x.Racine)
-		reponse = map[string]any{"Ok": ok, "Lignes": lignes}
+		ok, lines := prepareAndRecord(a.config, x.Root)
+		response = map[string]any{"Ok": ok, "Lignes": lines}
 	case "api/reparer":
 		var cfg Config
-		if err := lireConfig(a.config, &cfg); err != nil {
-			reponse = map[string]any{"Erreur": texteErreur(err)}
+		if err := readConfig(a.config, &cfg); err != nil {
+			response = map[string]any{"Erreur": errorText(err)}
 		} else {
-			reponse = map[string]any{"Lignes": reparer(&cfg, lanceurDe(&cfg))}
+			response = map[string]any{"Lignes": repair(&cfg, launcherOf(&cfg))}
 		}
 	case "api/desinstaller":
 		var cfg Config
-		if err := lireConfig(a.config, &cfg); err != nil {
-			reponse = map[string]any{"Erreur": texteErreur(err)}
+		if err := readConfig(a.config, &cfg); err != nil {
+			response = map[string]any{"Erreur": errorText(err)}
 			break
 		}
-		lignes, err := desinstaller(&cfg, a.config)
-		reponse = map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		lines, err := uninstall(&cfg, a.config)
+		response = map[string]any{"Lignes": lines, "Erreur": errorText(err)}
 		if err == nil {
-			a.finir() // la réponse part, puis le programme s'arrête : son exe peut aller à la Corbeille
+			a.finish() // la réponse part, puis le programme s'arrête : son exe peut aller à la Corbeille
 		}
 	case "api/ouvrir":
-		var x struct{ Nom string }
-		json.NewDecoder(r.Body).Decode(&x)
-		reponse = a.ouvrir(x.Nom)
-	case "api/alias":
 		var x struct {
-			Nom, Systeme string
-			Retirer      bool
+			Name string `json:"Nom"`
 		}
 		json.NewDecoder(r.Body).Decode(&x)
-		reponse = a.aliasWeb(x.Nom, x.Systeme, x.Retirer)
+		response = a.open(x.Name)
+	case "api/alias":
+		var x struct {
+			Name   string `json:"Nom"`
+			System string `json:"Systeme"`
+			Remove bool   `json:"Retirer"`
+		}
+		json.NewDecoder(r.Body).Decode(&x)
+		response = a.aliasWeb(x.Name, x.System, x.Remove)
 	case "api/jeux", "api/versions", "api/restaurer", "api/verifications", "api/mettreajour":
-		var x struct{ Cle, Fichier, Courant string }
+		var x struct {
+			Key     string `json:"Cle"`
+			File    string `json:"Fichier"`
+			Current string `json:"Courant"`
+		}
 		json.NewDecoder(r.Body).Decode(&x)
 		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
-			a.verrou.Unlock()
-			defer a.verrou.Lock()
-			switch chemin {
+			a.lock.Unlock()
+			defer a.lock.Lock()
+			switch path {
 			case "api/jeux":
-				reponse = a.jeuxWeb()
+				response = a.webGames()
 			case "api/versions":
-				reponse = a.versionsWeb(x.Cle)
+				response = a.versionsWeb(x.Key)
 			case "api/verifications":
-				l, maj := verifications(a.config)
-				reponse = map[string]any{"Liste": l, "Maj": maj}
+				l, update := checks(a.config)
+				response = map[string]any{"Liste": l, "Maj": update}
 			case "api/mettreajour":
-				reponse = a.mettreAJourWeb()
+				response = a.selfUpdateWeb()
 			default:
-				reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
+				response = a.restoreWeb(x.Key, x.File, x.Current)
 			}
 		}()
 	case "api/terminer":
-		a.finir()
-		reponse = true
+		a.finish()
+		response = true
 	default:
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(reponse)
+	json.NewEncoder(w).Encode(response)
 }
 
 // aliasWeb : les ROM hacks qui ont leur propre Clé (ADR 0014). Nom non vide : ajout (Clé créée par ajouterAlias) ou
 // retrait, écrit dans config.json avec une copie datée.
-func (a *AssistantWeb) aliasWeb(nom, systeme string, retirer bool) map[string]any {
+func (a *WebSetup) aliasWeb(name, system string, remove bool) map[string]any {
 	var cfg Config
-	if err := lireConfig(a.config, &cfg); err != nil {
-		return map[string]any{"Erreur": texteErreur(err)}
+	if err := readConfig(a.config, &cfg); err != nil {
+		return map[string]any{"Erreur": errorText(err)}
 	}
 	var err error
-	if nom = strings.TrimSpace(nom); nom != "" {
-		_, existe := cfg.Alias[nom]
+	if name = strings.TrimSpace(name); name != "" {
+		_, exists := cfg.Alias[name]
 		switch {
-		case retirer && existe:
-			delete(cfg.Alias, nom)
-			err = ecrireConfigCopie(a.config, &cfg)
-		case !retirer && !existe:
-			if _, err = ajouterAlias(&cfg, systeme, nom); err == nil {
-				err = ecrireConfigCopie(a.config, &cfg)
+		case remove && exists:
+			delete(cfg.Alias, name)
+			err = writeConfigCopy(a.config, &cfg)
+		case !remove && !exists:
+			if _, err = addAlias(&cfg, system, name); err == nil {
+				err = writeConfigCopy(a.config, &cfg)
 			}
 		}
 	}
-	noms := []string{}
+	names := []string{}
 	for n := range cfg.Alias {
-		noms = append(noms, n)
+		names = append(names, n)
 	}
-	sort.Slice(noms, func(i, j int) bool { return strings.ToLower(noms[i]) < strings.ToLower(noms[j]) })
-	x := map[string]any{"Noms": noms, "Cles": cfg.Alias} // Clé : la console dans la liste
+	sort.Slice(names, func(i, j int) bool { return strings.ToLower(names[i]) < strings.ToLower(names[j]) })
+	x := map[string]any{"Noms": names, "Cles": cfg.Alias} // Clé : la console dans la liste
 	if err != nil {
-		x["Erreur"] = texteErreur(err)
+		x["Erreur"] = errorText(err)
 	}
 	return x
 }
 
 // finir : arrête le programme après la réponse ; un deuxième appel (deux onglets, deux clics) ne fait rien.
-func (a *AssistantWeb) finir() {
+func (a *WebSetup) finish() {
 	select {
-	case <-a.fin:
+	case <-a.end:
 	default:
-		close(a.fin)
+		close(a.end)
 	}
 }
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
-func emuWeb(nom string, e *Emulateur, source string, actif bool) EmuWeb {
-	x := EmuWeb{Nom: nom, Profil: e.Profil, Exe: e.Exe, Processus: e.Processus, Source: source, Actif: actif, Coeurs: e.Coeurs,
-		EnPlus: joindre(e.ArgsEnPlus)}
-	if x.Profil == "" {
-		x.Profil = nom
+func webEmu(name string, e *Emulator, source string, active bool) WebEmu {
+	x := WebEmu{Name: name, Profile: e.Profile, Exe: e.Exe, Process: e.Process, Source: source, Active: active, Cores: e.Cores,
+		Extra: joinArgs(e.ExtraArgs)}
+	if x.Profile == "" {
+		x.Profile = name
 	}
-	if _, integre := profils[x.Profil]; !integre && e.Args != nil {
-		x.Personnalise, x.Commande, x.Extension, x.NomInterne, x.EnPlus = true, joindre(e.Args), e.Extension, e.NomInterne, ""
+	if _, builtIn := profiles[x.Profile]; !builtIn && e.Args != nil {
+		x.Custom, x.Command, x.Extension, x.InternalName, x.Extra = true, joinArgs(e.Args), e.Extension, e.InternalName, ""
 	}
-	if x.Profil == "retroarch" && len(e.Coeurs) == 0 {
-		e.Coeurs = coeursRetroArch(e.Exe)
-		x.Coeurs = e.Coeurs
+	if x.Profile == "retroarch" && len(e.Cores) == 0 {
+		e.Cores = retroArchCores(e.Exe)
+		x.Cores = e.Cores
 	}
-	p, err := e.profil(nom)
+	p, err := e.profile(name)
 	if err != nil {
-		x.Erreur = err.Error()
+		x.Error = err.Error()
 		return x
 	}
-	seul := &Emulateur{Exe: e.Exe, Coeurs: e.Coeurs, Profil: e.Profil, Args: e.Args} // sans config.json : le réglage de l'émulateur
-	for _, s := range e.systemes(p) {
-		d := seul.dossier(p, s, "")
-		v := e.Sauvegardes[s]
+	standalone := &Emulator{Exe: e.Exe, Cores: e.Cores, Profile: e.Profile, Args: e.Args} // sans config.json : le réglage de l'émulateur
+	for _, s := range e.systems(p) {
+		d := standalone.dir(p, s, "")
+		v := e.Saves[s]
 		if v == "" {
 			v = d
 		}
-		x.Systemes = append(x.Systemes, SysWeb{s, v, d, e.Roms[s]})
+		x.Systems = append(x.Systems, WebSystem{s, v, d, e.Roms[s]})
 	}
-	x.Conseil = conseil(e, p)
+	x.Hint = hint(e, p)
 	return x
 }
 
-var reNomEmulateur = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,15}$`)
+var reEmulatorName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,15}$`)
 
 // emulateurDe : l'émulateur que la page décrit. Rend une erreur claire pour un émulateur personnalisé incomplet.
-func emulateurDe(x EmuWeb) (*Emulateur, error) {
-	e := &Emulateur{Exe: x.Exe, Processus: x.Processus, Coeurs: x.Coeurs}
-	if !x.Personnalise {
-		if x.Profil != x.Nom {
-			e.Profil = x.Profil
+func emulatorOf(x WebEmu) (*Emulator, error) {
+	e := &Emulator{Exe: x.Exe, Process: x.Process, Cores: x.Cores}
+	if !x.Custom {
+		if x.Profile != x.Name {
+			e.Profile = x.Profile
 		}
-		e.ArgsEnPlus = decouper(x.EnPlus)
+		e.ExtraArgs = split(x.Extra)
 		return e, nil
 	}
-	if _, integre := profils[x.Nom]; integre || !reNomEmulateur.MatchString(x.Nom) {
+	if _, builtIn := profiles[x.Name]; builtIn || !reEmulatorName.MatchString(x.Name) {
 		return nil, fmt.Errorf(tr("Le nom « %s » ne convient pas. Utilisez des minuscules, des chiffres et des tirets, et un nom différent des profils intégrés.",
-			"The name \"%s\" can't be used. Use lowercase letters, digits and dashes, and a name that isn't a built-in profile."), x.Nom)
+			"The name \"%s\" can't be used. Use lowercase letters, digits and dashes, and a name that isn't a built-in profile."), x.Name)
 	}
-	e.Args = decouper(x.Commande)
-	if !strings.Contains(x.Commande, "{rom}") {
-		return nil, fmt.Errorf(tr("%s : ajoutez {rom} à la ligne de commande.", "%s: add {rom} to the command line."), x.Nom)
+	e.Args = split(x.Command)
+	if !strings.Contains(x.Command, "{rom}") {
+		return nil, fmt.Errorf(tr("%s : ajoutez {rom} à la ligne de commande.", "%s: add {rom} to the command line."), x.Name)
 	}
-	if len(x.Systemes) == 0 {
-		return nil, fmt.Errorf(tr("%s : cochez au moins un système.", "%s: tick at least one system."), x.Nom)
+	if len(x.Systems) == 0 {
+		return nil, fmt.Errorf(tr("%s : cochez au moins un système.", "%s: tick at least one system."), x.Name)
 	}
 	e.Extension = strings.TrimSpace(x.Extension)
 	if e.Extension != "" && !strings.HasPrefix(e.Extension, ".") {
 		e.Extension = "." + e.Extension
 	}
-	e.NomInterne = x.NomInterne
+	e.InternalName = x.InternalName
 	return e, nil
 }
 
 // apercu : la commande lancée pour une ROM d'exemple du premier Système (affichage seulement).
-func apercu(x EmuWeb) map[string]string {
-	e, err := emulateurDe(x)
-	if err == nil && len(x.Systemes) == 0 {
+func preview(x WebEmu) map[string]string {
+	e, err := emulatorOf(x)
+	if err == nil && len(x.Systems) == 0 {
 		err = fmt.Errorf("%s", tr("aucun système", "no system"))
 	}
 	if err != nil {
 		return map[string]string{"Erreur": err.Error()}
 	}
-	s := x.Systemes[0]
-	exemples := map[string]string{"DS": "Pokemon Platine.nds", "GB": "Pokemon Cristal.gbc", "GBA": "Pokemon Emeraude.gba", "3DS": "Pokemon X.3ds"}
-	dossierRoms := s.Roms
-	if dossierRoms == "" {
-		dossierRoms = filepath.Join(maison(), "roms")
+	s := x.Systems[0]
+	examples := map[string]string{"DS": "Pokemon Platine.nds", "GB": "Pokemon Cristal.gbc", "GBA": "Pokemon Emeraude.gba", "3DS": "Pokemon X.3ds"}
+	romsDir := s.Roms
+	if romsDir == "" {
+		romsDir = filepath.Join(home(), "roms")
 	}
-	rom := filepath.Join(dossierRoms, exemples[s.Systeme])
-	if x.Personnalise {
-		e.Sauvegardes = map[string]string{s.Systeme: s.Sauvegardes}
+	rom := filepath.Join(romsDir, examples[s.System])
+	if x.Custom {
+		e.Saves = map[string]string{s.System: s.Saves}
 	}
-	p, err := e.profil(x.Nom)
+	p, err := e.profile(x.Name)
 	if err != nil {
 		return map[string]string{"Erreur": err.Error()}
 	}
-	d := s.Sauvegardes
+	d := s.Saves
 	if d == "" {
-		d = e.dossier(p, s.Systeme, rom)
+		d = e.dir(p, s.System, rom)
 	}
-	return map[string]string{"Commande": joindre(e.commande(p, s.Systeme, rom, d))}
+	return map[string]string{"Commande": joinArgs(e.command(p, s.System, rom, d))}
 }
 
-func (a *AssistantWeb) etat() EtatWeb {
+func (a *WebSetup) state() WebState {
 	var cfg Config
-	existeCfg := lireJSON(a.config, &cfg) == nil
-	e := EtatWeb{Anglais: anglais, Windows: runtime.GOOS == "windows", Existe: existeCfg, JetonPresent: cfg.Jeton != "",
-		Local: cfg.ServeurLocal != nil || !existeCfg, URL: cfg.URL, Courant: executable(), Installe: emplacementInstalle(), Port: 8765}
-	if cfg.Jeton != "" {
-		e.Adresse3DS, _ = adresse3DS(&cfg)
+	cfgExists := readJSON(a.config, &cfg) == nil
+	e := WebState{English: english, Windows: runtime.GOOS == "windows", Exists: cfgExists, HasToken: cfg.Token != "",
+		Local: cfg.LocalServer != nil || !cfgExists, URL: cfg.URL, Current: executable(), Installed: installedLocation(), Port: 8765}
+	if cfg.Token != "" {
+		e.Address3DS, _ = address3DS(&cfg)
 	}
-	if cfg.ServeurLocal != nil {
-		e.Port = cfg.ServeurLocal.Port
+	if cfg.LocalServer != nil {
+		e.Port = cfg.LocalServer.Port
 		e.URL = ""
 	}
-	e.Icone, e.IconeDisponible = cfg.iconeHorloge(), trayDisponible
-	e.Version, e.Maj = version, cfg.verifierMaj()
+	e.Icon, e.IconAvailable = cfg.trayIcon(), trayAvailable
+	e.Version, e.Update = version, cfg.checkUpdate()
 	e.LaunchBox = cfg.Frontends["launchbox"]
 	if e.LaunchBox == "" && e.Windows {
-		e.LaunchBox = trouverLaunchBox()
+		e.LaunchBox = findLaunchBox()
 	}
-	e.EsDe, e.EsDeActif = cfg.Frontends["esde"], cfg.Frontends["esde"] != ""
-	if e.EsDe == "" && existe(maison("ES-DE")) {
-		e.EsDe, e.EsDeActif = maison("ES-DE"), true
+	e.EsDe, e.EsDeActive = cfg.Frontends["esde"], cfg.Frontends["esde"] != ""
+	if e.EsDe == "" && exists(home("ES-DE")) {
+		e.EsDe, e.EsDeActive = home("ES-DE"), true
 	}
-	var noms []string
-	for n := range cfg.Emulateurs {
-		noms = append(noms, n)
+	var names []string
+	for n := range cfg.Emulators {
+		names = append(names, n)
 	}
-	sort.Strings(noms)
-	e.Configures = noms
-	problemes := map[string][]string{} // même état que Vérifications (azahar sans dossier sdmc : « À vérifier »)
-	for _, v := range verifsEmulateurs(&cfg) {
+	sort.Strings(names)
+	e.Configured = names
+	problems := map[string][]string{} // même état que Vérifications (azahar sans dossier sdmc : « À vérifier »)
+	for _, v := range emulatorChecks(&cfg) {
 		if !v.Ok {
-			problemes[v.Emulateur] = append(problemes[v.Emulateur], v.Texte)
+			problems[v.Emulator] = append(problems[v.Emulator], v.Text)
 		}
 	}
-	for _, n := range noms {
-		x := emuWeb(n, cfg.Emulateurs[n], tr("configuré", "set up"), true)
-		x.Problemes = problemes[n]
-		e.Emulateurs = append(e.Emulateurs, x)
+	for _, n := range names {
+		x := webEmu(n, cfg.Emulators[n], tr("configuré", "set up"), true)
+		x.Problems = problems[n]
+		e.Emulators = append(e.Emulators, x)
 	}
 	// Trouvés sur ce PC, absents de config.json : cochés au premier lancement (rien à choisir avant), sinon pas cochés,
 	// dans la partie repliée de la page : rien n'est ajouté à une configuration existante sans un choix.
-	for _, t := range detecter(e.LaunchBox) {
-		if c := cfg.Emulateurs[t.Profil]; c != nil && strings.EqualFold(c.Exe, t.Exe) {
+	for _, t := range detect(e.LaunchBox) {
+		if c := cfg.Emulators[t.Profile]; c != nil && strings.EqualFold(c.Exe, t.Exe) {
 			continue
 		}
-		e.Emulateurs = append(e.Emulateurs, emuWeb(t.Profil, &Emulateur{Exe: t.Exe, Processus: t.Processus}, t.Source, !existeCfg))
+		e.Emulators = append(e.Emulators, webEmu(t.Profile, &Emulator{Exe: t.Exe, Process: t.Process}, t.Source, !cfgExists))
 	}
 	// Arguments en plus : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ». Seulement
 	// pour un émulateur absent de config.json (une valeur vide enregistrée reste vide). Jamais pour RetroArch (le -L du
 	// cœur d'une plateforme irait à tous les systèmes) ni NanoBoyAdvance (la ROM doit rester le premier argument).
 	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
-		for i := range e.Emulateurs {
-			x := &e.Emulateurs[i]
-			var systemes []string
-			for _, s := range x.Systemes {
-				systemes = append(systemes, s.Systeme)
+		for i := range e.Emulators {
+			x := &e.Emulators[i]
+			var systems []string
+			for _, s := range x.Systems {
+				systems = append(systems, s.System)
 			}
-			if !x.Personnalise && x.Erreur == "" && x.EnPlus == "" && cfg.Emulateurs[x.Nom] == nil && x.Profil != "retroarch" && x.Profil != "nanoboyadvance" {
-				x.EnPlus = optionsLaunchBox(string(o), e.LaunchBox, x.Exe, systemes)
+			if !x.Custom && x.Error == "" && x.Extra == "" && cfg.Emulators[x.Name] == nil && x.Profile != "retroarch" && x.Profile != "nanoboyadvance" {
+				x.Extra = launchBoxOptions(string(o), e.LaunchBox, x.Exe, systems)
 			}
 		}
 	}
-	for p := range profils {
-		e.Profils = append(e.Profils, p)
+	for p := range profiles {
+		e.Profiles = append(e.Profiles, p)
 	}
-	sort.Strings(e.Profils)
+	sort.Strings(e.Profiles)
 	return e
 }
 
 // ouvrir : l'émulateur nom de config.json, sans jeu, par « launch » (Synchronisation avant et après). Pour « Ouvrir
 // mGBA » de LaunchBox, qui démarre le Lanceur sans argument, donc sur cette page.
-func (a *AssistantWeb) ouvrir(nom string) map[string]any {
+func (a *WebSetup) open(name string) map[string]any {
 	var cfg Config
-	if err := lireJSON(a.config, &cfg); err != nil || cfg.Emulateurs[nom] == nil {
-		return map[string]any{"Ok": false, "Message": tr("Cet émulateur n'est pas configuré : ", "This emulator isn't set up: ") + nom}
+	if err := readJSON(a.config, &cfg); err != nil || cfg.Emulators[name] == nil {
+		return map[string]any{"Ok": false, "Message": tr("Cet émulateur n'est pas configuré : ", "This emulator isn't set up: ") + name}
 	}
-	if err := ouvrirDetache(lanceurDe(&cfg), []string{"launch", "--config", a.config, nom}); err != nil {
-		return map[string]any{"Ok": false, "Message": texteErreur(err)}
+	if err := openDetached(launcherOf(&cfg), []string{"launch", "--config", a.config, name}); err != nil {
+		return map[string]any{"Ok": false, "Message": errorText(err)}
 	}
 	return map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("%s s'ouvre avec vos sauvegardes à jour. Elles seront envoyées quand vous le fermerez.",
-		"%s is opening with your saves up to date. They'll be uploaded when you close it."), nom)}
+		"%s is opening with your saves up to date. They'll be uploaded when you close it."), name)}
 }
 
-func (a *AssistantWeb) tester(c ChoixWeb) map[string]any {
+func (a *WebSetup) test(c WebChoices) map[string]any {
 	var cfg Config
-	lireJSON(a.config, &cfg)
+	readJSON(a.config, &cfg)
 	cfg.URL = strings.TrimRight(c.URL, "/")
-	if c.Jeton != "" {
-		cfg.Jeton = c.Jeton
+	if c.Token != "" {
+		cfg.Token = c.Token
 	}
-	if err := testerServeur(&cfg); err != nil {
-		return map[string]any{"Ok": false, "Message": texteErreur(err)}
+	if err := testServer(&cfg); err != nil {
+		return map[string]any{"Ok": false, "Message": errorText(err)}
 	}
 	return map[string]any{"Ok": true, "Message": tr("Connexion réussie.", "Connected.")}
 }
 
 // appliquer : config.json (copie avant), programme, frontends, raccourcis, serveur local. Rien n'est écrit si le
 // serveur personnel ne répond pas ou si un choix est invalide.
-func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
+func (a *WebSetup) apply(c WebChoices) ([]string, error) {
 	var cfg Config
-	if err := lireJSON(a.config, &cfg); err != nil && !os.IsNotExist(err) {
+	if err := readJSON(a.config, &cfg); err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	if c.Local {
 		if c.Port <= 0 || c.Port > 65535 {
 			return nil, fmt.Errorf("%s", tr("Le port doit être un nombre entre 1 et 65535.", "The port must be a number from 1 to 65535."))
 		}
-		cfg.ServeurLocal = &ServeurLocal{Port: c.Port}
+		cfg.LocalServer = &LocalServer{Port: c.Port}
 		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", c.Port)
-		if c.Jeton != "" {
-			cfg.Jeton = c.Jeton
+		if c.Token != "" {
+			cfg.Token = c.Token
 		}
-		if cfg.Jeton == "" {
+		if cfg.Token == "" {
 			o := make([]byte, 16)
 			rand.Read(o)
-			cfg.Jeton = hex.EncodeToString(o)
+			cfg.Token = hex.EncodeToString(o)
 		}
 	} else {
-		cfg.ServeurLocal = nil
+		cfg.LocalServer = nil
 		cfg.URL = strings.TrimRight(c.URL, "/")
-		if c.Jeton != "" {
-			cfg.Jeton = c.Jeton
+		if c.Token != "" {
+			cfg.Token = c.Token
 		}
-		if err := testerServeur(&cfg); err != nil {
-			return nil, fmt.Errorf("%s %s", texteErreur(err), tr("Les réglages ne sont pas enregistrés.", "Your settings weren't saved."))
+		if err := testServer(&cfg); err != nil {
+			return nil, fmt.Errorf("%s %s", errorText(err), tr("Les réglages ne sont pas enregistrés.", "Your settings weren't saved."))
 		}
 	}
 
-	emus := map[string]*Emulateur{}
-	for _, x := range c.Emulateurs {
-		if !x.Actif {
+	emus := map[string]*Emulator{}
+	for _, x := range c.Emulators {
+		if !x.Active {
 			continue
 		}
-		if emus[x.Nom] != nil {
-			return nil, fmt.Errorf(tr("Deux émulateurs « %s » sont cochés. Gardez-en un seul.", "Two \"%s\" emulators are ticked. Keep only one."), x.Nom)
+		if emus[x.Name] != nil {
+			return nil, fmt.Errorf(tr("Deux émulateurs « %s » sont cochés. Gardez-en un seul.", "Two \"%s\" emulators are ticked. Keep only one."), x.Name)
 		}
-		e, err := emulateurDe(x)
+		e, err := emulatorOf(x)
 		if err != nil {
 			return nil, err
 		}
-		explicite := x.Personnalise // le Lanceur ne connaît pas les réglages d'un émulateur personnalisé
-		for _, s := range x.Systemes {
-			explicite = explicite || s.Sauvegardes != s.Defaut
+		explicit := x.Custom // le Lanceur ne connaît pas les réglages d'un émulateur personnalisé
+		for _, s := range x.Systems {
+			explicit = explicit || s.Saves != s.Default
 			if s.Roms != "" {
 				if e.Roms == nil {
 					e.Roms = map[string]string{}
 				}
-				e.Roms[s.Systeme] = s.Roms
+				e.Roms[s.System] = s.Roms
 			}
 		}
-		if explicite { // un dossier changé : tous écrits (sinon l'émulateur ne gérerait que celui-là)
-			e.Sauvegardes = map[string]string{}
-			for _, s := range x.Systemes {
-				if s.Sauvegardes == "" {
-					return nil, fmt.Errorf(tr("%s : indiquez le dossier des sauvegardes %s.", "%s: enter the %s save folder."), x.Nom, s.Systeme)
+		if explicit { // un dossier changé : tous écrits (sinon l'émulateur ne gérerait que celui-là)
+			e.Saves = map[string]string{}
+			for _, s := range x.Systems {
+				if s.Saves == "" {
+					return nil, fmt.Errorf(tr("%s : indiquez le dossier des sauvegardes %s.", "%s: enter the %s save folder."), x.Name, s.System)
 				}
-				e.Sauvegardes[s.Systeme] = s.Sauvegardes
+				e.Saves[s.System] = s.Saves
 			}
 		}
-		if _, err := e.profil(x.Nom); err != nil {
+		if _, err := e.profile(x.Name); err != nil {
 			return nil, err
 		}
-		emus[x.Nom] = e
+		emus[x.Name] = e
 	}
-	cfg.Emulateurs = emus
-	cfg.IconeHorloge = nil // "icone_horloge": false seulement quand elle est retirée
-	if !c.Icone {
-		cfg.IconeHorloge = &c.Icone
+	cfg.Emulators = emus
+	cfg.TrayIcon = nil // "icone_horloge": false seulement quand elle est retirée
+	if !c.Icon {
+		cfg.TrayIcon = &c.Icon
 	}
-	cfg.VerifierMaj = nil
-	if !c.Maj {
-		cfg.VerifierMaj = &c.Maj
+	cfg.CheckUpdates = nil
+	if !c.Update {
+		cfg.CheckUpdates = &c.Update
 	}
 
-	var sortie bytes.Buffer
-	q := &Questions{out: &sortie}
-	lignes := []string{}
+	var output bytes.Buffer
+	q := &Questions{out: &output}
+	lines := []string{}
 	if cfg.Frontends == nil {
 		cfg.Frontends = map[string]string{}
 	}
 	delete(cfg.Frontends, "launchbox")
 	if c.LaunchBox != "" {
-		if !existe(filepath.Join(c.LaunchBox, "Data", "Emulators.xml")) {
+		if !exists(filepath.Join(c.LaunchBox, "Data", "Emulators.xml")) {
 			return nil, fmt.Errorf(tr("LaunchBox introuvable dans %s. Choisissez le dossier principal de LaunchBox.", "Couldn't find LaunchBox in %s. Choose the main LaunchBox folder."), c.LaunchBox)
 		}
 		cfg.Frontends["launchbox"] = c.LaunchBox
@@ -586,29 +612,29 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	delete(cfg.Frontends, "esde")
 	if c.EsDe {
 		if esde == "" {
-			esde = maison("ES-DE")
+			esde = home("ES-DE")
 		}
 		cfg.Frontends["esde"] = esde
 	}
-	if c.Installer { // après les vérifications : installerExe arrête l'icône, serveurLocal la redémarre
-		lignes = append(lignes, installerExe(&cfg, filepath.Dir(a.config)))
-	} else if cfg.Lanceur == "" {
-		cfg.Lanceur = executable()
+	if c.Install { // après les vérifications : installerExe arrête l'icône, serveurLocal la redémarre
+		lines = append(lines, installExe(&cfg, filepath.Dir(a.config)))
+	} else if cfg.Launcher == "" {
+		cfg.Launcher = executable()
 	}
-	if err := enregistrerConfig(q, a.config, &cfg); err != nil {
+	if err := saveConfig(q, a.config, &cfg); err != nil {
 		return nil, err
 	}
-	lignes = append(lignes, reparer(&cfg, lanceurDe(&cfg))...)
-	if c.Raccourcis {
-		creerRaccourcis(q, &cfg)
+	lines = append(lines, repair(&cfg, launcherOf(&cfg))...)
+	if c.Shortcuts {
+		createShortcuts(q, &cfg)
 	}
-	if err := serveurLocal(q, &cfg, a.config); err != nil { // icône près de l'horloge, serveur local
-		lignes = append(lignes, err.Error())
+	if err := localServer(q, &cfg, a.config); err != nil { // icône près de l'horloge, serveur local
+		lines = append(lines, err.Error())
 	}
-	for _, l := range strings.Split(sortie.String(), "\n") {
+	for _, l := range strings.Split(output.String(), "\n") {
 		if l = strings.TrimPrefix(strings.TrimSpace(l), "- "); l != "" && !strings.HasPrefix(l, "==") {
-			lignes = append(lignes, l)
+			lines = append(lines, l)
 		}
 	}
-	return lignes, nil
+	return lines, nil
 }

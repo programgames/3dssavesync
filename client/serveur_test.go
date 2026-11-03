@@ -18,8 +18,8 @@ import (
 )
 
 // Contrat HTTP : la suite de server/test_server.py, lancée contre le serveur Go.
-func TestServeurContrat(t *testing.T) {
-	srv := httptest.NewServer(&Serveur{data: t.TempDir(), jeton: "jeton-go"})
+func TestServerContract(t *testing.T) {
+	srv := httptest.NewServer(&Server{data: t.TempDir(), token: "jeton-go"})
 	defer srv.Close()
 	py := "python3"
 	if runtime.GOOS == "windows" {
@@ -36,9 +36,9 @@ func TestServeurContrat(t *testing.T) {
 }
 
 // Ce que la suite Python ne peut pas faire à distance : format exact de la liste (lu par la 3DS), corps tronqué.
-func TestServeurLocal(t *testing.T) {
+func TestLocalServer(t *testing.T) {
 	data := t.TempDir()
-	srv := httptest.NewServer(&Serveur{data: data, jeton: "j"})
+	srv := httptest.NewServer(&Server{data: data, token: "j"})
 	defer srv.Close()
 	req, _ := http.NewRequest("PUT", srv.URL+"/saves/ADAF", strings.NewReader("partie"))
 	req.Header.Set("Authorization", "Bearer j")
@@ -79,23 +79,23 @@ func TestServeurLocal(t *testing.T) {
 
 // tests/saves.json (écrite par server.py, lue par le test C de la 3DS) : les mêmes Versions donnent la même liste, champ
 // pour champ, sur le serveur Go.
-func TestServeurListeCommeServerPy(t *testing.T) {
+func TestServerListLikeServerPy(t *testing.T) {
 	o, err := os.ReadFile(filepath.Join("..", "tests", "saves.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var attendu, recu []map[string]any
-	if err := json.Unmarshal(o, &attendu); err != nil || len(attendu) != 3 {
-		t.Fatalf("saves.json : %v %d", err, len(attendu))
+	var expected, received []map[string]any
+	if err := json.Unmarshal(o, &expected); err != nil || len(expected) != 3 {
+		t.Fatalf("saves.json : %v %d", err, len(expected))
 	}
 	data := t.TempDir()
-	for _, j := range attendu {
-		ecrire(t, filepath.Join(data, j["code"].(string), j["version"].(string)), make([]byte, int(j["taille"].(float64))))
-		if nom, ok := j["nom"].(string); ok {
-			ecrire(t, filepath.Join(data, j["code"].(string), "nom.txt"), []byte(nom))
+	for _, j := range expected {
+		write(t, filepath.Join(data, j["code"].(string), j["version"].(string)), make([]byte, int(j["taille"].(float64))))
+		if name, ok := j["nom"].(string); ok {
+			write(t, filepath.Join(data, j["code"].(string), "nom.txt"), []byte(name))
 		}
 	}
-	srv := httptest.NewServer(&Serveur{data: data, jeton: "j"})
+	srv := httptest.NewServer(&Server{data: data, token: "j"})
 	defer srv.Close()
 	req, _ := http.NewRequest("GET", srv.URL+"/saves", nil)
 	req.Header.Set("Authorization", "Bearer j")
@@ -104,60 +104,60 @@ func TestServeurListeCommeServerPy(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer r.Body.Close()
-	if err := json.NewDecoder(r.Body).Decode(&recu); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
 		t.Fatal(err)
 	}
-	for _, j := range append(attendu, recu...) { // age : dépend de l'heure du test
+	for _, j := range append(expected, received...) { // age : dépend de l'heure du test
 		if a, ok := j["age"].(float64); !ok || a <= 0 {
 			t.Errorf("age : %v", j["age"])
 		}
 		delete(j, "age")
 	}
-	if !reflect.DeepEqual(recu, attendu) {
-		t.Errorf("liste du serveur Go différente de tests/saves.json :\n%v\n%v", recu, attendu)
+	if !reflect.DeepEqual(received, expected) {
+		t.Errorf("liste du serveur Go différente de tests/saves.json :\n%v\n%v", received, expected)
 	}
 }
 
 // Assistant, choix « serveur local » : config.json, démarrage automatique, lancement, adresse et jeton pour la 3DS.
-func TestAssistantServeurLocal(t *testing.T) {
-	maisonFactice(t)
-	reinitialiser()
+func TestTextSetupLocalServer(t *testing.T) {
+	fakeHome(t)
+	reset()
 	l, _ := net.Listen("tcp", "127.0.0.1:0")
 	port := l.Addr().(*net.TCPAddr).Port
 	l.Close()
 	config := filepath.Join(t.TempDir(), "config.json")
-	var auto, lance []string
-	autoAvant, lancerAvant, detecterAvant := autostart, lancerServeur, detecter
-	t.Cleanup(func() { autostart, lancerServeur, detecter = autoAvant, lancerAvant, detecterAvant })
-	detecter = func(string) []Trouve { return nil }
-	autostart = func(nom, exe string, args []string) (string, error) { auto = args; return "demarrage", nil }
-	lancerServeur = func(exe string, args []string) error {
-		lance = args
+	var auto, launched []string
+	autoBefore, launchBefore, detectBefore := autostart, launchServer, detect
+	t.Cleanup(func() { autostart, launchServer, detect = autoBefore, launchBefore, detectBefore })
+	detect = func(string) []Found { return nil }
+	autostart = func(name, exe string, args []string) (string, error) { auto = args; return "demarrage", nil }
+	launchServer = func(exe string, args []string) error {
+		launched = args
 		var cfg Config
-		lireJSON(config, &cfg)
-		go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), &Serveur{data: t.TempDir(), jeton: cfg.Jeton})
+		readJSON(config, &cfg)
+		go http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), &Server{data: t.TempDir(), token: cfg.Token})
 		return nil
 	}
-	reponses := []string{"2", fmt.Sprint(port), "n", "", "n"} // serveur local, port, pas de copie, pas d'ajout manuel, frontends…
-	var sortie bytes.Buffer
-	q := &Questions{in: bufio.NewReader(strings.NewReader(strings.Join(reponses, "\n") + "\n")), out: &sortie}
-	if err := assistant(q, config); err != nil {
-		t.Fatalf("%v\n%s", err, sortie.String())
+	responses := []string{"2", fmt.Sprint(port), "n", "", "n"} // serveur local, port, pas de copie, pas d'ajout manuel, frontends…
+	var output bytes.Buffer
+	q := &Questions{in: bufio.NewReader(strings.NewReader(strings.Join(responses, "\n") + "\n")), out: &output}
+	if err := textSetup(q, config); err != nil {
+		t.Fatalf("%v\n%s", err, output.String())
 	}
 	var cfg Config
-	lireJSON(config, &cfg)
-	if cfg.ServeurLocal == nil || cfg.ServeurLocal.Port != port || cfg.URL != fmt.Sprintf("http://127.0.0.1:%d", port) || len(cfg.Jeton) != 32 {
+	readJSON(config, &cfg)
+	if cfg.LocalServer == nil || cfg.LocalServer.Port != port || cfg.URL != fmt.Sprintf("http://127.0.0.1:%d", port) || len(cfg.Token) != 32 {
 		t.Fatalf("config.json du serveur local incorrect : %+v", cfg)
 	}
-	attendu := "tray --config " + config // l'icône près de l'horloge fait tourner le serveur local (ADR 0022)
-	if !trayDisponible {
-		attendu = "serve --config " + config
+	expected := "tray --config " + config // l'icône près de l'horloge fait tourner le serveur local (ADR 0022)
+	if !trayAvailable {
+		expected = "serve --config " + config
 	}
-	if strings.Join(auto, " ") != attendu || strings.Join(lance, " ") != strings.Join(auto, " ") {
-		t.Errorf("démarrage automatique et lancement : %q %q", auto, lance)
+	if strings.Join(auto, " ") != expected || strings.Join(launched, " ") != strings.Join(auto, " ") {
+		t.Errorf("démarrage automatique et lancement : %q %q", auto, launched)
 	}
-	if !strings.Contains(sortie.String(), "Serveur local en marche") || !strings.Contains(sortie.String(), "Jeton : "+cfg.Jeton) ||
-		!strings.Contains(sortie.String(), fmt.Sprintf(":%d", port)) {
-		t.Errorf("adresse et jeton pour la 3DS attendus :\n%s", sortie.String())
+	if !strings.Contains(output.String(), "Serveur local en marche") || !strings.Contains(output.String(), "Jeton : "+cfg.Token) ||
+		!strings.Contains(output.String(), fmt.Sprintf(":%d", port)) {
+		t.Errorf("adresse et jeton pour la 3DS attendus :\n%s", output.String())
 	}
 }

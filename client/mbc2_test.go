@@ -13,45 +13,45 @@ import (
 func TestMBC2(t *testing.T) {
 	mgba := make([]byte, 256)
 	mgba[0], mgba[255] = 0x21, 0xA5 // adresse paire dans le quartet bas
-	serveur := make([]byte, 512)
-	serveur[0], serveur[1], serveur[510], serveur[511] = 1, 2, 5, 0xA
+	server := make([]byte, 512)
+	server[0], server[1], server[510], server[511] = 1, 2, 5, 0xA
 	sameboy := make([]byte, 512)
 	for i := range sameboy {
-		sameboy[i] = 0xF0 | serveur[i]
+		sameboy[i] = 0xF0 | server[i]
 	}
-	if !bytes.Equal(normaliserMBC2(mgba), serveur) || !bytes.Equal(normaliserMBC2(sameboy), serveur) {
+	if !bytes.Equal(normalizeMBC2(mgba), server) || !bytes.Equal(normalizeMBC2(sameboy), server) {
 		t.Fatal("normaliserMBC2 : forme du serveur fausse")
 	}
-	if !bytes.Equal(fichierMBC2(serveur, 256), mgba) || !bytes.Equal(fichierMBC2(serveur, 512), sameboy) {
+	if !bytes.Equal(mbc2File(server, 256), mgba) || !bytes.Equal(mbc2File(server, 512), sameboy) {
 		t.Fatal("fichierMBC2 : fichier faux")
 	}
-	if estMBC2("GB", 8192) || estMBC2("GBA", 512) || !estMBC2("GB", 256) {
+	if isMBC2("GB", 8192) || isMBC2("GBA", 512) || !isMBC2("GB", 256) {
 		t.Fatal("estMBC2")
 	}
 
 	dir := t.TempDir()
-	j := &Jeu{Systeme: "GB", Cle: "GB-KIRBY-0000", Nom: "Kirby", Fichier: filepath.Join(dir, "Kirby.sav")}
-	ecrire(t, j.Fichier, sameboy)
-	l, err := lireLocal(j, nil)
-	if err != nil || l.Hash != hachage(serveur) || l.Taille != 512 {
+	j := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Kirby", File: filepath.Join(dir, "Kirby.sav")}
+	write(t, j.File, sameboy)
+	l, err := readLocal(j, nil)
+	if err != nil || l.Hash != sha256Hex(server) || l.Size != 512 {
 		t.Fatalf("lireLocal MBC2 512 o : err=%v", err)
 	}
-	autre := make([]byte, 512)
-	autre[3] = 7
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(autre) }))
+	other := make([]byte, 512)
+	other[3] = 7
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(other) }))
 	defer srv.Close()
-	s := &Session{cfg: &Config{URL: srv.URL}, dossier: dir, profil: "mgba", http: srv.Client()}
-	if err := s.recuperer(j, l, &Version{Hash: hachage(autre), Taille: 512}); err != nil {
+	s := &Session{cfg: &Config{URL: srv.URL}, dir: dir, profile: "mgba", http: srv.Client()}
+	if err := s.download(j, l, &Version{Hash: sha256Hex(other), Size: 512}); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(lire(j.Fichier), fichierMBC2(autre, 512)) {
+	if !bytes.Equal(read(j.File), mbc2File(other, 512)) {
 		t.Fatal("Récupération : taille du fichier existant non gardée")
 	}
-	neuf := &Jeu{Systeme: "GB", Cle: "GB-KIRBY-0000", Nom: "Neuf", Fichier: filepath.Join(dir, "Neuf.sav")}
-	if err := s.recuperer(neuf, nil, &Version{Hash: hachage(autre), Taille: 512}); err != nil {
+	fresh := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Neuf", File: filepath.Join(dir, "Neuf.sav")}
+	if err := s.download(fresh, nil, &Version{Hash: sha256Hex(other), Size: 512}); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(lire(neuf.Fichier), fichierMBC2(autre, 256)) {
+	if !bytes.Equal(read(fresh.File), mbc2File(other, 256)) {
 		t.Fatal("Récupération sans fichier : pas 256 octets chez mGBA")
 	}
 }
