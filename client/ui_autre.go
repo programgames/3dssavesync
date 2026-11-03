@@ -207,3 +207,12 @@ func racinesAmovibles() []string {
 	}
 	return l
 }
+
+// Place libre pour l'utilisateur sur le disque du dossier.
+func espaceLibreSysteme(dossier string) (uint64, error) {
+	var s syscall.Statfs_t
+	if err := syscall.Statfs(dossier, &s); err != nil {
+		return 0, err
+	}
+	return uint64(s.Bavail) * uint64(s.Bsize), nil
+}

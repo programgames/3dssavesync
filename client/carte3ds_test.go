@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io/fs"
 	"net"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -82,8 +86,10 @@ func TestPreparerCarte(t *testing.T) {
 	t.Cleanup(func() { detecterCartes = avant })
 	detecterCartes = func() []string { return []string{sd3} }
 	var sortie bytes.Buffer
-	etapeCarteSD(&Questions{in: bufio.NewReader(strings.NewReader("1\n")), out: &sortie}, &Config{URL: "https://saves.example.com", Jeton: "j"})
-	if !strings.Contains(sortie.String(), "Carte SD prête") || string(lire(filepath.Join(sd3, "3ds", "3dssavesync", "config.ini"))) != "url=https://saves.example.com\njeton=j\n" {
+	config := filepath.Join(t.TempDir(), "config.json")
+	ecrireJSON(config, &Config{URL: "https://saves.example.com", Jeton: "j"}, false)
+	etapeCarteSD(&Questions{in: bufio.NewReader(strings.NewReader("1\n")), out: &sortie}, &Config{URL: "https://saves.example.com", Jeton: "j"}, config)
+	if !strings.Contains(sortie.String(), "config.ini écrit") || string(lire(filepath.Join(sd3, "3ds", "3dssavesync", "config.ini"))) != "url=https://saves.example.com\njeton=j\n" {
 		t.Errorf("assistant en console :\n%s", sortie.String())
 	}
 }
@@ -168,5 +174,62 @@ func TestAliasIni(t *testing.T) {
 	}
 	if o, _ := os.ReadFile(filepath.Join(sd, "3ds", "3dssavesync", "alias.ini")); string(o) != "Radical Red (4.10)=GBA-0RAD\n" {
 		t.Errorf("alias.ini écrit : %q", o)
+	}
+}
+
+// 3dssavesync.cia sur la carte : écrit, déjà là, ancien copié avant, place libre, FBI absent, .cia absent de ce
+// programme ; la date de préparation notée seulement après une préparation réussie.
+func TestCopierCia(t *testing.T) {
+	ea, ca := espaceLibre, ciaEmbarque
+	t.Cleanup(func() { espaceLibre, ciaEmbarque = ea, ca })
+	espaceLibre = func(string) (uint64, error) { return 1 << 40, nil }
+	sd := t.TempDir()
+	os.Mkdir(filepath.Join(sd, "Nintendo 3DS"), 0o755)
+	cia := filepath.Join(sd, "cias", "3dssavesync.cia")
+
+	l, err := copierCia(sd, nil)
+	if err != nil || len(l) != 2 || !strings.Contains(l[0], "ne contient pas 3dssavesync.cia") || !strings.Contains(l[0], "releases/latest") ||
+		!strings.Contains(l[1], "FBI n'est pas sur la carte") || existe(filepath.Join(sd, "cias")) {
+		t.Errorf("sans .cia dans le programme : %v %q", err, l)
+	}
+	if l, err := copierCia(sd, []byte("cia 1")); err != nil || len(l) != 2 || l[0] != "3dssavesync.cia copié : "+cia || string(lire(cia)) != "cia 1" {
+		t.Errorf("carte neuve : %v %q", err, l)
+	}
+	ecrire(t, filepath.Join(sd, "3ds", "FBI.3dsx"), []byte("fbi"))
+	if l, err := copierCia(sd, []byte("cia 1")); err != nil || len(l) != 1 || !strings.Contains(l[0], "déjà sur la carte") {
+		t.Errorf("même .cia, FBI présent : %v %q", err, l)
+	}
+	espaceLibre = func(string) (uint64, error) { return 1 << 20, nil }
+	if _, err := copierCia(sd, []byte("cia 2")); err == nil || !strings.Contains(err.Error(), "Pas assez de place sur la carte SD") || string(lire(cia)) != "cia 1" {
+		t.Errorf("carte pleine : %v", err)
+	}
+	espaceLibre = func(string) (uint64, error) { return 0, errors.New("inconnu") } // place inconnue : la copie est tentée
+	if _, err := copierCia(sd, []byte("cia 2")); err != nil || string(lire(cia)) != "cia 2" {
+		t.Errorf("nouvelle version : %v", err)
+	}
+	if c, _ := filepath.Glob(cia + ".avant-3dssavesync-*"); len(c) != 1 || string(lire(c[0])) != "cia 1" {
+		t.Errorf("copie datée de l'ancien .cia : %v", c)
+	}
+
+	errno := syscall.EROFS
+	if runtime.GOOS == "windows" {
+		errno = syscall.Errno(19) // ERROR_WRITE_PROTECT
+	}
+	if e := erreurCarte(&fs.PathError{Op: "open", Path: cia, Err: errno}); !strings.HasPrefix(e, "La carte SD est verrouillée") || !strings.Contains(e, "\nDétail : open "+cia) {
+		t.Errorf("carte verrouillée : %q", e)
+	}
+
+	config := filepath.Join(t.TempDir(), "config.json")
+	ecrireJSON(config, &Config{URL: "https://saves.example.com", Jeton: "j"}, false)
+	var cfg Config
+	if ok, l := preparerEtNoter(config, t.TempDir()); ok || len(l) != 1 || !strings.Contains(l[0], "Nintendo 3DS") || lireJSON(config, &cfg) != nil || cfg.CartePreparee != "" {
+		t.Errorf("carte refusée : %v %q %+v", ok, l, cfg)
+	}
+	ciaEmbarque = []byte("cia 3")
+	ok, l := preparerEtNoter(config, sd)
+	lireJSON(config, &cfg)
+	if !ok || len(l) != 3 || !strings.HasPrefix(l[0], "config.ini écrit") || !strings.HasPrefix(l[1], "3dssavesync.cia copié") ||
+		!strings.Contains(l[2], "FBI, SD, cias, 3dssavesync.cia, « Install and delete CIA »") || string(lire(cia)) != "cia 3" || len(cfg.CartePreparee) != 16 {
+		t.Errorf("carte préparée : %v %q %+v", ok, l, cfg)
 	}
 }

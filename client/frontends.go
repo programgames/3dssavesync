@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -354,26 +355,7 @@ func mapper(l []string, f func(string) string) []string {
 // reparer : refait la configuration des frontends notés dans config.json. Un frontend ouvert est sauté.
 func reparer(cfg *Config, lanceur string) []string {
 	var rapport []string
-	var lb []EntreeLB
-	emus := map[string]string{}
-	var noms []string
-	for n := range cfg.Emulateurs {
-		noms = append(noms, n)
-	}
-	sort.Strings(noms)
-	for _, n := range noms {
-		e := cfg.Emulateurs[n]
-		p, err := e.profil(n)
-		if err != nil {
-			continue
-		}
-		lb = append(lb, EntreeLB{n, e.Exe, e.systemes(p)})
-		for _, s := range e.systemes(p) {
-			if emus[s] == "" {
-				emus[s] = n
-			}
-		}
-	}
+	lb, emus := entreesFrontends(cfg)
 	if d := cfg.Frontends["launchbox"]; d != "" {
 		f := filepath.Join(d, "Data", "Emulators.xml")
 		o, err := os.ReadFile(f)
@@ -416,6 +398,54 @@ func reparer(cfg *Config, lanceur string) []string {
 		rapport = append(rapport, a)
 	}
 	return rapport
+}
+
+// entreesFrontends : les émulateurs de config.json pour LaunchBox, et pour ES-DE le premier (par nom) de chaque Système.
+func entreesFrontends(cfg *Config) ([]EntreeLB, map[string]string) {
+	var lb []EntreeLB
+	emus := map[string]string{}
+	var noms []string
+	for n := range cfg.Emulateurs {
+		noms = append(noms, n)
+	}
+	sort.Strings(noms)
+	for _, n := range noms {
+		e := cfg.Emulateurs[n]
+		p, err := e.profil(n)
+		if err != nil {
+			continue
+		}
+		lb = append(lb, EntreeLB{n, e.Exe, e.systemes(p)})
+		for _, s := range e.systemes(p) {
+			if emus[s] == "" {
+				emus[s] = n
+			}
+		}
+	}
+	return lb, emus
+}
+
+// manquantsLaunchBox : les entrées dont l'émulateur d'origine est dans LaunchBox, mais sans émulateur
+// « (3dssavesync) » par défaut sur une de ses plateformes (réparation à refaire).
+func manquantsLaunchBox(texte, lanceur string, entrees []EntreeLB) []string {
+	base := func(app string) string { return strings.ToLower(path.Base(strings.ReplaceAll(app, `\`, "/"))) }
+	emus, plats := blocEmulateurLB.FindAllString(texte, -1), blocPlateformeLB.FindAllString(texte, -1)
+	var manquants []string
+	for _, e := range entrees {
+		pret, original := false, false
+		for _, b := range emus {
+			app := base(champ(b, "ApplicationPath"))
+			original = original || app == base(e.Exe)
+			for _, p := range plats {
+				pret = pret || app == base(lanceur) && champ(p, "Emulator") == champ(b, "ID") && champ(p, "Default") == "true" &&
+					strings.Contains(" "+champ(p, "CommandLine")+" ", " --emulator "+e.Nom+" ")
+			}
+		}
+		if original && !pret {
+			manquants = append(manquants, e.Nom)
+		}
+	}
+	return manquants
 }
 
 func prefixer(p string, l []string) []string {

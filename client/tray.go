@@ -40,16 +40,20 @@ type ElementMenu struct {
 	Action string // reglages, envoyer, quitter
 }
 
-// menuTray : le menu d'après l'état. attente : nombre d'Envois en attente ; serveur : ligne du serveur local ("" : aucun).
-func menuTray(attente int, serveur string) []ElementMenu {
+// menuTray : le menu d'après l'état. attente : nombre d'Envois en attente ; serveur : ligne du serveur local ("" : aucun) ;
+// maj : version plus récente sur GitHub ("" : aucune), mise à jour depuis les réglages.
+func menuTray(attente int, serveur, maj string) []ElementMenu {
 	m := []ElementMenu{{tr("Ouvrir les réglages", "Open settings"), "reglages"}}
+	if maj != "" {
+		m = append(m, ElementMenu{fmt.Sprintf(tr("Version %s disponible : mettre à jour", "Version %s available: update"), maj), "reglages"})
+	}
 	if attente > 0 {
 		m = append(m, ElementMenu{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Send now (%d pending)"), attente), "envoyer"})
 	}
 	if serveur != "" {
 		m = append(m, ElementMenu{serveur, ""})
 	}
-	return append(m, ElementMenu{}, ElementMenu{tr("Quitter", "Quit"), "quitter"})
+	return append(m, ElementMenu{"3dssavesync " + version, ""}, ElementMenu{}, ElementMenu{tr("Quitter", "Quit"), "quitter"})
 }
 
 // ligneServeur : "" sans serveur local ; sinon l'adresse à entrer sur la 3DS, ou la première phrase de l'erreur.
@@ -254,6 +258,26 @@ func commandeTray(config string) (int, error) {
 	var une sync.Once
 	quitter := func() { une.Do(func() { close(fin) }) }
 	go surveillerArret(dossier, quitter, fin)
+	var maj struct {
+		sync.Mutex
+		version string
+	}
+	if version != "dev" && cfg.verifierMaj() { // au plus une recherche par jour (derniereRelease) ; échec : rien dans le menu
+		go func() {
+			for {
+				if r, err := derniereRelease(dossier, false); err == nil && plusRecente(version, r.Tag) {
+					maj.Lock()
+					maj.version = strings.TrimPrefix(r.Tag, "v")
+					maj.Unlock()
+				}
+				select {
+				case <-fin:
+					return
+				case <-time.After(6 * time.Hour):
+				}
+			}
+		}()
+	}
 	var envoi sync.Mutex
 	choisir := func(action string) {
 		switch action {
@@ -274,7 +298,10 @@ func commandeTray(config string) (int, error) {
 	menu := func() []ElementMenu {
 		serveur.Lock()
 		defer serveur.Unlock()
-		return menuTray(nombreEnAttente(dossier), ligneServeur(&cfg, serveur.err))
+		maj.Lock()
+		defer maj.Unlock()
+		return menuTray(nombreEnAttente(dossier), ligneServeur(&cfg, serveur.err), maj.version)
+
 	}
 	s.journal("tray : icône près de l'horloge")
 	err := afficherIcone(menu, choisir, fin)

@@ -6,6 +6,7 @@ Nothing in this list can lose a save: when 3dssavesync cannot finish, it leaves 
 
 - [Install](#install)
 - [PC: settings page and games](#pc-settings-page-and-games)
+- [PC: 3DS SD card, checks and updates](#pc-3ds-sd-card-checks-and-updates)
 - [3DS](#3ds)
 - [Server and network](#server-and-network)
 - [Sync and conflicts](#sync-and-conflicts)
@@ -231,6 +232,74 @@ The `.dsv` file has a layout that 3dssavesync does not know. Use melonDS for thi
 > game never started in Azahar. Start it once in Azahar and save in game, then start it here again
 
 Do what the message says. The 8 Pokémon games do not need this step.
+
+## PC: 3DS SD card, checks and updates
+
+Each failure gives what to do, then a **Detail:** line (path, system error, HTTP code): copy it if you [report a bug](#report-a-bug).
+
+### The SD card is locked
+
+> The SD card is locked: nothing can be written to it. Take it out, slide the small lock switch on its side (or on the microSD adapter) up, put it back, then try again. *(La carte SD est verrouillée : rien ne peut y être écrit. …)*
+
+The lock switch is on the left side of a full-size SD card or adapter. Slide it toward the contacts (up), then click **Prepare the 3DS SD card** again.
+
+### Not enough space on the SD card for 3dssavesync.cia
+
+> Not enough space on the SD card for 3dssavesync.cia: 0 MB free, 2 MB needed. … *(Pas assez de place sur la carte SD pour 3dssavesync.cia : …)*
+
+`config.ini` is already written. Delete files you do not need from the card (old `.cia` files in `cias`, the `*.avant-3dssavesync-*` copies; never the `Nintendo 3DS` folder or the saves), then try again.
+
+### FBI was not found on the card
+
+> FBI was not found on the card (no 3ds/FBI.3dsx, no 3ds/FBI folder). … *(FBI n'est pas sur la carte …)*
+
+Only a note: the card is prepared. FBI is the 3DS app that installs `.cia` files. If it is on your HOME menu, ignore the note. Otherwise, download `FBI.3dsx` from [FBI releases](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder of the card, and open it from the Homebrew Launcher.
+
+### This program does not include 3dssavesync.cia
+
+> This program does not include 3dssavesync.cia (version dev). Download it from … *(Ce programme ne contient pas 3dssavesync.cia …)*
+
+You built the PC program yourself: only release builds carry the 3DS app. Download `3dssavesync.cia` from the page given in the message, and copy it to the `cias` folder of the card.
+
+### Checks: something to do
+
+The **Checks** list (settings page) says what to do on each line. The usual ones:
+
+- **Server unreachable**: see [Server and network](#server-and-network); the line gives the same message.
+- **Save folder not found**: start a game once in the emulator (it creates the folder), or choose the right folder in **Emulators**, **Settings**.
+- **LaunchBox: … not default yet** or **ES-DE: not set up yet**: close LaunchBox (or ES-DE), then click **Repair frontends**. In LaunchBox, someone chose the original emulator as default again; the repair sets the "(3dssavesync)" one back.
+- **3DS SD card not prepared from this PC yet**: prepare it once. The date is noted only after a success; a card prepared by hand or by FTP is not seen.
+- **The icon near the clock is not running**: click **Save**: it starts. Or turn it off in **Frontends and install**.
+
+### PC update messages
+
+After any of these failures, the old program stays in place and works as before.
+
+> GitHub does not answer (no Internet, or too many requests from this address). … *(GitHub ne répond pas …)*
+
+Check the Internet connection. GitHub accepts 60 checks per hour from one Internet address: wait one hour, then try again.
+
+> Version 3.7.0 has no 3dssavesync-windows-amd64.exe or SHA256SUMS file on GitHub: nothing is changed. … *(La version 3.7.0 n'a pas de fichier …)*
+> The downloaded file is damaged (size or SHA-256 differs from SHA256SUMS): nothing is changed. … *(Le fichier téléchargé est abîmé …)*
+
+The program installs nothing that it cannot check. Try again later; if the message stays, download the program by hand from the [releases page](https://github.com/programgames/3dssavesync/releases) and replace the old one.
+
+> Not enough disk space for the update: … *(Pas assez de place sur le disque pour la mise à jour : …)*
+
+Free some space on the disk of the program (the **Detail** line gives the folder), then try again.
+
+> The update could not replace the program: the old one stays in place. Close the other 3dssavesync windows, then try again. *(La mise à jour n'a pas pu remplacer le programme …)*
+
+Another program holds the file (an antivirus scan, a second settings page). Close the other 3dssavesync windows, wait a minute, then click **Update** again.
+
+> The update failed, and the old program could not get its place back. Rename … to …. *(La mise à jour a échoué, et l'ancien programme n'a pas pu reprendre sa place. …)*
+
+Rare. Open the folder of the program, and rename the file as the message says (for example `3dssavesync-3.6.1.exe` to `3dssavesync.exe`). Until then, LaunchBox, ES-DE and the shortcuts cannot start it.
+
+> Updated to 3.7.0. The settings page does not restart: open the "3dssavesync settings" shortcut. *(Mis à jour vers 3.7.0. Les réglages ne redémarrent pas …)*
+> The icon near the clock does not restart: it comes back at the next session. *(L'icône près de l'horloge ne redémarre pas …)*
+
+The update is done. Open the shortcut, or log in again for the icon.
 
 ## 3DS
 

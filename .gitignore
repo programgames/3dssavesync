@@ -22,3 +22,6 @@ tools/
 e2e/
 
 __pycache__/
+
+# .cia inclus dans le programme PC par le job release (ADR 0023)
+client/embarque/3dssavesync.cia

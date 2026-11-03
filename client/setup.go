@@ -250,7 +250,7 @@ func assistant(q *Questions, config string) error {
 		dire3DS(q, &cfg)
 	}
 	if slices.Contains(etapes, "serveur") {
-		etapeCarteSD(q, &cfg)
+		etapeCarteSD(q, &cfg, config)
 	}
 	q.dire("\n%s", tr("Terminé.", "Done."))
 	return nil

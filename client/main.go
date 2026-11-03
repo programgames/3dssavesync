@@ -48,6 +48,9 @@ type Config struct {
 	// Serveur local (3dssavesync serve) : même jeton ; url = http://127.0.0.1:<port> pour ce PC.
 	ServeurLocal *ServeurLocal `json:"serveur_local,omitempty"`
 	IconeHorloge *bool         `json:"icone_horloge,omitempty"` // absent : icône près de l'horloge (tray.go)
+	VerifierMaj  *bool         `json:"verifier_maj,omitempty"`  // absent : recherche des mises à jour (majpc.go)
+	// Date de la dernière préparation réussie de la carte SD de la 3DS (liste « Tout est prêt »), jamais devinée.
+	CartePreparee string `json:"carte_preparee,omitempty"`
 }
 
 type ServeurLocal struct {

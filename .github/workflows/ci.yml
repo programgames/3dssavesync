@@ -127,11 +127,14 @@ jobs:
         with:
           go-version-file: client/go.mod
           cache: false
+      # Le .cia de la même version, inclus dans le programme PC qui le copie sur la carte SD (ADR 0023) ; la version
+      # du tag (v3.7.0 -> 3.7.0) pour la mise à jour du PC.
       - name: Binaires PC (sans console sous Windows)
         working-directory: client
         run: |
+          cp ../dist/3dssavesync.cia embarque/3dssavesync.cia
           for cible in windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
-            os=${cible%/*}; arch=${cible#*/}; ext=; drapeaux="-s -w"
+            os=${cible%/*}; arch=${cible#*/}; ext=; drapeaux="-s -w -X main.version=${GITHUB_REF_NAME#v}"
             if [ "$os" = windows ]; then ext=.exe; drapeaux="$drapeaux -H windowsgui"; fi
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "$drapeaux" -o "../dist/3dssavesync-$os-$arch$ext" .
           done

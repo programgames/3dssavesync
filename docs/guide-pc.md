@@ -8,16 +8,19 @@ Double-click the program, or the **3dssavesync settings** shortcut. A settings p
 
 ![Settings page](images/settings-en.png)
 
-At the top, three boxes show the state at a glance: server reachable or not, emulators ready, games on the server. The menu on the left opens one part at a time; an orange dot marks a part to check. The parts:
+**First start** (no settings yet): the page guides you in 4 steps, with **Previous** and **Next** ("Step 2 of 4"): 1 **Server** (with **Test the connection**), 2 **Emulators and frontends** (**Save and continue** writes the settings, like **Save**), 3 **3DS SD card** (you can skip it), 4 **Everything is ready**. Then **Finish the assistant** shows the normal page.
+
+At the top, four boxes show the state at a glance: server reachable or not, emulators ready, games on the server, and **Checks** ("All good" or "2 to do"; click it to open the list). The menu on the left opens one part at a time; an orange dot marks a part to check. The parts:
 
 1. **Server**: **Local server on this PC** (the default) or **Personal server** (address and token, button **Test the connection**). See the [server guide](guide-server.md).
-2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. No card reader? **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
+2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. The page also copies `cias/3dssavesync.cia`, of the same version as the PC program (an older different file is copied first, with the date in its name). On the 3DS: FBI, **SD**, **cias**, **3dssavesync.cia**, **Install and delete CIA**. The page warns when FBI is not on the card ([FBI](https://github.com/nh-server/FBI-NH/releases/latest)). No card reader? **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
 3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS). Portable version: this part is hidden, the program stays where it is.
 4. **Emulators**: one card per emulator of your settings or found on the PC (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators), with its consoles and its state. **Settings** opens its save and ROM folders. **Add an emulator by hand** adds another one.
 5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), the **3dssavesync settings** shortcut, and **Show the icon near the clock** (see [The icon near the clock](#the-icon-near-the-clock)).
 6. **History**: search a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
 7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
 8. **Uninstall** (part Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin (portable version: the program and its folder stay). See [ADR 0019](adr/0019-desinstallation.md).
+9. **Checks** ("Everything is ready?"): one line per item, good or with what to do. The server answers and accepts the token; each save folder of your emulators exists; LaunchBox has the "(3dssavesync)" emulator as default; ES-DE is set up; the 3DS SD card was prepared from this PC (date of the last success); the icon near the clock runs; a new version is out. Nothing is changed. **Check again** reads everything again.
 
 Nothing is written before you click **Save**. A personal server that does not answer blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "To enter on the 3DS". The program stops when you click **Finish**, or 2 minutes after you close the tab.
 
@@ -27,13 +30,28 @@ No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --sans-navigateur`
 
 Frontends to set up by hand (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode): [frontend guide](guide-frontends.md).
 
+## Updates
+
+The version shows next to the page title and in the menu of the icon near the clock. Once a day, the settings page and the icon ask GitHub for the latest release (untick **Check for 3dssavesync updates** in **Frontends and install** to stop it). A newer version shows a box at the top of the page, a line in the **Checks** list, and **Version X available: update** in the menu of the icon (it opens the page).
+
+Click **Update**:
+
+1. The program of your system (`3dssavesync-<os>-<arch>`) and `SHA256SUMS` are downloaded from the release. The size and the SHA-256 must match, and the disk must have room: else nothing changes.
+2. The running program is renamed `3dssavesync-<old version>` (`.exe` on Windows), and the new one takes its name. On a failure, the old one stays in place. Portable version: the program in its folder is updated.
+3. The icon near the clock restarts, the settings open in a new tab, and the old page stops: close it.
+
+The old program stays next to the new one: delete it when you want, or rename it back to go back to it. Then prepare the 3DS SD card again: the card gets the `3dssavesync.cia` of the new version. A program you built yourself (version `dev`) never offers an update. See [ADR 0023](adr/0023-cia-inclus-et-mise-a-jour-du-pc.md).
+
 ## The icon near the clock
 
 A 3dssavesync icon sits near the clock (Windows notification area, Linux system tray). It starts with your session. Right-click it:
 
 - **Open settings**: opens the settings page. On Windows, a double-click on the icon does the same; on Linux, a left click.
 - **Send now (N pending)**: only when uploads are pending (see [Pending uploads](#pending-uploads)). It sends them now, then a notification gives the result.
+- **Version X available: update**: only when a newer version is out. It opens the settings page, with its **Update** button (see [Updates](#updates)).
 - **Local server: running (http://…)**: with the local server, the address to enter on the 3DS, or the error when the server stopped. The icon program runs the local server itself: one program stays in memory, not two.
+- **3dssavesync X.Y.Z**: the version of the program.
+
 - **Quit**: removes the icon until the next session. The local server stops with it.
 
 To remove the icon, untick **Show the icon near the clock** in the part **Frontends and install**, then click **Save**. The local server then starts alone with the session (`3dssavesync serve`), as before version 3.7. Each **Save** restarts the icon with the new settings. The uninstall stops it first, so that the program can go to the Recycle Bin.
@@ -61,6 +79,8 @@ Another place: option `--config <file>`. Example: [`client/config.example.json`]
 | `copies` | Folder of the backup copies (optional; default: `copies` next to `config.json`). |
 | `serveur_local` | Optional: `{"port": 8765, "donnees": "…"}` for `3dssavesync serve`; `url` is then `http://127.0.0.1:<port>`. See the [server guide](guide-server.md). |
 | `icone_horloge` | `false` only when the icon near the clock is turned off. Absent: the icon is shown. |
+| `verifier_maj` | `false` only when the update check is turned off. Absent: once a day (see [Updates](#updates)). |
+| `carte_preparee` | Date of the last successful **Prepare the 3DS SD card**, for the **Checks** list. |
 | `titres_3ds` | Optional: 3DS games to sync in addition to the 8 Pokémon games, `{"<title ID>": "<name>"}`. Same list as the **3DS games** screen of the 3DS. Only games with a single save file `main`. |
 | `alias` | Optional: `{"<ROM file name without extension>": "<key>"}`, for a ROM hack that keeps the key of its original game. See [ROM hacks](#rom-hacks). |
 | `emulateurs.<name>.exe` | The emulator executable. |

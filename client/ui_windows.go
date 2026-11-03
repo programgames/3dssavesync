@@ -259,3 +259,12 @@ func racinesAmovibles() []string {
 	}
 	return l
 }
+
+// Place libre pour l'utilisateur sur le disque du dossier (GetDiskFreeSpaceExW).
+func espaceLibreSysteme(dossier string) (uint64, error) {
+	var libre uint64
+	if r, _, err := kernel32.NewProc("GetDiskFreeSpaceExW").Call(uintptr(unsafe.Pointer(u16(dossier))), uintptr(unsafe.Pointer(&libre)), 0, 0); r == 0 {
+		return 0, err
+	}
+	return libre, nil
+}

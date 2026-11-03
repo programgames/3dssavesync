@@ -69,6 +69,8 @@ type EtatWeb struct {
 	Profils                                       []string
 	Configures                                    []string // émulateurs de config.json : boutons « Ouvrir »
 	Icone, IconeDisponible                        bool     // icône près de l'horloge (tray.go)
+	Version                                       string   // de ce programme (majpc.go)
+	Maj                                           bool     // recherche des mises à jour
 }
 
 // Ouvre un émulateur sans jeu, avec Synchronisation (launch), indépendant de la page. Remplacé par les tests.
@@ -82,7 +84,7 @@ type ChoixWeb struct {
 	Emulateurs       []EmuWeb
 	LaunchBox        string
 	EsDe, Raccourcis bool
-	Icone            bool
+	Icone, Maj       bool
 }
 
 func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
@@ -196,15 +198,8 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "api/preparer":
 		var x struct{ Racine string }
 		json.NewDecoder(r.Body).Decode(&x)
-		var cfg Config
-		lireJSON(a.config, &cfg)
-		url, _ := adresse3DS(&cfg)
-		if f, err := preparerCarte(x.Racine, url, cfg.Jeton, cfg.Alias); err != nil {
-			reponse = map[string]any{"Ok": false, "Message": texteErreur(err)}
-		} else {
-			reponse = map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("Carte SD prête (%s). Remettez-la dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
-				"SD card ready (%s). Put it back in the 3DS, then start 3dssavesync: it connects without typing anything."), f)}
-		}
+		ok, lignes := preparerEtNoter(a.config, x.Racine)
+		reponse = map[string]any{"Ok": ok, "Lignes": lignes}
 	case "api/reparer":
 		var cfg Config
 		if err := lireConfig(a.config, &cfg); err != nil {
@@ -234,7 +229,7 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewDecoder(r.Body).Decode(&x)
 		reponse = a.aliasWeb(x.Nom, x.Systeme, x.Retirer)
-	case "api/jeux", "api/versions", "api/restaurer":
+	case "api/jeux", "api/versions", "api/restaurer", "api/verifications", "api/mettreajour":
 		var x struct{ Cle, Fichier, Courant string }
 		json.NewDecoder(r.Body).Decode(&x)
 		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
@@ -245,6 +240,11 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				reponse = a.jeuxWeb()
 			case "api/versions":
 				reponse = a.versionsWeb(x.Cle)
+			case "api/verifications":
+				l, maj := verifications(a.config)
+				reponse = map[string]any{"Liste": l, "Maj": maj}
+			case "api/mettreajour":
+				reponse = a.mettreAJourWeb()
 			default:
 				reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
 			}
@@ -407,6 +407,7 @@ func (a *AssistantWeb) etat() EtatWeb {
 		e.URL = ""
 	}
 	e.Icone, e.IconeDisponible = cfg.iconeHorloge(), trayDisponible
+	e.Version, e.Maj = version, cfg.verifierMaj()
 	e.LaunchBox = cfg.Frontends["launchbox"]
 	if e.LaunchBox == "" && e.Windows {
 		e.LaunchBox = trouverLaunchBox()
@@ -536,6 +537,10 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	cfg.IconeHorloge = nil // "icone_horloge": false seulement quand elle est retirée
 	if !c.Icone {
 		cfg.IconeHorloge = &c.Icone
+	}
+	cfg.VerifierMaj = nil
+	if !c.Maj {
+		cfg.VerifierMaj = &c.Maj
 	}
 
 	var sortie bytes.Buffer

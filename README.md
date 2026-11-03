@@ -42,17 +42,17 @@ About 10 minutes. Do the PC first: it prepares the 3DS for you.
    - **Windows**: double-click it. Windows shows "Windows protected your PC"? [Here is what to do](docs/troubleshooting.md#windows-protected-your-pc).
    - **macOS**: the program is not signed. In a terminal, run `xattr -d com.apple.quarantine <file>` once, then double-click it.
    - **Linux**: run `chmod +x 3dssavesync-linux-amd64`, then `./3dssavesync-linux-amd64 setup`.
-3. A settings page opens in your browser. Keep **Local server on this PC** (the default, nothing else to install). Check the emulators it found and the frontends (LaunchBox, ES-DE, shortcuts), then click **Save**.
+3. A settings page opens in your browser and guides you in 4 steps. **Server**: keep **Local server on this PC** (the default, nothing else to install). **Emulators and frontends**: check the emulators it found and the frontends (LaunchBox, ES-DE, shortcuts), then click **Save and continue**.
 4. Windows asks about the firewall? Allow **private networks**. Without this, the 3DS cannot reach the PC.
-5. Put the 3DS SD card in the PC. In the **3DS SD card** part of the page, click **Prepare the 3DS SD card**. The page writes the server address and token to the card. Nothing else on the card changes.
+5. **3DS SD card**: put the 3DS SD card in the PC, then click **Prepare the 3DS SD card**. The page writes the server address and token to the card, and copies `3dssavesync.cia` to its `cias` folder. Nothing else on the card changes.
+6. **Everything is ready**: each line is good, or says what to do.
 
 ### 2. The 3DS
 
-1. Download [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) and copy it to the SD card.
-2. Put the SD card back in the 3DS. Install the `.cia` with FBI.
-3. Start **3dssavesync** from the HOME menu. It connects to the PC by itself: you type nothing.
+1. Put the SD card back in the 3DS. Open FBI, then **SD**, **cias**, **3dssavesync.cia**, **Install and delete CIA**. No FBI? Get [FBI.3dsx](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder of the card, and open it from the Homebrew Launcher.
+2. Start **3dssavesync** from the HOME menu. It connects to the PC by itself: you type nothing.
 
-No SD card reader? Press SELECT on the 3DS and enter the **Server** and **Token** that the PC page shows. Or click **Download config.ini** on the PC page and copy it to `sdmc:/3ds/3dssavesync/` by FTP.
+No SD card reader? Copy [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) to the 3DS by FTP and install it with FBI. Then press SELECT on the 3DS and enter the **Server** and **Token** that the PC page shows, or click **Download config.ini** on the PC page and copy it to `sdmc:/3ds/3dssavesync/` by FTP.
 
 ### 3. Check that it works
 
@@ -84,6 +84,8 @@ The file `portable.txt` next to the program makes it portable: the settings, the
 - **Get back an old version**: open the **3dssavesync settings** shortcut, part **History**, choose the game and the version, then click **Restore this version**. Or run `3dssavesync restore`. Each device gets it at its next sync, after a backup copy.
 - **No network after a game on the PC**: the save stays on the PC and goes out at the next launch, whatever game you start.
 - **Icon near the clock** (Windows, Linux KDE): right-click it to open the settings, send the pending saves now, or see the local server address. See the [PC guide](docs/guide-pc.md#the-icon-near-the-clock).
+- **Updates**: the settings page and the icon near the clock show when a new version is out. Click **Update** on the settings page: the program is checked, replaced, and restarts. Then prepare the 3DS SD card again to get the matching `3dssavesync.cia`, or update the 3DS app from its settings (**SELECT** > **Update**). See the [PC guide](docs/guide-pc.md#updates).
+
 - **ROM hacks** (Radical Red and others) use the same game code as the original game. 3dssavesync refuses to mix them, and offers to give the hack [its own save](docs/troubleshooting.md#a-rom-hack-is-not-synced).
 - **ROMs in subfolders** on the 3DS are found (4 levels deep). The save goes where your 3DS app writes it.
 - **More PC settings** (emulators, frontends, commands): [PC guide](docs/guide-pc.md). **3DS settings**: [3DS guide](docs/guide-3ds.md).

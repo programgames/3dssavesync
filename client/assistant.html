@@ -97,6 +97,23 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 .cadre .valeur b { min-width: 70px; }
 .cadre .valeur code { font-size: 16px; }
 @media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
+#menu button.afaire::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--alerte); vertical-align: middle; }
+button.case { text-align: left; font: inherit; color: var(--texte); cursor: pointer; }
+button.case:hover { border-color: var(--accent); }
+.lignes { white-space: pre-line; }
+h1 small { font-size: 13px; font-weight: normal; color: var(--doux); }
+#listeVerifs { list-style: none; padding: 0; margin: 8px 0 0; }
+#listeVerifs li { padding: 6px 0 6px 26px; border-bottom: 1px solid var(--bord); position: relative; white-space: pre-line; overflow-wrap: anywhere; }
+#listeVerifs li::before { position: absolute; left: 2px; font-weight: 700; }
+#listeVerifs li.ok::before { content: "✓"; color: var(--ok); }
+#listeVerifs li.afaire::before { content: "!"; color: var(--alerte); }
+#maj { border-color: var(--accent); }
+/* Assistant du premier lancement : 4 étapes, sans le menu ni le bandeau. */
+.etapes, #progression { display: none; }
+.assistant .etapes { display: inline-block; }
+.assistant #progression { display: block; font-weight: 600; color: var(--accent); }
+.assistant #menu, .assistant .bandeau, .assistant .normal, .assistant #sectionOuvrir, .assistant #sectionDesinstaller { display: none !important; }
+.assistant .page { grid-template-columns: minmax(0, 1fr); max-width: 960px; }
 </style>
 </head>
 <body>
@@ -109,16 +126,26 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
   <button type="button" data-page="frontends">{{t "Frontends et installation" "Frontends and install"}}</button>
   <button type="button" data-page="historique">{{t "Historique" "History"}}</button>
   <button type="button" data-page="hacks">{{t "ROM hacks" "ROM hacks"}}</button>
+  <button type="button" data-page="verifs">{{t "Vérifications" "Checks"}}</button>
 </nav>
 <main>
-  <h1>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</h1>
+  <h1>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}} <small id="version"></small></h1>
+  <p id="progression" aria-live="polite"></p>
   <p class="sous">{{t "Synchronise les sauvegardes DS, GB, GBA et 3DS entre la 3DS et ce PC. Rien n'est écrit avant le bouton « Enregistrer » ; chaque fichier modifié est copié avant." "Syncs DS, GB, GBA and 3DS saves between the 3DS and this PC. Nothing is written before the \"Save\" button; every changed file is copied first."}}</p>
 
   <div class="bandeau">
     <div class="case"><span>{{t "Serveur" "Server"}}</span><b id="etatServeur">…</b></div>
     <div class="case"><span>{{t "Émulateurs prêts" "Emulators ready"}}</span><b id="etatEmus">…</b></div>
     <div class="case"><span>{{t "Jeux sur le serveur" "Games on the server"}}</span><b id="etatJeux">…</b></div>
+    <button type="button" class="case" id="caseVerifs"><span>{{t "Vérifications" "Checks"}}</span><b id="etatVerifs">…</b></button>
   </div>
+
+  <section id="maj" class="masque" aria-live="polite">
+    <h2 id="majTitre"></h2>
+    <p class="aide">{{t "Le programme est téléchargé depuis GitHub et vérifié (SHA256SUMS). La version actuelle reste à côté, renommée. Puis les réglages redémarrent." "The program is downloaded from GitHub and checked (SHA256SUMS). The current version stays next to it, renamed. Then the settings page restarts."}} <a id="majPage" target="_blank" rel="noopener">{{t "Nouveautés" "What's new"}}</a></p>
+    <p class="ligne"><button type="button" class="principal" id="majBouton">{{t "Mettre à jour" "Update"}}</button></p>
+    <p id="majEtat" class="lignes" role="status"></p>
+  </section>
 
   <section id="resultat" class="masque" aria-live="polite"></section>
 
@@ -158,8 +185,16 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
     </div>
     <label for="carteChemin">{{t "Ou dossier de la carte SD (facultatif)" "Or SD card folder (optional)"}}</label>
     <input type="text" id="carteChemin" autocomplete="off">
-    <p class="ligne" style="margin-top:10px"><button type="button" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button> <span id="carteEtat" role="status"></span></p>
+    <p class="ligne" style="margin-top:10px"><button type="button" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button></p>
+    <ul id="carteEtat" role="status"></ul>
+    <p class="aide">{{t "La carte reçoit aussi cias/3dssavesync.cia, de la même version que ce programme. Sur la 3DS, installez-le avec FBI : SD, cias, 3dssavesync.cia, « Install and delete CIA »." "The card also gets cias/3dssavesync.cia, of the same version as this program. On the 3DS, install it with FBI: SD, cias, 3dssavesync.cia, \"Install and delete CIA\"."}}</p>
+    <p class="aide">{{t "Pas de lecteur de carte SD : passez cette étape. Installez 3dssavesync.cia avec FBI (copiez-le par FTP depuis la" "No SD card reader: skip this step. Install 3dssavesync.cia with FBI (copy it by FTP from the"}} <a id="lienCia" target="_blank" rel="noopener">{{t "page de cette version" "page of this version"}}</a>){{t ", puis entrez l'adresse et le jeton sur la 3DS (3dssavesync, SELECT), ou copiez config.ini par FTP :" ", then enter the address and token on the 3DS (3dssavesync, SELECT), or copy config.ini by FTP:"}}</p>
     <p class="aide"><a href="config.ini" download>{{t "Télécharger config.ini" "Download config.ini"}}</a> : {{t "pour le copier par FTP dans sdmc:/3ds/3dssavesync/. Ce fichier remet les dossiers de la 3DS à leur valeur par défaut ; avec la carte SD, ils sont gardés." "to copy it by FTP to sdmc:/3ds/3dssavesync/. This file resets the 3DS folders to their default value; with the SD card, they are kept."}}</p>
+  </section>
+
+  <section id="carteImpossible" class="masque" data-page="carte">
+    <h2>{{t "Carte SD de la 3DS" "3DS SD card"}}</h2>
+    <p class="alerte">{{t "La carte SD ne peut pas encore être préparée : l'adresse du PC sur le réseau est introuvable. Vérifiez que le PC est relié à la box, puis rouvrez les réglages." "The SD card cannot be prepared yet: the network address of the PC is not found. Check that the PC is connected to the router, then open the settings again."}}</p>
   </section>
 
   <section id="sectionProgramme" data-page="frontends">
@@ -194,6 +229,7 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
     <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
     <label class="choix masque" id="iconeLigne"><input type="checkbox" id="icone"> <span>{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}</span></label>
     <p class="aide masque" id="iconeAide">{{t "Clic droit sur l'icône : ouvrir les réglages, envoyer les sauvegardes en attente, état du serveur local. Elle démarre avec la session." "Right-click the icon: open the settings, send the pending saves, state of the local server. It starts with the session."}}</p>
+    <label class="choix"><input type="checkbox" id="majAuto"> <span>{{t "Rechercher les mises à jour de 3dssavesync (GitHub, une fois par jour)" "Check for 3dssavesync updates (GitHub, once a day)"}}</span></label>
   </section>
 
   <section id="sectionDesinstaller" class="masque" data-page="frontends">
@@ -216,6 +252,13 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
       </div>
   </section>
 
+  <section id="sectionVerifs" class="masque" data-page="verifs">
+      <h2>{{t "Tout est prêt ?" "Everything is ready?"}}</h2>
+      <p class="aide">{{t "Chaque ligne est bonne (✓), ou dit ce qu'il faut faire (!). Rien n'est modifié." "Each line is good (✓), or says what to do (!). Nothing is changed."}}</p>
+      <p class="ligne"><button type="button" id="reverifier">{{t "Vérifier de nouveau" "Check again"}}</button> <span id="verifsEtat" role="status"></span></p>
+      <ul id="listeVerifs"></ul>
+  </section>
+
   <section id="sectionHacks" class="masque" data-page="hacks">
       <h2>{{t "ROM hacks : une sauvegarde à part" "ROM hacks: a separate save"}}</h2>
       <p class="aide">{{t "Un ROM hack garde souvent le code du jeu d'origine : 3dssavesync le prendrait pour ce jeu, et lui donnerait sa partie. Choisissez ici la ROM du hack : elle reçoit sa propre sauvegarde. Pour la 3DS, préparez ensuite de nouveau sa carte SD." "A ROM hack often keeps the code of the original game: 3dssavesync would take it for that game, and give it its save. Choose the hack ROM here: it gets its own save. For the 3DS, then prepare its SD card again."}}</p>
@@ -231,10 +274,13 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 </div>
 
 <div class="barre"><div>
-  <button type="button" class="principal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
-  <button type="button" id="reparer">{{t "Réparer les frontends" "Repair frontends"}}</button>
-  <button type="button" id="terminer">{{t "Terminer" "Finish"}}</button>
+  <button type="button" class="etapes" id="precedent">{{t "Précédent" "Previous"}}</button>
+  <button type="button" class="etapes principal" id="suivant">{{t "Suivant" "Next"}}</button>
+  <button type="button" class="principal normal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
+  <button type="button" class="normal" id="reparer">{{t "Réparer les frontends" "Repair frontends"}}</button>
+  <button type="button" class="normal" id="terminer">{{t "Terminer" "Finish"}}</button>
 </div></div>
+
 
 <script>
 const T = {
@@ -287,6 +333,17 @@ const T = {
   sur: {{t "sur" "of"}},
   retirerHack: {{t "Retirer %s ? Ce hack serait de nouveau vu comme le jeu d'origine : 3dssavesync le lancerait sans synchronisation, ou poserait une question." "Remove %s? This hack would again be seen as the original game: 3dssavesync would start it without sync, or ask a question."}},
   aucunHack: {{t "Aucun ROM hack." "No ROM hack."}},
+  etapes: [{{t "Serveur" "Server"}}, {{t "Émulateurs et frontends" "Emulators and frontends"}}, {{t "Carte SD de la 3DS" "3DS SD card"}}, {{t "Tout est prêt" "Everything is ready"}}],
+  etape: {{t "Étape %d sur 4 : %s" "Step %d of 4: %s"}},
+  suivant: {{t "Suivant" "Next"}},
+  enregistrerSuivant: {{t "Enregistrer et continuer" "Save and continue"}},
+  passer: {{t "Suivant (ou passer)" "Next (or skip)"}},
+  finAssistant: {{t "Terminer l'assistant" "Finish the assistant"}},
+  toutBon: {{t "Tout est bon" "All good"}},
+  aFaire: {{t "%d à faire" "%d to do"}},
+  majDispo: {{t "Version %s disponible (vous avez la %s)" "Version %s available (you have %s)"}},
+  confirmerMaj: {{t "Mettre à jour vers la version %s ? Le programme est remplacé, puis les réglages redémarrent." "Update to version %s? The program is replaced, then the settings page restarts."}},
+  version: {{t "version" "version"}},
   explication: {{t "Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde. Synchronisez d'abord les autres appareils : une partie pas encore envoyée peut sinon remplacer cette version, ou afficher un conflit." "This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n\nEach device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save. Sync the other devices first: otherwise a game not yet uploaded can replace this version, or show a conflict."}}
 };
 const racine = location.pathname;
@@ -417,7 +474,8 @@ async function bandeauServeur() {
 let page = "";
 function montrer(p) {
   page = p;
-  document.querySelectorAll("main section[data-page]").forEach(s => s.classList.toggle("cachee", s.dataset.page !== p));
+  const pages = etape ? ETAPES[etape - 1] : [p];
+  document.querySelectorAll("main section[data-page]").forEach(s => s.classList.toggle("cachee", !pages.includes(s.dataset.page)));
   document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("actif", b.dataset.page === p));
   if (p === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
   if (p === "hacks") hacks().catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
@@ -490,7 +548,7 @@ function choix() {
     Installer: $("installer").checked,
     Emulateurs: [...$("emulateurs").children].map(d => d.emu),
     LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
-    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked
+    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked, Maj: $("majAuto").checked
   };
 }
 
@@ -504,8 +562,18 @@ async function action(bouton, travail) {
   boutons.forEach(b => b.disabled = false);
 }
 
+// Assistant du premier lancement (pas encore de config.json) : 4 étapes, chacune montre des sections existantes.
+const ETAPES = [["serveur"], ["emulateurs", "frontends"], ["carte"], ["verifs"]];
+let etape = 0, premier = true; // etape : 1 à 4 ; 0 = page habituelle
+
 async function charger() {
   etat = await api("etat");
+  if (premier && !etat.Existe) etape = 1;
+  premier = false;
+  document.body.classList.toggle("assistant", etape > 0);
+  $("version").textContent = T.version + " " + etat.Version;
+  $("lienCia").href = etat.Version === "dev" ? "https://github.com/programgames/3dssavesync/releases/latest" : "https://github.com/programgames/3dssavesync/releases/tag/v" + etat.Version;
+  $("majAuto").checked = etat.Maj;
   document.querySelector(`input[name=type][value=${etat.Local ? "local" : "perso"}]`).checked = true;
   $("url").value = etat.URL || "";
   $("jeton").placeholder = etat.JetonPresent ? T.inchange : "";
@@ -546,14 +614,82 @@ async function charger() {
   $("sectionDesinstaller").classList.toggle("masque", !etat.Existe);
   const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
   $("sectionCarte").classList.toggle("masque", !sd);
+  $("carteImpossible").classList.toggle("masque", sd || !etat.Existe);
+  $("sectionVerifs").classList.toggle("masque", !etat.Existe);
   $("adresseCarte").textContent = etat.Adresse3DS || "";
   $("carteChemin").placeholder = etat.Windows ? "E:\\" : "/media/…";
   menu();
   montrer(page && !document.querySelector(`#menu button[data-page="${page}"]`).classList.contains("masque") ? page : (etat.Existe ? "emulateurs" : "serveur"));
   bandeauEmus();
   bandeauServeur();
+  if (etat.Existe && etape === 0) verifs();
+  if (etape) boutonsEtape();
   if (sd) await cartes();
 }
+
+function boutonsEtape() {
+  $("progression").textContent = T.etape.replace("%d", etape).replace("%s", T.etapes[etape - 1]);
+  $("precedent").disabled = etape === 1;
+  $("suivant").textContent = [T.suivant, T.enregistrerSuivant, T.passer, T.finAssistant][etape - 1];
+}
+function allerA(n) {
+  etape = n;
+  document.body.classList.toggle("assistant", etape > 0);
+  if (!etape) { charger().catch(e => afficher("3dssavesync", [], e.message)); window.scrollTo(0, 0); return; }
+  boutonsEtape();
+  montrer(ETAPES[n - 1][0]);
+  if (n === 4) verifs();
+  window.scrollTo(0, 0);
+}
+$("precedent").onclick = () => allerA(etape - 1);
+$("suivant").onclick = e => {
+  if (etape !== 2) return allerA(etape === 4 ? 0 : etape + 1);
+  action(e.target, async () => { // « Enregistrer et continuer » : le même enregistrement que le bouton « Enregistrer »
+    const r = await api("appliquer", choix());
+    afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur, r.Jeton ? cadre3DS(r) : null);
+    if (r.Erreur) return;
+    $("jeton").value = "";
+    await charger();
+    allerA(3);
+  });
+};
+
+// Liste « Tout est prêt » (api/verifications, sur le réseau) : case du bandeau, points orange du menu, mise à jour.
+async function verifs() {
+  $("verifsEtat").textContent = T.attente; $("verifsEtat").className = "";
+  $("etatVerifs").textContent = "…"; $("etatVerifs").className = "";
+  let r;
+  try { r = await api("verifications"); } catch (e) {
+    $("verifsEtat").textContent = T.erreur + e.message; $("verifsEtat").className = "erreur"; $("etatVerifs").textContent = "—";
+    return;
+  }
+  const l = r.Liste || [], afaire = l.filter(v => !v.Ok);
+  $("verifsEtat").textContent = "";
+  $("listeVerifs").replaceChildren(...l.map(v => texte("li", v.Texte, v.Ok ? "ok" : "afaire")));
+  $("etatVerifs").textContent = afaire.length ? T.aFaire.replace("%d", afaire.length) : T.toutBon;
+  $("etatVerifs").className = afaire.length ? "alerte" : "ok";
+  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("afaire", afaire.some(v => v.Page === b.dataset.page)));
+  $("menu").querySelector('[data-page="verifs"]').classList.toggle("afaire", afaire.length > 0);
+  $("maj").classList.toggle("masque", !r.Maj);
+  if (r.Maj) {
+    $("majTitre").textContent = T.majDispo.replace("%s", r.Maj.Version).replace("%s", etat.Version);
+    $("majPage").href = r.Maj.Page;
+    $("majBouton").dataset.version = r.Maj.Version;
+  }
+}
+$("reverifier").onclick = verifs;
+$("caseVerifs").onclick = () => { montrer("verifs"); window.scrollTo(0, 0); };
+$("majBouton").onclick = async () => {
+  if (!confirm(T.confirmerMaj.replace("%s", $("majBouton").dataset.version))) return;
+  $("majBouton").disabled = true;
+  $("majEtat").textContent = T.attente; $("majEtat").className = "lignes";
+  try {
+    const r = await api("mettreajour");
+    $("majEtat").textContent = r.Message; $("majEtat").className = "lignes " + (r.Ok ? "ok" : "erreur");
+    if (r.Ok) { document.querySelector(".barre").remove(); return; } // ce programme s'arrête, le nouveau ouvre un onglet
+  } catch (e) { $("majEtat").textContent = T.erreur + e.message; $("majEtat").className = "lignes erreur"; }
+  $("majBouton").disabled = false;
+};
 
 // Cartes SD de 3DS branchées sur le PC (racine avec un dossier « Nintendo 3DS »).
 async function cartes() {
@@ -639,12 +775,19 @@ $("tester").onclick = async () => {
 };
 $("chercher").onclick = () => cartes().catch(e => { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; });
 $("preparer").onclick = async () => {
-  $("carteEtat").textContent = T.attente; $("carteEtat").className = "";
+  // Échec : seule la dernière ligne (l'erreur) en rouge ; les lignes d'avant disent ce qui est déjà écrit.
+  const etatCarte = (lignes, ok) => $("carteEtat").replaceChildren(...lignes.map((l, i) => texte("li", l, "lignes" + (ok ? "" : i === lignes.length - 1 ? " erreur" : ""))));
+  etatCarte([T.attente], true);
+  $("preparer").disabled = true;
   try {
     const r = await api("preparer", {Racine: $("carteChemin").value.trim() || ($("carte").disabled ? "" : $("carte").value)});
-    $("carteEtat").textContent = r.Message; $("carteEtat").className = r.Ok ? "ok" : "erreur";
-  } catch (e) { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; }
+    etatCarte(r.Lignes || [], r.Ok);
+    if (r.Ok && etape === 0) verifs();
+  } catch (e) { etatCarte([T.erreur + e.message], false); }
+  $("preparer").disabled = false;
+
 };
+
 // ROM hacks : la liste, puis un ajout ou un retrait (api/alias).
 async function hacks(corps) {
   const r = await api("alias", corps);
