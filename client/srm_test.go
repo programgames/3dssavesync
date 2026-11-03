@@ -75,7 +75,7 @@ func TestSRM(t *testing.T) {
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(other) }))
 	defer srv.Close()
-	s := &Session{cfg: &Config{URL: srv.URL}, dir: dir, profile: "retroarch", http: srv.Client()}
+	s := testClient(srv, dir, "retroarch")
 	if err := s.download(j, l, &Version{Hash: sha256Hex(other), Size: 128 << 10}); err != nil {
 		t.Fatal(err)
 	}

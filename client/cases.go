@@ -76,7 +76,7 @@ func (s *Session) knownBase(key string) bool {
 //
 // With question (run), the user chooses: same game (second case), "Sync separately" (an Alias is created, j takes
 // its Key), or play without syncing.
-func (s *Session) romRefusal(j *Game, rom string, question bool) string {
+func (c *Client) romRefusal(j *Game, rom string, question bool) string {
 	if j.Key == "" || rom == "" {
 		return ""
 	}
@@ -84,10 +84,10 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 	hint := tr("Pour lui donner sa propre sauvegarde, lancez-le depuis votre frontend et choisissez « Synchroniser à part ». Vous pouvez aussi l'ajouter dans les réglages, section ROM hacks.",
 		"To give it its own save, start it from your frontend and choose \"Sync separately\". You can also add it in the settings, ROM hacks section.")
 	choice := ""
-	m, _ := s.keptRoms()
+	m, _ := c.keptRoms()
 	if a, err := os.Stat(m[j.Key]); err == nil {
 		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) {
-			s.log(fmt.Sprintf("même Clé %s que %s : %s", j.Key, m[j.Key], rom))
+			c.log(fmt.Sprintf("même Clé %s que %s : %s", j.Key, m[j.Key], rom))
 			text := fmt.Sprintf(tr("%s ressemble à %s, déjà synchronisé. C'est sans doute un ROM hack.",
 				"%s looks like %s, which is already synced. It's probably a ROM hack."), filepath.Base(rom), filepath.Base(m[j.Key]))
 			if question {
@@ -98,9 +98,9 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 				return text + " " + hint
 			}
 		}
-	} else if m[j.Key] == "" && s.knownBase(j.Key) {
+	} else if m[j.Key] == "" && c.knownBase(j.Key) {
 		if l, err := readLocal(j, nil); err == nil && (l == nil || l.Blank) {
-			s.log(fmt.Sprintf("Clé %s déjà synchronisée, aucune ROM retenue, pas de sauvegarde : %s", j.Key, rom))
+			c.log(fmt.Sprintf("Clé %s déjà synchronisée, aucune ROM retenue, pas de sauvegarde : %s", j.Key, rom))
 			yes := tr("Synchroniser", "Sync")
 			if question {
 				choice = ask(fmt.Sprintf(tr("%s n'a pas encore de sauvegarde dans cet émulateur, mais ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
@@ -116,12 +116,12 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 		}
 	}
 	if choice == apart {
-		key, err := s.createAlias(j.System, strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom)))
+		key, err := c.createAlias(j.System, strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom)))
 		if err != nil {
-			s.log("alias impossible pour " + rom + " : " + err.Error())
+			c.log("alias impossible pour " + rom + " : " + err.Error())
 			return fmt.Sprintf(tr("%s : impossible de le synchroniser à part (%v).", "%s: couldn't sync it separately (%v)."), filepath.Base(rom), err)
 		}
-		s.log(fmt.Sprintf("alias créé : %s -> %s", rom, key))
+		c.log(fmt.Sprintf("alias créé : %s -> %s", rom, key))
 		notify(fmt.Sprintf(tr("%s a maintenant sa propre sauvegarde. Pour y jouer aussi sur la 3DS, préparez de nouveau la carte SD dans les réglages.",
 			"%s now has its own save. To play it on the 3DS too, prepare the SD card again in the settings."), filepath.Base(rom)))
 		j.Key = key
@@ -129,10 +129,10 @@ func (s *Session) romRefusal(j *Game, rom string, question bool) string {
 	if abs, err := filepath.Abs(rom); err == nil {
 		rom = abs
 	}
-	if s.romOf == nil {
-		s.romOf = map[string]string{}
+	if c.romOf == nil {
+		c.romOf = map[string]string{}
 	}
-	s.romOf[j.Key] = rom
+	c.romOf[j.Key] = rom
 	return ""
 }
 
@@ -201,20 +201,20 @@ func newKey(system System, name string, taken map[string]bool) string {
 }
 
 // keepRom keeps the ROM of this Key after a Base is written (if the ROM is known and changed).
-func (s *Session) keepRom(key string) error {
-	rom := s.romOf[key]
+func (c *Client) keepRom(key string) error {
+	rom := c.romOf[key]
 	if rom == "" {
 		return nil
 	}
-	m, err := s.keptRoms()
+	m, err := c.keptRoms()
 	if err != nil {
-		s.log("ROM retenues illisibles, remplacées : " + err.Error())
+		c.log("ROM retenues illisibles, remplacées : " + err.Error())
 	}
 	if m[key] == rom {
 		return nil
 	}
 	m[key] = rom
-	return writeJSON(s.romsPath(), m, true)
+	return writeJSON(c.romsPath(), m, true)
 }
 
 // romKey (run) returns the Key of the ROM for this Client, Alias included, or a reason to start without Sync.
@@ -236,12 +236,13 @@ type pendingEntry struct {
 	Game
 }
 
-func (s *Session) pendingPath() string { return filepath.Join(s.dir, "en-attente.json") }
+// pendingPath returns the list of pending Uploads of a configuration folder.
+func pendingPath(dir string) string { return filepath.Join(dir, "en-attente.json") }
 
 // pendingLock lets one Launcher at a time read and rewrite the list (two Launchers can run together).
 // A lock older than 30 s comes from a stopped Launcher: it is removed. The returned function removes the lock.
 func (s *Session) pendingLock() func() {
-	v := s.pendingPath() + ".verrou"
+	v := pendingPath(s.dir) + ".verrou"
 	os.MkdirAll(s.dir, 0o755)
 	for attempt := 0; attempt < 50; attempt++ {
 		f, err := os.OpenFile(v, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
@@ -267,9 +268,9 @@ func (s *Session) pendingLock() func() {
 func (s *Session) editPending(f func([]pendingEntry) []pendingEntry) error {
 	defer s.pendingLock()()
 	var l []pendingEntry
-	if err := readJSON(s.pendingPath(), &l); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		side := s.pendingPath() + ".illisible-" + time.Now().Format("20060102-150405")
-		if e := os.Rename(s.pendingPath(), side); e != nil {
+	if err := readJSON(pendingPath(s.dir), &l); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		side := pendingPath(s.dir) + ".illisible-" + time.Now().Format("20060102-150405")
+		if e := os.Rename(pendingPath(s.dir), side); e != nil {
 			s.log("en-attente.json illisible, et impossible à mettre de côté : " + err.Error() + " ; " + e.Error())
 			return e
 		}
@@ -278,7 +279,7 @@ func (s *Session) editPending(f func([]pendingEntry) []pendingEntry) error {
 			"The list of pending uploads couldn't be read. It was set aside in %s, and its games will be uploaded the next time you start them."), side))
 		l = nil
 	}
-	err := writeJSON(s.pendingPath(), f(l), true)
+	err := writeJSON(pendingPath(s.dir), f(l), true)
 	if err != nil {
 		s.log("en-attente.json : " + err.Error())
 	}
@@ -287,21 +288,21 @@ func (s *Session) editPending(f func([]pendingEntry) []pendingEntry) error {
 
 // addPending marks as pending the games whose Local save changed since the Base (those To upload). Error: the list
 // could not be written.
-func (s *Session) addPending(games []*Game) error {
-	b, _ := s.bases()
+func (c *Client) addPending(games []*Game) error {
+	b, _ := c.bases()
 	var added []pendingEntry
 	for _, j := range games {
 		l, err := readLocal(j, nil)
 		if err == nil && (l == nil || l.Blank || b[j.Key] == l.Hash) {
 			continue
 		}
-		s.log(j.Key + " : Envoi en attente")
-		added = append(added, pendingEntry{s.profile, *j})
+		c.log(j.Key + " : Envoi en attente")
+		added = append(added, pendingEntry{c.name, *j})
 	}
 	if len(added) == 0 {
 		return nil
 	}
-	return s.editPending(func(l []pendingEntry) []pendingEntry {
+	return c.editPending(func(l []pendingEntry) []pendingEntry {
 		for _, n := range added {
 			l = append(remove(l, n), n)
 		}
@@ -324,12 +325,9 @@ func remove(l []pendingEntry, a pendingEntry) []pendingEntry {
 // Returns the last Upload error (tray icon menu, "Upload now").
 func (s *Session) resume() error {
 	var l []pendingEntry
-	if readJSON(s.pendingPath(), &l) != nil || len(l) == 0 {
+	if readJSON(pendingPath(s.dir), &l) != nil || len(l) == 0 {
 		return nil
 	}
-	profile, downloaded, romOf := s.profile, s.downloaded, s.romOf // romOf: the started ROM is not the one of a pending Upload
-	s.romOf = nil
-	defer func() { s.profile, s.downloaded, s.romOf = profile, downloaded, romOf }()
 	var done []pendingEntry
 	var last error
 	for _, a := range l {
@@ -342,10 +340,9 @@ func (s *Session) resume() error {
 		if instances(e.process()) > 0 { // a running game can still write this file
 			continue
 		}
-		s.profile = a.Profile
 		j := a.Game
-		j.MBC2 = s.cfg.mbc2Size(a.Profile, a.Core) // not in en-attente.json
-		_, err := s.syncGame(&j, true)
+		j.MBC2 = s.cfg.mbc2Size(a.Profile, a.Core)       // not in en-attente.json
+		_, err := s.client(a.Profile).syncGame(&j, true) // its own Client: no ROM kept, no warning for the started game
 		if err == nil {
 			s.log(a.Key + " : Envoi en attente repris")
 			done = append(done, a)

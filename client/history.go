@@ -54,7 +54,7 @@ var reVersion = regexp.MustCompile(`^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-
 // serverGames returns the server's games, with the known name (3DS titles, ROM found by romNames, or name given to the
 // server by a Client: ADR 0018).
 func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
-	st, o, err := s.api("GET", "/saves", nil, nil)
+	st, o, err := s.request(restoreClient, "GET", "/saves", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 		return nil, fmt.Errorf(tr("Clé de jeu inconnue : %s. « 3dssavesync restore » affiche les clés des jeux du serveur.",
 			"Unknown game key: %s. \"3dssavesync restore\" lists the keys of the games on the server."), key)
 	}
-	st, o, err := s.api("GET", "/saves/"+key+"/history", nil, nil)
+	st, o, err := s.request(restoreClient, "GET", "/saves/"+key+"/history", nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 		n, _ := strconv.Atoi(strings.SplitN(v.File, "-", 2)[0])
 		x := HistoryLine{n, v.File, v.Hash, localDate(v.Date), v.Client, formatSize(v.Size), "", i == 0}
 		if _, g67 := pokemonFormats[int(v.Size)]; g67 || v.Size == 0x8000 || v.Size == 0x20000 || v.Size == 0x80000 {
-			if st, o, err := s.api("GET", "/saves/"+key+"/history/"+v.File, nil, nil); err == nil && st == 200 {
+			if st, o, err := s.request(restoreClient, "GET", "/saves/"+key+"/history/"+v.File, nil, nil); err == nil && st == 200 {
 				x.PlayInfo, _ = pokemonPlayInfo(o)
 			}
 		}
@@ -166,7 +166,7 @@ func (s *Session) restore(key, file, current string) (already bool, err error) {
 	if hashOf(file) == current {
 		return true, nil
 	}
-	st, o, err := s.api("GET", "/saves/"+key+"/history/"+file, nil, nil)
+	st, o, err := s.request(restoreClient, "GET", "/saves/"+key+"/history/"+file, nil, nil)
 	if err != nil {
 		return false, err
 	}
@@ -177,7 +177,7 @@ func (s *Session) restore(key, file, current string) (already bool, err error) {
 		return false, errors.New(tr("La version reçue du serveur est incomplète, rien n'a été restauré. Réessayez.",
 			"The version from the server arrived incomplete, so nothing was restored. Try again."))
 	}
-	st, _, err = s.api("PUT", "/saves/"+key, o, map[string]string{"If-Match": `"` + current + `"`})
+	st, _, err = s.request(restoreClient, "PUT", "/saves/"+key, o, map[string]string{"If-Match": `"` + current + `"`})
 	if err != nil {
 		return false, err
 	}
@@ -200,15 +200,6 @@ func restoredText() string {
 func alreadyText() string {
 	return tr("Cette version est identique à la version actuelle. Il n'y a rien à restaurer.",
 		"This version is the same as the current one. There's nothing to restore.")
-}
-
-// restoreSession returns the Restore Session: the configuration, and the Client name "restauration".
-func restoreSession(config string) (*Session, error) {
-	s, err := newSession(config)
-	if s != nil {
-		s.profile = restoreClient
-	}
-	return s, err
 }
 
 // cmdRestoreConsole runs in a console (the Windows exe has none, like repair) and shows the error there, no window.
@@ -240,7 +231,7 @@ func cmdRestore(config string, args []string, yes bool, q *Questions) (int, erro
 	if len(rest) > 2 {
 		return 2, errors.New(tr("restore attend une clé de jeu, puis un numéro de version", "restore needs a game key, then a version number"))
 	}
-	s, err := restoreSession(config)
+	s, err := newSession(config)
 	if err != nil {
 		return 1, err
 	}
@@ -315,7 +306,7 @@ func cmdRestore(config string, args []string, yes bool, q *Questions) (int, erro
 
 // webGames serves the setup page: games, Versions, Restore.
 func (a *WebSetup) webGames() map[string]any {
-	s, err := restoreSession(a.config)
+	s, err := newSession(a.config)
 	if err != nil {
 		return map[string]any{"Erreur": errorText(err)}
 	}
@@ -329,7 +320,7 @@ func (a *WebSetup) webGames() map[string]any {
 
 // versionsWeb, restoreWeb: without the page lock (up to 30 network reads); ServeHTTP releases it before.
 func (a *WebSetup) versionsWeb(key string) map[string]any {
-	s, err := restoreSession(a.config)
+	s, err := newSession(a.config)
 	if err == nil {
 		var l []HistoryLine
 		if l, err = s.historyLines(key); err == nil {
@@ -340,7 +331,7 @@ func (a *WebSetup) versionsWeb(key string) map[string]any {
 }
 
 func (a *WebSetup) restoreWeb(key, file, current string) map[string]any {
-	s, err := restoreSession(a.config)
+	s, err := newSession(a.config)
 	if err != nil {
 		return map[string]any{"Ok": false, "Message": errorText(err)}
 	}

@@ -26,19 +26,17 @@ func pokemonX(hours int, trainer string) []byte {
 // uploadFromOther uploads from another device (Client "3ds").
 func uploadFromOther(t *testing.T, s *Session, key string, o, before []byte) {
 	t.Helper()
-	other := *s
-	other.profile = "3ds"
 	cond := map[string]string{"If-None-Match": "*"}
 	if before != nil {
 		cond = map[string]string{"If-Match": `"` + sha256Hex(before) + `"`}
 	}
-	if st, _, err := other.api("PUT", "/saves/"+key, o, cond); st != 200 || err != nil {
+	if st, _, err := s.request("3ds", "PUT", "/saves/"+key, o, cond); st != 200 || err != nil {
 		t.Fatalf("envoi %s : %d %v", key, st, err)
 	}
 }
 
 func currentOf(s *Session, key string) []byte {
-	_, o, _ := s.api("GET", "/saves/"+key, nil, nil)
+	_, o, _ := s.request(restoreClient, "GET", "/saves/"+key, nil, nil)
 	return o
 }
 
@@ -49,14 +47,14 @@ func TestRestore(t *testing.T) {
 	t.Run("serveur local", func(t *testing.T) { checkRestore(t, local.URL) })
 	t.Run("server.py", func(t *testing.T) {
 		tmp = t.TempDir()
-		startTestServer(t)
+		startPythonServer(t)
 		checkRestore(t, url)
 	})
 }
 
 func checkRestore(t *testing.T, address string) {
 	config := writeConfig(t, filepath.Join(t.TempDir(), "config.json"), Config{URL: address, Token: "jeton-test"})
-	s, err := restoreSession(config)
+	s, err := newSession(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +112,7 @@ func TestRestoreCommand(t *testing.T) {
 	srv := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
 	defer srv.Close()
 	config := writeConfig(t, filepath.Join(t.TempDir(), "config.json"), Config{URL: srv.URL, Token: "j"})
-	s, _ := restoreSession(config)
+	s, _ := newSession(config)
 	uploadFromOther(t, s, "ADAF", []byte("un"), nil)
 	uploadFromOther(t, s, "ADAF", []byte("deux"), []byte("un"))
 	command := func(entry string, args ...string) (string, error) {
@@ -155,7 +153,7 @@ func TestWebSetupHistory(t *testing.T) {
 	write(t, filepath.Join(roms, "Pokemon Platine.nds"), rom)
 	config := writeConfig(t, filepath.Join(t.TempDir(), "config.json"), Config{URL: srv.URL, Token: "j",
 		Emulators: map[string]*Emulator{"melonds": {Exe: "melonDS.exe", Roms: map[System]string{"DS": roms}}}})
-	s, _ := restoreSession(config)
+	s, _ := newSession(config)
 	uploadFromOther(t, s, "CPUF", []byte("un"), nil)
 	uploadFromOther(t, s, "CPUF", []byte("deux"), []byte("un"))
 

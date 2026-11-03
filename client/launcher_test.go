@@ -1,6 +1,6 @@
 package main
 
-// End-to-end Launcher tests: the real server (server/server.py) and a temporary folder.
+// End-to-end Launcher tests: the local Server (server.go) and a temporary folder.
 // Test doubles replace the emulator, the windows and the process detection.
 // The scenarios follow one another: each one starts from the state that the previous one left.
 
@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	neturl "net/url"
 	"os"
 	"os/exec"
@@ -65,7 +66,22 @@ func init() {
 	instances = func(string) int { return running }
 }
 
+// testClient returns a Client named name, on a test server, with its configuration folder in dir.
+func testClient(srv *httptest.Server, dir, name string) *Client {
+	cfg := &Config{URL: srv.URL}
+	return (&Session{cfg: cfg, dir: dir, remote: &remote{cfg: cfg, dir: dir, http: srv.Client()}}).client(name)
+}
+
+// startTestServer starts the local Server (server.go) on tmp/data, at url. Its HTTP contract is the one of
+// server/server.py: TestServerContract runs the Python suite against it.
 func startTestServer(t *testing.T) {
+	srv := httptest.NewServer(&Server{data: filepath.Join(tmp, "data"), token: "jeton-test"})
+	t.Cleanup(srv.Close)
+	url = srv.URL
+}
+
+// startPythonServer starts the real server/server.py on tmp/data, at url.
+func startPythonServer(t *testing.T) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

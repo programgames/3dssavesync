@@ -303,7 +303,7 @@ func cmdServe(config string) (int, error) {
 	if err := os.MkdirAll(data, 0o755); err != nil {
 		return 1, err
 	}
-	(&Session{dir: filepath.Dir(config)}).log(fmt.Sprintf("serveur local : port %d, données %s", cfg.LocalServer.Port, data))
+	logTo(filepath.Dir(config), fmt.Sprintf("serveur local : port %d, données %s", cfg.LocalServer.Port, data))
 	srv := &http.Server{Addr: fmt.Sprintf(":%d", cfg.LocalServer.Port), Handler: &Server{data: data, token: cfg.Token},
 		ReadHeaderTimeout: 30 * time.Second}
 	err := srv.ListenAndServe()
@@ -312,7 +312,7 @@ func cmdServe(config string) (int, error) {
 		// Started at login while it already runs: nothing to report.
 		cfg.URL = fmt.Sprintf("http://127.0.0.1:%d", cfg.LocalServer.Port)
 		if testServer(&cfg) == nil {
-			(&Session{dir: filepath.Dir(config)}).log("serveur local déjà en marche")
+			logTo(filepath.Dir(config), "serveur local déjà en marche")
 			return 0, nil
 		}
 		return 1, fmt.Errorf(tr("le serveur local ne démarre pas : un autre programme utilise déjà le port %d. Choisissez un autre port dans les réglages et entrez la nouvelle adresse sur la 3DS.",

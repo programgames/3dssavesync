@@ -311,7 +311,7 @@ func (a *WebSetup) selfUpdateWeb() map[string]any {
 	if err != nil {
 		return map[string]any{"Ok": false, "Message": err.Error()}
 	}
-	(&Session{dir: dir}).log("mise à jour : " + version + " -> " + r.Tag + ", ancien exe : " + cp)
+	logTo(dir, "mise à jour : "+version+" -> "+r.Tag+", ancien exe : "+cp)
 	lines := []string{fmt.Sprintf(tr("Mise à jour vers %s terminée. Les réglages se rouvrent dans un nouvel onglet, vous pouvez fermer celui-ci.",
 		"Updated to %s. The settings page reopens in a new tab, so you can close this one."), strings.TrimPrefix(r.Tag, "v")),
 		tr("Ancienne version conservée : ", "Previous version kept: ") + cp}

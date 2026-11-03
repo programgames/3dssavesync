@@ -8,10 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"net"
-	"net/http"
 	neturl "net/url"
 	"os"
 	"path/filepath"
@@ -125,65 +123,39 @@ func state(local, server *Version, base string) State {
 	return conflict
 }
 
-// Session is an emulator (Profile) and its configuration folder (log, Bases, Backup copies).
+// Session is one run of the program: the configuration, its folder (log, Bases, Backup copies) and the server.
 type Session struct {
-	cfg        *Config
-	config     string // path of config.json: an Alias created at launch is written there (ADR 0014)
-	dir        string
-	profile    string
-	http       *http.Client
-	downloaded bool              // a Version arrived from the server during this Session
-	romOf      map[string]string // Key -> ROM of this launch, kept with the Base (ADR 0014)
-	// GET /saves list of the current pass (read once per pass); read again after an Upload or a 412.
-	list     []Version
-	listErr  error
-	listRead bool
+	cfg    *Config
+	config string // path of config.json: an Alias created at launch is written there (ADR 0014)
+	dir    string
+	*remote
 }
 
-func (s *Session) log(text string) {
-	f, err := os.OpenFile(filepath.Join(s.dir, "3dssavesync.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+// Client is an emulator of this PC on the server: its Bases, its Backup copies, the ROMs kept for its Keys. A launch
+// has one; each pending Upload resumes with its own (resume).
+type Client struct {
+	*Session
+	name       string            // config.json entry; X-Client on the server (clientName)
+	romOf      map[string]string // Key -> ROM of this launch, kept with the Base (ADR 0014)
+	downloaded bool              // a Version arrived from the server for this Client
+}
+
+func (s *Session) client(name string) *Client { return &Client{Session: s, name: name} }
+
+func (s *Session) log(text string) { logTo(s.dir, text) }
+
+// logTo adds a dated line to the log of a configuration folder.
+func logTo(dir, text string) {
+	f, err := os.OpenFile(filepath.Join(dir, "3dssavesync.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err == nil {
 		fmt.Fprintf(f, "%s %s\n", time.Now().Format("2006-01-02T15:04:05"), text)
 		f.Close()
 	}
 }
 
-func (s *Session) api(method, path string, body []byte, headers map[string]string) (int, []byte, error) {
-	var r io.Reader
-	if body != nil {
-		r = bytes.NewReader(body)
-	}
-	req, err := http.NewRequest(method, strings.TrimRight(s.cfg.URL, "/")+path, r)
-	if err != nil {
-		return 0, nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+s.cfg.Token)
-	req.Header.Set("X-Client", clientName(s.profile))
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
-	rep, err := s.http.Do(req)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer rep.Body.Close()
-	if rep.StatusCode == http.StatusUnauthorized {
-		return 0, nil, &httpError{method + " " + path, 401}
-	}
-	buf, err := io.ReadAll(rep.Body)
-	if err != nil { // cut-off response: the network is at fault, like a request with no response (classify)
-		return 0, nil, &neturl.Error{Op: method, URL: path, Err: err}
-	}
-	return rep.StatusCode, buf, nil
+func (c *Client) api(method, path string, body []byte, headers map[string]string) (int, []byte, error) {
+	return c.request(c.name, method, path, body, headers)
 }
-
-// httpError is a server response other than the expected one. Error() keeps the technical detail, for the log.
-type httpError struct {
-	request string
-	code    int
-}
-
-func (e *httpError) Error() string { return fmt.Sprintf("%s : %d", e.request, e.code) }
 
 // helpPage is the help page for error messages, added to the error windows of the PC.
 const helpPage = "https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md"
@@ -283,58 +255,12 @@ func errorText(err error) string {
 	return t
 }
 
-// clientName returns the Client name for the server ([a-z0-9]{1,16}): two emulators = two Clients.
-func clientName(profile string) string {
-	var b strings.Builder
-	for _, c := range strings.ToLower(profile) {
-		if (c >= 'a' && c <= 'z' || c >= '0' && c <= '9') && b.Len() < 16 {
-			b.WriteRune(c)
-		}
-	}
-	return b.String()
-}
-
-// serverVersion returns the Current version of a Game on the server, or nil. The list is read once per pass, and so is
-// an error (network down: a single timeout for the whole pass).
-func (s *Session) serverVersion(key string) (*Version, error) {
-	if !s.listRead {
-		s.list, s.listErr = s.readList()
-		s.listRead = true
-	}
-	if s.listErr != nil {
-		return nil, s.listErr
-	}
-	for i := range s.list {
-		if s.list[i].Code == key {
-			v := s.list[i]
-			return &v, nil
-		}
-	}
-	return nil, nil
-}
-
-func (s *Session) readList() ([]Version, error) {
-	st, o, err := s.api("GET", "/saves", nil, nil)
-	if err != nil {
-		return nil, err
-	}
-	if st != 200 {
-		return nil, &httpError{"GET /saves", st}
-	}
-	var list []Version
-	if err := json.Unmarshal(o, &list); err != nil { // Wi-Fi portal page, wrong address: unexpected response
-		s.log("GET /saves illisible : " + err.Error())
-		return nil, &httpError{"GET /saves", st}
-	}
-	return list, nil
-}
-
 // basePath returns the Bases file: one file per emulator, Key -> Hash of the last Sync.
-func (s *Session) basePath() string { return filepath.Join(s.dir, "bases", s.profile+".json") }
+func (c *Client) basePath() string { return filepath.Join(c.dir, "bases", c.name+".json") }
 
-func (s *Session) bases() (map[string]string, error) {
+func (c *Client) bases() (map[string]string, error) {
 	m := map[string]string{}
-	o, err := os.ReadFile(s.basePath())
+	o, err := os.ReadFile(c.basePath())
 	if errors.Is(err, fs.ErrNotExist) {
 		return m, nil
 	}
@@ -344,17 +270,17 @@ func (s *Session) bases() (map[string]string, error) {
 	return m, json.Unmarshal(bytes.TrimPrefix(o, []byte("\xef\xbb\xbf")), &m)
 }
 
-func (s *Session) setBase(key, hash string) error {
-	m, err := s.bases()
+func (c *Client) setBase(key, hash string) error {
+	m, err := c.bases()
 	if err != nil {
 		return err
 	}
 	m[key] = hash
-	if err := writeJSON(s.basePath(), m, true); err != nil {
+	if err := writeJSON(c.basePath(), m, true); err != nil {
 		return err
 	}
-	if err := s.keepRom(key); err != nil {
-		s.log("ROM de " + key + " non retenue : " + err.Error())
+	if err := c.keepRom(key); err != nil {
+		c.log("ROM de " + key + " non retenue : " + err.Error())
 	}
 	return nil
 }
@@ -425,12 +351,12 @@ func writeVerified(path string, buf []byte) error {
 }
 
 // upload is a conditional Upload: If-Match = Current version seen by this Client. false on 412.
-func (s *Session) upload(j *Game, l *Local, srv *Version) (bool, error) {
+func (c *Client) upload(j *Game, l *Local, srv *Version) (bool, error) {
 	cond := map[string]string{"If-None-Match": "*"}
 	if srv != nil {
 		cond = map[string]string{"If-Match": `"` + srv.Hash + `"`}
 	}
-	st, _, err := s.api("PUT", "/saves/"+j.Key, l.SRAM, cond)
+	st, _, err := c.api("PUT", "/saves/"+j.Key, l.SRAM, cond)
 	if err != nil {
 		return false, err
 	}
@@ -441,15 +367,15 @@ func (s *Session) upload(j *Game, l *Local, srv *Version) (bool, error) {
 		return false, &httpError{"PUT /saves/" + j.Key, st}
 	}
 	if srv == nil && j.Name != "" { // first Upload of this game: the server does not have its name yet (ADR 0018)
-		s.setName(j)
+		c.setName(c.name, j)
 	}
-	s.listRead = false // the list no longer has the Current version of this Game
-	return true, s.setBase(j.Key, l.Hash)
+	c.listRead = false // the list no longer has the Current version of this Game
+	return true, c.setBase(j.Key, l.Hash)
 }
 
 // copy makes a Backup copy of the Local save: <copies>/<emulator>/<name>-<date>.
-func (s *Session) copy(j *Game, raw []byte) error {
-	dir := filepath.Join(s.cfg.copiesDir(s.dir), s.profile)
+func (c *Client) copy(j *Game, raw []byte) error {
+	dir := filepath.Join(c.cfg.copiesDir(c.dir), c.name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -468,8 +394,8 @@ func (s *Session) copy(j *Game, raw []byte) error {
 }
 
 // download is a Download: Backup copy, verified temporary file, then replacement (ADR 0004, docs/design.md §3).
-func (s *Session) download(j *Game, l *Local, srv *Version) error {
-	st, o, err := s.api("GET", "/saves/"+j.Key, nil, nil)
+func (c *Client) download(j *Game, l *Local, srv *Version) error {
+	st, o, err := c.api("GET", "/saves/"+j.Key, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -502,7 +428,7 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 	}
 	var old []byte
 	if l != nil {
-		if err := s.copy(j, l.Raw); err != nil {
+		if err := c.copy(j, l.Raw); err != nil {
 			return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
 		}
 		old = l.Raw
@@ -517,8 +443,8 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 	if reread, err := os.ReadFile(j.File); err != nil || !bytes.Equal(reread, content) {
 		return fmt.Errorf(tr("%s : le fichier remplacé ne correspond pas", "%s: the replaced file doesn't match"), j.File)
 	}
-	s.downloaded = true
-	return s.setBase(j.Key, srv.Hash)
+	c.downloaded = true
+	return c.setBase(j.Key, srv.Hash)
 }
 
 // damagedError: received content whose Hash is not the one of the list.
@@ -596,31 +522,18 @@ const (
 	dontPlay
 )
 
-// setName gives the game name to the server, for the History (ADR 0018). A failure does not block the Sync: it is
-// logged, and the name is marked as known so that this session does not try again.
-func (s *Session) setName(j *Game) {
-	if st, _, err := s.api("PUT", "/saves/"+j.Key+"/name", []byte(j.Name), nil); err != nil || st != 204 {
-		s.log(fmt.Sprintf("nom de %s non envoyé : %d %v", j.Key, st, err))
-	}
-	for i := range s.list {
-		if s.list[i].Code == j.Key {
-			s.list[i].Name = j.Name
-		}
-	}
-}
-
 // syncGame runs one Sync pass. cancelled = the user does not want to play.
-func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
+func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 	for attempt := 0; attempt < 3; attempt++ { // a 412 starts a new pass with the new Current version
 		if attempt > 0 {
-			s.listRead = false
+			c.listRead = false
 		}
-		srv, err := s.serverVersion(j.Key)
+		srv, err := c.serverVersion(c.name, j.Key)
 		if err != nil {
 			return false, err
 		}
 		if srv != nil && srv.Name == "" && j.Name != "" {
-			s.setName(j)
+			c.setName(c.name, j)
 		}
 		l, err := readLocal(j, srv)
 		if err != nil {
@@ -634,7 +547,7 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		if seen == nil && srv == nil {
 			return false, nil
 		}
-		b, err := s.bases()
+		b, err := c.bases()
 		if err != nil {
 			return false, err
 		}
@@ -642,7 +555,7 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		if st == conflict {
 			var remote []byte // Pokémon: read the server Version to compare the play times
 			if _, ok := pokemonPlayInfo(l.SRAM); ok {
-				if st, o, err := s.api("GET", "/saves/"+j.Key, nil, nil); err == nil && st == 200 {
+				if st, o, err := c.api("GET", "/saves/"+j.Key, nil, nil); err == nil && st == 200 {
 					remote = o
 				}
 			}
@@ -659,14 +572,14 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		}
 		switch st {
 		case inSync:
-			return false, s.setBase(j.Key, l.Hash)
+			return false, c.setBase(j.Key, l.Hash)
 		case toUpload:
-			if ok, err := s.upload(j, l, srv); ok || err != nil {
+			if ok, err := c.upload(j, l, srv); ok || err != nil {
 				return false, err
 			}
 		case toDownload:
 			// Content other than the list: a Version arrived after the list was read (long pass), so read again.
-			if err := s.download(j, l, srv); !errors.As(err, new(damagedError)) || attempt == 2 {
+			if err := c.download(j, l, srv); !errors.As(err, new(damagedError)) || attempt == 2 {
 				return false, err
 			}
 		}

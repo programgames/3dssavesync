@@ -389,12 +389,12 @@ func serverStep(q *Questions, cfg *Config) error {
 }
 
 func testServer(cfg *Config) error {
-	s := &Session{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}, profile: "setup"}
+	r := &remote{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}}
 	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
 		return errors.New(tr("Entrez l'adresse du serveur, avec https:// (ou http:// pour le serveur local).",
 			"Enter the server address, with https:// (or http:// for the local server)."))
 	}
-	st, _, err := s.api("GET", "/saves", nil, nil)
+	st, _, err := r.request("setup", "GET", "/saves", nil, nil)
 	if err == nil && st != 200 {
 		err = &httpError{"GET /saves", st}
 	}

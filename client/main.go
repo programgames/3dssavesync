@@ -173,7 +173,7 @@ func realMain(args []string) int {
 		}
 	}
 	if err != nil {
-		(&Session{dir: dir}).log("erreur : " + err.Error() + " (" + strings.Join(args, " ") + ")")
+		logTo(dir, "erreur : "+err.Error()+" ("+strings.Join(args, " ")+")")
 		text := errorText(err)
 		fmt.Fprintln(os.Stderr, text)
 		if j := filepath.Join(dir, "3dssavesync.log"); exists(j) {
@@ -213,7 +213,8 @@ func newSession(path string) (*Session, error) {
 	for id, name := range cfg.Titles3DS { // same list as the 3DS titres.ini (only games with a single /main file)
 		titles3DS[strings.ToUpper(id)] = name
 	}
-	return &Session{cfg: &cfg, config: path, dir: filepath.Dir(path), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
+	dir := filepath.Dir(path)
+	return &Session{&cfg, path, dir, &remote{cfg: &cfg, dir: dir, http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}}, nil
 }
 
 // emulatorFor returns the configured emulator that handles this System: the one asked for, or the only possible one.
@@ -280,12 +281,12 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 		if s.cfg.Emulators[asked] == nil {
 			return 1, fmt.Errorf(tr("Extension de ROM inconnue : %s", "Unknown ROM extension: %s"), rom)
 		}
-		s.profile = asked
-	} else if s.profile, err = s.cfg.emulatorFor(system, asked); err != nil {
+	} else if asked, err = s.cfg.emulatorFor(system, asked); err != nil {
 		return 1, err
 	}
-	e := s.cfg.Emulators[s.profile]
-	p, err := e.profile(s.profile)
+	c := s.client(asked)
+	e := s.cfg.Emulators[c.name]
+	p, err := e.profile(c.name)
 	if err != nil {
 		return 1, err
 	}
@@ -313,9 +314,9 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 			name = internal
 		}
 		core := library(e.Cores[system])
-		j = &Game{system, key, name, savePath(dir, system, key, name, p.Ext), core, s.cfg.mbc2Size(s.profile, core)}
+		j = &Game{system, key, name, savePath(dir, system, key, name, p.Ext), core, s.cfg.mbc2Size(c.name, core)}
 		if system != "3DS" { // Azahar stores the Save by title ID: two ROMs of a 3DS game share it
-			why = s.romRefusal(j, rom, true)
+			why = c.romRefusal(j, rom, true)
 		}
 	}
 	var games []*Game
@@ -330,7 +331,7 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 				"Game started without syncing: 3dssavesync doesn't recognize this game (homebrew or unsupported 3DS game). Its save stays on this PC."))
 		}
 	case dir == "":
-		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable. Indiquez-le dans les réglages.", "can't find the %s save folder of %s. Set it in the settings."), system, s.profile)
+		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable. Indiquez-le dans les réglages.", "can't find the %s save folder of %s. Set it in the settings."), system, c.name)
 	default:
 		games = []*Game{j}
 	}
@@ -338,7 +339,7 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 		notify(fmt.Sprintf(tr("Jeu lancé sans synchronisation : 3dssavesync ne sait pas lire ce format de ROM (%s). Utilisez une ROM .zip ou non compressée.",
 			"Game started without syncing: 3dssavesync can't read this ROM format (%s). Use a .zip or uncompressed ROM."), strings.ToLower(filepath.Ext(rom))))
 	}
-	return s.play(games, command, hint(e, p))
+	return c.play(games, command, hint(e, p))
 }
 
 // hint names the setting that loads a save state at start: it can replace a downloaded Version with older progress.
@@ -354,7 +355,7 @@ func cmdLaunch(config, name string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	s.profile = name
+	c := s.client(name)
 	s.log("lancement de " + name)
 	e := s.cfg.Emulators[name]
 	if e == nil {
@@ -378,7 +379,7 @@ func cmdLaunch(config, name string) (int, error) {
 			dir = d
 		}
 	}
-	return s.play(s.gamesOf(e, p), e.command(p, "", "", dir), hint(e, p))
+	return c.play(c.gamesOf(e, p), e.command(p, "", "", dir), hint(e, p))
 }
 
 // refusal: the emulator already runs. Refuse if its game is unknown (instance opened outside 3dssavesync, or
@@ -438,7 +439,7 @@ func (s *Session) acquireLock(process, key string) func() {
 }
 
 // gamesOf returns an emulator's games for launch: the ROMs of its roms folders, and the 3DS Pokémon seen by Azahar.
-func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
+func (c *Client) gamesOf(e *Emulator, p Profile) []*Game {
 	var games []*Game
 	var noRoms, refusal []string
 	byKey, roms := map[string][]*Game{}, map[*Game]string{} // roms: ROM path of each Game
@@ -456,7 +457,7 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 		}
 		root := e.Roms[system]
 		if root == "" {
-			s.log("pas de dossier roms pour " + string(system) + " : ses jeux ne sont pas synchronisés")
+			c.log("pas de dossier roms pour " + string(system) + " : ses jeux ne sont pas synchronisés")
 			noRoms = append(noRoms, string(system))
 			continue
 		}
@@ -469,14 +470,14 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 			if err != nil || sys != system {
 				return nil
 			}
-			if key, err := s.cfg.aliasKey(sys, name, r.Key); err != nil {
+			if key, err := c.cfg.aliasKey(sys, name, r.Key); err != nil {
 				refusal = append(refusal, err.Error())
 			} else if key != "" {
 				if p.InternalName && r.Internal != "" {
 					name = r.Internal
 				}
 				core := library(e.Cores[sys])
-				byKey[key] = append(byKey[key], &Game{sys, key, name, savePath(e.dir(p, sys, path), sys, key, name, p.Ext), core, s.cfg.mbc2Size(s.profile, core)})
+				byKey[key] = append(byKey[key], &Game{sys, key, name, savePath(e.dir(p, sys, path), sys, key, name, p.Ext), core, c.cfg.mbc2Size(c.name, core)})
 				roms[byKey[key][len(byKey[key])-1]] = path
 			}
 			return nil
@@ -500,7 +501,7 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 		case byFile[strings.ToLower(l[0].File)] > 1:
 			shares = append(shares, filepath.Base(roms[l[0]]))
 		default:
-			if why := s.romRefusal(l[0], roms[l[0]], false); why != "" {
+			if why := c.romRefusal(l[0], roms[l[0]], false); why != "" {
 				refusal = append(refusal, why)
 			} else {
 				games = append(games, l[0])
@@ -509,13 +510,13 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 	}
 	if len(duplicates) > 0 {
 		sort.Strings(duplicates)
-		s.log("Doublons : " + strings.Join(duplicates, ", "))
+		c.log("Doublons : " + strings.Join(duplicates, ", "))
 		refusal = append(refusal, fmt.Sprintf(tr("ces ROM contiennent le même jeu : %s. Gardez-en une seule, ou ajoutez les autres dans les réglages, section ROM hacks.",
 			"these ROMs contain the same game: %s. Keep only one, or add the others in the settings, ROM hacks section."), strings.Join(duplicates, ", ")))
 	}
 	if len(shares) > 0 {
 		sort.Strings(shares)
-		s.log("même fichier de sauvegarde : " + strings.Join(shares, ", "))
+		c.log("même fichier de sauvegarde : " + strings.Join(shares, ", "))
 		refusal = append(refusal, fmt.Sprintf(tr("ces ROM utiliseraient le même fichier de sauvegarde : %s. Renommez-en une.",
 			"these ROMs would use the same save file: %s. Rename one of them."), strings.Join(shares, ", ")))
 	}
@@ -533,16 +534,16 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 }
 
 // play runs the pending Uploads, the Sync before, the game, the Sync after. One read of the server list per pass.
-func (s *Session) play(games []*Game, command []string, hint string) (int, error) {
-	s.resume() // same pass as the pre-game Sync: network down = a single timeout
+func (c *Client) play(games []*Game, command []string, hint string) (int, error) {
+	c.resume() // same pass as the pre-game Sync: network down = a single timeout
 	var failures []string
 	for _, j := range games {
-		cancelled, err := s.syncGame(j, false)
+		cancelled, err := c.syncGame(j, false)
 		if cancelled {
 			return 0, nil
 		}
 		if err != nil {
-			s.log(j.Key + " avant : " + err.Error())
+			c.log(j.Key + " avant : " + err.Error())
 			if failures = addFailure(failures, j, err); end(err) {
 				break
 			}
@@ -556,7 +557,7 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 			return 0, nil
 		}
 	}
-	if hint != "" && s.downloaded {
+	if hint != "" && c.downloaded {
 		noPlay := tr("Ne pas jouer", "Don't play")
 		r := ask(tr("Une sauvegarde vient d'arriver du serveur.", "A save just arrived from the server.")+"\n\n"+hint+"\n\n"+
 			tr("Sinon, en sauvegardant dans le jeu, vous risquez d'écraser cette sauvegarde avec une partie plus ancienne.", "Otherwise, saving in the game could overwrite it with older progress."),
@@ -568,7 +569,7 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 			notify(hint)
 		}
 	} else if hint != "" {
-		s.log("avertissement : " + hint)
+		c.log("avertissement : " + hint)
 	}
 	// A game with no save before playing: if it still has none after, the folder or the extension may be
 	// wrong (custom Profile). One game only (run): launch would have dozens of never-played games.
@@ -577,16 +578,16 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 		return 1, fmt.Errorf(tr("impossible de lancer %s : %w", "couldn't start %s: %w"), command[0], err)
 	}
 	if noSave && !exists(games[0].File) {
-		s.log("aucune sauvegarde après la partie : " + games[0].File)
+		c.log("aucune sauvegarde après la partie : " + games[0].File)
 		notify(fmt.Sprintf(tr("Aucune sauvegarde trouvée après la partie : %s\nSi vous avez sauvegardé dans le jeu, vérifiez le dossier des sauvegardes et l'extension réglés pour %s.",
-			"No save found after playing: %s\nIf you saved in the game, check the save folder and extension set for %s."), games[0].File, s.profile))
+			"No save found after playing: %s\nIf you saved in the game, check the save folder and extension set for %s."), games[0].File, c.name))
 	}
 	failures = nil
-	s.listRead = false
+	c.listRead = false
 	var notUploaded []*Game // retried at the next game start, whatever the error
 	for i, j := range games {
-		if _, err := s.syncGame(j, true); err != nil {
-			s.log(j.Key + " après : " + err.Error())
+		if _, err := c.syncGame(j, true); err != nil {
+			c.log(j.Key + " après : " + err.Error())
 			if failures = addFailure(failures, j, err); end(err) {
 				notUploaded = append(notUploaded, games[i:]...)
 				break
@@ -596,7 +597,7 @@ func (s *Session) play(games []*Game, command []string, hint string) (int, error
 	}
 	if len(failures) > 0 { // most important first: the notification is cut at 255 characters
 		text := tr("Sauvegarde non envoyée. Elle reste sur le PC et sera envoyée au prochain lancement d'un jeu.\n", "Upload failed. The save stays on the PC and will upload the next time you start a game.\n")
-		if s.addPending(notUploaded) != nil {
+		if c.addPending(notUploaded) != nil {
 			text = tr("Sauvegarde non envoyée. Elle reste sur le PC : relancez ce jeu pour l'envoyer.\n", "Upload failed. The save stays on the PC. Start this game again to upload it.\n")
 		}
 		notify(text + strings.Join(failures, "\n"))
