@@ -164,7 +164,10 @@ func TestDefaireLaunchBoxSurPlace(t *testing.T) {
 	melon, mgba := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe"), filepath.Join(tmp, "mGBA", "mGBA.exe")
 	ecrire(t, melon, []byte("exe"))
 	ecrire(t, mgba, []byte("exe"))
-	cfg := &Config{Emulateurs: map[string]*Emulateur{"melonds": {Exe: melon}, "mgba": {Exe: mgba}, "azahar": {Exe: filepath.Join(tmp, "absent", "azahar.exe")}}}
+	ra := filepath.Join(tmp, "RetroArch", "retroarch.exe")
+	ecrire(t, ra, []byte("exe"))
+	cfg := &Config{Emulateurs: map[string]*Emulateur{"melonds": {Exe: melon}, "mgba": {Exe: mgba}, "azahar": {Exe: filepath.Join(tmp, "absent", "azahar.exe")},
+		"retroarch": {Exe: ra, Coeurs: map[string]string{"GBA": filepath.Join(tmp, "RetroArch", "cores", "mgba_libretro.dll")}}}}
 	plat := func(emu, p, cmd, def string) string {
 		c := "<CommandLine />"
 		if cmd != "" {
@@ -187,6 +190,9 @@ func TestDefaireLaunchBoxSurPlace(t *testing.T) {
 		emu("m1", "MelonDS", lanceur) + emu("m2", "Mgba", lanceur) + emu("m3", "Azahar", lanceur) +
 		emu("r0", "RetroArch", `C:\RetroArch\retroarch.exe`) + emu("r1", "RetroArch (3dssavesync)", lanceur) +
 		emu("s0", "Sameboy", `C:\SameBoy\sameboy.exe`) + emu("s1", "Sameboy (3dssavesync)", lanceur) +
+		// RetroArch modifié sur place : cœur GBA connu, GB inconnu ; DeSmuME, aussi par défaut pour Nintendo DS
+		plat("m4", "Nintendo Game Boy Advance", "run --emulator retroarch", "false") + plat("m4", "Nintendo Game Boy Color", "run --emulator retroarch", "false") +
+		plat("x0", "Nintendo DS", "", "true") + emu("m4", "RetroArch 1.9", lanceur) + emu("x0", "DeSmuME", `C:\DeSmuME\desmume.exe`) +
 		"</LaunchBox>"
 
 	d, rapport := defaireLaunchbox(xmlLB, lb, lanceur, cfg)
@@ -195,7 +201,7 @@ func TestDefaireLaunchBoxSurPlace(t *testing.T) {
 	for _, b := range blocEmulateurLB.FindAllString(d, -1) {
 		emus[champ(b, "Title")] = b
 	}
-	if len(emus) != 5 || emus["RetroArch (3dssavesync)"] != "" || emus["Sameboy (3dssavesync)"] != "" {
+	if len(emus) != 7 || emus["RetroArch (3dssavesync)"] != "" || emus["Sameboy (3dssavesync)"] != "" {
 		t.Fatalf("copies retirées, MelonDS, Mgba, Azahar, RetroArch, Sameboy gardés :\n%s", d)
 	}
 	if a := champ(emus["MelonDS"], "ApplicationPath"); a != filepath.Join("Emulators", "MelonDS", "melonDS.exe") {
@@ -208,18 +214,26 @@ func TestDefaireLaunchBoxSurPlace(t *testing.T) {
 		t.Errorf("Azahar (exe absent) : laissé tel quel :\n%s", emus["Azahar"])
 	}
 	plats := blocPlateformeLB.FindAllString(d, -1)
-	if len(plats) != 9 || !strings.Contains(d, plat("m3", "Nintendo 3DS", "run --emulator azahar", "true")) {
+	if len(plats) != 12 || !strings.Contains(d, plat("m3", "Nintendo 3DS", "run --emulator azahar", "true")) {
 		t.Fatalf("plateformes de MelonDS, Mgba et Azahar gardées :\n%s", d)
 	}
 	for _, p := range []string{plat("m1", "Nintendo DS", "", "true"), plat("m1", "Nintendo DSi", "", "true"), plat("m1", "Nintendo Entertainment System", "", "false"),
 		plat("m2", "Nintendo Game Boy", "", "true"), plat("m2", "Nintendo Game Boy Advance", "", "true"), plat("m2", "Nintendo Game Boy Color", "", "true"),
-		plat("r0", "Nintendo Game Boy Advance", "", "true"), plat("s0", "Nintendo Game Boy", "", "true")} {
+		// Mgba, modifié sur place, reste par défaut : RetroArch et Sameboy ne le redeviennent pas (jamais deux par défaut)
+		plat("r0", "Nintendo Game Boy Advance", "", "false"), plat("s0", "Nintendo Game Boy", "", "false"),
+		// le cœur de config.json revient, relatif au dossier de RetroArch
+		plat("m4", "Nintendo Game Boy Advance", "-L &#34;"+filepath.Join("cores", "mgba_libretro.dll")+"&#34;", "false"),
+		plat("m4", "Nintendo Game Boy Color", "", "false"), plat("x0", "Nintendo DS", "", "true")} {
 		if !strings.Contains(d, p) {
 			t.Errorf("plateforme attendue :\n%s", p)
 		}
 	}
 	texte := strings.Join(rapport, "\n")
-	if len(rapport) != 5 || !strings.Contains(texte, "Azahar") || !strings.Contains(texte, "Tools, Manage, Emulators") || !strings.Contains(texte, mgba) {
+	// 8 lignes : MelonDS, Mgba, Azahar, RetroArch 1.9 et son cœur GB inconnu, les deux copies retirées, Nintendo DS
+	// par défaut deux fois (MelonDS et DeSmuME)
+	if len(rapport) != 8 || !strings.Contains(texte, "Azahar") || !strings.Contains(texte, "Tools, Manage, Emulators") || !strings.Contains(texte, mgba) ||
+		!strings.Contains(texte, "Nintendo Game Boy Color") || !strings.Contains(texte, "2 émulateurs sont par défaut pour « Nintendo DS »") ||
+		strings.Contains(texte, "de nouveau celui par défaut") || strings.Contains(texte, "Nintendo Game Boy Advance") {
 		t.Errorf("rapport :\n%s", texte)
 	}
 }

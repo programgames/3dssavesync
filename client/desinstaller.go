@@ -33,9 +33,12 @@ var retirerRaccourcis, retirerProgramme = retirerRaccourcisSysteme, retirerProgr
 // l'émulateur dont elle est la copie (même titre sans « (3dssavesync) ») redevient l'émulateur par défaut de ces
 // plateformes. Un émulateur qui lance le Lanceur sous son titre d'origine a été modifié sur place (assistant des
 // versions 1 et 2) : il reste avec ses plateformes, et retrouve l'exe réel de config.json (nom lu dans
-// « --emulator <nom> ») ; exe inconnu ou absent : laissé tel quel, le rapport dit de le corriger à la main.
+// « --emulator <nom> ») ; exe inconnu ou absent : laissé tel quel, le rapport dit de le corriger à la main. Une
+// plateforme où cet émulateur est par défaut le reste : l'émulateur d'origine de la copie n'y redevient pas par défaut.
+// Deux émulateurs encore par défaut d'une même plateforme : le rapport dit d'en garder un.
 func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []string) {
 	var rapport []string
+	surPlace := map[string]bool{} // ID des émulateurs modifiés sur place
 	unescape := func(s string) string { return strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">").Replace(s) }
 	notre := func(b string) bool {
 		return strings.EqualFold(path.Base(strings.ReplaceAll(unescape(champ(b, "ApplicationPath")), `\`, "/")), filepath.Base(lanceur))
@@ -46,6 +49,7 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 			continue
 		}
 		titre, nom := unescape(champ(b, "Title")), ""
+		surPlace[champ(b, "ID")] = true
 		blocs := []string{b}
 		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
 			if champ(p, "Emulator") == champ(b, "ID") {
@@ -67,13 +71,30 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 		if r, err := filepath.Rel(dossierLB, e.Exe); err == nil && !strings.HasPrefix(r, "..") {
 			app = r
 		}
+		profil := e.Profil
+		if profil == "" {
+			profil = nom
+		}
 		for i, x := range blocs {
 			n := x
 			if i == 0 {
 				n = fixerChamp(n, "ApplicationPath", app)
 			}
 			if optionEmulateur.MatchString(champ(n, "CommandLine")) {
-				n = fixerChamp(n, "CommandLine", "")
+				ligne := ""
+				if i > 0 && profil == "retroarch" { // le -L du cœur, que « run --emulator » avait remplacé
+					plateforme := unescape(champ(n, "Platform"))
+					if c := e.Coeurs[plateformesLB[plateforme]]; c != "" {
+						if r, err := filepath.Rel(filepath.Dir(e.Exe), c); err == nil && !strings.HasPrefix(r, "..") {
+							c = r // relatif au dossier de RetroArch, comme LaunchBox l'écrit
+						}
+						ligne = `-L "` + c + `"`
+					} else {
+						rapport = append(rapport, fmt.Sprintf(tr("« %s » : cœur RetroArch inconnu. Choisissez de nouveau le cœur de « %s » dans LaunchBox : Tools, Manage, Emulators, « %s ».",
+							"\"%s\": unknown RetroArch core. Choose the core for \"%s\" again in LaunchBox: Tools, Manage, Emulators, \"%s\"."), titre, plateforme, titre))
+					}
+				}
+				n = fixerChamp(n, "CommandLine", ligne)
 			}
 			texte = strings.Replace(texte, x, n, 1)
 		}
@@ -91,14 +112,21 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 				idOrig = champ(o, "ID")
 			}
 		}
+		restaure, garde := false, false // origine de nouveau par défaut ; émulateur modifié sur place resté par défaut
 		for _, p := range blocPlateformeLB.FindAllString(texte, -1) {
 			if champ(p, "Emulator") != id {
 				continue
 			}
-			if champ(p, "Default") == "true" {
+			defautSurPlace := false
+			for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
+				defautSurPlace = defautSurPlace || surPlace[champ(q, "Emulator")] && champ(q, "Platform") == champ(p, "Platform") && champ(q, "Default") == "true"
+			}
+			garde = garde || defautSurPlace
+			if champ(p, "Default") == "true" && !defautSurPlace {
 				for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
 					if idOrig != "" && champ(q, "Emulator") == idOrig && champ(q, "Platform") == champ(p, "Platform") {
 						texte = strings.Replace(texte, q, fixerChamp(q, "Default", "true"), 1)
+						restaure = true
 						break
 					}
 				}
@@ -106,13 +134,29 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 			texte = strings.Replace(texte, p, "", 1)
 		}
 		texte = strings.Replace(texte, b, "", 1)
-		if idOrig == "" {
-			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré. Son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox.",
-				"Removed the \"%s\" emulator. Its original emulator no longer exists, so choose a default emulator in LaunchBox."), unescape(champ(b, "Title"))))
-		} else {
+		switch {
+		case restaure:
 			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré, « %s » est de nouveau celui par défaut", "Removed the \"%s\" emulator. \"%s\" is the default again"),
 				unescape(champ(b, "Title")), unescape(titre)))
+		case idOrig == "" && !garde:
+			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré. Son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox.",
+				"Removed the \"%s\" emulator. Its original emulator no longer exists, so choose a default emulator in LaunchBox."), unescape(champ(b, "Title"))))
+		default:
+			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré.", "Removed the \"%s\" emulator."), unescape(champ(b, "Title"))))
 		}
+	}
+	defauts := map[string]int{}
+	var plateformes []string
+	for _, q := range blocPlateformeLB.FindAllString(texte, -1) {
+		if p := unescape(champ(q, "Platform")); champ(q, "Default") == "true" {
+			if defauts[p]++; defauts[p] == 2 {
+				plateformes = append(plateformes, p)
+			}
+		}
+	}
+	for _, p := range plateformes {
+		rapport = append(rapport, fmt.Sprintf(tr("%d émulateurs sont par défaut pour « %s ». Gardez-en un seul dans LaunchBox : Tools, Manage, Emulators.",
+			"%d emulators are the default for \"%s\". Keep only one in LaunchBox: Tools, Manage, Emulators."), defauts[p], p))
 	}
 	return texte, rapport
 }
