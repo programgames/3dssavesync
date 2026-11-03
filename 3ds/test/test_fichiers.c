@@ -130,6 +130,26 @@ int main(void)
                      !strcmp(c, "sdmc:/3ds/open_agb_firm/saves/X.sav"), "autre dossier (open_agb_firm) : gardé");
         verifier(chemin_sauvegarde(r, "", sous, "un nom bien trop long pour ce petit tampon", c, sizeof c) != 0, "chemin trop long : refusé");
     }
+    /* Copie de sécurité : jamais d'écrasement d'une copie de la même seconde */
+    {
+        char c[64];
+        mkdir("test-copies", 0777);
+        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.sav"),
+                 "première copie : nom-date.ext");
+        ecrire("test-copies/Pokemon-20261103-101500.sav", "a");
+        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-1.sav"),
+                 "copie de la même seconde : -1");
+        ecrire("test-copies/Pokemon-20261103-101500-1.sav", "b");
+        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "main", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500.main"),
+                 "autre extension : pas de collision");
+        verifier(!chemin_copie("test-copies", "Pokemon", "20261103-101500", "sav", c, sizeof c) && !strcmp(c, "test-copies/Pokemon-20261103-101500-2.sav"),
+                 "troisième copie : -2");
+        verifier(chemin_copie("test-copies", "un nom bien trop long pour ce petit tampon", "20261103-101500", "sav", c, sizeof c) != 0,
+                 "chemin trop long : refusé");
+        verifier(contient("test-copies/Pokemon-20261103-101500.sav", "a") && contient("test-copies/Pokemon-20261103-101500-1.sav", "b"),
+                 "copies existantes intactes");
+        remove("test-copies/Pokemon-20261103-101500.sav"), remove("test-copies/Pokemon-20261103-101500-1.sav"), remove("test-copies");
+    }
     printf("%s\n", echecs ? "ECHECS" : "fichiers : OK");
     return echecs != 0;
 }

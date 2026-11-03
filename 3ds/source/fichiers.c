@@ -117,6 +117,19 @@ fin:
     return r;
 }
 
+int chemin_copie(const char *dossier, const char *nom, const char *date, const char *ext, char *out, size_t n)
+{
+    FILE *f;
+    int i, r;
+    for (i = 0; i < 1000; i++) {
+        r = i ? snprintf(out, n, "%s/%s-%s-%d.%s", dossier, nom, date, i, ext) : snprintf(out, n, "%s/%s-%s.%s", dossier, nom, date, ext);
+        if (r < 0 || (size_t)r >= n) return -1;
+        if (!(f = fopen(out, "rb"))) return 0;
+        fclose(f);
+    }
+    return -1;
+}
+
 int chemin_sauvegarde(const char *roms, const char *saves, const char *dossier, const char *nom, char *out, size_t n)
 {
     size_t l = strlen(roms);

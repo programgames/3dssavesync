@@ -673,10 +673,9 @@ static int recuperer(jeu_t *j)
     if (existe) {
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(DOSSIER "/copies", 0777);
-        snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.%s", j->nom, date, j->systeme == SYS_3DS ? "main" : "sav");
-        if (access(copie, F_OK) == 0) /* même nom de ROM dans deux sous-dossiers, la même seconde : la Clé les sépare */
-            snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s-%s.%s", j->nom, date, j->cle, j->systeme == SYS_3DS ? "main" : "sav");
-        echec = lire_sauvegarde(j, &ancien, &n);
+        /* même nom de ROM dans deux sous-dossiers, la même seconde : -1, -2… (jamais d'écrasement d'une copie) */
+        echec = chemin_copie(DOSSIER "/copies", j->nom, date, j->systeme == SYS_3DS ? "main" : "sav", copie, sizeof copie);
+        if (!echec) echec = lire_sauvegarde(j, &ancien, &n);
         if (!echec) echec = ecrire_relu(copie, ancien, n); /* relue : une copie abîmée ne protège rien */
         if (echec) {
             free(ancien);
@@ -1930,11 +1929,11 @@ static int basculer(jeu_t *j)
     if (!confirmer(j->court, NULL, q, avert, action)) return 0;
     strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
     mkdir(DOSSIER "/copies", 0777);
-    snprintf(copie, sizeof copie, DOSSIER "/copies/%s-%s.sav", j->nom, date);
     mkdir("sdmc:/mGBA", 0777);
     mkdir(FORWARDERS, 0777);
     creer_dossier_de(j->sav_rom);
-    if (deplacer_sauvegarde(j->sav, vers_rom ? j->sav_rom : fwd, copie, vers_rom))
+    if (chemin_copie(DOSSIER "/copies", j->nom, date, "sav", copie, sizeof copie) ||
+        deplacer_sauvegarde(j->sav, vers_rom ? j->sav_rom : fwd, copie, vers_rom))
         dire(C_ROUGE, j->sav, T("%s : changement impossible, rien n'est perdu.", "%s: switch failed, nothing lost."), j->court);
     else
         dire(C_VERT, NULL, T("%s : se joue maintenant avec %s.", "%s: now played with %s."), j->court, vers_rom ? autre : T("le forwarder mGBA", "the mGBA forwarder"));

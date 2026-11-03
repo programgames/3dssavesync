@@ -33,6 +33,10 @@ int lance_depuis_sd(const char *argv0);
  * 0 si fait ; -1 sinon, sans rien perdre (au pire, dst.tmp reste). */
 int deplacer_sauvegarde(const char *src, const char *dst, const char *copie, int supprimer_src);
 
+/* Nom libre pour une copie de sécurité : dossier/nom-date.ext, sinon dossier/nom-date-1.ext, -2… (deux copies la même
+ * seconde, ou deux ROM de même nom). Une copie existante n'est jamais écrasée. 0 si trouvé et tient dans out, -1 sinon. */
+int chemin_copie(const char *dossier, const char *nom, const char *date, const char *ext, char *out, size_t n);
+
 /* Sauvegarde de la ROM nom (sans extension) rangée dans dossier (racine roms ou un de ses sous-dossiers, ADR 0015).
  * saves vide ou égal à roms : à côté de la ROM. saves = roms + "/saves" (TWiLight Menu++) : dans le dossier saves du
  * dossier de la ROM. Autre dossier (open_agb_firm, _nds/TWiLightMenu/saves) : toutes les ROM dans ce dossier.
