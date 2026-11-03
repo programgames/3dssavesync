@@ -12,6 +12,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -820,5 +821,24 @@ func TestClassify(t *testing.T) {
 	if len(questions) != 1 || !strings.Contains(questions[0], "3dssavesync n'est pas encore configuré. Ouvrez « 3dssavesync »") ||
 		!strings.Contains(questions[0], helpPage) {
 		t.Errorf("configuration absente : %q", questions)
+	}
+}
+
+// The English flag names are the documented ones; the French names of the first versions set the same value but stay
+// out of the help.
+func TestHiddenFlagAliases(t *testing.T) {
+	fl := flag.NewFlagSet("setup", flag.ContinueOnError)
+	text := fl.Bool("text", false, "text setup")
+	yes := fl.Bool("yes", false, "no question")
+	hiddenAliases(fl, map[string]string{"texte": "text", "oui": "yes"})
+	var help strings.Builder
+	fl.SetOutput(&help)
+	if err := fl.Parse([]string{"--texte", "-yes", "rom"}); err != nil || !*text || !*yes || fl.Arg(0) != "rom" {
+		t.Fatalf("--texte and -yes expected to set text and yes: %v %v %v %q", err, *text, *yes, fl.Args())
+	}
+	fl.Usage()
+	if h := help.String(); !strings.Contains(h, "-text") || !strings.Contains(h, "-yes") || strings.Contains(h, "texte") ||
+		strings.Contains(h, "oui") {
+		t.Errorf("help with the English names only expected:\n%s", h)
 	}
 }

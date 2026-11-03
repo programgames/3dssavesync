@@ -228,12 +228,12 @@ func cmdRestoreConsole(config string, args []string, yes bool) int {
 	return code
 }
 
-// cmdRestore: 3dssavesync restore [--oui] [<key> [<n>]]. Without a key, the server's games; without n, the Versions;
-// otherwise the Restore of Version n, after confirmation.
+// cmdRestore: 3dssavesync restore [--yes] [<key> [<n>]]. Without a key, the server's games; without n, the Versions;
+// otherwise the Restore of Version n, after confirmation. --yes may also come after the key (--oui: older name).
 func cmdRestore(config string, args []string, yes bool, q *Questions) (int, error) {
 	var rest []string
 	for _, a := range args {
-		if a == "--oui" || a == "-oui" {
+		if a == "--yes" || a == "-yes" || a == "--oui" || a == "-oui" {
 			yes = true
 		} else {
 			rest = append(rest, a)

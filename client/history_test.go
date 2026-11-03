@@ -137,6 +137,9 @@ func TestRestoreCommand(t *testing.T) {
 	if o, err := command("", "ADAF", "1", "--oui"); err != nil || !strings.Contains(o, "Version restaurée") || string(currentOf(s, "ADAF")) != "un" {
 		t.Errorf("--oui : restauration sans question attendue : %v\n%s", err, o)
 	}
+	if o, err := command("", "ADAF", "2", "--yes"); err != nil || !strings.Contains(o, "Version restaurée") || string(currentOf(s, "ADAF")) != "deux" {
+		t.Errorf("--yes: restore without a question expected: %v\n%s", err, o)
+	}
 	if _, err := command("", "ADAF", "9"); err == nil {
 		t.Error("numéro inconnu : erreur attendue")
 	}

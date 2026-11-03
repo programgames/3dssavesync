@@ -153,7 +153,7 @@ func cmdRepair(config string) (int, error) {
 	return 0, nil
 }
 
-// cmdUninstall runs 3dssavesync uninstall [--oui]: the uninstall (uninstall.go), after confirmation.
+// cmdUninstall runs 3dssavesync uninstall [--yes]: the uninstall (uninstall.go), after confirmation.
 func cmdUninstall(config string, yes bool) (int, error) {
 	openConsole()
 	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}

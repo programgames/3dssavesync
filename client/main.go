@@ -3,11 +3,11 @@
 //	3dssavesync run [--emulator <name>] <rom>            one game (frontends)
 //	3dssavesync run [--emulator <name>] --rom <rom> -- <command…>  wraps any command
 //	3dssavesync launch <name>                            all games of an emulator, then the emulator
-//	3dssavesync setup [--texte] (or no argument)         setup (browser, or console)
+//	3dssavesync setup [--text] [--no-browser] (or none)  setup (browser, or console)
 //	3dssavesync repair                                   redoes the frontend configuration
 //	3dssavesync serve                                    local server (local network, for the 3DS)
 //	3dssavesync tray                                     tray icon (and local server), at login
-//	3dssavesync restore [--oui] [<key> [<n>]]            makes an old Version the Current version again
+//	3dssavesync restore [--yes] [<key> [<n>]]            makes an old Version the Current version again
 //
 // Common option: --config <file> (default: <config folder>/3dssavesync/config.json).
 package main
@@ -89,6 +89,20 @@ var (
 	transport      = http.DefaultTransport
 )
 
+// hiddenAliases adds alias -> name flags that set the same value as name; the help lists only the names.
+func hiddenAliases(fl *flag.FlagSet, aliases map[string]string) {
+	help := flag.NewFlagSet(fl.Name(), flag.ContinueOnError)
+	fl.VisitAll(func(f *flag.Flag) { help.Var(f.Value, f.Name, f.Usage) })
+	fl.Usage = func() {
+		fmt.Fprintf(fl.Output(), "Usage of %s:\n", fl.Name())
+		help.SetOutput(fl.Output())
+		help.PrintDefaults()
+	}
+	for alias, name := range aliases {
+		fl.Var(fl.Lookup(name).Value, alias, "")
+	}
+}
+
 // runCommand waits for the command to end. Only a failed start counts: after an emulator crash,
 // the Upload must still happen.
 func runCommand(command []string) error {
@@ -115,12 +129,14 @@ func realMain(args []string) int {
 		args = []string{"setup"}
 	}
 	fl := flag.NewFlagSet(args[0], flag.ContinueOnError)
-	config := fl.String("config", defaultConfig(), "fichier de configuration")
-	emulator := fl.String("emulator", "", "émulateur de la configuration")
-	rom := fl.String("rom", "", "ROM, avec une commande après --")
-	text := fl.Bool("texte", false, "setup : assistant en texte dans une console, sans navigateur")
-	noBrowser := fl.Bool("sans-navigateur", false, "setup : affiche l'adresse de la page au lieu d'ouvrir le navigateur (SSH)")
-	yes := fl.Bool("oui", false, "restore, uninstall : sans question de confirmation")
+	config := fl.String("config", defaultConfig(), "configuration file")
+	emulator := fl.String("emulator", "", "emulator of the configuration")
+	rom := fl.String("rom", "", "ROM, with a command after --")
+	text := fl.Bool("text", false, "setup: text setup in a console, without a browser")
+	noBrowser := fl.Bool("no-browser", false, "setup: print the address of the page instead of opening the browser (SSH)")
+	yes := fl.Bool("yes", false, "restore, uninstall: no confirmation question")
+	// The French names of the first versions still work (shortcuts, scripts).
+	hiddenAliases(fl, map[string]string{"texte": "text", "sans-navigateur": "no-browser", "oui": "yes"})
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
