@@ -521,6 +521,9 @@ func (s *Session) envoyer(j *Jeu, l *Local, srv *Version) (bool, error) {
 	if st != 200 {
 		return false, &erreurHTTP{"PUT /saves/" + j.Cle, st}
 	}
+	if srv == nil && j.Nom != "" { // premier Envoi de ce jeu : le serveur n'a pas encore son nom (ADR 0018)
+		s.nommer(j)
+	}
 	s.listeLue = false // la liste n'a plus la Version courante de ce Jeu
 	return true, s.fixerBase(j.Cle, l.Hash)
 }

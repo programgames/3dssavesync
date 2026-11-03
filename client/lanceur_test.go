@@ -306,6 +306,8 @@ func TestLanceur(t *testing.T) {
 	verifier(run(rom) == 0, "code de sortie 0")
 	verifier(joue, "melonDS lancé")
 	verifier(hachage(courante("IRBF")) == hachage(v1), "le serveur a la Sauvegarde du PC")
+	_, o := api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"nom": "Pokemon Noire"`), "premier Envoi : le serveur connaît aussi le nom du jeu (ADR 0018)")
 	verifier(len(questions) == 0, "aucune question")
 	verifier(strings.Join(commandeLancee, "|") == "inutilise.exe|"+rom, "melonDS reçoit la ROM")
 
@@ -316,7 +318,7 @@ func TestLanceur(t *testing.T) {
 	run(rom)
 	verifier(hachage(courante("IRBF")) == hachage(v2), "le serveur a la Sauvegarde jouée")
 	verifier(len(historique("IRBF")) == 2, "l'Historique garde les 2 Versions")
-	_, o := api("GET", "/saves", nil, nil)
+	_, o = api("GET", "/saves", nil, nil)
 	verifier(strings.Contains(string(o), `"code": "IRBF"`) && strings.Contains(string(o), `"nom": "Pokemon Noire"`),
 		"le serveur connaît le nom du jeu (ADR 0018)")
 
@@ -558,6 +560,14 @@ func TestLanceur(t *testing.T) {
 	ecrire(t, filepath.Join(tmp, "gba", nomEm+".sav"), append(append([]byte{}, g1...), suite(1, 16)...))
 	run(emeraude)
 	verifier(hachage(courante("GBA-BPEF")) == hachage(g1), "le serveur a la SRAM d'Émeraude sous GBA-BPEF")
+
+	t.Log("Jeu neuf, sauvegarde créée pendant la partie : le premier Envoi donne aussi le nom (ADR 0018)")
+	reinitialiser()
+	neuf := romZip(t, "Radical Red", "Radical Red.gba", enteteGBA("ZZRR"))
+	partie = func() { ecrire(t, filepath.Join(tmp, "gba", "Radical Red.sav"), aleatoire(131072, 43)) }
+	run(neuf)
+	_, o = api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"code": "GBA-ZZRR"`) && strings.Contains(string(o), `"nom": "Radical Red"`), "le serveur connaît le nom du jeu neuf")
 
 	// --- 3DS (ADR 0009) -------------------------------------------------------------------
 	t.Log("3DS : Clé et dossier Azahar lus dans la ROM")
