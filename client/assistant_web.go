@@ -34,6 +34,7 @@ type AssistantWeb struct {
 	vu                   time.Time // dernier signe de vie de la page
 	fin                  chan struct{}
 	noms                 map[string]string // Clé -> nom de ROM, lu une fois (historique.go)
+	nomsLus              sync.Once
 }
 
 // Émulateur tel que la page l'affiche et le renvoie.
@@ -220,17 +221,18 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewDecoder(r.Body).Decode(&x)
 		reponse = a.aliasWeb(x.Nom, x.Systeme, x.Retirer)
-	case "api/jeux":
-		reponse = a.jeuxWeb()
-	case "api/versions", "api/restaurer":
+	case "api/jeux", "api/versions", "api/restaurer":
 		var x struct{ Cle, Fichier, Courant string }
 		json.NewDecoder(r.Body).Decode(&x)
 		func() { // lectures sur le réseau sans le verrou : la page (ping, autres onglets) reste servie pendant ce temps
 			a.verrou.Unlock()
 			defer a.verrou.Lock()
-			if chemin == "api/versions" {
+			switch chemin {
+			case "api/jeux":
+				reponse = a.jeuxWeb()
+			case "api/versions":
 				reponse = a.versionsWeb(x.Cle)
-			} else {
+			default:
 				reponse = a.restaurerWeb(x.Cle, x.Fichier, x.Courant)
 			}
 		}()

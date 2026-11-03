@@ -313,9 +313,7 @@ func (a *AssistantWeb) jeuxWeb() map[string]any {
 	if err != nil {
 		return map[string]any{"Erreur": texteErreur(err)}
 	}
-	if a.noms == nil {
-		a.noms = nomsRoms(s.cfg)
-	}
+	a.nomsLus.Do(func() { a.noms = nomsRoms(s.cfg) }) // hors du verrou de la page : deux appels peuvent arriver ensemble
 	jeux, err := s.jeuxServeur(a.noms)
 	if err != nil {
 		return map[string]any{"Erreur": texteErreur(err)}
