@@ -1951,10 +1951,14 @@ static int restore_version(const game_t *j, const entry_t *v)
     local_text(j, loc, sizeof loc);
     snprintf(q, sizeof q, "%s\t%s%s%s\n%s\t%s\n\n%s", T("Cette version", "This version"), when, has_progress ? "\n\t" : "", has_progress ? t : "",
              T("Sur la 3DS", "On the 3DS"), loc,
-             T("Elle redevient la version actuelle du serveur. Rien n'est effacé : l'actuelle reste dans l'historique. "
-               "Ensuite, 3dssavesync propose de la récupérer sur la 3DS, après une copie de sécurité de sa sauvegarde.",
-               "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
-               "Then 3dssavesync offers to download it to the 3DS, after a backup of its save."));
+             vc(j) ? T("Elle redevient la version actuelle du serveur. Rien n'est effacé : l'actuelle reste dans l'historique. "
+                       "La récupération sur la 3DS des jeux Virtual Console arrive dans une prochaine version.",
+                       "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
+                       "Downloading Virtual Console games to the 3DS comes in a later version.")
+                   : T("Elle redevient la version actuelle du serveur. Rien n'est effacé : l'actuelle reste dans l'historique. "
+                       "Ensuite, 3dssavesync propose de la récupérer sur la 3DS, après une copie de sécurité de sa sauvegarde.",
+                       "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
+                       "Then 3dssavesync offers to download it to the 3DS, after a backup of its save."));
     ok = confirm(T("Restaurer cette version ?", "Restore this version?"), j->short_name, q, NULL, T("Restaurer", "Restore"));
     if (ok) {
         char condition[100];
@@ -2018,6 +2022,7 @@ static void history_screen(game_t *j)
                              !version_cursor ? T("La version que les appareils récupèrent. Choisissez une version plus ancienne pour la restaurer.",
                                                  "The version the devices download. Choose an older one to restore it.")
                              : same ? T("Même contenu que la version actuelle : rien à restaurer.", "Same content as the current version: nothing to restore.")
+                                    : vc(j) ? T("\xEE\x80\x80 la remet en version actuelle sur le serveur.", "\xEE\x80\x80 makes it the current version on the server again.")
                                     : T("\xEE\x80\x80 la remet en version actuelle sur le serveur, puis propose de la récupérer sur la 3DS, après une copie de sécurité.",
                                         "\xEE\x80\x80 makes it the current version on the server again, then offers to download it to the 3DS, after a backup."));
         } else {
