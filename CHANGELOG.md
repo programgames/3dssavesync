@@ -2,6 +2,19 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.8.0] - Unreleased
+
+### Added
+
+- **Big game lists on the 3DS.** Tabs for All, To do, DS, GB, GBA and 3DS (L and R), page jumps (left and right), and a **Search** button on the touch screen. The search ignores accents: "pokemon" finds "Pokémon".
+- **List order** in the 3DS settings: to do first (as before), by name, or last played.
+- **Games page** in the PC settings (it was History): a filter per console, a sort by name or last save, and the date and device of each game's last save. The search ignores accents and matches every word.
+
+### Changed
+
+- The 3DS app has no game limit any more (it stopped at 512 ROMs), and you can tick up to 256 3DS games (64 before).
+- In the 3DS game choice, ticked games come first.
+
 ## [3.7.0] - Unreleased
 
 ### Added
@@ -120,7 +133,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...HEAD
+[3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.7.0
 [3.6.1]: https://github.com/programgames/3dssavesync/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/programgames/3dssavesync/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/programgames/3dssavesync/compare/v3.4.0...v3.5.0
