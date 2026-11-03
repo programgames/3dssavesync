@@ -122,7 +122,8 @@ func optionsLaunchBox(texte, dossierLB, exe string, systemes []string) string {
 		}
 		var options []string
 		ajouter := func(o string) {
-			if o = strings.TrimSpace(html.UnescapeString(o)); o != "" && !slices.Contains(options, o) {
+			// jamais le cœur RetroArch d'une plateforme (-L) : il irait à tous les systèmes
+			if o = strings.TrimSpace(html.UnescapeString(o)); o != "" && !slices.Contains(options, o) && !strings.Contains(" "+o, " -L ") {
 				options = append(options, o)
 			}
 		}

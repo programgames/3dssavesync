@@ -190,26 +190,45 @@ func TestAliasWeb(t *testing.T) {
 	}
 }
 
-// Page : « Arguments en plus » vide, proposé depuis l'émulateur LaunchBox d'origine ; jamais à la place d'une valeur
-// de config.json.
+// Page : « Arguments en plus » proposé depuis l'émulateur LaunchBox d'origine pour un émulateur trouvé, absent de
+// config.json ; jamais à la place d'une valeur de config.json, même vide ; jamais pour RetroArch ni NanoBoyAdvance.
 func TestAssistantWebOptionsLaunchBox(t *testing.T) {
 	maisonFactice(t)
 	detecterAvant := detecter
 	t.Cleanup(func() { detecter = detecterAvant })
-	detecter = func(string) []Trouve { return nil }
 	lb := filepath.Join(t.TempDir(), "LaunchBox")
-	ecrire(t, filepath.Join(lb, "Data", "Emulators.xml"), []byte(emulatorsXML))
 	melon := filepath.Join(lb, "Emulators", "MelonDS", "melonDS.exe")
-	ecrire(t, melon, []byte("exe"))
+	nba := filepath.Join(lb, "Emulators", "NBA", "NanoBoyAdvance.exe")
+	ra := filepath.Join(lb, "Emulators", "RetroArch", "retroarch.exe")
+	xml := strings.NewReplacer(`Emulators\Cemu\Cemu.exe`, `Emulators\NBA\NanoBoyAdvance.exe`, "</LaunchBox>",
+		"  <Emulator>\r\n    <ApplicationPath>Emulators\\RetroArch\\retroarch.exe</ApplicationPath>\r\n    <CommandLine>-f</CommandLine>\r\n    <ID>cccc</ID>\r\n  </Emulator>\r\n"+
+			"  <EmulatorPlatform>\r\n    <Emulator>cccc</Emulator>\r\n    <Platform>Nintendo Game Boy Advance</Platform>\r\n    <CommandLine>-L &quot;cores\\mgba_libretro.dll&quot;</CommandLine>\r\n  </EmulatorPlatform>\r\n</LaunchBox>").Replace(emulatorsXML)
+	ecrire(t, filepath.Join(lb, "Data", "Emulators.xml"), []byte(xml))
+	for _, x := range []string{melon, nba, ra, filepath.Join(filepath.Dir(ra), "cores", "mgba_libretro.dll")} {
+		ecrire(t, x, []byte("exe"))
+	}
 	config := filepath.Join(t.TempDir(), "config.json")
 	a := &AssistantWeb{config: config}
 	for _, c := range []struct {
-		enPlus  []string
+		emus    map[string]*Emulateur
+		trouve  Trouve
 		attendu string
-	}{{nil, "-f"}, {[]string{"-g"}, "-g"}} {
-		ecrireConfig(t, config, Config{Frontends: map[string]string{"launchbox": lb}, Emulateurs: map[string]*Emulateur{"melonds": {Exe: melon, ArgsEnPlus: c.enPlus}}})
+	}{
+		{map[string]*Emulateur{"melonds": {Exe: melon}}, Trouve{}, ""}, // vide enregistré : reste vide
+		{map[string]*Emulateur{"melonds": {Exe: melon, ArgsEnPlus: []string{"-g"}}}, Trouve{}, "-g"},
+		{nil, Trouve{Profil: "melonds", Exe: melon}, "-f"},
+		{nil, Trouve{Profil: "nanoboyadvance", Exe: nba}, ""},
+		{nil, Trouve{Profil: "retroarch", Exe: ra}, ""},
+	} {
+		detecter = func(string) []Trouve {
+			if c.trouve.Exe == "" {
+				return nil
+			}
+			return []Trouve{c.trouve}
+		}
+		ecrireConfig(t, config, Config{Frontends: map[string]string{"launchbox": lb}, Emulateurs: c.emus})
 		if e := a.etat().Emulateurs; len(e) != 1 || e[0].EnPlus != c.attendu {
-			t.Errorf("args_en_plus %q : %+v", c.enPlus, e)
+			t.Errorf("%v %+v : %+v", c.emus, c.trouve, e)
 		}
 	}
 }

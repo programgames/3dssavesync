@@ -442,7 +442,9 @@ func (a *AssistantWeb) etat() EtatWeb {
 		}
 		e.Emulateurs = append(e.Emulateurs, emuWeb(t.Profil, &Emulateur{Exe: t.Exe, Processus: t.Processus}, t.Source, !existeCfg))
 	}
-	// Arguments en plus vides : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ».
+	// Arguments en plus : proposés depuis l'émulateur LaunchBox d'origine (ex. -f), écrits par « Enregistrer ». Seulement
+	// pour un émulateur absent de config.json (une valeur vide enregistrée reste vide). Jamais pour RetroArch (le -L du
+	// cœur d'une plateforme irait à tous les systèmes) ni NanoBoyAdvance (la ROM doit rester le premier argument).
 	if o, err := os.ReadFile(filepath.Join(e.LaunchBox, "Data", "Emulators.xml")); e.LaunchBox != "" && err == nil {
 		for i := range e.Emulateurs {
 			x := &e.Emulateurs[i]
@@ -450,7 +452,7 @@ func (a *AssistantWeb) etat() EtatWeb {
 			for _, s := range x.Systemes {
 				systemes = append(systemes, s.Systeme)
 			}
-			if !x.Personnalise && x.Erreur == "" && x.EnPlus == "" {
+			if !x.Personnalise && x.Erreur == "" && x.EnPlus == "" && cfg.Emulateurs[x.Nom] == nil && x.Profil != "retroarch" && x.Profil != "nanoboyadvance" {
 				x.EnPlus = optionsLaunchBox(string(o), e.LaunchBox, x.Exe, systemes)
 			}
 		}

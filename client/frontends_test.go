@@ -247,6 +247,10 @@ func TestOptionsLaunchBox(t *testing.T) {
 	if o := optionsLaunchBox(plateforme, lb, melon, []string{"DS"}); o != "-f --plein-ecran" {
 		t.Errorf("options de l'émulateur et de la plateforme DS : %q", o)
 	}
+	coeur := strings.Replace(emulatorsXML, "<CommandLine />", `<CommandLine>-L &quot;cores\melonds_libretro.dll&quot;</CommandLine>`, 1)
+	if o := optionsLaunchBox(coeur, lb, melon, []string{"DS"}); o != "-f" {
+		t.Errorf("cœur RetroArch d'une plateforme repris : %q", o)
+	}
 	if o := optionsLaunchBox(plateforme, lb, melon, []string{"GB"}); o != "-f" {
 		t.Errorf("plateforme d'un autre système ignorée : %q", o)
 	}
