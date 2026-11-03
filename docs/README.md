@@ -19,5 +19,6 @@ New here? Start with the [README](../README.md): what 3dssavesync does and how t
 |---|---|
 | [Glossary](GLOSSARY.md) | one word per idea, with the French name used in the code |
 | [Design](design.md) | the sync rule, the server contract, the 3DS app |
-| [Decisions (ADRs)](adr/) | why each hard-to-reverse choice was made |
-| `research*.md`, `v3-plan.md` | research notes, in French |
+| [Decisions (ADRs)](adr/README.md) | why each hard-to-reverse choice was made |
+| [Working notes](notes/) | research and planning notes behind the decisions, mostly in French |
+| [Contributing](../CONTRIBUTING.md) | how to build and test each part, language and AI-use policy |

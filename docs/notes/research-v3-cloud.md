@@ -1,5 +1,7 @@
 # Recherche v3 — hébergement gratuit du Serveur (alternative à Docker)
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-01. Sources : pages officielles de tarifs et de docs, plus un test TLS réel fait depuis le PC le 2026-11-01.
 Légende : **NON VÉRIFIÉ** = pas de source primaire, source communautaire seulement, ou déduction sans test sur le matériel réel.
 

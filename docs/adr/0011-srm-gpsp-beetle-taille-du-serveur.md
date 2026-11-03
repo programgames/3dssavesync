@@ -1,6 +1,6 @@
 # gpSP and Beetle GBA: the SRAM size comes from the server Version
 
-The RetroArch cores gpSP and Beetle GBA write a fixed-size `.srm`, whatever the save type of the game (ticket #4, `docs/research-v3-emulateurs.md` §4.6, French):
+The RetroArch cores gpSP and Beetle GBA write a fixed-size `.srm`, whatever the save type of the game (ticket #4, `docs/notes/research-v3-emulateurs.md` §4.6, French):
 
 - gpSP: 131072 bytes (128 KiB). The SRAM is at the start; the rest keeps its original value (0xFF, or 0x00 if the loaded file was all 0x00).
 - Beetle GBA: 139264 bytes (0x22000). Flash and SRAM at the start, EEPROM at 0x20000. The function that guesses the size (`adjust_save_ram`) exists but is never called: the size does not change.

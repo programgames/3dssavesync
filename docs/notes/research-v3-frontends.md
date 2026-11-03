@@ -1,5 +1,7 @@
 # Recherche v3 : intégration de `3dssavesync` dans les frontends
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-01. Ce document regarde comment chaque frontend lance un émulateur. Le but : remplacer l'émulateur par `3dssavesync run <rom> [--emulator <profil>]`. L'outil synchronise la sauvegarde, lance le vrai émulateur, attend sa fin, puis envoie la sauvegarde.
 
 Règle de citation : chaque fait renvoie à une source primaire (documentation officielle, code source à un commit fixe, wiki officiel). La mention **NON VÉRIFIÉ** marque un fait sans source primaire. La mention **Constat local** marque un fait observé sur la machine de développement (fichiers de ce dépôt ou installation LaunchBox locale). Un constat local n'est pas une source primaire.

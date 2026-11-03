@@ -1,6 +1,6 @@
 # Three-way sync by Hash, never by date
 
-Each Client keeps a Base per Game and compares three Hashes: Local save (L), Current version (S), Base (B). File modification dates cannot be used: nds-bootstrap writes the sectors of the `.sav` without updating the FAT entry, so the `mtime` does not move when you play on the 3DS (see `docs/research.md`, part 1 §1, French), and the 3DS clock can be set by hand.
+Each Client keeps a Base per Game and compares three Hashes: Local save (L), Current version (S), Base (B). File modification dates cannot be used: nds-bootstrap writes the sectors of the `.sav` without updating the FAT entry, so the `mtime` does not move when you play on the 3DS (see `docs/notes/research.md`, part 1 §1, French), and the 3DS clock can be set by hand.
 
 | Case | State |
 |---|---|

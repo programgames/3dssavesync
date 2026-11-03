@@ -1,5 +1,7 @@
 # Research — Pokémon Virtual Console saves on 3DS
 
+> Working notes, kept for the record of design decisions.
+
 Date: 2026-11-02. Question: how can 3dssavesync sync the Pokémon Virtual Console (VC) games of a 3DS with mGBA on the PC?
 Method: reading of source code at fixed commits, 3dbrew, and the eShop title database. No code was run on a 3DS. No VC title was opened.
 
@@ -7,7 +9,7 @@ Legend:
 - **NOT FOUND** = no primary source found.
 - **inference** = conclusion drawn from the cited code or pages, not tested.
 
-Starting point: [ADR 0008](adr/0008-gb-gba-par-fichiers-sram-seule.md) (SRAM only, rejected VC injects), [ADR 0009](adr/0009-sauvegardes-3ds-natives.md) (native `/main` archives), [ADR 0010](adr/0010-trailer-d-horloge-par-reste-512.md) (clock Trailer = `size mod 512` in {16, 44, 48}), `3ds/source/titres3ds.c`, and the older notes in [research-v2.md](research-v2.md) §1b and §2 ("Injects GB/GBC VC").
+Starting point: [ADR 0008](../adr/0008-gb-gba-par-fichiers-sram-seule.md) (SRAM only, rejected VC injects), [ADR 0009](../adr/0009-sauvegardes-3ds-natives.md) (native `/main` archives), [ADR 0010](../adr/0010-trailer-d-horloge-par-reste-512.md) (clock Trailer = `size mod 512` in {16, 44, 48}), `3ds/source/titres3ds.c`, and the older notes in [research-v2.md](research-v2.md) §1b and §2 ("Injects GB/GBC VC").
 
 ## Pinned sources
 

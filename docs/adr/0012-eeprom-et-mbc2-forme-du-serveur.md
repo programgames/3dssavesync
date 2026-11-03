@@ -1,6 +1,6 @@
 # GBA EEPROM and GB MBC2: one single form on the server
 
-Two save types have a different file depending on the emulator, for the same data (tickets #7 and #8, `docs/research-eeprom-mbc2.md`, French). The Hash covers the SRAM (ADR 0008): without conversion, the 3DS and the PC see two versions, so a Conflict, and a file copied as is gives an unreadable game.
+Two save types have a different file depending on the emulator, for the same data (tickets #7 and #8, `docs/notes/research-eeprom-mbc2.md`, French). The Hash covers the SRAM (ADR 0008): without conversion, the 3DS and the PC see two versions, so a Conflict, and a file copied as is gives an unreadable game.
 
 - **GBA EEPROM** (512 bytes or 8 KiB): open_agb_firm writes the bytes in hardware order; mGBA reverses each 8-byte block.
 - **GB MBC2** (512 4-bit values): mGBA writes 256 bytes, two values per byte (even address in the low nibble); SameBoy, VBA-M and BGB 512 bytes, one value per byte; GameYob (TWiLight Menu++) 8 KiB, the first 512 bytes used.

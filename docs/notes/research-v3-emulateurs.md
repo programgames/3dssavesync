@@ -1,5 +1,7 @@
 # Recherche v3 — profils d'émulateurs pour le client PC (Go)
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-11-01. Méthode : lecture du code source à un commit figé, plus les pages officielles (BGB, NO$GBA, Emulicious, Flatpak, Qt, SDL). Aucun émulateur n'a été lancé. Rien n'a été installé.
 
 Légende :

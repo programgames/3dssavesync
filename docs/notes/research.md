@@ -1,5 +1,7 @@
 # Phase 0 — Recherche
 
+> Working notes (French), kept for the record of design decisions.
+
 Date : 2026-10-31. Sources primaires (code source à un commit fixé, docs officielles, 3dbrew, GBATEK).
 Légende : **NON VÉRIFIÉ** = aucune source primaire trouvée. « Déduit » = conclusion tirée du code, sans test sur matériel.
 
