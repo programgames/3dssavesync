@@ -56,6 +56,18 @@ int main(void)
     ecrire("test-titres.ini", "");
     verifier(titres_lire("test-titres.ini", t, MAX_TITRES) == 0, "fichier vide : aucun jeu 3DS (tout décoché)");
 
+    /* Écriture sans perte (remplacer_fichier) : .tmp impossible à écrire, l'ancien titres.ini reste entier */
+    ecrire("test-titres.ini", "00040000000EC300=Jeu a moi\n");
+    mkdir("test-titres.ini.tmp", 0777);
+    verifier(titres_ecrire("test-titres.ini", t, 0) != 0 && contient("test-titres.ini", "00040000000EC300=Jeu a moi\n"),
+             "écriture impossible : ancien titres.ini intact");
+    remove("test-titres.ini.tmp");
+    /* Coupure entre le retrait de titres.ini et le renommage : le .tmp, vérifié, est lu */
+    remove("test-titres.ini");
+    ecrire("test-titres.ini.tmp", "00040000000EC300=Jeu a moi\n");
+    verifier(titres_lire("test-titres.ini", t, MAX_TITRES) == 1 && t[0].id == 0x00040000000EC300ULL, "titres.ini absent : titres.ini.tmp lu");
+    remove("test-titres.ini.tmp");
+
     /* Reprise de l'ancien dossier */
     remove("test-ancien/config.ini"), remove("test-ancien/base.ini"), remove("test-nouveau/config.ini"), remove("test-nouveau/base.ini");
     mkdir("test-ancien", 0777);

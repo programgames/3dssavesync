@@ -15,10 +15,11 @@ typedef struct {
 /* Les 8 Pokémon 3DS (ADR 0009) : la liste quand titres.ini n'existe pas. */
 int titres_defaut(titre_t *t, int max);
 
-/* titres.ini : une ligne "0004000000055D00=Pokemon X" par jeu. Fichier absent : titres_defaut. Nombre de jeux. */
+/* titres.ini : une ligne "0004000000055D00=Pokemon X" par jeu. Fichier absent : titres.ini.tmp (coupure pendant
+ * titres_ecrire), puis titres_defaut. Nombre de jeux. */
 int titres_lire(const char *chemin, titre_t *t, int max);
 
-/* 0 si écrit. */
+/* Remplacement sans perte (remplacer_fichier). 0 si écrit. */
 int titres_ecrire(const char *chemin, const titre_t *t, int n);
 
 /* Index de id dans t, ou -1. */

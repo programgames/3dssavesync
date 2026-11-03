@@ -29,6 +29,10 @@ int titres_lire(const char *chemin, titre_t *t, int max)
     FILE *f = fopen(chemin, "r");
     char ligne[128];
     int n = 0;
+    if (!f) { /* coupure entre le retrait de l'ancien et le renommage (remplacer_fichier) : le .tmp est complet */
+        snprintf(ligne, sizeof ligne, "%s.tmp", chemin);
+        f = fopen(ligne, "r");
+    }
     if (!f) return titres_defaut(t, max);
     while (n < max && fgets(ligne, sizeof ligne, f)) {
         char *egal = strchr(ligne, '='), *fin;
@@ -48,12 +52,13 @@ int titres_lire(const char *chemin, titre_t *t, int max)
 
 int titres_ecrire(const char *chemin, const titre_t *t, int n)
 {
-    FILE *f = fopen(chemin, "w");
-    int i, ok;
-    if (!f) return -1;
-    for (i = 0; i < n; i++) fprintf(f, "%016llX=%s\n", t[i].id, t[i].nom);
-    ok = !ferror(f);
-    return fclose(f) == 0 && ok ? 0 : -1;
+    char texte[MAX_TITRES * 66]; /* "0004000000055D00=" + nom (47 au plus) + "\n" par jeu */
+    size_t l = 0;
+    int i;
+    if (n > MAX_TITRES) return -1;
+    for (i = 0; i < n; i++) l += snprintf(texte + l, sizeof texte - l, "%016llX=%s\n", t[i].id, t[i].nom);
+    /* .tmp écrit et relu, puis renommé : une coupure ne vide jamais titres.ini (titres_lire lit le .tmp au besoin) */
+    return remplacer_fichier(chemin, texte, l) ? -1 : 0;
 }
 
 int titres_index(const titre_t *t, int n, unsigned long long id)
