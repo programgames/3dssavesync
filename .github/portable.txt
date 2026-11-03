@@ -1,0 +1,7 @@
+3dssavesync - portable version / version portable
+
+EN: This file makes 3dssavesync portable. The settings (config.json), the log, the backup copies and the local server data stay in this folder, next to the program. The program is never copied elsewhere: LaunchBox, ES-DE and the shortcuts start it from this folder. Keep this folder writable.
+To go back to the normal mode, delete this file. The program then reads its settings from the user folder (the files in this folder do not move).
+
+FR : Ce fichier rend 3dssavesync portable. Les réglages (config.json), le journal, les copies de sécurité et les données du serveur local restent dans ce dossier, à côté du programme. Le programme n'est jamais copié ailleurs : LaunchBox, ES-DE et les raccourcis le lancent depuis ce dossier. Gardez ce dossier modifiable.
+Pour revenir au mode normal, supprimez ce fichier. Le programme lit alors ses réglages dans le dossier de l'utilisateur (les fichiers de ce dossier ne bougent pas).

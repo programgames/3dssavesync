@@ -125,3 +125,31 @@ func TestDesinstaller(t *testing.T) {
 		t.Errorf("rapport :\n%s", texte)
 	}
 }
+
+// Version portable : frontends et raccourcis défaits, mais le programme et son dossier restent ; le rapport le nomme.
+func TestDesinstallerPortable(t *testing.T) {
+	maisonFactice(t)
+	dossier := filepath.Join(t.TempDir(), "3dssavesync")
+	exe := filepath.Join(dossier, "3dssavesync.exe")
+	ecrire(t, exe, []byte("exe"))
+	ecrire(t, filepath.Join(dossier, "portable.txt"), []byte("portable"))
+	executableAvant := executable
+	t.Cleanup(func() { executable = executableAvant })
+	executable = func() string { return exe }
+	var raccourcisPour []string
+	programme := false
+	retirerRaccourcis = func(l string) ([]string, error) { raccourcisPour = append(raccourcisPour, l); return nil, nil }
+	retirerProgramme = func(string) error { programme = true; return nil }
+
+	rapport, err := desinstaller(&Config{Lanceur: exe}, filepath.Join(dossier, "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	texte := strings.Join(rapport, "\n")
+	if programme || !existe(exe) {
+		t.Error("version portable : le programme ne doit pas partir à la Corbeille")
+	}
+	if strings.Join(raccourcisPour, "|") != exe || !strings.Contains(texte, "Supprimez ce dossier vous-même") || !strings.Contains(texte, dossier) {
+		t.Errorf("raccourcis %q, rapport :\n%s", raccourcisPour, texte)
+	}
+}
