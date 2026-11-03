@@ -316,6 +316,9 @@ func TestLanceur(t *testing.T) {
 	run(rom)
 	verifier(hachage(courante("IRBF")) == hachage(v2), "le serveur a la Sauvegarde jouée")
 	verifier(len(historique("IRBF")) == 2, "l'Historique garde les 2 Versions")
+	_, o := api("GET", "/saves", nil, nil)
+	verifier(strings.Contains(string(o), `"code": "IRBF"`) && strings.Contains(string(o), `"nom": "Pokemon Noire"`),
+		"le serveur connaît le nom du jeu (ADR 0018)")
 
 	t.Log("La 3DS a joué : Récupération avec Copie de sécurité")
 	reinitialiser()

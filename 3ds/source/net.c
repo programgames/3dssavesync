@@ -64,7 +64,7 @@ static long requete(const char *url, const char *jeton, const char *condition,
     entetes = curl_slist_append(NULL, auth);
     entetes = curl_slist_append(entetes, "X-Client: 3ds");
     if (envoi) {
-        entetes = curl_slist_append(entetes, condition);
+        if (condition) entetes = curl_slist_append(entetes, condition);
         entetes = curl_slist_append(entetes, "Content-Type: application/octet-stream");
         entetes = curl_slist_append(entetes, "Expect:");
         curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "PUT");

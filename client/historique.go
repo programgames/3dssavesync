@@ -45,7 +45,8 @@ var reVersion = regexp.MustCompile(`^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-
 
 func cleValide(cle string) bool { return reCode.MatchString("/saves/" + cle) }
 
-// jeuxServeur : les jeux du serveur, avec le nom connu (titres 3DS, ou ROM trouvée par nomsRoms).
+// jeuxServeur : les jeux du serveur, avec le nom connu (titres 3DS, ROM trouvée par nomsRoms, ou nom donné au serveur
+// par un Client : ADR 0018).
 func (s *Session) jeuxServeur(noms map[string]string) ([]JeuHisto, error) {
 	st, o, err := s.api("GET", "/saves", nil, nil)
 	if err != nil {
@@ -63,6 +64,9 @@ func (s *Session) jeuxServeur(noms map[string]string) ([]JeuHisto, error) {
 		nom := noms[v.Code]
 		if strings.HasPrefix(v.Code, "3DS-") {
 			nom = titres3DS[v.Code[4:]]
+		}
+		if nom == "" {
+			nom = v.Nom
 		}
 		jeux = append(jeux, JeuHisto{v.Code, nom})
 	}

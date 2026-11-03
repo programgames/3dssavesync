@@ -152,6 +152,18 @@ class ApiTest(unittest.TestCase):
         self.assertEqual([v["client"] for v in histo], ["3ds", "pc"])
         self.assertEqual(self.requete("GET", f"/saves/{self.cle}/history/{histo[0]['version']}")[2], b"v1")
 
+    def test_nom_du_jeu_dans_la_liste(self):
+        self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", "Pokémon Bleue".encode())[0], 404)  # jeu sans Version
+        self.envoyer()
+        self.assertNotIn("nom", {j["code"]: j for j in self.json("/saves")}[self.cle])
+        self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", "Pokémon Bleue".encode())[0], 204)
+        self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", " Pokémon - Version Bleue ".encode())[0], 204)
+        self.assertEqual({j["code"]: j for j in self.json("/saves")}[self.cle]["nom"], "Pokémon - Version Bleue")
+        for mauvais in (b"", b"   ", b"a\nb", b"\xff", "x".encode() * 201):
+            self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", mauvais)[0], 400, mauvais)
+        self.assertEqual(self.requete("PUT", f"/saves/{self.cle}/name", b"x", jeton="faux")[0], 401)
+        self.assertEqual(len(self.json(f"/saves/{self.cle}/history")), 1)  # le nom ne crée pas de Version
+
     def test_envoi_identique_ne_cree_pas_de_version(self):
         self.envoyer()
         statut, entetes, _ = self.envoyer(If_Match=f'"{HASH}"')

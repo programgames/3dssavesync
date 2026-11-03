@@ -188,6 +188,7 @@ type Version struct {
 	Taille int64  `json:"taille"`
 	Client string `json:"client"`
 	Age    *int64 `json:"age"`
+	Nom    string `json:"nom"` // nom du jeu donné par un Client (ADR 0018) ; vide sur un serveur plus ancien
 }
 
 type Local struct {
@@ -689,6 +690,19 @@ func resoudreConflit(j *Jeu, l *Local, srv *Version, distant []byte, apres bool)
 	return rien
 }
 
+// nommer : donne au serveur le nom du jeu, pour l'Historique (ADR 0018). Un échec ne gêne pas la Synchronisation : il
+// est noté, et le nom est noté comme connu pour ne pas réessayer pendant cette session.
+func (s *Session) nommer(j *Jeu) {
+	if st, _, err := s.api("PUT", "/saves/"+j.Cle+"/name", []byte(j.Nom), nil); err != nil || st != 204 {
+		s.journal(fmt.Sprintf("nom de %s non envoyé : %d %v", j.Cle, st, err))
+	}
+	for i := range s.liste {
+		if s.liste[i].Code == j.Cle {
+			s.liste[i].Nom = j.Nom
+		}
+	}
+}
+
 // Une passe de Synchronisation. annule = l'utilisateur ne veut pas jouer.
 func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 	for essai := 0; essai < 3; essai++ { // un 412 relance une passe avec la nouvelle Version courante
@@ -698,6 +712,9 @@ func (s *Session) syncJeu(j *Jeu, apres bool) (annule bool, err error) {
 		srv, err := s.versionServeur(j.Cle)
 		if err != nil {
 			return false, err
+		}
+		if srv != nil && srv.Nom == "" && j.Nom != "" {
+			s.nommer(j)
 		}
 		l, err := lireLocal(j, srv)
 		if err != nil {

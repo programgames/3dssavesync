@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 )
 
 const cleServeur = `([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})`
@@ -30,6 +32,7 @@ const cleServeur = `([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|
 var (
 	reCode       = regexp.MustCompile(`^/saves/` + cleServeur + `$`)
 	reHistorique = regexp.MustCompile(`^/saves/` + cleServeur + `/history(/.*)?$`)
+	reNom        = regexp.MustCompile(`^/saves/` + cleServeur + `/name$`)
 	reClient     = regexp.MustCompile(`^[a-z0-9]{1,16}$`)
 )
 
@@ -118,7 +121,12 @@ func (s *Serveur) get(w http.ResponseWriter, r *http.Request) {
 		entrees, _ := os.ReadDir(s.data)
 		for _, e := range entrees {
 			if v := s.courante(e.Name()); e.IsDir() && v != "" {
-				l = append(l, s.info(e.Name(), v))
+				i := s.info(e.Name(), v)
+				if nom, err := os.ReadFile(filepath.Join(s.data, e.Name(), "nom.txt")); err == nil {
+					n, _ := json.Marshal(string(nom))
+					i = strings.TrimSuffix(i, "}") + `, "nom": ` + string(n) + "}"
+				}
+				l = append(l, i)
 			}
 		}
 		liste(l)
@@ -168,6 +176,10 @@ func (s *Serveur) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.autorise(w, r) {
+		return
+	}
+	if m := reNom.FindStringSubmatch(r.URL.Path); m != nil {
+		s.nommer(w, m[1], corps)
 		return
 	}
 	m := reCode.FindStringSubmatch(r.URL.Path)
@@ -222,6 +234,32 @@ func (s *Serveur) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	repondre(w, 200, nil, `"`+h+`"`)
+}
+
+// Nom du jeu (nom de la ROM ou titre 3DS), comme server.py : seulement pour un jeu qui a déjà une Version.
+func (s *Serveur) nommer(w http.ResponseWriter, cle string, corps []byte) {
+	nom := strings.TrimSpace(string(corps))
+	if !utf8.ValidString(nom) || nom == "" || utf8.RuneCountInString(nom) > 200 ||
+		strings.ContainsFunc(nom, func(c rune) bool { return c < ' ' || c == 0x7f }) {
+		repondre(w, 400, nil, "")
+		return
+	}
+	if s.courante(cle) == "" {
+		repondre(w, 404, nil, "")
+		return
+	}
+	s.verrou.Lock()
+	defer s.verrou.Unlock()
+	tmp := filepath.Join(s.data, cle, "nom.txt.tmp")
+	err := os.WriteFile(tmp, []byte(nom), 0o644)
+	if err == nil {
+		err = os.Rename(tmp, filepath.Join(s.data, cle, "nom.txt"))
+	}
+	if err != nil {
+		repondre(w, 500, nil, "")
+		return
+	}
+	repondre(w, 204, nil, "")
 }
 
 // Adresses IPv4 du PC sur le réseau local : celles à entrer sur la 3DS, la plus probable en tête.

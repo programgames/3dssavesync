@@ -63,11 +63,12 @@ All require `Authorization: Bearer <token>` (compared with `hmac.compare_digest`
 
 | Route | Response |
 |---|---|
-| `GET /saves` | `200` JSON `[{code, hash, taille, date, client}]`, one entry per Game (Current version) |
+| `GET /saves` | `200` JSON `[{code, hash, taille, date, client, nom?}]`, one entry per Game (Current version); `nom` if a Client named the game ([ADR 0018](adr/0018-nom-du-jeu-sur-le-serveur.md)) |
 | `GET /saves/<code>` | `200` raw bytes + `ETag: "<hash>"`, or `404` |
 | `PUT /saves/<code>` | see below |
 | `GET /saves/<code>/history` | `200` JSON `[{version, hash, taille, date, client}]`, oldest first |
 | `GET /saves/<code>/history/<version>` | `200` raw bytes of one Version, or `404` |
+| `PUT /saves/<code>/name` | body = game name (UTF-8, 1-200 characters): `204`, `404` without Version, `400` invalid name |
 
 ### `PUT /saves/<code>`
 

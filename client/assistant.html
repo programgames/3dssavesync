@@ -419,7 +419,7 @@ async function jeux() {
   const vide = texte("option", T.choisirJeu);
   vide.value = "";
   $("jeu").replaceChildren(vide, ...r.Jeux.map(j => {
-    const o = texte("option", j.Nom ? j.Nom + " (" + j.Cle + ")" : j.Cle);
+    const o = texte("option", j.Nom || j.Cle); // la Clé seulement si aucun nom n'est connu
     o.value = j.Cle;
     return o;
   }));

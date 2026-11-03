@@ -51,6 +51,7 @@ typedef struct {
     char hash_local[65], hash_serveur[65], date[17], client[17];
     long age; /* secondes depuis la Version courante (horloge du serveur), -1 si inconnu */
     int a_local, a_serveur;
+    int a_nom;      /* le serveur connaît le nom du jeu (ADR 0018) */
     int vide; /* SRAM locale vierge : comptée comme absente (cle.h) */
     time_t modif;   /* DS, GB, GBA : date du fichier (horloge de la 3DS) ; 0 si inconnue */
     int a_partie;   /* Pokémon : temps de jeu et dresseur lus (pokemon.h) */
@@ -458,6 +459,7 @@ static int lire_serveur(void)
     for (p = strstr(corps, "\"code\": \""); p; p = strstr(p + 1, "\"code\": \"")) {
         const char *h = strstr(p, "\"hash\": \""), *t = strstr(p, "\"taille\": ");
         const char *d = strstr(p, "\"date\": \""), *c = strstr(p, "\"client\": \""), *a = strstr(p, "\"age\": ");
+        const char *n = strstr(p, "\"nom\": \""), *suivant = strstr(p + 1, "\"code\": \"");
         char cle[CLE_MAX] = "";
         sscanf(p + 9, "%31[^\"]", cle);
         for (i = 0; i < nb_jeux && strcmp(jeux[i].cle, cle); i++);
@@ -468,8 +470,18 @@ static int lire_serveur(void)
         if (c) sscanf(c + 11, "%16[^\"]", jeux[i].client);
         jeux[i].age = a ? strtol(a + 7, NULL, 10) : -1;
         jeux[i].a_serveur = 1;
+        jeux[i].a_nom = n && (!suivant || n < suivant);
     }
     free(corps);
+    /* Nom de chaque jeu pour l'Historique du PC (ADR 0018), une fois par jeu. Arrêt au premier refus : un serveur plus
+     * ancien ne connaît pas cette adresse, et la liste reste lisible sans les noms. */
+    for (i = 0; i < nb_jeux; i++) {
+        if (!jeux[i].a_serveur || jeux[i].a_nom) continue;
+        progression(i + 1, nb_jeux, T("Envoi des noms des jeux\n%s", "Sending game names\n%s"), jeux[i].court);
+        snprintf(url, sizeof url, "%s/saves/%.31s/name", cfg.url, jeux[i].cle); /* Clé : 31 caractères au plus (CLE_MAX) */
+        if (net_put(url, cfg.jeton, NULL, jeux[i].nom, strlen(jeux[i].nom)) != 204) break;
+        jeux[i].a_nom = 1;
+    }
     return 0;
 }
 

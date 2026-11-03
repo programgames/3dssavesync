@@ -2,7 +2,7 @@
 
 Variables d'environnement (préfixe NDSSYNC_ d'avant la v3, gardé pour les installations existantes) : NDSSYNC_TOKEN (obligatoire), NDSSYNC_DATA (défaut /data), NDSSYNC_PORT (défaut 8080).
 Une Version = data/<code>/<seq>-<date>-<client>-<hash>.sav ; la Version courante a le plus grand <seq>.
-Rien n'est jamais supprimé ni réécrit.
+Rien n'est jamais supprimé ni réécrit, sauf data/<code>/nom.txt : le nom du jeu donné par un Client, pour l'Historique.
 """
 import calendar
 import hashlib
@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 CLE = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})"
 CODE = re.compile(rf"^/saves/{CLE}$")
 HISTORIQUE = re.compile(rf"^/saves/{CLE}/history(/.*)?$")
+NOM = re.compile(rf"^/saves/{CLE}/name$")
 CLIENT = re.compile(r"^[a-z0-9]{1,16}$")
 TAILLE_MAX = 64 * 1024 * 1024  # plus grande mémoire de sauvegarde DS connue
 VERROU = threading.Lock()  # ponytail: verrou global, suffit pour 2 Clients
@@ -44,6 +45,13 @@ def creer(adresse, data, jeton):
         age = int(time.time() - calendar.timegm(time.strptime(date, "%Y%m%dT%H%M%SZ")))
         return {"code": code, "version": version, "hash": h, "taille": taille, "date": date, "client": client, "age": age}
 
+    def avec_nom(code, element):
+        try:
+            with open(os.path.join(data, code, "nom.txt"), encoding="utf-8") as f:
+                return {**element, "nom": f.read()}
+        except OSError:
+            return element
+
     class Handler(BaseHTTPRequestHandler):
         def autorise(self):
             recu = self.headers.get("Authorization", "")
@@ -65,7 +73,7 @@ def creer(adresse, data, jeton):
                 return
             if self.path == "/saves":
                 codes = sorted(os.listdir(data)) if os.path.isdir(data) else []
-                return self.json([info(c, courante(c)) for c in codes if courante(c)])
+                return self.json([avec_nom(c, info(c, courante(c))) for c in codes if courante(c)])
             m = HISTORIQUE.match(self.path)
             if m and not m[2]:
                 return self.json([info(m[1], v) for v in versions(m[1])])
@@ -95,6 +103,9 @@ def creer(adresse, data, jeton):
                 return self.repondre(400)
             if not self.autorise():
                 return
+            m = NOM.match(self.path)
+            if m:
+                return self.nommer(m[1], corps)
             m = CODE.match(self.path)
             if not m:
                 return self.repondre(400)
@@ -121,6 +132,23 @@ def creer(adresse, data, jeton):
                     os.fsync(f.fileno())  # une Version acceptée doit survivre à une coupure
                 os.replace(tmp, os.path.join(dossier, nom))
             self.repondre(200, ETag=f'"{h}"')
+
+        def nommer(self, code, corps):
+            """Nom du jeu (nom de la ROM ou titre 3DS) : seulement pour un jeu qui a déjà une Version."""
+            try:
+                nom = corps.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                nom = ""
+            if not 0 < len(nom) <= 200 or any(c < " " or c == "" for c in nom):
+                return self.repondre(400)
+            if not courante(code):
+                return self.repondre(404)
+            with VERROU:
+                tmp = os.path.join(data, code, "nom.txt.tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    f.write(nom)
+                os.replace(tmp, os.path.join(data, code, "nom.txt"))
+            self.repondre(204)
 
     return ThreadingHTTPServer(adresse, Handler)
 
