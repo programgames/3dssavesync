@@ -23,6 +23,7 @@ import io.github.programgames.savesync.core.Syncer
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
+import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.splitDuplicates
@@ -212,9 +213,9 @@ object App {
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
             for ((s, f) in e.systems) {
                 try {
-                    scan(e, s, f, found)
+                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found)
                 } catch (t: Throwable) {
-                    problems += "${e.label} ${s.name}: $t"
+                    problems += text(R.string.folder_problem, "${e.label} ${s.name}: $t")
                 }
             }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })
@@ -231,7 +232,6 @@ object App {
 
     // scan walks the ROM folder of one System (subfolders too, hidden ones skipped) and pairs each ROM with its Save.
     private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>) {
-        if (s == System.N3DS) return scan3DS(e, f, out)
         val romTree = (f.roms ?: return).toUri()
         val saveTree = if (f.nextToRom) romTree else (f.saves ?: return).toUri()
         val format = e.format(s)
@@ -261,20 +261,31 @@ object App {
     }
 
     // scan3DS finds the 3DS Pokémon games in the Azahar user folder (or its sdmc folder): the title ID is in the path,
-    // no ROM is read. A game never started in Azahar has no folder: it is not listed (ADR 0009).
-    private fun scan3DS(e: Emulator, f: Folders, out: MutableList<Pair<Entry, String>>) {
+    // no ROM is read. A game never started in Azahar has no folder: listed when its format is known, as on the PC (its
+    // first Download creates the folder, ADR 0009). No Nintendo 3DS/<id0>/<id1> folder: Azahar was never set up there.
+    private fun scan3DS(e: Emulator, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
         val tree = (f.saves ?: return).toUri()
         fun child(parent: String?, name: String) =
             parent?.let { p -> children(resolver, tree, p).find { it.folder && it.name.equals(name, ignoreCase = true) }?.id }
         val root = rootId(tree)
         val zeros = "0".repeat(32)
-        val title = listOf("Nintendo 3DS", zeros, zeros, "title").fold(child(root, "sdmc") ?: root, ::child) ?: return
+        val user = listOf("Nintendo 3DS", zeros, zeros).fold(child(root, "sdmc") ?: root, ::child)
+            ?: return run { problems += text(R.string.azahar_not_set_up, e.title()) }
         for ((id, name) in titles3DS) {
             val lo = id.lowercase()
-            val dir = listOf(lo.substring(0, 8), lo.substring(8), "data", "00000001").fold(title, ::child) ?: continue
-            val main = children(resolver, tree, dir).find { !it.folder && it.name == "main" }
-            val g = Game(System.N3DS, "3DS-$id", name, SafFile(resolver, tree, dir, "main", main?.id, main?.modified), e.format(System.N3DS), e.id)
-            out += Entry(e, System.N3DS, name, id, g) to "$tree|$dir|main"
+            val path = listOf("title", lo.substring(0, 8), lo.substring(8), "data", "00000001")
+            var dir = user
+            var found = 0 // folders of path that exist
+            for (n in path) dir = child(dir, n)?.also { found++ } ?: break
+            val g = if (found == path.size) {
+                val main = children(resolver, tree, dir).find { !it.folder && it.name == "main" }
+                Game(System.N3DS, "3DS-$id", name, SafFile(resolver, tree, dir, "main", main?.id, main?.modified), e.format(System.N3DS), e.id)
+            } else {
+                if (formats3DS[id] == null) continue // unknown format: never created, as on the PC
+                val file = SafFile(resolver, tree, null, "main", null, path = (user.substringAfter(':') + "/" + path.joinToString("/")))
+                Game(System.N3DS, "3DS-$id", name, file, e.format(System.N3DS), e.id, SafArchive(resolver, tree, dir, path.subList(found, path.size - 1), file))
+            }
+            out += Entry(e, System.N3DS, name, id, g) to "$tree|3DS-$id"
         }
     }
 }

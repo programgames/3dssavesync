@@ -28,7 +28,7 @@ interface SaveFile {
 }
 
 // Game is a Key and its Save file in one emulator of this phone. emulator: id of the emulator entry, which owns the
-// Bases and the folder of the Backup copies.
+// Bases and the folder of the Backup copies. archive: set for a 3DS game never started in Azahar (no folder yet).
 data class Game(
     val system: System,
     val key: String,
@@ -36,7 +36,26 @@ data class Game(
     val file: SaveFile,
     val format: Format,
     val emulator: String,
+    val archive: NewArchive? = null,
 )
+
+// formats3DS: Azahar's 00000001.metadata of a 3DS game, as client/sync.go (ADR 0009): ArchiveFormatInfo (total_size,
+// directory count, file count as u32 LE, duplicate_data, 3 padding bytes). Read on Moon and Ultra Sun, same value
+// assumed for the 8 Pokémon games. A 3DS game without a known format is never created: it could reformat its save.
+private val pokemonFormat = byteArrayOf(0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0) // 0x40000 bytes, 1 dir, 1 file, duplicated
+val formats3DS: Map<String, ByteArray> = titles3DS.keys.associateWith { pokemonFormat }
+
+// NewArchive is the Azahar folder of a 3DS game never started: title/<high>/<low>/data/00000001 is missing (ADR 0009).
+// Its main file is the Save file of the Game. SAF on the phone, memory in the tests.
+interface NewArchive {
+    fun exists(): Boolean // data/00000001 is there now: Azahar started the game since the listing
+
+    fun hasMetadata(): Boolean // data/00000001.metadata is there
+
+    fun create(metadata: ByteArray) // the missing folders down to data/, the .metadata (read back), then data/00000001
+
+    fun undo(): Boolean // deletes main and what create made, and nothing else; false: something remains
+}
 
 // Local is the Local save: its Version covers the SRAM only (decode).
 class Local(val version: Version, val raw: ByteArray, val sram: ByteArray, val blank: Boolean)
@@ -44,7 +63,8 @@ class Local(val version: Version, val raw: ByteArray, val sram: ByteArray, val b
 fun readLocal(g: Game, srv: Version?): Local? {
     val raw = g.file.read() ?: return null
     val sram = decode(g.system, g.format, raw, srv)
-    return Local(Version(sha256(sram), sram.size.toLong()), raw, sram, g.system != System.N3DS && blank(sram)) // a 3DS main is never blank
+    // A 3DS main is never blank, except an empty one: a failed first write leaves it so, and it must not be uploaded.
+    return Local(Version(sha256(sram), sram.size.toLong()), raw, sram, (g.system != System.N3DS || raw.isEmpty()) && blank(sram))
 }
 
 // seen is the Local save as the State sees it: a Blank save counts as absent, unless the server has the same Save.
@@ -123,7 +143,7 @@ data class Summary(
 )
 
 // writeProblems: a write on this phone failed, so the storage may be at fault for the next games too.
-private val writeProblems = setOf(Problem.BACKUP, Problem.WRITE, Problem.RESTORE, Problem.NOT_WRITTEN)
+private val writeProblems = setOf(Problem.BACKUP, Problem.WRITE, Problem.RESTORE, Problem.NOT_WRITTEN, Problem.PARTIAL)
 
 // Choice on a Conflict, for the Current version the user saw: if the server changed since, nothing is done.
 data class Choice(val keepPhone: Boolean, val serverHash: String)
@@ -257,7 +277,8 @@ class Syncer(
         if (sha256(decode(g.system, g.format, content, srv)) != srv.hash) {
             throw FormatException("${g.file.location}: a ${content.size}-byte file wouldn't give back the ${o.size}-byte save")
         }
-        replace(g, l?.raw, content, backups)
+        val a = g.archive
+        if (a != null && !a.exists()) createArchive(g, a, content, backups) else replace(g, l?.raw, content, backups)
         bases.set(g.emulator, g.key, srv.hash)
     }
 }
@@ -293,6 +314,27 @@ fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups): Fil
     }.getOrDefault(false)
     if (restored) throw SyncException(Problem.WRITE, "$why\nbackup copy: $copy")
     throw SyncException(Problem.RESTORE, "$why\nbackup copy: $copy")
+}
+
+// createArchive writes the first save of a 3DS game never started in Azahar, like download in client/sync.go: its folder
+// and a .metadata of known format, then main through replace (no old save: no Backup copy). Never over an existing
+// .metadata. On a failure, what this call created is deleted again: a folder with a .metadata and no full main would be
+// a broken save for Azahar, while no folder is a game never started, which Azahar formats on its first start.
+fun createArchive(g: Game, a: NewArchive, content: ByteArray, backups: Backups) {
+    val format = formats3DS[g.key.removePrefix("3DS-")]
+    if (format == null || a.hasMetadata()) {
+        throw SyncException(Problem.NOT_STARTED, "${g.file.location}: no folder, ${if (format == null) "format unknown" else "00000001.metadata already there"}")
+    }
+    try {
+        a.create(format)
+        replace(g, null, content, backups)
+    } catch (e: Exception) {
+        // CHANGED: a main appeared in the new folder (the emulator wrote it): it is not this app's, so it stays.
+        if (e is SyncException && e.problem == Problem.CHANGED) throw e
+        if (runCatching { a.undo() }.getOrDefault(false)) throw e
+        val folder = g.file.location.substringBeforeLast('/')
+        throw SyncException(Problem.PARTIAL, "$e\n$folder (and 00000001.metadata next to it): created, couldn't be removed")
+    }
 }
 
 // splitDuplicates keeps the items alone for their Key and for their Save file; the others are Duplicates, never

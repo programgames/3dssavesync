@@ -56,7 +56,7 @@
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
     <string name="hint_retroarch">RetroArch keeps its saves in RetroArch/saves, in one folder per core (mGBA, Gambatte…). Choose that core folder as the save folder. Play Store version: in the folder picker, open the menu, choose RetroArch, then saves. Close RetroArch before you sync: it writes the save every few seconds.</string>
-    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced, and only after you started them once in Azahar. Close Azahar before you sync.</string>
+    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. For a game never started in Azahar, the app creates its folder with the save of the server. Close Azahar before you sync.</string>
     <string name="hint_melonds">melonDS writes the save next to the ROM by default (setting \"Save next to ROM\"). If you chose another save folder in melonDS, untick \"Saves next to the ROMs\" and choose the same folder here.</string>
     <string name="hint_noods">NooDS writes the save next to the ROM by default. Its other setting (saves folder) puts them where no other app can read them: keep the default.</string>
     <string name="hint_custom">For DraStic, Pizza Boy, My Boy!, Linkboy and others: choose the folder where the emulator writes its saves and type their extension (.sav, .dsv). These emulators are not checked yet: try with a copy of one save first. Some keep their saves in Android/data, which no other app can open.</string>
@@ -74,6 +74,7 @@
     <string name="syncing_game">Syncing %1$d of %2$d: %3$s</string>
     <string name="server_not_read">The server wasn\'t read, so the states are unknown.</string>
     <string name="folder_problem">Folder not read: %1$s. Choose it again in Emulators.</string>
+    <string name="azahar_not_set_up">%1$s: no Nintendo 3DS folder in the chosen folder, so Azahar was never set up there. Start Azahar once, or choose its user folder again in Emulators.</string>
     <string name="search">Search a game</string>
     <string name="filter_all">All</string>
     <string name="filter_todo">To do</string>
@@ -111,6 +112,7 @@
     <string name="this_phone">This phone</string>
     <string name="server">Server</string>
     <string name="no_local_save">No save on this phone</string>
+    <string name="never_started_azahar">Never started in Azahar: Download creates its save folder</string>
     <string name="no_server_version">Not on the server yet</string>
     <string name="blank_save">Blank save (nothing played yet)</string>
     <string name="modified_on">Modified on %1$s</string>
@@ -165,6 +167,8 @@
     <string name="p_write">The new save couldn\'t be written correctly, so the previous one was put back. Check the folder in Emulators, then try again.</string>
     <string name="p_restore">The save couldn\'t be written, and the previous one couldn\'t be put back. Don\'t play this game: copy the backup copy named below back into the save folder.</string>
     <string name="p_not_written">The new save couldn\'t be written. This phone had no save for this game, so nothing was lost. If a save file of this game is now in the folder, delete it before you play. Then check the folder in Emulators and try again.</string>
+    <string name="p_partial">The save couldn\'t be written, and the app couldn\'t remove the folder it created for this game in Azahar. Azahar would see a broken save: before you start this game, delete the folder named below with a file manager. Then try again.</string>
+    <string name="p_not_started">This game was never started in Azahar, but its folder already holds a 00000001.metadata file, so the app doesn\'t create its save. Start the game once in Azahar, save in the game, then refresh.</string>
     <string name="p_changed">The save on this phone changed during the sync, so it wasn\'t replaced. Close the emulator, then try again.</string>
     <string name="p_format">This save file has an unexpected format, so it wasn\'t synced. Check the emulator and its core in Emulators.</string>
     <string name="p_permission">The app can no longer open this folder or file. Choose the folder again in Emulators.</string>

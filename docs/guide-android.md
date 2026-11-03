@@ -23,12 +23,12 @@ Plain `http://` is allowed for a server on your home network. An `https://` addr
 
 ## Emulators
 
-The app can only read the folders that you choose with the Android folder picker. It never deletes a file, and it writes only the save files of these folders.
+The app can only read the folders that you choose with the Android folder picker. It writes only the save files of these folders. It never deletes a file, except the files it has just created itself when the first save of a 3DS game fails (see [3DS games never started in Azahar](#3ds-games-never-started-in-azahar)).
 
 | Emulator | Systems | What to choose |
 |---|---|---|
 | **RetroArch** | DS, GB/GBC, GBA | The core you use for each system (the save format depends on it), the ROM folder, and the save folder of that core: `RetroArch/saves/<core name>` (for example `RetroArch/saves/mGBA`) when "Sort saves by core" is on, the default. Play Store version: its saves are in its own storage; in the folder picker, open the side menu, choose **RetroArch**, then `saves`. |
-| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Only the 8 Pokémon games, and only after you started each one once in Azahar. No ROM folder. |
+| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Only the 8 Pokémon games. No ROM folder. If the folder has no `Nintendo 3DS` folder, Azahar was never set up there: the list says so. |
 | **melonDS** | DS | The ROM folder. melonDS writes the save next to the ROM by default; if you chose a save folder in melonDS, untick **Saves next to the ROMs** and choose the same folder. |
 | **NooDS** | DS, GBA | The ROM folder: NooDS writes the save next to the ROM by default. Its "saves folder" setting puts saves where no other app can read them: keep the default. |
 | **Other emulator** | DS, GB/GBC, GBA | The save folder and the extension of the save files (`.sav`, `.dsv`…). For DraStic, Pizza Boy, My Boy!, My OldBoy!, Linkboy. **Not checked yet**: their folder and format are not documented. Test with a copy of one save first. |
@@ -72,6 +72,18 @@ The game details show two cards, **This phone** and **Server**, with the date, t
 
 If the server changed while you were choosing, nothing is done and the screen shows the new version.
 
+## 3DS games never started in Azahar
+
+The app knows the 8 Pokémon games of the 3DS even if you never started them in Azahar. Such a game shows in the list when the server has a save for it, as **To download**; its details say **Never started in Azahar**. **Download** (or **Sync all**) creates its save folder in Azahar, like the PC program does:
+
+1. It creates the folder `sdmc/Nintendo 3DS/<id>/<id>/title/<high>/<low>/data/` if it is missing.
+2. It writes `00000001.metadata` (the format of the save) and reads it back.
+3. It creates the folder `00000001` and writes the save file `main` in it, then reads it back.
+
+Then start the game in Azahar: it loads the save. The app never writes over an existing `00000001.metadata`: if one is there without the `00000001` folder, the app refuses. Start the game once in Azahar, save in the game, then refresh.
+
+If a step fails, the app deletes the files and folders it has just created, and only these. A folder with `00000001.metadata` but no full `main` would be a broken save for Azahar; no folder is a game never started, which Azahar sets up normally. If the app cannot delete them either, the message names the folder: delete it with a file manager before you start the game.
+
 ## Backup copies
 
 Before any save is replaced, the app writes a copy, reads it back and compares it. Then it reads the save again: if the emulator changed it since the sync read it, nothing is written. Then it writes the new save, reads it back and compares it; if the new save does not match, it puts the old one back. If the phone had no save for this game, a failed write leaves an empty file, which the app sees as no save. The copies are in:
@@ -87,7 +99,6 @@ Removing an emulator from the app, or uninstalling the app, deletes nothing in y
 - No background sync: open the app and tap **Sync all** before and after you play.
 - The app does not start games.
 - No ROM hack aliases ([ADR 0014](adr/0014-rom-hack-et-alias.md)).
-- A 3DS game never started in Azahar is not listed: start it once in Azahar, save, then refresh.
 
 ## Build it yourself
 

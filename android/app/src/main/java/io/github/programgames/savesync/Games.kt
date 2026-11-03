@@ -142,7 +142,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
         }
         App.serverError?.let { ErrorText(it, stringResource(R.string.server_not_read)) }
         App.message?.let { (text, t) -> if (t != null) ErrorText(t, text) }
-        for (line in App.scanProblems) Text(stringResource(R.string.folder_problem, line), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        for (line in App.scanProblems) Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for ((f, label) in listOf("ALL" to stringResource(R.string.filter_all), "TODO" to stringResource(R.string.filter_todo)) + System.entries.map { it.name to it.label }) {
@@ -303,7 +303,8 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             App.busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (e.game == null || st == null) return@Column // Duplicate, or nothing read: no cards
 
-            val phoneLines = if (local == null) listOf(stringResource(R.string.no_local_save)) else listOfNotNull(
+            val none = if (e.game.archive != null) R.string.never_started_azahar else R.string.no_local_save
+            val phoneLines = if (local == null) listOf(stringResource(none)) else listOfNotNull(
                 e.game.file.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },
                 pluralStringResource(R.plurals.size, local.version.size.toInt(), local.version.size),
                 if (local.blank) stringResource(R.string.blank_save) else null,

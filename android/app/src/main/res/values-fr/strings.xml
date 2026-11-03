@@ -55,7 +55,7 @@
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
     <string name="hint_retroarch">RetroArch range ses sauvegardes dans RetroArch/saves, un dossier par cœur (mGBA, Gambatte…). Choisissez ce dossier du cœur comme dossier des sauvegardes. Version du Play Store : dans le sélecteur de dossier, ouvrez le menu, choisissez RetroArch, puis saves. Fermez RetroArch avant de synchroniser : il écrit la sauvegarde toutes les quelques secondes.</string>
-    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés, et seulement après un premier lancement dans Azahar. Fermez Azahar avant de synchroniser.</string>
+    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés. Pour un jeu jamais lancé dans Azahar, l\'application crée son dossier avec la sauvegarde du serveur. Fermez Azahar avant de synchroniser.</string>
     <string name="hint_melonds">melonDS écrit la sauvegarde à côté de la ROM par défaut (réglage « Save next to ROM »). Si vous avez choisi un autre dossier de sauvegardes dans melonDS, décochez « Sauvegardes à côté des ROM » et choisissez le même dossier ici.</string>
     <string name="hint_noods">NooDS écrit la sauvegarde à côté de la ROM par défaut. Son autre réglage (dossier saves) les range là où aucune autre application ne peut les lire : gardez le réglage par défaut.</string>
     <string name="hint_custom">Pour DraStic, Pizza Boy, My Boy!, Linkboy et les autres : choisissez le dossier où l\'émulateur écrit ses sauvegardes et tapez leur extension (.sav, .dsv). Ces émulateurs ne sont pas encore vérifiés : essayez d\'abord avec une copie d\'une sauvegarde. Certains rangent leurs sauvegardes dans Android/data, qu\'aucune autre application ne peut ouvrir.</string>
@@ -73,6 +73,7 @@
     <string name="syncing_game">Synchronisation %1$d sur %2$d : %3$s</string>
     <string name="server_not_read">Le serveur n\'a pas été lu : les états sont inconnus.</string>
     <string name="folder_problem">Dossier non lu : %1$s. Choisissez-le de nouveau dans Émulateurs.</string>
+    <string name="azahar_not_set_up">%1$s : aucun dossier Nintendo 3DS dans le dossier choisi, donc Azahar n\'y a jamais été configuré. Lancez Azahar une fois, ou choisissez de nouveau son dossier utilisateur dans Émulateurs.</string>
     <string name="search">Chercher un jeu</string>
     <string name="filter_all">Tous</string>
     <string name="filter_todo">À faire</string>
@@ -111,6 +112,7 @@
     <string name="this_phone">Ce téléphone</string>
     <string name="server">Serveur</string>
     <string name="no_local_save">Aucune sauvegarde sur ce téléphone</string>
+    <string name="never_started_azahar">Jamais lancé dans Azahar : Récupérer crée son dossier de sauvegarde</string>
     <string name="no_server_version">Pas encore sur le serveur</string>
     <string name="blank_save">Sauvegarde vierge (aucune partie)</string>
     <string name="modified_on">Modifiée le %1$s</string>
@@ -166,6 +168,8 @@
     <string name="p_write">La nouvelle sauvegarde n\'a pas pu être écrite correctement : l\'ancienne a été remise en place. Vérifiez le dossier dans Émulateurs, puis réessayez.</string>
     <string name="p_restore">La sauvegarde n\'a pas pu être écrite, et l\'ancienne n\'a pas pu être remise en place. Ne jouez pas à ce jeu : recopiez la copie de sécurité indiquée ci-dessous dans le dossier des sauvegardes.</string>
     <string name="p_not_written">La nouvelle sauvegarde n\'a pas pu être écrite. Ce téléphone n\'avait pas de sauvegarde pour ce jeu : rien n\'est perdu. Si un fichier de sauvegarde de ce jeu est maintenant dans le dossier, supprimez-le avant de jouer. Vérifiez ensuite le dossier dans Émulateurs, puis réessayez.</string>
+    <string name="p_partial">La sauvegarde n\'a pas pu être écrite, et l\'application n\'a pas pu retirer le dossier qu\'elle a créé pour ce jeu dans Azahar. Azahar y verrait une sauvegarde abîmée : avant de lancer ce jeu, supprimez le dossier indiqué ci-dessous avec un gestionnaire de fichiers. Réessayez ensuite.</string>
+    <string name="p_not_started">Ce jeu n\'a jamais été lancé dans Azahar, mais son dossier contient déjà un fichier 00000001.metadata : l\'application ne crée donc pas sa sauvegarde. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
     <string name="p_changed">La sauvegarde de ce téléphone a changé pendant la synchronisation : elle n\'a pas été remplacée. Fermez l\'émulateur, puis réessayez.</string>
     <string name="p_format">Ce fichier de sauvegarde a un format inattendu : il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>

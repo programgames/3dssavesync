@@ -152,6 +152,94 @@ class ReplaceTest {
     }
 }
 
+// MemoryArchive is a fake Azahar folder of a 3DS game never started: data/00000001, its .metadata, and main (the
+// MemoryFile). undoFails: the provider refuses to delete.
+class MemoryArchive(val main: MemoryFile, var metadata: ByteArray? = null, var folder: Boolean = false, var undoFails: Boolean = false) : NewArchive {
+    private var created = false
+
+    override fun exists() = folder
+
+    override fun hasMetadata() = metadata != null
+
+    override fun create(metadata: ByteArray) {
+        this.metadata = metadata.copyOf()
+        folder = true
+        created = true
+    }
+
+    override fun undo(): Boolean {
+        if (undoFails) return false
+        if (created) { // only what create made
+            main.content = null
+            metadata = null
+            folder = false
+        }
+        return true
+    }
+}
+
+// A 3DS game never started in Azahar, like "jeu jamais lancé dans Azahar" in client/launcher_test.go (ADR 0009).
+class CreateArchiveTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val pcMetadata = byteArrayOf(0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0) // client/sync.go formats3DS
+
+    private fun game(a: MemoryArchive, id: String = "0004000000055E00") = Game(System.N3DS, "3DS-$id", "Pokemon Y", a.main, Format(""), "azahar", a)
+
+    private fun fails(a: MemoryArchive, id: String = "0004000000055E00") =
+        runCatching { createArchive(game(a, id), a, random(415232, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
+
+    @Test
+    fun created() {
+        assertEquals(titles3DS.keys, formats3DS.keys)
+        val a = MemoryArchive(MemoryFile("main"))
+        createArchive(game(a), a, random(415232, 2), Backups(tmp.root))
+        assertTrue(a.folder)
+        assertArrayEquals(pcMetadata, a.metadata) // the 16 bytes of the PC
+        assertArrayEquals(random(415232, 2), a.main.content)
+        assertTrue(tmp.root.listFiles()!!.isEmpty()) // no old save: no Backup copy
+    }
+
+    // An existing .metadata without the folder, or an unknown format: nothing is created, as on the PC.
+    @Test
+    fun refused() {
+        val a = MemoryArchive(MemoryFile("main"), metadata = random(16, 1))
+        assertEquals(Problem.NOT_STARTED, fails(a).problem)
+        assertArrayEquals(random(16, 1), a.metadata)
+        assertFalse(a.folder)
+        assertNull(a.main.content)
+
+        val other = MemoryArchive(MemoryFile("main"))
+        assertEquals(Problem.NOT_STARTED, fails(other, "00040000000EC300").problem)
+        assertFalse(other.folder)
+        assertNull(other.metadata)
+    }
+
+    // main can't be written: the folder and the .metadata go away again, so Azahar sees a game never started.
+    @Test
+    fun failedMidway() {
+        val a = MemoryArchive(MemoryFile("main", bad = 1))
+        assertEquals(Problem.NOT_WRITTEN, fails(a).problem)
+        assertFalse(a.folder)
+        assertNull(a.metadata)
+        assertNull(a.main.content)
+    }
+
+    // They can't be removed either: PARTIAL names the folder; the empty main left counts as no save, never uploaded.
+    @Test
+    fun failedMidwayNotUndone() {
+        val a = MemoryArchive(MemoryFile("main", bad = 1), undoFails = true)
+        val e = fails(a)
+        assertEquals(Problem.PARTIAL, e.problem)
+        assertTrue(e.message!!, e.message!!.contains("test (and 00000001.metadata"))
+        assertEquals(0, a.main.content!!.size)
+        val l = readLocal(game(a), null)!!
+        assertTrue(l.blank)
+        assertNull(seen(l, null))
+    }
+}
+
 // End to end against the real server/server.py on 127.0.0.1, like client/launcher_test.go startPythonServer.
 class PythonServerTest {
     @get:Rule
@@ -329,6 +417,31 @@ class PythonServerTest {
         now += 30_000 // the emulator was closed
         assertEquals(Outcome.DOWNLOADED, b.sync(recent, mayReplace = true))
         assertArrayEquals(random(32 shl 10, 1), recent.file.read())
+    }
+
+    // A 3DS game never started in Azahar: To download, its first Download creates the folder; the next one is a normal
+    // Download over the save it wrote, after a Backup copy.
+    @Test
+    fun neverStarted3DS() {
+        val a = syncer("a")
+        val b = syncer("b")
+        fun y(f: MemoryFile, archive: NewArchive? = null) = Game(System.N3DS, "3DS-0004000000055E00", "Pokemon Y", f, Format(""), "azahar", archive)
+        val pc = MemoryFile("main", random(415232, 1))
+        assertEquals(Outcome.UPLOADED, a.sync(y(pc)))
+        val arch = MemoryArchive(MemoryFile("main"))
+        val g = y(arch.main, arch)
+        assertEquals(State.TO_DOWNLOAD, b.status(g).state)
+        assertEquals(1, b.syncAll(listOf(g), emptySet()).downloaded) // no save on this phone: no confirmation needed
+        assertArrayEquals(random(415232, 1), arch.main.content)
+        assertArrayEquals(formats3DS.getValue("0004000000055E00"), arch.metadata)
+        assertEquals(Outcome.IN_SYNC, b.sync(g))
+
+        pc.content = random(415232, 2)
+        assertEquals(Outcome.UPLOADED, a.sync(y(pc)))
+        b.refresh()
+        assertEquals(Outcome.DOWNLOADED, b.sync(g, mayReplace = true)) // the folder exists now: no second .metadata
+        assertArrayEquals(random(415232, 2), arch.main.content)
+        assertArrayEquals(random(415232, 1), File(tmp.root, "copies-b/azahar").listFiles()!!.single().readBytes())
     }
 
     @Test
