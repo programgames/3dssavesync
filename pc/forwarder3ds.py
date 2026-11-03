@@ -14,44 +14,44 @@ import argparse, hashlib, os, shutil, struct, subprocess, sys, tempfile
 MGBA_DEV = os.environ.get("MGBA_DEV", "")  # dossier de mGBA 0.11-dev (outils du forwarder-kit)
 
 
-def lancer(outils, *args):
-    r = subprocess.run([os.path.join(outils, args[0] + ".exe"), *args[1:]], capture_output=True, text=True, errors="replace")
+def run_tool(tools, *args):
+    r = subprocess.run([os.path.join(tools, args[0] + ".exe"), *args[1:]], capture_output=True, text=True, errors="replace")
     if r.returncode:
         sys.exit(f"échec : {' '.join(args)}\n{r.stdout}{r.stderr}")
     return r.stdout
 
 
-def base36(octets, n):  # identique à ForwarderGenerator::base36
-    alpha, res, courant, j = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", "", 0, 0
+def base36(data, n):  # identique à ForwarderGenerator::base36
+    alpha, res, acc, j = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ", "", 0, 0
     for _ in range(n):
-        if courant < 36:
-            courant = (courant << 8 | octets[j]) & 0xFFFFFFFF
+        if acc < 36:
+            acc = (acc << 8 | data[j]) & 0xFFFFFFFF
             j += 1
-        res += alpha[courant % 36]
-        courant //= 36
+        res += alpha[acc % 36]
+        acc //= 36
     return res
 
 
-def ecrire_titre(smdh, titre):
+def write_title(smdh, title):
     """Titre court et long, toutes langues, en UTF-16 (SMDH : 16 × 0x200 octets à partir de 0x8)."""
-    court = titre.encode("utf-16-le")[:0x7E].ljust(0x80, b"\0")
-    long_ = titre.encode("utf-16-le")[:0xFE].ljust(0x100, b"\0")
+    short = title.encode("utf-16-le")[:0x7E].ljust(0x80, b"\0")
+    long_ = title.encode("utf-16-le")[:0xFE].ljust(0x100, b"\0")
     with open(smdh, "r+b") as f:
         assert f.read(4) == b"SMDH"
-        for langue in range(16):
-            f.seek(0x8 + langue * 0x200)
-            f.write(court + long_)
+        for lang in range(16):
+            f.seek(0x8 + lang * 0x200)
+            f.write(short + long_)
 
 
-def creer(rom, titre, icone, banniere, sortie, outils, base):
+def build_forwarder(rom, title, icon, banner, output, tools, base):
     w = tempfile.mkdtemp(prefix="forwarder3ds-")
-    j = lambda chemin: os.path.normpath(os.path.join(w, chemin))  # ctrtool refuse les « / » mêlés aux « \ »
+    j = lambda path: os.path.normpath(os.path.join(w, path))  # ctrtool refuse les « / » mêlés aux « \ »
     try:
-        sortie_ctr = lancer(outils, "ctrtool", f"--contents={j('cxi')}", base)
-        index = [l.strip()[-8:] for l in sortie_ctr.splitlines() if "|- ContentId:" in l][-1]
+        ctr_output = run_tool(tools, "ctrtool", f"--contents={j('cxi')}", base)
+        index = [l.strip()[-8:] for l in ctr_output.splitlines() if "|- ContentId:" in l][-1]
         cxi = j(f"cxi.0000.{index}")
-        lancer(outils, "3dstool", "-xf", cxi, "--exh", j("exheader.bin"), "--header", j("header.bin"), "--exefs", j("exefs.bin"))
-        lancer(outils, "3dstool", "-xf", j("exefs.bin"), "--header", j("exeheader.bin"), "--exefs-dir", j("exefs"))
+        run_tool(tools, "3dstool", "-xf", cxi, "--exh", j("exheader.bin"), "--header", j("header.bin"), "--exefs", j("exefs.bin"))
+        run_tool(tools, "3dstool", "-xf", j("exefs.bin"), "--header", j("exeheader.bin"), "--exefs-dir", j("exefs"))
 
         # Title ID et code produit dérivés du hash de la ROM (même jeu = même titre installé, mis à jour par FBI).
         h = hashlib.sha256(open(rom, "rb").read()).digest()
@@ -70,25 +70,25 @@ def creer(rom, titre, icone, banniere, sortie, outils, base):
         os.makedirs(j("romfs"))
         open(j("romfs/filename"), "wb").write(os.path.basename(rom).encode("utf-8"))
         shutil.copy(rom, j("romfs"))
-        lancer(outils, "3dstool", "-cf", j("romfs.bin"), "-t", "romfs", "--romfs-dir", j("romfs"))
+        run_tool(tools, "3dstool", "-cf", j("romfs.bin"), "-t", "romfs", "--romfs-dir", j("romfs"))
 
         icn = j("exefs/icon.icn")
         os.remove(icn)  # jamais l'icône de la base par erreur
-        lancer(outils, "bannertool", "makesmdh", "-s", "forwarder", "-l", "forwarder", "-p", "mGBA Forwarder", "-i", icone, "-o", icn)
-        ecrire_titre(icn, titre)
+        run_tool(tools, "bannertool", "makesmdh", "-s", "forwarder", "-l", "forwarder", "-p", "mGBA Forwarder", "-i", icon, "-o", icn)
+        write_title(icn, title)
 
         bnr = j("exefs/banner.bnr")
         b = open(bnr, "rb").read()
         open(j("banner.bcwav"), "wb").write(b[struct.unpack("<I", b[0x84:0x88])[0]:])  # le son de la base
         os.remove(bnr)
-        lancer(outils, "bannertool", "makebanner", "-i", banniere, "-ca", j("banner.bcwav"), "-o", bnr)
+        run_tool(tools, "bannertool", "makebanner", "-i", banner, "-ca", j("banner.bcwav"), "-o", bnr)
 
-        lancer(outils, "3dstool", "-cf", j("exefs.bin"), "-t", "exefs", "--header", j("exeheader.bin"), "--exefs-dir", j("exefs"))
+        run_tool(tools, "3dstool", "-cf", j("exefs.bin"), "-t", "exefs", "--header", j("exeheader.bin"), "--exefs-dir", j("exefs"))
         os.remove(cxi)
-        lancer(outils, "3dstool", "-cf", cxi, "-t", "cxi", "--exh", j("exheader.bin"), "--header", j("header.bin"),
+        run_tool(tools, "3dstool", "-cf", cxi, "-t", "cxi", "--exh", j("exheader.bin"), "--header", j("header.bin"),
                "--exefs", j("exefs.bin"), "--romfs", j("romfs.bin"))
-        lancer(outils, "makerom", "-f", "cia", "-o", sortie, "-content", f"{cxi}:0:0")
-        print(f"{sortie} : title ID 00040000{struct.unpack('<I', tid)[0]:08X}, {os.path.getsize(sortie)} o")
+        run_tool(tools, "makerom", "-f", "cia", "-o", output, "-content", f"{cxi}:0:0")
+        print(f"{output} : title ID 00040000{struct.unpack('<I', tid)[0]:08X}, {os.path.getsize(output)} o")
     finally:
         shutil.rmtree(w, ignore_errors=True)
 
@@ -103,4 +103,4 @@ if __name__ == "__main__":
     p.add_argument("--outils", default=MGBA_DEV, required=not MGBA_DEV)
     p.add_argument("--base", required=True, help=".cia du build 3DS dev de mGBA")
     a = p.parse_args()
-    creer(a.rom, a.titre, a.icone, a.banniere, a.sortie, a.outils, a.base)
+    build_forwarder(a.rom, a.titre, a.icone, a.banniere, a.sortie, a.outils, a.base)
