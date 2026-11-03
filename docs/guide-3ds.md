@@ -26,7 +26,7 @@ You can also touch the buttons on the bottom screen.
 | Upload | the 3DS save is newer: **A** sends it to the server |
 | Download | the server save is newer: **A** gets it, after a backup copy |
 | Conflict | both changed since the last sync: **A** lets you choose (A keep the 3DS, X take the server, B do nothing) |
-| Duplicate | two ROMs give the same game: keep one, or [give an alias](troubleshooting.md#a-rom-hack-is-not-synced) |
+| Duplicate | two ROMs give the same game: keep one, or [give the hack its own save](troubleshooting.md#a-rom-hack-is-not-synced) |
 | Unknown | the server could not be read: press **Y** |
 
 ## Settings (SELECT)
@@ -69,7 +69,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `config.ini` | server, token, folders |
 | `base.ini` | the last synced state of each game. Do not delete it: without it, every changed game shows a conflict. |
 | `titres.ini` | the 3DS games to sync (absent = the 8 Pokémon games) |
-| `alias.ini` | optional: aliases for ROM hacks, one line per ROM: `Pokemon Radical Red=GBA-0RAD` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
+| `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
 | `copies/` | backup copies made before a save is replaced |
 
 ## Native 3DS games

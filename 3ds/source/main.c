@@ -324,9 +324,9 @@ static void scanner_dossier(systeme_t s, const char *roms, const char *saves, co
         if (n < sizeof entete) continue;
         if ((a = alias_de(nom))) {
             if (cle_alias(s, a, cle)) {
-                char t[120];
-                snprintf(t, sizeof t, T("Alias invalide pour « %.40s » (alias.ini) : ROM non synchronisée.",
-                                        "Invalid alias for \"%.40s\" (alias.ini): ROM not synced."), nom);
+                char t[200];
+                snprintf(t, sizeof t, T("Alias invalide pour « %.40s » : ROM non synchronisée. Préparez de nouveau la carte SD depuis le PC.",
+                                        "Invalid alias for \"%.40s\": ROM not synced. Prepare the SD card again from the PC."), nom);
                 alerter(t);
                 continue;
             }
@@ -955,7 +955,8 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
     case DOUBLON:
         if (j->partage) snprintf(t, n, T("%d ROM ont ce nom de fichier : elles partageraient une sauvegarde (forwarder mGBA ou dossier des sauvegardes). Renommez-en une.",
                                          "%d ROMs have this file name: they would share one save (mGBA forwarder or saves folder). Rename one."), j->nb_roms);
-        else snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%d ROMs hold this game: keep only one, or give the others an alias (alias.ini)."), j->nb_roms);
+        else snprintf(t, n, T("%d ROM contiennent ce jeu : gardez-en une seule, ou ajoutez les autres dans les réglages du PC (ROM hacks), puis préparez la carte SD.",
+                                "%d ROMs hold this game: keep only one, or add the others in the PC settings (ROM hacks), then prepare the SD card."), j->nb_roms);
         return t;
     case HORS_LIGNE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     }
@@ -1421,7 +1422,8 @@ static int agir(jeu_t *j)
     case DOUBLON:
         if (j->partage) snprintf(message, sizeof message, T("%s : %d ROM ont ce nom de fichier et partageraient une sauvegarde. Renommez-en une.",
                                                             "%s: %d ROMs have this file name and would share one save. Rename one."), j->court, j->nb_roms);
-        else snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule, ou donnez un alias aux autres (alias.ini).", "%s: %d ROMs hold this game. Keep only one, or give the others an alias (alias.ini)."),
+        else snprintf(message, sizeof message, T("%s : %d ROM contiennent ce jeu. Gardez-en une seule, ou ajoutez les autres dans les réglages du PC (ROM hacks).",
+                                                            "%s: %d ROMs hold this game. Keep only one, or add the others in the PC settings (ROM hacks)."),
                       j->court, j->nb_roms);
         break;
     case HORS_LIGNE:

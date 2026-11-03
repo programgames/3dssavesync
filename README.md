@@ -69,7 +69,7 @@ The local server syncs at home, when the PC is on. To sync from anywhere, run th
 - **Conflict** (you played on both sides): you choose the version to keep. The other version stays on the server.
 - **Get back an old version**: open the **3dssavesync settings** shortcut, part **History**, choose the game and the version, then click **Restore this version**. Or run `3dssavesync restore`. Each device gets it at its next sync, after a backup copy.
 - **No network after a game on the PC**: the save stays on the PC and goes out at the next launch, whatever game you start.
-- **ROM hacks** (Radical Red and others) use the same game code as the original game. 3dssavesync refuses to mix them: give the hack an [alias](docs/troubleshooting.md#a-rom-hack-is-not-synced).
+- **ROM hacks** (Radical Red and others) use the same game code as the original game. 3dssavesync refuses to mix them, and offers to give the hack [its own save](docs/troubleshooting.md#a-rom-hack-is-not-synced).
 - **ROMs in subfolders** on the 3DS are found (4 levels deep). The save goes where your 3DS app writes it.
 - **More PC settings** (emulators, frontends, commands): [PC guide](docs/guide-pc.md). **3DS settings**: [3DS guide](docs/guide-3ds.md).
 

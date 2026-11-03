@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -28,8 +29,8 @@ func (c *Config) cleAlias(systeme, nom, cle string) (string, error) {
 		return cle, nil
 	}
 	if a = strings.ToUpper(strings.TrimSpace(a)); !formesCle[systeme].MatchString(a) {
-		return "", fmt.Errorf(tr("l'alias « %s » de %s est invalide. Exemple pour un jeu %s : %s. Corrigez-le dans config.json.",
-			"the alias \"%s\" of %s is not valid. Example for a %s game: %s. Fix it in config.json."), c.Alias[nom], nom, systeme, exemplesCle[systeme])
+		return "", fmt.Errorf(tr("l'alias « %s » de %s est invalide (exemple pour un jeu %s : %s). Retirez-le dans « 3dssavesync réglages », section ROM hacks, puis ajoutez de nouveau la ROM.",
+			"the alias \"%s\" of %s is not valid (example for a %s game: %s). Remove it in \"3dssavesync settings\", ROM hacks section, then add the ROM again."), c.Alias[nom], nom, systeme, exemplesCle[systeme])
 	}
 	return a, nil
 }
@@ -77,35 +78,59 @@ func (s *Session) baseConnue(cle string) bool {
 //     d'origine). Une ROM retenue qui n'existe plus (renommée, déplacée, extraite dans un dossier temporaire) laisse la place ;
 //   - aucune ROM retenue, mais une Base de cette Clé sur ce PC (synchronisée avant que les ROM soient retenues), et pas de
 //     sauvegarde pour cette ROM : la Récupération donnerait à un éventuel ROM hack la partie du jeu d'origine, que son
-//     prochain Envoi remplacerait. Avec question (run), l'utilisateur confirme que c'est le même jeu.
+//     prochain Envoi remplacerait.
+//
+// Avec question (run), l'utilisateur choisit : même jeu (second cas), « Synchroniser à part » (un alias est créé, j prend
+// sa Clé), ou jouer sans synchroniser.
 func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
 	if j.Cle == "" || rom == "" {
 		return ""
 	}
+	aPart, sans := tr("Synchroniser à part (ROM hack)", "Sync separately (ROM hack)"), tr("Jouer sans synchroniser", "Play without sync")
+	conseil := tr("Pour lui donner sa propre sauvegarde : lancez-le depuis votre frontend et choisissez « Synchroniser à part », ou ajoutez-le dans « 3dssavesync réglages », section ROM hacks.",
+		"To give it its own save: start it from your frontend and choose \"Sync separately\", or add it in \"3dssavesync settings\", ROM hacks section.")
+	choix := ""
 	m, _ := s.romsRetenues()
 	if a, err := os.Stat(m[j.Cle]); err == nil {
 		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) {
 			s.journal(fmt.Sprintf("même Clé %s que %s : %s", j.Cle, m[j.Cle], rom))
-			return fmt.Sprintf(tr("%s est vu comme le même jeu que %s, déjà synchronisé (ROM hack ?). Pour le synchroniser à part, ajoutez un alias dans config.json.",
-				"%s is seen as the same game as %s, already synced (ROM hack?). To sync it separately, add an alias in config.json."),
-				filepath.Base(rom), filepath.Base(m[j.Cle]))
+			texte := fmt.Sprintf(tr("%s est vu comme le même jeu que %s, déjà synchronisé. C'est sans doute un ROM hack.",
+				"%s is seen as the same game as %s, already synced. It is probably a ROM hack."), filepath.Base(rom), filepath.Base(m[j.Cle]))
+			if question {
+				choix = demander(texte+"\n\n"+tr("Synchroniser cette ROM à part, avec sa propre sauvegarde ?", "Sync this ROM separately, with its own save?"),
+					[]string{aPart, sans})
+			}
+			if choix != aPart {
+				return texte + " " + conseil
+			}
 		}
 	} else if m[j.Cle] == "" && s.baseConnue(j.Cle) {
 		if l, err := lireLocal(j, nil); err == nil && (l == nil || l.Vide) {
 			s.journal(fmt.Sprintf("Clé %s déjà synchronisée, aucune ROM retenue, pas de sauvegarde : %s", j.Cle, rom))
 			oui := tr("Synchroniser", "Sync")
-			if !question || demander(fmt.Sprintf(tr("%s : cette ROM n'a pas de sauvegarde dans cet émulateur, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
-				"Si c'est un ROM hack, il recevrait la partie du jeu d'origine : ajoutez-lui plutôt un alias dans config.json.\n\n"+
-				"Synchroniser cette ROM avec la sauvegarde du serveur ?",
-				"%s: this ROM has no save in this emulator, and this game was already synced on this PC, maybe with another ROM.\n\n"+
-					"If it is a ROM hack, it would get the game of the original: add an alias for it in config.json instead.\n\n"+
-					"Sync this ROM with the server save?"), filepath.Base(rom)),
-				[]string{oui, tr("Jouer sans synchroniser", "Play without sync")}) != oui {
-				return fmt.Sprintf(tr("%s n'a pas de sauvegarde ici, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM (ROM hack ?). Lancez ce jeu seul et confirmez que c'est le même jeu, ou ajoutez un alias dans config.json.",
-					"%s has no save here, and this game was already synced on this PC, maybe with another ROM (ROM hack?). Start this game alone and confirm it is the same game, or add an alias in config.json."),
-					filepath.Base(rom))
+			if question {
+				choix = demander(fmt.Sprintf(tr("%s : cette ROM n'a pas de sauvegarde dans cet émulateur, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
+					"Même jeu : « Synchroniser » lui donne la sauvegarde du serveur.\nROM hack : « Synchroniser à part » lui donne sa propre sauvegarde.",
+					"%s: this ROM has no save in this emulator, and this game was already synced on this PC, maybe with another ROM.\n\n"+
+						"Same game: \"Sync\" gives it the server save.\nROM hack: \"Sync separately\" gives it its own save."), filepath.Base(rom)),
+					[]string{oui, aPart, sans})
+			}
+			if choix != oui && choix != aPart {
+				return fmt.Sprintf(tr("%s n'a pas de sauvegarde ici, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM. Lancez-le depuis votre frontend pour choisir.",
+					"%s has no save here, and this game was already synced on this PC, maybe with another ROM. Start it from your frontend to choose."), filepath.Base(rom))
 			}
 		}
+	}
+	if choix == aPart {
+		cle, err := s.creerAlias(j.Systeme, strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom)))
+		if err != nil {
+			s.journal("alias impossible pour " + rom + " : " + err.Error())
+			return fmt.Sprintf(tr("%s : synchronisation à part impossible (%v).", "%s: cannot sync separately (%v)."), filepath.Base(rom), err)
+		}
+		s.journal(fmt.Sprintf("alias créé : %s -> %s", rom, cle))
+		notifier(fmt.Sprintf(tr("%s a maintenant sa propre sauvegarde. Pour y jouer aussi sur la 3DS : « 3dssavesync réglages », Préparer la carte SD.",
+			"%s now has its own save. To play it on the 3DS too: \"3dssavesync settings\", Prepare the SD card."), filepath.Base(rom)))
+		j.Cle = cle
 	}
 	if abs, err := filepath.Abs(rom); err == nil {
 		rom = abs
@@ -115,6 +140,70 @@ func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
 	}
 	s.romDe[j.Cle] = rom
 	return ""
+}
+
+// creerAlias : l'alias de la ROM nom, créé s'il manque et écrit dans config.json (copie datée avant).
+func (s *Session) creerAlias(systeme, nom string) (string, error) {
+	var cfg Config
+	if err := lireConfig(s.config, &cfg); err != nil { // relu : la page des réglages a pu l'écrire depuis
+		return "", err
+	}
+	cle, err := ajouterAlias(&cfg, systeme, nom)
+	if err == nil {
+		err = ecrireConfigCopie(s.config, &cfg)
+	}
+	if err != nil {
+		return "", err
+	}
+	s.cfg.Alias = cfg.Alias
+	return cle, nil
+}
+
+// ecrireConfigCopie : copie datée de config.json, puis écriture vérifiée.
+func ecrireConfigCopie(chemin string, cfg *Config) error {
+	if err := copieAvant(chemin); err != nil {
+		return err
+	}
+	return ecrireJSON(chemin, cfg, true)
+}
+
+// ajouterAlias : l'alias de la ROM nom dans cfg, créé s'il manque (ADR 0014). La Clé est tirée du nom : la même ROM
+// reçoit la même Clé sur chaque PC ; une Clé déjà prise par un autre alias en donne une autre.
+func ajouterAlias(cfg *Config, systeme, nom string) (string, error) {
+	if formesCle[systeme] == nil {
+		return "", fmt.Errorf(tr("les jeux %s n'ont pas d'alias", "%s games have no alias"), systeme)
+	}
+	if strings.TrimSpace(nom) == "" || strings.ContainsAny(nom, "=\r\n") {
+		return "", fmt.Errorf(tr("nom de ROM invalide pour un alias : « %s »", "invalid ROM name for an alias: \"%s\""), nom)
+	}
+	if a := strings.ToUpper(cfg.Alias[nom]); formesCle[systeme].MatchString(a) {
+		return a, nil
+	}
+	prises := map[string]bool{}
+	for n, a := range cfg.Alias {
+		if n != nom {
+			prises[strings.ToUpper(a)] = true
+		}
+	}
+	cle := nouvelleCle(systeme, nom, prises)
+	if cfg.Alias == nil {
+		cfg.Alias = map[string]string{}
+	}
+	cfg.Alias[nom] = cle
+	return cle, nil
+}
+
+// nouvelleCle : une Clé de la forme du Système, qui commence par un chiffre (jamais un code de jeu commercial).
+func nouvelleCle(systeme, nom string, prises map[string]bool) string {
+	const signes = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	for i := 0; ; i++ {
+		h := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d", nom, i)))
+		suite := string([]byte{signes[h[0]%36], signes[h[1]%36], signes[h[2]%36]})
+		cle := map[string]string{"DS": "0" + suite, "GBA": "GBA-0" + suite, "GB": fmt.Sprintf("GB-ALIAS-%02X%02X", h[0], h[1])}[systeme]
+		if !prises[cle] {
+			return cle
+		}
+	}
 }
 
 // retenirRom : après une Base écrite, la ROM de cette Clé (si elle est connue et a changé).

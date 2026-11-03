@@ -150,15 +150,14 @@ Nothing is written on the PC. Each device gets the version at its next sync, aft
 
 A ROM hack often keeps the game key of its original game (Pokémon Radical Red keeps the one of Fire Red). So that the two games never mix ([ADR 0014](adr/0014-rom-hack-et-alias.md)):
 
-- `run`: 3dssavesync remembers the ROM of each synced game. Another ROM with the same key starts without sync, and a notification names both files. If the remembered ROM no longer exists (renamed, moved), the new one takes its place.
+- `run`: 3dssavesync remembers the ROM of each synced game. Another ROM with the same key asks a question: **Sync separately (ROM hack)** gives the hack its own save; **Play without sync** starts it without sync. If the remembered ROM no longer exists (renamed, moved), the new one takes its place.
 - `launch`: two ROMs with the same key in the `roms` folders are not synced; a notification names them.
 
-To sync the hack as its own game, give it an alias, with the same value on the PC and on the 3DS:
+To give a hack its own save before its first start, open **3dssavesync settings**, section **ROM hacks**, choose the ROM file, then click **Add**. The list shows the hacks with their own save; **Remove** puts a hack back under the key of its original game.
 
-- PC, `config.json`: `"alias": {"Pokemon Radical Red": "GBA-0RAD"}` (ROM file name without extension).
-- 3DS, file `sdmc:/3ds/3dssavesync/alias.ini`, one line per ROM: `Pokemon Radical Red=GBA-0RAD`.
+Then, for the 3DS, click **Prepare the 3DS SD card** again: it writes `sdmc:/3ds/3dssavesync/alias.ini`, so the 3DS gives the hack the same key as the PC. Keep the same ROM file name on the PC and on the SD card.
 
-The alias has the form of a key of the ROM system: `0RAD` (DS), `GBA-0RAD` (GBA), `GB-MONHACK-0001` (GB: a title of 1 to 15 characters `A-Z`, `0-9`, `_`, then 4 hexadecimal digits). For DS and GBA, start the code with a digit: no commercial game has such a key. An invalid alias stops the sync of this ROM; the notification gives an example.
+Behind the scenes, each hack gets an alias in `config.json` (`"alias": {"<ROM file name without extension>": "<key>"}`): a key of the ROM system that starts with a digit, such as `GBA-0A7K` (`0A7K` for DS, `GB-ALIAS-1F3C` for GB). No commercial game has such a key. The same ROM file name gives the same key on every PC.
 
 ## LaunchBox
 

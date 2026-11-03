@@ -138,28 +138,20 @@ A homebrew has no game code. A 3DS game is synced only when it is in the list of
 
 ### A ROM hack is not synced
 
-> Pokemon Radical Red.gba is seen as the same game as Pokemon Fire Red.gba, already synced (ROM hack?). To sync it separately, add an alias in config.json.
-> these ROMs are seen as the same game: … Keep one, or add an alias in config.json.
-> 3DS: 2 ROMs hold this game: keep only one, or give the others an alias (alias.ini).
+> Pokemon Radical Red.gba is seen as the same game as Pokemon Fire Red.gba, already synced. It is probably a ROM hack.
+> these ROMs are seen as the same game: … Keep only one, or add the others in "3dssavesync settings", ROM hacks section.
+> 3DS: 2 ROMs hold this game: keep only one, or add the others in the PC settings (ROM hacks), then prepare the SD card.
 
-A ROM hack often keeps the game code of the original game (Radical Red keeps the code of Fire Red). 3dssavesync refuses to mix the two games, so it does not sync the second ROM. To sync the hack as its own game, give it an **alias**: the same alias on the PC and on the 3DS.
+A ROM hack often keeps the game code of the original game (Radical Red keeps the code of Fire Red). 3dssavesync refuses to mix the two games. To give the hack its own save:
 
-- **PC**: in `config.json`, add `"alias": {"Pokemon Radical Red": "GBA-0RAD"}`. The name is the ROM file name without its extension.
-- **3DS**: create `sdmc:/3ds/3dssavesync/alias.ini` with one line per ROM: `Pokemon Radical Red=GBA-0RAD`.
+1. Start the hack from your frontend (LaunchBox…). In the question, choose **Sync separately (ROM hack)**. Or open **3dssavesync settings**, section **ROM hacks**, choose the ROM file, then click **Add**.
+2. If you also play the hack on the 3DS: in **3dssavesync settings**, click **Prepare the 3DS SD card** again. Keep the same ROM file name on the PC and on the SD card.
 
-The alias has the form of a game key of the ROM system:
+Native 3DS games cannot have a separate save.
 
-| System | Form | Example |
-|---|---|---|
-| DS | 4 letters or digits | `0RAD` |
-| GBA | `GBA-` + 4 letters or digits | `GBA-0RAD` |
-| GB / GBC | `GB-` + 1 to 15 letters, digits or `_` + `-` + 4 hexadecimal digits | `GB-MONHACK-0001` |
+> the alias "…" of … is not valid (example for a GBA game: GBA-0RAD). Remove it in "3dssavesync settings", ROM hacks section, then add the ROM again.
 
-Start the code with a digit, as in `0RAD`: no commercial game has such a code. Native 3DS games cannot have an alias.
-
-> the alias "…" of … is not valid. Example for a GBA game: GBA-0RAD. Fix it in config.json.
-
-The alias does not have the right form. Fix it with the table above. Until then, this ROM is not synced.
+`config.json` was edited by hand with a wrong key. Follow the message. Until then, this ROM is not synced.
 
 ### The emulator is already running
 
@@ -313,9 +305,9 @@ The 3DS SD card has no `config.ini`. Prepare the SD card from the PC settings pa
 
 ### Several ROMs hold this game
 
-> 2 ROMs hold this game: keep only one, or give the others an alias (alias.ini).
+> 2 ROMs hold this game: keep only one, or add the others in the PC settings (ROM hacks), then prepare the SD card.
 
-Two ROMs have the same game key (two copies, or a ROM hack), or give the same save file. 3dssavesync does not guess which one is right. Delete or move the extra ROM, or [give it an alias](#a-rom-hack-is-not-synced).
+Two ROMs have the same game key (two copies, or a ROM hack), or give the same save file. 3dssavesync does not guess which one is right. Delete or move the extra ROM, or [give the hack its own save](#a-rom-hack-is-not-synced).
 
 ### SD card errors
 

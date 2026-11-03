@@ -260,6 +260,7 @@ func etat(local, serveur *Version, base string) string {
 // Session : un émulateur (profil) et son dossier de configuration (journal, Bases, Copies de sécurité).
 type Session struct {
 	cfg      *Config
+	config   string // chemin de config.json : un alias créé au lancement y est écrit (ADR 0014)
 	dossier  string
 	profil   string
 	http     *http.Client

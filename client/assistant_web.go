@@ -196,7 +196,7 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var cfg Config
 		lireJSON(a.config, &cfg)
 		url, _ := adresse3DS(&cfg)
-		if f, err := preparerCarte(x.Racine, url, cfg.Jeton); err != nil {
+		if f, err := preparerCarte(x.Racine, url, cfg.Jeton, cfg.Alias); err != nil {
 			reponse = map[string]any{"Ok": false, "Message": texteErreur(err)}
 		} else {
 			reponse = map[string]any{"Ok": true, "Message": fmt.Sprintf(tr("Carte SD prête (%s). Remettez-la dans la 3DS, puis lancez 3dssavesync : il se connecte sans rien taper.",
@@ -213,6 +213,13 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var x struct{ Nom string }
 		json.NewDecoder(r.Body).Decode(&x)
 		reponse = a.ouvrir(x.Nom)
+	case "api/alias":
+		var x struct {
+			Nom, Systeme string
+			Retirer      bool
+		}
+		json.NewDecoder(r.Body).Decode(&x)
+		reponse = a.aliasWeb(x.Nom, x.Systeme, x.Retirer)
 	case "api/jeux":
 		reponse = a.jeuxWeb()
 	case "api/versions", "api/restaurer":
@@ -236,6 +243,38 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(reponse)
+}
+
+// aliasWeb : les ROM hacks qui ont leur propre Clé (ADR 0014). Nom non vide : ajout (Clé créée par ajouterAlias) ou
+// retrait, écrit dans config.json avec une copie datée.
+func (a *AssistantWeb) aliasWeb(nom, systeme string, retirer bool) map[string]any {
+	var cfg Config
+	if err := lireConfig(a.config, &cfg); err != nil {
+		return map[string]any{"Erreur": texteErreur(err)}
+	}
+	var err error
+	if nom = strings.TrimSpace(nom); nom != "" {
+		_, existe := cfg.Alias[nom]
+		switch {
+		case retirer && existe:
+			delete(cfg.Alias, nom)
+			err = ecrireConfigCopie(a.config, &cfg)
+		case !retirer && !existe:
+			if _, err = ajouterAlias(&cfg, systeme, nom); err == nil {
+				err = ecrireConfigCopie(a.config, &cfg)
+			}
+		}
+	}
+	noms := []string{}
+	for n := range cfg.Alias {
+		noms = append(noms, n)
+	}
+	sort.Slice(noms, func(i, j int) bool { return strings.ToLower(noms[i]) < strings.ToLower(noms[j]) })
+	x := map[string]any{"Noms": noms}
+	if err != nil {
+		x["Erreur"] = texteErreur(err)
+	}
+	return x
 }
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.

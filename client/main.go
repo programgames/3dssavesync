@@ -184,7 +184,7 @@ func nouvelleSession(chemin string) (*Session, error) {
 	for id, nom := range cfg.Titres3DS { // même liste que titres.ini de la 3DS (seulement des jeux à un seul fichier /main)
 		titres3DS[strings.ToUpper(id)] = nom
 	}
-	return &Session{cfg: &cfg, dossier: filepath.Dir(chemin), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
+	return &Session{cfg: &cfg, config: chemin, dossier: filepath.Dir(chemin), http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}, nil
 }
 
 // Émulateur de la configuration qui gère ce Système : celui demandé, ou le seul possible.
@@ -477,8 +477,8 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 	if len(doublons) > 0 {
 		sort.Strings(doublons)
 		s.journal("Doublons : " + strings.Join(doublons, ", "))
-		refus = append(refus, fmt.Sprintf(tr("ces ROM sont vues comme le même jeu : %s. Gardez-en une, ou ajoutez un alias dans config.json.",
-			"these ROMs are seen as the same game: %s. Keep only one, or add an alias in config.json."), strings.Join(doublons, ", ")))
+		refus = append(refus, fmt.Sprintf(tr("ces ROM sont vues comme le même jeu : %s. Gardez-en une, ou ajoutez les autres dans « 3dssavesync réglages », section ROM hacks.",
+			"these ROMs are seen as the same game: %s. Keep only one, or add the others in \"3dssavesync settings\", ROM hacks section."), strings.Join(doublons, ", ")))
 	}
 	if len(partages) > 0 {
 		sort.Strings(partages)

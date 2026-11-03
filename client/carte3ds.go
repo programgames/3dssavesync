@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -56,7 +57,7 @@ func configIni(ancien, url, jeton string) string {
 
 // Écrit <racine>/3ds/3dssavesync/config.ini : copie datée de l'ancien, fichier temporaire vérifié, renommage, relecture.
 // Rend le chemin écrit.
-func preparerCarte(racine, url, jeton string) (string, error) {
+func preparerCarte(racine, url, jeton string, alias map[string]string) (string, error) {
 	if url == "" || jeton == "" {
 		return "", errors.New(tr("Enregistrez d'abord le serveur.", "Save the server first."))
 	}
@@ -82,17 +83,53 @@ func preparerCarte(racine, url, jeton string) (string, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
-	contenu := []byte(configIni(string(o), url, jeton))
-	if bytes.Equal(o, contenu) {
-		return chemin, nil
-	}
-	if err := remplacerFichier(chemin, contenu); err != nil {
+	if err := ecrireCarte(chemin, []byte(configIni(string(o), url, jeton))); err != nil {
 		return "", err
 	}
-	if relu, err := os.ReadFile(chemin); err != nil || !bytes.Equal(relu, contenu) {
-		return "", fmt.Errorf(tr("%s relu différent. Vérifiez la carte SD, puis recommencez.", "%s read back differently. Check the SD card, then try again."), chemin)
+	if len(alias) > 0 { // ROM hacks : mêmes Clés sur la 3DS que sur ce PC (ADR 0014)
+		f := filepath.Join(filepath.Dir(chemin), "alias.ini")
+		a, err := os.ReadFile(f)
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		if err := ecrireCarte(f, []byte(aliasIni(string(a), alias))); err != nil {
+			return "", err
+		}
 	}
 	return chemin, nil
+}
+
+// ecrireCarte : rien si le contenu est déjà là ; sinon copie datée, fichier temporaire vérifié, renommage, relecture.
+func ecrireCarte(chemin string, contenu []byte) error {
+	if o, err := os.ReadFile(chemin); err == nil && bytes.Equal(o, contenu) {
+		return nil
+	}
+	if err := remplacerFichier(chemin, contenu); err != nil {
+		return err
+	}
+	if relu, err := os.ReadFile(chemin); err != nil || !bytes.Equal(relu, contenu) {
+		return fmt.Errorf(tr("%s relu différent. Vérifiez la carte SD, puis recommencez.", "%s read back differently. Check the SD card, then try again."), chemin)
+	}
+	return nil
+}
+
+// aliasIni : alias.ini de la 3DS (« nom de la ROM=Clé ») avec les alias de ce PC ; les autres lignes restent.
+func aliasIni(ancien string, alias map[string]string) string {
+	t := ""
+	for _, l := range strings.Split(strings.ReplaceAll(ancien, "\r\n", "\n"), "\n") {
+		if nom, _, ok := strings.Cut(l, "="); l != "" && (!ok || alias[nom] == "") {
+			t += l + "\n"
+		}
+	}
+	noms := make([]string, 0, len(alias))
+	for n := range alias {
+		noms = append(noms, n)
+	}
+	sort.Strings(noms)
+	for _, n := range noms {
+		t += n + "=" + alias[n] + "\n"
+	}
+	return t
 }
 
 // Assistant en console : carte SD de la 3DS, après le serveur.
@@ -115,7 +152,7 @@ func etapeCarteSD(q *Questions, cfg *Config) {
 	if r == "" {
 		return
 	}
-	if f, err := preparerCarte(r, url, cfg.Jeton); err != nil {
+	if f, err := preparerCarte(r, url, cfg.Jeton, cfg.Alias); err != nil {
 		q.dire("%s", texteErreur(err))
 	} else {
 		q.dire("%s %s", tr("Carte SD prête :", "SD card ready:"), f)

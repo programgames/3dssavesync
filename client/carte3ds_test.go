@@ -25,10 +25,10 @@ func TestPreparerCarte(t *testing.T) {
 	}
 
 	sd := t.TempDir()
-	if _, err := preparerCarte(sd, "http://192.0.2.5:8765", "abc"); err == nil || !strings.Contains(err.Error(), "Nintendo 3DS") {
+	if _, err := preparerCarte(sd, "http://192.0.2.5:8765", "abc", nil); err == nil || !strings.Contains(err.Error(), "Nintendo 3DS") {
 		t.Errorf("sans dossier Nintendo 3DS : erreur attendue, %v", err)
 	}
-	if _, err := preparerCarte("relatif", "http://192.0.2.5:8765", "abc"); err == nil {
+	if _, err := preparerCarte("relatif", "http://192.0.2.5:8765", "abc", nil); err == nil {
 		t.Error("chemin relatif : erreur attendue")
 	}
 	if existe(filepath.Join(sd, "3ds")) {
@@ -36,14 +36,14 @@ func TestPreparerCarte(t *testing.T) {
 	}
 
 	os.Mkdir(filepath.Join(sd, "Nintendo 3DS"), 0o755)
-	f, err := preparerCarte(`"`+sd+`" `, "http://192.0.2.5:8765", "abc")
+	f, err := preparerCarte(`"`+sd+`" `, "http://192.0.2.5:8765", "abc", nil)
 	if err != nil || f != filepath.Join(sd, "3ds", "3dssavesync", "config.ini") || string(lire(f)) != "url=http://192.0.2.5:8765\njeton=abc\n" {
 		t.Fatalf("carte neuve : %s %v", f, err)
 	}
 
 	ecrire(t, f, []byte("url=https://ancien\njeton=vieux\nroms=sdmc:/jeux\nsaves_gba=sdmc:/gba\n"))
 	ecrire(t, filepath.Join(sd, "3ds", "3dssavesync", "base.ini"), []byte("ADAF=1234\n"))
-	if _, err := preparerCarte(sd, "http://192.0.2.5:8765", "abc"); err != nil {
+	if _, err := preparerCarte(sd, "http://192.0.2.5:8765", "abc", nil); err != nil {
 		t.Fatal(err)
 	}
 	if string(lire(f)) != "url=http://192.0.2.5:8765\njeton=abc\nroms=sdmc:/jeux\nsaves_gba=sdmc:/gba\n" {
@@ -66,7 +66,7 @@ func TestPreparerCarte(t *testing.T) {
 	os.Mkdir(filepath.Join(sd2, "Nintendo 3DS"), 0o755)
 	ancien := filepath.Join(sd2, "3ds", "nds-save-sync", "config.ini")
 	ecrire(t, ancien, []byte("url=https://ancien\nroms=sdmc:/x\n"))
-	if f, err := preparerCarte(sd2, "https://saves.example.com", "j"); err != nil || f != ancien || string(lire(ancien)) != "url=https://saves.example.com\njeton=j\nroms=sdmc:/x\n" ||
+	if f, err := preparerCarte(sd2, "https://saves.example.com", "j", nil); err != nil || f != ancien || string(lire(ancien)) != "url=https://saves.example.com\njeton=j\nroms=sdmc:/x\n" ||
 		existe(filepath.Join(sd2, "3ds", "3dssavesync")) {
 		t.Errorf("ancien dossier : %s %v", f, err)
 	}
@@ -151,5 +151,22 @@ func TestAdressesLocales(t *testing.T) {
 		if ip := net.ParseIP(a); ip == nil || ip.To4() == nil || !ip.IsPrivate() || slices.Contains(l[:i], a) {
 			t.Errorf("adresse %q dans %v", a, l)
 		}
+	}
+}
+
+// alias.ini de la 3DS : les alias du PC remplacent ou complètent les lignes, les autres restent.
+func TestAliasIni(t *testing.T) {
+	ancien := "Hack 3DS seul=GBA-0AAA\r\nRadical Red (4.10)=GBA-0OLD\r\n"
+	got := aliasIni(ancien, map[string]string{"Radical Red (4.10)": "GBA-0RAD", "Unbound": "GBA-0UNB"})
+	if want := "Hack 3DS seul=GBA-0AAA\nRadical Red (4.10)=GBA-0RAD\nUnbound=GBA-0UNB\n"; got != want {
+		t.Errorf("alias.ini :\n%q\nattendu\n%q", got, want)
+	}
+	sd := t.TempDir()
+	os.MkdirAll(filepath.Join(sd, "Nintendo 3DS"), 0o755)
+	if _, err := preparerCarte(sd, "http://192.0.2.5:8765", "abc", map[string]string{"Radical Red (4.10)": "GBA-0RAD"}); err != nil {
+		t.Fatal(err)
+	}
+	if o, _ := os.ReadFile(filepath.Join(sd, "3ds", "3dssavesync", "alias.ini")); string(o) != "Radical Red (4.10)=GBA-0RAD\n" {
+		t.Errorf("alias.ini écrit : %q", o)
 	}
 }

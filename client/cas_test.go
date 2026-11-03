@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -81,18 +82,41 @@ func TestRomHackEtAlias(t *testing.T) {
 		t.Fatalf("serveur ou ROM retenue faux : %q", retenue())
 	}
 
-	t.Log("Le hack (même Clé, autre fichier qui existe) : partie sans Synchronisation, une notification")
+	t.Log("Le hack (même Clé, autre fichier qui existe), Jouer sans synchroniser : une question, puis une notification")
 	reinitialiser()
+	reponses = []string{"Jouer sans synchroniser"}
 	partie = func() { ecrire(t, savRR, r2) }
 	if run(rr) != 0 || !joue {
 		t.Error("le hack doit démarrer")
 	}
-	if len(notifications) != 1 || !contient(notifications, "Pokemon Radical Red.gba est vu comme le même jeu que Pokemon Rouge Feu.gba") ||
-		!contient(notifications, "alias") {
+	if len(questions) != 1 || !strings.Contains(questions[0], "Pokemon Radical Red.gba est vu comme le même jeu que Pokemon Rouge Feu.gba") {
+		t.Errorf("question : %q", questions)
+	}
+	if len(notifications) != 1 || !contient(notifications, "Synchroniser à part") || !contient(notifications, "ROM hacks") {
 		t.Errorf("notification : %q", notifications)
 	}
 	if hachage(courante("GBA-BPRE")) != hachage(f1) || len(historique("GBA-BPRE")) != 1 || hachage(lire(savRR)) != hachage(r2) {
 		t.Error("le serveur doit garder la Sauvegarde d'origine, et le hack la sienne")
+	}
+
+	t.Log("Le hack, Synchroniser à part : alias créé dans config.json (copie avant), le hack part sous sa propre Clé")
+	reinitialiser()
+	reponses = []string{"Synchroniser à part (ROM hack)"}
+	run(rr)
+	var avecAlias Config
+	lireJSON(config, &avecAlias)
+	cleRR := avecAlias.Alias["Pokemon Radical Red"]
+	if !regexp.MustCompile(`^GBA-0[A-Z0-9]{3}$`).MatchString(cleRR) || hachage(courante(cleRR)) != hachage(r2) || hachage(courante("GBA-BPRE")) != hachage(f1) {
+		t.Errorf("alias %q : le hack doit partir sous sa Clé, Rouge Feu rester", cleRR)
+	}
+	if len(questions) != 1 || !contient(notifications, "a maintenant sa propre sauvegarde") ||
+		len(nomsDans(filepath.Join(tmp, "cfg"), "config.json.avant-3dssavesync-*")) == 0 {
+		t.Errorf("questions %q, notifications %q, copie de config.json attendue", questions, notifications)
+	}
+	reinitialiser()
+	run(rr)
+	if len(questions) != 0 || len(notifications) != 0 {
+		t.Errorf("lancement suivant sans question ni message : %q %q", questions, notifications)
 	}
 
 	t.Log("ROM retenue disparue (déplacée, extraction temporaire) : la nouvelle est acceptée et retenue")
@@ -328,8 +352,8 @@ func TestRomRetenueGlobale(t *testing.T) {
 		t.Errorf("Récupération attendue, questions %q", questions)
 	}
 	reinitialiser()
-	run("autre", rr)
-	if len(questions) != 0 || !contient(notifications, "est vu comme le même jeu") {
+	run("autre", rr) // la question propose « Synchroniser à part » ; sans réponse, le hack part sans synchronisation
+	if len(questions) != 1 || !contient(notifications, "est vu comme le même jeu") {
 		t.Errorf("questions %q, notifications %q", questions, notifications)
 	}
 }
@@ -423,5 +447,37 @@ func TestFormatNonLuAlias(t *testing.T) {
 	principal([]string{"run", "--config", config, "--emulator", "melonds", rom})
 	if !joue || codes() != "" || !contient(notifications, "format de ROM non lu") {
 		t.Errorf("serveur %q, notifications %q", codes(), notifications)
+	}
+}
+
+// Clé d'un alias créé par 3dssavesync : forme du Système, tirée du nom (même ROM, même Clé sur chaque PC), libre.
+func TestAjouterAlias(t *testing.T) {
+	cfg := &Config{}
+	a, err := ajouterAlias(cfg, "GBA", "Radical Red (4.10)")
+	if err != nil || !regexp.MustCompile(`^GBA-0[A-Z0-9]{3}$`).MatchString(a) {
+		t.Fatalf("GBA : %q %v", a, err)
+	}
+	if b, _ := ajouterAlias(&Config{}, "GBA", "Radical Red (4.10)"); b != a {
+		t.Errorf("même nom, autre PC : %q puis %q", a, b)
+	}
+	if b, _ := ajouterAlias(cfg, "GBA", "Radical Red (4.10)"); b != a || len(cfg.Alias) != 1 {
+		t.Errorf("alias existant gardé : %q, %v", b, cfg.Alias)
+	}
+	pris := &Config{Alias: map[string]string{"Autre hack": a}}
+	if b, _ := ajouterAlias(pris, "GBA", "Radical Red (4.10)"); b == a || !formesCle["GBA"].MatchString(b) {
+		t.Errorf("Clé déjà prise par un autre alias : %q", b)
+	}
+	for systeme, forme := range map[string]string{"DS": `^0[A-Z0-9]{3}$`, "GB": `^GB-ALIAS-[0-9A-F]{4}$`} {
+		if b, err := ajouterAlias(&Config{}, systeme, "Hack"); err != nil || !regexp.MustCompile(forme).MatchString(b) || !formesCle[systeme].MatchString(b) {
+			t.Errorf("%s : %q %v", systeme, b, err)
+		}
+	}
+	for _, nom := range []string{"", "  ", "a=b", "a\nb"} {
+		if _, err := ajouterAlias(&Config{}, "GBA", nom); err == nil {
+			t.Errorf("nom %q accepté", nom)
+		}
+	}
+	if _, err := ajouterAlias(&Config{}, "3DS", "Hack"); err == nil {
+		t.Error("alias 3DS accepté")
 	}
 }

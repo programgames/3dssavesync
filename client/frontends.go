@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +22,8 @@ import (
 	"time"
 )
 
-// Copie datée d'un fichier avant de le modifier ; rien si le fichier n'existe pas.
+// Copie datée d'un fichier avant de le modifier ; rien si le fichier n'existe pas. Deux changements dans la même
+// seconde (ajout puis retrait d'un alias) : -1, -2… en plus, jamais d'écrasement d'une copie.
 func copieAvant(chemin string) error {
 	o, err := os.ReadFile(chemin)
 	if os.IsNotExist(err) {
@@ -29,7 +32,14 @@ func copieAvant(chemin string) error {
 	if err != nil {
 		return err
 	}
-	return ecrireVerifie(chemin+".avant-3dssavesync-"+time.Now().Format("20060102-150405"), o)
+	nom := chemin + ".avant-3dssavesync-" + time.Now().Format("20060102-150405")
+	for i := 1; ; i++ {
+		err = ecrireVerifie(nom, o)
+		if !errors.Is(err, fs.ErrExist) || i == 10 {
+			return err
+		}
+		nom = fmt.Sprintf("%s.avant-3dssavesync-%s-%d", chemin, time.Now().Format("20060102-150405"), i)
+	}
 }
 
 // Remplacement d'un fichier de frontend : copie datée, fichier temporaire vérifié, puis renommage.
