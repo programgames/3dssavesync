@@ -12,7 +12,9 @@ Save of a ROM `<roms>/<subfolder>/X.nds` (or `.gb`, `.gbc`, `.gba`), depending o
 
 A ROM at the root keeps the same path as before. The mGBA forwarder does not change (`sdmc:/mGBA/forwarders/<name>.sav`). The comparison between `saves` and `roms` ignores case (FAT SD card).
 
-Two ROMs that give the same Save file (same name in two subfolders, with a shared save folder) are a Duplicate, like two ROMs with the same Key. Two Backup copies with the same name in the same second get the Key in their name.
+Two ROMs that give the same Save file (same name in two subfolders, with a shared save folder) are a Duplicate, like two ROMs with the same Key. Two GB/GBA ROMs with the same name (case ignored), even in different folders and even GB against GBA, are also a Duplicate: they would share one mGBA forwarder Save (`sdmc:/mGBA/forwarders/<name>.sav`). The message asks to rename one.
+
+The X key (switch between the mGBA forwarder and the ROM launcher) moves the Save to the file the scan reads for this ROM (table above), never next to the ROM by default. Two Backup copies with the same name in the same second get the Key in their name.
 
 ## Consequences
 
