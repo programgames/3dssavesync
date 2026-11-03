@@ -769,7 +769,7 @@ static int icone_ds(const jeu_t *j, u16 *pixels)
 
 /* ---------------------------------------------------------------- comparer deux Versions */
 
-/* « 152 h 30 · Julien », ou partie non commencée. */
+/* « 152 h 30 · Sacha », ou partie non commencée. */
 static void texte_partie(const partie_t *p, char *out, size_t n)
 {
     if (p->dresseur[0]) snprintf(out, n, "%d h %02d \xC2\xB7 %s", p->heures, p->minutes, p->dresseur);
@@ -1056,22 +1056,29 @@ static const char *phrase_etat(const jeu_t *j, char *t, size_t n)
 }
 
 /* Bande d'un message, collée au-dessus de la barre des touches (bas) : trait de couleur, texte, puis la ligne technique
- * en gris. Jamais au-dessus de y (fin des détails) : le texte est coupé avec « … » si la place manque. */
-static void bande(float y, float bas, const char *texte, const char *technique, u32 couleur)
+ * en gris, toutes deux sur plusieurs lignes. Elle monte aussi haut que le texte le demande, par-dessus les détails :
+ * le message reste entier (un peu plus petit s'il le faut ; « … » seulement s'il dépasse encore l'écran). */
+static void bande(float bas, const char *texte, const char *technique, u32 couleur)
 {
-    float l1 = ecran_hauteur(0.42f, 302, "X"), l2 = technique && technique[0] ? ecran_hauteur(0.38f, 302, "X") : 0, h;
-    int lignes = (int)(ecran_hauteur(0.42f, 302, texte) / l1 + 0.5f), place = (int)((bas - y - 6 - l2) / l1);
+    float taille, l1, l2 = technique && technique[0] ? ecran_hauteur(0.38f, 302, technique) : 0, h;
+    int lignes, place;
     if (!texte[0]) return;
+    for (taille = 0.42f;; taille = 0.36f) {
+        l1 = ecran_hauteur(taille, 302, "X");
+        lignes = (int)(ecran_hauteur(taille, 302, texte) / l1 + 0.5f);
+        place = (int)((bas - 12 - l2) / l1); /* jusqu'à 6 px du haut de l'écran */
+        if (lignes <= place || taille < 0.4f) break;
+    }
     if (lignes > place) lignes = place < 1 ? 1 : place;
     h = lignes * l1 + l2 + 6;
     ecran_rect(0, bas - h, 320, h, CARTE);
     ecran_rect(0, bas - h, 3, h, couleur);
-    ecran_lignes(10, bas - h + 3, 0.42f, BLANC, 302, lignes, texte);
-    if (l2) ecran_texte(10, bas - h + 3 + lignes * l1, 0.38f, GRIS_C, 302, technique);
+    ecran_lignes(10, bas - h + 3, taille, BLANC, 302, lignes, texte);
+    if (l2) ecran_paragraphe(10, bas - h + 3 + lignes * l1, 0.38f, GRIS_C, 302, technique);
 }
 
 /* Message de la dernière action, dans sa bande. */
-static void dessiner_message(float y, float bas) { bande(y, bas, message, message_detail, message_couleur); }
+static void dessiner_message(float bas) { bande(bas, message, message_detail, message_couleur); }
 
 static void dessiner_bas(const jeu_t *j)
 {
@@ -1110,10 +1117,10 @@ static void dessiner_bas(const jeu_t *j)
                        : !strcmp(b, j->hash_serveur) ? T("Même version que le serveur", "Same as the server") : T("Version différente des deux", "Differs from both"));
         }
     }
-    if (message[0]) dessiner_message(y + 2, FOND_BARRE_2);
+    if (message[0]) dessiner_message(FOND_BARRE_2);
     else if (maj_plus_recente(VERSION, maj_version)) { /* sans message : la mise à jour, à la même place */
         snprintf(t, sizeof t, T("Version %s disponible (SELECT)", "Version %s available (SELECT)"), maj_version);
-        bande(y + 2, FOND_BARRE_2, t, NULL, C_CYAN);
+        bande(FOND_BARRE_2, t, NULL, C_CYAN);
     }
 
     /* Barre : en haut, ce que font A (toujours affichée, grisée s'il n'y a rien à faire) et X (GB/GBA) pour ce jeu ;
@@ -1221,7 +1228,7 @@ static int confirmer(const char *titre, const char *sous_titre, const char *text
             } else y += ligne[0] ? ecran_paragraphe(8, y, 0.45f, BLANC, 304, ligne) : 6;
             s += n + (s[n] == '\n');
         }
-        if (avertissement) bande(y + 4, FOND_BARRE_1, avertissement, NULL, C_ROUGE);
+        if (avertissement) bande(FOND_BARRE_1, avertissement, NULL, C_ROUGE);
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
         ecran_finir();
@@ -1567,7 +1574,7 @@ static void choisir_titres(void)
             y += ecran_paragraphe(8, y, 0.5f, GRIS_C, 304, T("Aucun jeu trouvé.", "No game found.")) + 6;
         }
         y += ecran_paragraphe(8, y, 0.42f, GRIS_C, 304, T("Un jeu manque ? Lancez-le une fois et sauvegardez.", "Game missing? Start it once and save.")) + 6;
-        dessiner_message(y, FOND_BARRE_1);
+        dessiner_message(FOND_BARRE_1);
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
         ecran_finir();
@@ -1755,7 +1762,7 @@ static int reglages(int premier)
                                                          : c == nb ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
                                                                    : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 6;
         }
-        if (message[0]) dessiner_message(y, FOND_BARRE_1);
+        if (message[0]) dessiner_message(FOND_BARRE_1);
         else if (c == nb + 2 && maj_detail[0]) { /* dernière vérification : texte, puis sa ligne technique (après le dernier saut) */
             char d[sizeof maj_detail];
             char *nl;
@@ -1764,7 +1771,7 @@ static int reglages(int premier)
             snprintf(d, sizeof d, "%s", maj_detail);
             nl = strrchr(d, '\n');
             if (nl) *nl++ = '\0';
-            bande(y, FOND_BARRE_1, d, nl, couleur == GRIS_C ? BLANC : couleur);
+            bande(FOND_BARRE_1, d, nl, couleur == GRIS_C ? BLANC : couleur);
         }
         fond_barre(1);
         ligne_touches(t, 2, 240 - HAUTEUR_TOUCHE - 4, 18);
