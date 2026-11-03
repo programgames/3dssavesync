@@ -6,4 +6,7 @@
  * aucun point d'accès. Une phrase courte qui dit quoi faire. */
 const char *texte_reseau(long statut, int wifi, int anglais);
 
+/* Même chose pour GitHub (vérification et téléchargement d'une mise à jour, ADR 0021). */
+const char *texte_github(long statut, int wifi, int anglais);
+
 #endif

@@ -1,4 +1,4 @@
-/* Vérifie texte_reseau() : codes curl et HTTP -> phrase pour l'utilisateur.
+/* Vérifie texte_reseau() et texte_github() : codes curl et HTTP -> phrase pour l'utilisateur.
  * Compilé sur PC : gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e */
 #include <stdio.h>
 #include <string.h>
@@ -6,15 +6,17 @@
 
 static int echecs, total;
 
-static void cas(long statut, int wifi, int anglais, const char *attendu)
+static void cas_texte(const char *t, long statut, int wifi, const char *attendu)
 {
-    const char *t = texte_reseau(statut, wifi, anglais);
     total++;
     if (strcmp(t, attendu)) {
         printf("ECHEC  statut %ld, wifi %d : attendu « %s », obtenu « %s »\n", statut, wifi, attendu, t);
         echecs++;
     }
 }
+
+static void cas(long statut, int wifi, int anglais, const char *attendu) { cas_texte(texte_reseau(statut, wifi, anglais), statut, wifi, attendu); }
+static void cas_github(long statut, int wifi, int anglais, const char *attendu) { cas_texte(texte_github(statut, wifi, anglais), statut, wifi, attendu); }
 
 int main(void)
 {
@@ -35,6 +37,16 @@ int main(void)
     cas(413, 1, 1, "Save too large for the server.");
     cas(502, 1, 0, "Le serveur a un problème : réessayez plus tard.");
     cas(302, 1, 0, "Réponse inattendue du serveur : vérifiez l'adresse.");
+    cas_github(-6, 0, 0, "Pas de réseau : activez le Wi-Fi de la 3DS, puis réessayez.");
+    cas_github(-6, 1, 0, "GitHub injoignable : vérifiez l'accès à Internet, puis réessayez.");
+    cas_github(-60, 1, 1, "Secure connection to GitHub failed: check the 3DS date and time.");
+    cas_github(-18, 1, 0, "Connexion à GitHub coupée : rapprochez-vous du point d'accès, puis réessayez."); /* CURLE_PARTIAL_FILE */
+    cas_github(-56, 1, 1, "Connection to GitHub cut: move closer to the access point, then try again.");
+    cas_github(-63, 1, 0, "Fichier de mise à jour trop grand : il n'est pas téléchargé."); /* CURLE_FILESIZE_EXCEEDED */
+    cas_github(403, 1, 0, "GitHub limite les vérifications : réessayez dans une heure."); /* 60 requêtes par heure sans compte */
+    cas_github(429, 1, 1, "GitHub limits the checks: try again in an hour.");
+    cas_github(404, 1, 0, "Réponse inattendue de GitHub : réessayez plus tard.");
+    cas_github(200, 1, 1, "Unexpected answer from GitHub: try again later."); /* 200 sans tag_name */
     printf("%d/%d cas OK\n", total - echecs, total);
     return echecs != 0;
 }

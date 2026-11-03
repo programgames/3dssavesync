@@ -340,6 +340,62 @@ Only native 3DS games with a single save file are supported.
 
 open_agb_firm writes the `.sav` file only when you turn off the 3DS with POWER. Turn it off with POWER after you play, then sync at the next start.
 
+### Update messages
+
+The **Update** line of the settings (**SELECT**) shows the result of the last check or install. The last line of a failure gives a code (`curl 6`, `HTTP 403`, `AM 0x…`): copy it if you [report a bug](#report-a-bug). After any of these failures, the old version of the app stays, and your saves do not change.
+
+> No network: turn on the 3DS Wi-Fi, then try again. *(Pas de réseau : activez le Wi-Fi de la 3DS, puis réessayez.)*
+
+Turn on the Wi-Fi, then press **A** on **Update** again.
+
+> GitHub unreachable: check the Internet access, then try again. *(GitHub injoignable : vérifiez l'accès à Internet, puis réessayez.)*
+
+The 3DS reaches your home network, but not the Internet. Check the Internet access of the router. A local server works without Internet; only updates need it.
+
+> GitHub limits the checks: try again in an hour. *(GitHub limite les vérifications : réessayez dans une heure.)*
+
+GitHub accepts 60 checks per hour from one Internet address, for all the devices of your home. Wait one hour, then try again.
+
+> Secure connection to GitHub failed: check the 3DS date and time. *(Connexion sécurisée à GitHub impossible : vérifiez la date et l'heure de la 3DS.)*
+
+Set the date and time of the 3DS (System Settings). If the message stays, GitHub changed its certificates: install the new version by hand (see the end of this section).
+
+> Connection to GitHub cut: move closer to the access point, then try again. *(Connexion à GitHub coupée : rapprochez-vous du point d'accès, puis réessayez.)*
+> Download failed: nothing is installed. … *(Téléchargement impossible : rien n'est installé. …)*
+
+The download stopped. Move closer to the router, then press **A** on **Update** again.
+
+> Downloaded file damaged (checksum differs): nothing is installed. Try again. *(Fichier téléchargé abîmé (somme de contrôle différente) : rien n'est installé. Réessayez.)*
+
+The downloaded file is not the file of the release. Try again. If the message stays, install the new version by hand.
+
+> Not enough space on the SD card: free 2 MB, then try again. Nothing is installed. *(Pas assez de place sur la carte SD : libérez 2 Mo, puis réessayez. Rien n'est installé.)*
+
+Delete files you do not need from the SD card (not the saves), then try again.
+
+> Installation refused by the 3DS: the old version stays. Restart the 3DS, then try again. *(Installation refusée par la 3DS : l'ancienne version reste. Redémarrez la 3DS, puis réessayez.)*
+
+The 3DS refused the `.cia`. Restart the 3DS, then try again. If the message stays, install the new version by hand with FBI.
+
+> Version 3.7.0 incomplete on GitHub: nothing is installed. Install it by hand (3DS guide). *(Version 3.7.0 incomplète sur GitHub : rien n'est installé. Installez-la à la main (guide de la 3DS).)*
+> SHA256SUMS without 3dssavesync.cia: nothing is installed. … *(SHA256SUMS sans 3dssavesync.cia : rien n'est installé. …)*
+
+The release has no `SHA256SUMS` file, or no file for your 3DS. The app installs nothing that it cannot check. Install the new version by hand.
+
+> Cannot write to the SD card: the old version stays. Check the SD card, then try again. *(Écriture sur la carte SD impossible : l'ancienne version reste. Vérifiez la carte SD, puis réessayez.)*
+
+Only with the `.3dsx`. The SD card is full, locked (lock switch), or damaged.
+
+> New version checked but not renamed: on a PC, rename …/3dssavesync.3dsx.tmp to 3dssavesync.3dsx. *(Nouvelle version vérifiée mais pas renommée : …)*
+
+Only with the `.3dsx`. The new file is complete and checked, but it kept its `.tmp` name. Put the SD card in a PC, and rename the file as the message says.
+
+> Development build: no update offered. *(Version de développement : aucune mise à jour proposée.)*
+
+You built the app yourself from the source code. Install a release to get updates.
+
+**Install a version by hand**: download `3dssavesync.cia` from the [releases page](https://github.com/programgames/3dssavesync/releases), copy it to the SD card, and install it with FBI. Your saves and settings stay.
+
 ## Server and network
 
 The PC shows these messages in the settings page (**Test the connection**, **Save**), and in the "Sync failed" window before a game.
