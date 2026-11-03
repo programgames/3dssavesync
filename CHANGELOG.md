@@ -1,0 +1,126 @@
+# Changelog
+
+What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
+
+## [3.7.0] - Unreleased
+
+### Added
+
+- **Icon near the clock** (Windows, Linux). Right-click it to open the settings, upload pending saves now, or see whether the local server runs. It starts with your session and runs the local server itself, so only one program stays in memory.
+- **Portable version.** Put `portable.txt` next to the program and everything stays in that folder: settings, backup copies, server data. Handy on a USB stick or in the LaunchBox folder. Releases include a Windows `.zip` and a Linux `.tar.gz` ready to use.
+- **The 3DS app updates itself** from GitHub, when you ask for it in its settings. It checks the download before it installs it.
+- **The PC program updates itself** from the settings page. The old program stays next to the new one, in case you want to go back.
+- **Guided first start.** Without settings, the page walks you through four steps: server, emulators, 3DS SD card, done.
+- **Prepare the 3DS SD card** now also copies `3dssavesync.cia`, the same version as the PC program, so you install the 3DS app with FBI from the card. The page warns when the card is locked, full, or has no FBI, and never replaces a newer app with an older one.
+- **Checks** ("Is everything ready?"): one list in the settings page that tells you what's left to do, with a button to fix each line.
+- When you add an emulator that LaunchBox already knows, its extra arguments (like `-f` for full screen) are offered for 3dssavesync too.
+- A new icon for the 3DS app, its banner, and the Windows program.
+- Each release now publishes `SHA256SUMS`.
+
+### Changed
+
+- **Redesigned settings page**: status badges at the top, one row per emulator with a switch, a dark theme, and emulators you don't use folded away.
+- **Redesigned 3DS app**: one word per game state, clearer details ("Same version as the server", "5 h ago · from pc"), side-by-side cards for a conflict, a progress bar, and a footer that shows when the server list was last read.
+- Messages on the PC, in the settings page and on the 3DS are rewritten in plainer French and English. Errors say what to do, then give the technical detail on its own line.
+- A Scoop install of an emulator shows once, with its real program, instead of twice.
+
+### Fixed
+
+- Uninstalling no longer removes the LaunchBox emulators that versions 1 and 2 changed in place (melonDS, mGBA, Azahar, RetroArch). It points them back to their real program, gives RetroArch its core back, and tells you when a platform ends up with two default emulators.
+- The 3DS app no longer shows an impossible Pokémon play time.
+
+### Removed
+
+- The old PowerShell launcher (`pc/sync.ps1`) and the `migrate-v2` command that imported its settings. Version 2 installs should set up 3dssavesync from the settings page.
+
+## [3.6.1] - 2026-11-03
+
+### Added
+
+- **Uninstall**, from the settings page or `3dssavesync uninstall`. LaunchBox and ES-DE get their original emulators back, and the shortcuts and the program go to the Recycle Bin. Your saves and backups stay.
+
+## [3.6.0] - 2026-11-03
+
+### Added
+
+- **Restore an old version** of any save from the PC, in the new History part of the settings page.
+- **ROM hacks** can keep a save of their own, without changing any file.
+- **Game names** are stored on the server, so lists show names instead of keys.
+- ROMs in subfolders on the 3DS.
+- A failed upload is retried at the next game.
+
+### Changed
+
+- **Simpler first start**: the local server is the default, and the PC writes the 3DS settings to the SD card, so there's nothing to type on the 3DS.
+- New settings page with a side menu and a status bar.
+- Clearer messages on the PC and the 3DS, each saying what to do.
+- All documentation is now in English, with a troubleshooting guide.
+
+### Fixed
+
+- Some Game Boy ROMs crashed the PC program while it read their key.
+- ROMs in a format the program can't read (`.7z`) now start without sync, with a message.
+- The 3DS writes its settings and sync state through a checked temporary file.
+
+## [3.5.0] - 2026-11-02
+
+### Fixed
+
+- GBA games with EEPROM saves and Game Boy games with MBC2 saves now sync between emulators that store them differently.
+
+## [3.4.0] - 2026-11-02
+
+### Added
+
+- Profiles for SkyEmu, NanoBoyAdvance and BGB.
+- RetroArch cores gpSP and Beetle GBA.
+- **Open** buttons in the settings page start an emulator with a sync before and after.
+
+## [3.3.1] - 2026-11-02
+
+### Added
+
+- Two different games can run at the same time (for a Pokémon trade, for example).
+
+## [3.3.0] - 2026-11-02
+
+### Added
+
+- DeSmuME profile.
+- Play time and trainer name for every main Pokémon game from Red and Blue to Ultra Moon, shown when you have to choose between two versions.
+
+### Fixed
+
+- Game Boy and GBA clock data is recognised for every save size, so saves with a clock sync between emulators.
+
+## [3.2.0] - 2026-11-02
+
+### Changed
+
+- The 3DS app is now drawn with graphics instead of a text console, and shows the date and play time of both versions in a conflict.
+
+## [3.1.0] - 2026-11-02
+
+### Added
+
+- A 3DS Pokémon game never started in Azahar gets its save from the server.
+
+## [3.0.0] - 2026-11-01
+
+First release under the name 3dssavesync.
+
+- One PC program for Windows, Linux and macOS, with profiles for melonDS, mGBA, Azahar, RetroArch, VBA-M and SameBoy.
+- A settings page in your browser, which sets up LaunchBox, ES-DE and shortcuts.
+- A local server built into the PC program, or your own Docker server with automatic HTTPS.
+- A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
+
+[3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...HEAD
+[3.6.1]: https://github.com/programgames/3dssavesync/compare/v3.6.0...v3.6.1
+[3.6.0]: https://github.com/programgames/3dssavesync/compare/v3.5.0...v3.6.0
+[3.5.0]: https://github.com/programgames/3dssavesync/compare/v3.4.0...v3.5.0
+[3.4.0]: https://github.com/programgames/3dssavesync/compare/v3.3.1...v3.4.0
+[3.3.1]: https://github.com/programgames/3dssavesync/compare/v3.3.0...v3.3.1
+[3.3.0]: https://github.com/programgames/3dssavesync/compare/v3.2.0...v3.3.0
+[3.2.0]: https://github.com/programgames/3dssavesync/compare/v3.1.0...v3.2.0
+[3.1.0]: https://github.com/programgames/3dssavesync/compare/v3.0.0...v3.1.0
+[3.0.0]: https://github.com/programgames/3dssavesync/releases/tag/v3.0.0

@@ -153,7 +153,7 @@ cd 3ds && make cia                                   # devkitPro, makerom and ba
 
 C tests (gcc on the PC): see `.github/workflows/ci.yml`. GitHub Actions runs every test (Go on Windows, Linux and macOS) and builds the `.cia`. A `v*` tag publishes a release with the PC programs and the server image.
 
-Code identifiers and comments are in French. The apps speak English and French.
+The apps speak English and French. Most code identifiers and comments are still French and are being moved to English. See [CONTRIBUTING.md](CONTRIBUTING.md) for the build steps, the rules every change follows, and how AI tools are used here. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
