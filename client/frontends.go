@@ -49,15 +49,7 @@ func replaceFile(path string, content []byte) error {
 	if err := copyBefore(path); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp := path + ".3dssavesync-tmp"
-	os.Remove(tmp)
-	if err := writeVerified(tmp, content); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return writeAtomic(path, content)
 }
 
 func escapeXML(s string) string {

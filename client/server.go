@@ -220,16 +220,8 @@ func (s *Server) put(w http.ResponseWriter, r *http.Request) {
 	}
 	dir := filepath.Join(s.data, m[1])
 	name := fmt.Sprintf("%06d-%s-%s-%s.sav", seq, time.Now().UTC().Format("20060102T150405Z"), client, h)
-	tmp := filepath.Join(dir, name+".tmp")
-	err := os.MkdirAll(dir, 0o755)
-	if err == nil {
-		os.Remove(tmp)
-		err = writeVerified(tmp, body) // written to disk and read back: an accepted Version survives a power cut
-	}
-	if err == nil {
-		err = os.Rename(tmp, filepath.Join(dir, name))
-	}
-	if err != nil {
+	// Written to disk and read back: an accepted Version survives a power cut.
+	if err := writeAtomic(filepath.Join(dir, name), body); err != nil {
 		answer(w, 500, nil, "")
 		return
 	}
@@ -250,13 +242,7 @@ func (s *Server) setName(w http.ResponseWriter, key string, body []byte) {
 	}
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	tmp := filepath.Join(s.data, key, "nom.txt.tmp")
-	os.Remove(tmp)
-	err := writeVerified(tmp, []byte(name)) // written to disk and read back, like a Version
-	if err == nil {
-		err = os.Rename(tmp, filepath.Join(s.data, key, "nom.txt"))
-	}
-	if err != nil {
+	if err := writeAtomic(filepath.Join(s.data, key, "nom.txt"), []byte(name)); err != nil { // like a Version
 		answer(w, 500, nil, "")
 		return
 	}

@@ -469,18 +469,37 @@ func writeJSON(path string, v any, replace bool) error {
 	if err != nil {
 		return err
 	}
+	if replace {
+		return writeAtomic(path, o)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if !replace {
-		return writeVerified(path, o)
-	}
-	tmp := path + ".tmp"
-	os.Remove(tmp)
-	if err := writeVerified(tmp, o); err != nil {
+	return writeVerified(path, o)
+}
+
+// tmpSuffix ends the temporary file of every atomic write.
+const tmpSuffix = ".3dssavesync-tmp"
+
+// writeAtomic replaces path (folders created) with buf: verified temporary file next to it, then rename. On failure
+// path stays as it was and no temporary file is left.
+func writeAtomic(path string, buf []byte) error { return writeAtomicIn(filepath.Dir(path), path, buf) }
+
+// writeAtomicIn is writeAtomic with the temporary file in dir (a 3DS Save archive must hold only its own files).
+func writeAtomicIn(dir, path string, buf []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := filepath.Join(dir, filepath.Base(path)+tmpSuffix)
+	os.Remove(tmp) // leftover of a hard stop
+	if err := writeVerified(tmp, buf); err != nil {
+		return err
+	}
+	if err := rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // writeVerified creates the file (never overwrites), writes it to disk, then reads it back.
@@ -565,8 +584,7 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 		return damagedError(tr("la sauvegarde reçue du serveur est incomplète, la vôtre n'a pas été remplacée. Relancez le jeu",
 			"the save from the server arrived incomplete, so yours wasn't replaced. Start the game again"))
 	}
-	dir := filepath.Dir(j.File)
-	tmp := j.File + ".3dssavesync-tmp"
+	dir, tmpDir := filepath.Dir(j.File), filepath.Dir(j.File)
 	if j.System == "3DS" {
 		// No folder = Azahar never saw this game. Create it only with a known .metadata (formats3DS) and never
 		// over an existing .metadata; otherwise refuse (ADR 0009).
@@ -584,9 +602,7 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 				return err
 			}
 		}
-		tmp = filepath.Join(filepath.Dir(dir), "main.3dssavesync-tmp") // the archive must hold only main
-	} else if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		tmpDir = filepath.Dir(dir) // the archive must hold only main
 	}
 	content := o
 	if l != nil {
@@ -618,12 +634,7 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 			return err
 		}
 	}
-	os.Remove(tmp) // leftover of a hard stop
-	if err := writeVerified(tmp, content); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, j.File); err != nil {
-		os.Remove(tmp)
+	if err := writeAtomicIn(tmpDir, j.File, content); err != nil {
 		return err
 	}
 	if reread, err := os.ReadFile(j.File); err != nil || !bytes.Equal(reread, content) {

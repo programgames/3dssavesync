@@ -431,23 +431,18 @@ func installExe(cfg *Config, dir string) string {
 	stopTray(dir) // on failure the installed exe may stay locked; the copy message says what to do
 	o, err := os.ReadFile(current)
 	if err == nil {
-		err = os.MkdirAll(filepath.Dir(target), 0o755)
-	}
-	if err == nil {
-		os.Remove(target + ".3dssavesync-tmp")
-		if err = writeVerified(target+".3dssavesync-tmp", o); err == nil {
-			os.Chmod(target+".3dssavesync-tmp", 0o755)
-			if err = rename(target+".3dssavesync-tmp", target); err != nil { // installed exe running
-				os.Remove(target + ".3dssavesync-tmp")
-				return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
-					"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
-					"\n" + tr("Détail : ", "Detail: ") + err.Error()
-			}
+		err = writeAtomic(target, o)
+		var running *os.LinkError
+		if errors.As(err, &running) { // the rename failed: installed exe running
+			return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
+				"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
+				"\n" + tr("Détail : ", "Detail: ") + err.Error()
 		}
 	}
 	if err != nil {
 		return tr("Impossible de copier le programme, il est peut-être encore ouvert : ", "Couldn't copy the program, it may still be running: ") + errorText(err)
 	}
+	os.Chmod(target, 0o755)
 	cfg.Launcher = target
 	return tr("Programme copié : ", "Program copied: ") + target
 }
