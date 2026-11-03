@@ -195,3 +195,42 @@ func TestAssistant(t *testing.T) {
 		t.Errorf("LaunchBox déjà en place attendu :\n%s", sortie.String())
 	}
 }
+
+// Version portable (ADR 0020) : portable.txt à côté de l'exe. Réglages dans le dossier de l'exe, exe jamais copié,
+// frontends vers l'exe en cours, dossier en lecture seule refusé avec un message.
+func TestPortable(t *testing.T) {
+	m := maisonFactice(t)
+	dossier := filepath.Join(t.TempDir(), "LaunchBox", "ThirdParty", "3dssavesync")
+	exe := filepath.Join(dossier, "3dssavesync.exe")
+	ecrire(t, exe, []byte("lanceur"))
+	executableAvant := executable
+	t.Cleanup(func() { executable = executableAvant })
+	executable = func() string { return exe }
+
+	normal := emplacementInstalle()
+	if configDefaut() == filepath.Join(dossier, "config.json") || !strings.HasPrefix(configDefaut(), m) || normal == exe {
+		t.Fatalf("sans portable.txt : réglages dans la maison, pas à côté de l'exe (%s, %s)", configDefaut(), normal)
+	}
+	ecrire(t, filepath.Join(dossier, "portable.txt"), []byte("portable"))
+	if configDefaut() != filepath.Join(dossier, "config.json") {
+		t.Errorf("config.json à côté de l'exe attendu : %s", configDefaut())
+	}
+	if emplacementInstalle() != exe || lanceurDe(&Config{Lanceur: filepath.Join("E:", "ancien", "3dssavesync.exe")}) != exe {
+		t.Errorf("frontends et raccourcis vers l'exe en cours attendus : %s, %s", emplacementInstalle(), lanceurDe(&Config{Lanceur: "x"}))
+	}
+	cfg := &Config{}
+	if l := installerExe(cfg); !strings.Contains(l, "Exe en place") || cfg.Lanceur != exe || existe(normal) {
+		t.Errorf("l'exe ne doit pas être copié : %q, Lanceur %q", l, cfg.Lanceur)
+	}
+	if err := verifierPortable(dossier); err != nil {
+		t.Errorf("dossier modifiable : %v", err)
+	}
+	if n, _ := filepath.Glob(filepath.Join(dossier, ".3dssavesync-essai-*")); len(n) != 0 {
+		t.Errorf("fichier d'essai laissé : %v", n)
+	}
+	err := verifierPortable(filepath.Join(dossier, "absent"))
+	if err == nil || !strings.Contains(err.Error(), "Déplacez ce dossier") || !strings.Contains(err.Error(), "supprimez portable.txt") ||
+		!strings.Contains(err.Error(), "\nDétail : ") {
+		t.Errorf("dossier où rien ne s'écrit : message attendu, %v", err)
+	}
+}

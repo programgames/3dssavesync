@@ -132,6 +132,15 @@ jobs:
             if [ "$os" = windows ]; then ext=.exe; drapeaux="$drapeaux -H windowsgui"; fi
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "$drapeaux" -o "../dist/3dssavesync-$os-$arch$ext" .
           done
+      # Version portable (ADR 0020) : l'exe et portable.txt (une seule source : .github/portable.txt), hors de dist/.
+      - name: Archives portables
+        run: |
+          mkdir -p portable/windows portable/linux
+          cp .github/portable.txt portable/windows/ && cp .github/portable.txt portable/linux/
+          cp dist/3dssavesync-windows-amd64.exe portable/windows/3dssavesync.exe
+          cp dist/3dssavesync-linux-amd64 portable/linux/3dssavesync && chmod +x portable/linux/3dssavesync
+          (cd portable/windows && zip -q ../../dist/3dssavesync-windows-amd64-portable.zip 3dssavesync.exe portable.txt)
+          tar -czf dist/3dssavesync-linux-amd64-portable.tar.gz -C portable/linux 3dssavesync portable.txt
       - name: Release GitHub
         env:
           GH_TOKEN: ${{ github.token }}

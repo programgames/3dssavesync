@@ -120,33 +120,38 @@ func principal(args []string) int {
 	dossier := filepath.Dir(*config)
 	var code int
 	var err error
-	switch args[0] {
-	case "run":
-		code, err = commandeRun(*config, *emulateur, *rom, fl.Args())
-	case "launch":
-		if fl.NArg() != 1 {
-			err = errors.New(tr("launch : un nom d'émulateur", "launch: one emulator name"))
-			break
+	if d := dossierPortable(); d != "" {
+		err = verifierPortable(d)
+	}
+	if err == nil {
+		switch args[0] {
+		case "run":
+			code, err = commandeRun(*config, *emulateur, *rom, fl.Args())
+		case "launch":
+			if fl.NArg() != 1 {
+				err = errors.New(tr("launch : un nom d'émulateur", "launch: one emulator name"))
+				break
+			}
+			code, err = commandeLaunch(*config, fl.Arg(0))
+		case "setup":
+			code, err = commandeSetup(*config, *texte, *sansNavigateur)
+		case "repair":
+			code, err = commandeRepair(*config)
+		case "uninstall":
+			code, err = commandeUninstall(*config, *oui)
+		case "serve":
+			code, err = commandeServe(*config)
+		case "restore":
+			code = commandeRestoreConsole(*config, fl.Args(), *oui)
+		case "migrate-v2":
+			if fl.NArg() != 1 {
+				err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))
+				break
+			}
+			err = migrerV2(fl.Arg(0), *config)
+		default:
+			err = fmt.Errorf(tr("commande inconnue : %s", "unknown command: %s"), args[0])
 		}
-		code, err = commandeLaunch(*config, fl.Arg(0))
-	case "setup":
-		code, err = commandeSetup(*config, *texte, *sansNavigateur)
-	case "repair":
-		code, err = commandeRepair(*config)
-	case "uninstall":
-		code, err = commandeUninstall(*config, *oui)
-	case "serve":
-		code, err = commandeServe(*config)
-	case "restore":
-		code = commandeRestoreConsole(*config, fl.Args(), *oui)
-	case "migrate-v2":
-		if fl.NArg() != 1 {
-			err = errors.New(tr("migrate-v2 : le dossier de sync.ps1", "migrate-v2: the sync.ps1 folder"))
-			break
-		}
-		err = migrerV2(fl.Arg(0), *config)
-	default:
-		err = fmt.Errorf(tr("commande inconnue : %s", "unknown command: %s"), args[0])
 	}
 	if err != nil {
 		(&Session{dossier: dossier}).journal("erreur : " + err.Error() + " (" + strings.Join(args, " ") + ")")
@@ -162,6 +167,9 @@ func principal(args []string) int {
 }
 
 func configDefaut() string {
+	if d := dossierPortable(); d != "" {
+		return filepath.Join(d, "config.json")
+	}
 	if d, err := os.UserConfigDir(); err == nil {
 		return filepath.Join(d, "3dssavesync", "config.json")
 	}

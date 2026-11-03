@@ -66,6 +66,16 @@ Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
 
 The local server syncs at home, when the PC is on. To sync from anywhere, run the server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. See the [server guide](docs/guide-server.md).
 
+### Portable version
+
+Keep everything in one folder, for example `LaunchBox\ThirdParty\3dssavesync`, a USB drive or the SD card of a Steam Deck:
+
+1. Download [3dssavesync-windows-amd64-portable.zip](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-windows-amd64-portable.zip) or [3dssavesync-linux-amd64-portable.tar.gz](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-linux-amd64-portable.tar.gz).
+2. Extract it to a folder where you can write (not `Program Files`, not a read-only drive).
+3. Start `3dssavesync` from this folder (Linux: `./3dssavesync setup`), then continue at step 3 of [The PC](#1-the-pc).
+
+The file `portable.txt` next to the program makes it portable: the settings, the log, the backup copies and the local server data stay in this folder. The program is never copied elsewhere, and LaunchBox, ES-DE and the shortcuts start it from this folder. Delete `portable.txt` to go back to the normal mode. See [ADR 0020](docs/adr/0020-version-portable.md).
+
 ## Everyday use
 
 - **PC**: start your games from your frontend or the shortcuts, as before. Close the emulator to send the save.
@@ -115,7 +125,7 @@ With the local server, nothing leaves your home network. Your saves stay in your
 2. Open **3dssavesync settings**, part **Frontends and install**, then click **Uninstall 3dssavesync**.
 3. On the 3DS, open FBI, **Titles**, **3dssavesync**, **Delete Title**.
 
-LaunchBox and ES-DE get their original emulators back, so your games start as before. The shortcuts and the program go to the Recycle Bin. Your saves do not move; the settings, the backup copies and the local server data stay, and the report says where. Without the settings page: `3dssavesync uninstall`.
+LaunchBox and ES-DE get their original emulators back, so your games start as before. The shortcuts and the program go to the Recycle Bin (portable version: the program stays; delete its folder yourself). Your saves do not move; the settings, the backup copies and the local server data stay, and the report says where. Without the settings page: `3dssavesync uninstall`.
 
 ## How it works
 

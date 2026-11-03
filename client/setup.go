@@ -74,8 +74,11 @@ func (q *Questions) secret(question string) string {
 	return q.ligne()
 }
 
-// Emplacement fixe de l'exe : les frontends et les raccourcis pointent vers lui.
+// Emplacement fixe de l'exe : les frontends et les raccourcis pointent vers lui. Version portable : l'exe en cours.
 func emplacementInstalle() string {
+	if dossierPortable() != "" {
+		return executable()
+	}
 	switch runtime.GOOS {
 	case "windows":
 		return env("LOCALAPPDATA", "Programs", "3dssavesync", "3dssavesync.exe")
@@ -87,6 +90,29 @@ func emplacementInstalle() string {
 
 // Exe en cours ; vide en test (le binaire de test n'est pas le Lanceur).
 var executable = func() string { e, _ := os.Executable(); return e }
+
+// Version portable (ADR 0020) : portable.txt à côté de l'exe. Réglages et données dans le dossier de l'exe, qui n'est
+// jamais copié ailleurs. Rend ce dossier, ou "".
+func dossierPortable() string {
+	e := executable()
+	if e == "" || !existe(filepath.Join(filepath.Dir(e), "portable.txt")) {
+		return ""
+	}
+	return filepath.Dir(e)
+}
+
+// Dossier portable en lecture seule (clé verrouillée, Program Files) : une erreur qui dit quoi faire, jamais un repli
+// silencieux sur le dossier de l'utilisateur.
+func verifierPortable(d string) error {
+	f, err := os.CreateTemp(d, ".3dssavesync-essai-*")
+	if err != nil {
+		return fmt.Errorf(tr("Version portable : 3dssavesync ne peut pas écrire dans son dossier %s. Déplacez ce dossier vers un emplacement modifiable (pas Program Files, pas une clé en lecture seule), ou supprimez portable.txt pour garder les réglages dans le dossier de l'utilisateur.\nDétail : %v",
+			"Portable version: 3dssavesync cannot write to its folder %s. Move this folder to a writable place (not Program Files, not a read-only drive), or delete portable.txt to keep the settings in the user folder.\nDetail: %v"), d, err)
+	}
+	f.Close()
+	os.Remove(f.Name())
+	return nil
+}
 
 func commandeSetup(config string, texte, sansNavigateur bool) (int, error) {
 	if !texte {
@@ -151,9 +177,10 @@ func commandeUninstall(config string, oui bool) (int, error) {
 	return 0, nil
 }
 
-// Exe vers lequel pointent les frontends : celui noté à l'installation, sinon l'exe en cours.
+// Exe vers lequel pointent les frontends : celui noté à l'installation, sinon l'exe en cours. Version portable :
+// toujours l'exe en cours (la lettre d'une clé USB change).
 func lanceurDe(cfg *Config) string {
-	if cfg.Lanceur != "" {
+	if cfg.Lanceur != "" && dossierPortable() == "" {
 		return cfg.Lanceur
 	}
 	return executable()

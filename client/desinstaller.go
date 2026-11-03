@@ -3,7 +3,8 @@ package main
 // Désinstallation (ADR 0019) : défait ce que l'installation a fait hors des dossiers de 3dssavesync, pour que LaunchBox
 // et ES-DE lancent de nouveau leurs jeux sans lui. Rien n'est effacé définitivement : les fichiers des frontends sont
 // copiés avant (remplacerFichier), les raccourcis et le programme vont à la Corbeille (Windows). Les réglages, les copies
-// de sécurité et les données du serveur local restent : ce sont les données de l'utilisateur.
+// de sécurité et les données du serveur local restent : ce sont les données de l'utilisateur. Version portable
+// (ADR 0020) : le programme et son dossier restent, le rapport dit de supprimer ce dossier.
 
 import (
 	"errors"
@@ -147,7 +148,10 @@ func desinstaller(cfg *Config, config string) ([]string, error) {
 	if retires > 0 {
 		rapport = append(rapport, fmt.Sprintf(tr("%d raccourci(s) mis à la Corbeille", "%d shortcut(s) moved to the Recycle Bin"), retires))
 	}
-	if installe := emplacementInstalle(); existe(installe) {
+	if portable := dossierPortable(); portable != "" {
+		rapport = append(rapport, fmt.Sprintf(tr("Version portable : le programme reste dans %s. Supprimez ce dossier vous-même quand vous n'en avez plus besoin (il contient aussi vos réglages).",
+			"Portable version: the program stays in %s. Delete this folder yourself when you no longer need it (it also holds your settings)."), portable))
+	} else if installe := emplacementInstalle(); existe(installe) {
 		if err := retirerProgramme(installe); err != nil {
 			rapport = append(rapport, tr("Programme : ", "Program: ")+texteErreur(err))
 		} else {

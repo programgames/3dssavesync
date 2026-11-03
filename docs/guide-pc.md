@@ -12,12 +12,12 @@ At the top, three boxes show the state at a glance: server reachable or not, emu
 
 1. **Server**: **Local server on this PC** (the default) or **Personal server** (address and token, button **Test the connection**). See the [server guide](guide-server.md).
 2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. No card reader? **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
-3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS).
+3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS). Portable version: this part is hidden, the program stays where it is.
 4. **Emulators**: one card per emulator of your settings or found on the PC (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators), with its consoles and its state. **Settings** opens its save and ROM folders. **Add an emulator by hand** adds another one.
 5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), and the **3dssavesync settings** shortcut.
 6. **History**: search a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
 7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
-8. **Uninstall** (part Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin. See [ADR 0019](adr/0019-desinstallation.md).
+8. **Uninstall** (part Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin (portable version: the program and its folder stay). See [ADR 0019](adr/0019-desinstallation.md).
 
 Nothing is written before you click **Save**. A personal server that does not answer blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "To enter on the 3DS". The program stops when you click **Finish**, or 2 minutes after you close the tab.
 
@@ -34,6 +34,7 @@ The settings page writes `config.json` in the settings folder:
 - Windows: `%APPDATA%\3dssavesync\config.json`
 - Linux: `~/.config/3dssavesync/config.json`
 - macOS: `~/Library/Application Support/3dssavesync/config.json`
+- Portable version (a file `portable.txt` next to the program): `config.json` next to the program. The log, `copies` and the local server data `serveur` go there too. This folder must be writable: if it is not, the program stops with a message and never uses the folder above instead. See [ADR 0020](adr/0020-version-portable.md).
 
 Another place: option `--config <file>`. Example: [`client/config.example.json`](../client/config.example.json). The field names are French.
 
