@@ -4,14 +4,19 @@
 
 ## The settings page
 
-Double-click the program, or the **3dssavesync settings** shortcut. A settings page opens in your browser. Its address is local (`http://127.0.0.1:<port>/<secret>/`): only this PC can open it. The page has these parts:
+Double-click the program, or the **3dssavesync settings** shortcut. A settings page opens in your browser. Its address is local (`http://127.0.0.1:<port>/<secret>/`): only this PC can open it.
+
+![Settings page](images/settings-en.png)
+
+At the top, three boxes show the state at a glance: server reachable or not, emulators ready, games on the server. The menu on the left opens one part at a time; an orange dot marks a part to check. The parts:
 
 1. **Server**: **Local server on this PC** (the default) or **Personal server** (address and token, button **Test the connection**). See the [server guide](guide-server.md).
 2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. No card reader? **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
 3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS).
-4. **Emulators**: the emulators of your settings, and the ones found on the PC (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators), with their save and ROM folders. **Add an emulator by hand** adds another one.
-5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator (**3dssavesync &lt;emulator&gt;**), and the **3dssavesync settings** shortcut.
-6. **History**: get back an old version of a save (see [Restore an old version](#restore-an-old-version)).
+4. **Emulators**: one card per emulator of your settings or found on the PC (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators), with its consoles and its state. **Settings** opens its save and ROM folders. **Add an emulator by hand** adds another one.
+5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), and the **3dssavesync settings** shortcut.
+6. **History**: search a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
+7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
 
 Nothing is written before you click **Save**. A personal server that does not answer blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "To enter on the 3DS". The program stops when you click **Finish**, or 2 minutes after you close the tab.
 
