@@ -28,6 +28,11 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 - Uninstalling no longer removes the LaunchBox emulators that versions 1 and 2 changed in place (melonDS, mGBA, Azahar, RetroArch). It points them back to their real program, gives RetroArch its core back, and tells you when a platform ends up with two default emulators.
 - The 3DS app no longer shows an impossible Pokémon play time.
+- The 3DS list of 3DS games (`titres.ini`) can no longer end up empty after a power cut while it is saved.
+- Two backup copies of the same game made in the same second on the 3DS no longer share a name.
+- The 3DS app reads the server list more strictly: a field missing from one game is no longer taken from the next one.
+- Uninstalling recognises LaunchBox emulators whose title contains an apostrophe.
+- The server answers with an error instead of dropping the connection when it cannot write to its disk.
 
 ### Removed
 
