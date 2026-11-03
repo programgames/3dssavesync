@@ -192,6 +192,8 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
     </div>
     <label class="choix masque" id="esdeLigne"><input type="checkbox" id="esde"> <span>{{t "Configurer ES-DE" "Set up ES-DE"}} (<code id="esdeChemin"></code>)</span></label>
     <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
+    <label class="choix masque" id="iconeLigne"><input type="checkbox" id="icone"> <span>{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}</span></label>
+    <p class="aide masque" id="iconeAide">{{t "Clic droit sur l'icône : ouvrir les réglages, envoyer les sauvegardes en attente, état du serveur local. Elle démarre avec la session." "Right-click the icon: open the settings, send the pending saves, state of the local server. It starts with the session."}}</p>
   </section>
 
   <section id="sectionDesinstaller" class="masque" data-page="frontends">
@@ -488,7 +490,7 @@ function choix() {
     Installer: $("installer").checked,
     Emulateurs: [...$("emulateurs").children].map(d => d.emu),
     LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
-    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked
+    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked
   };
 }
 
@@ -522,6 +524,9 @@ async function charger() {
   $("esdeChemin").textContent = etat.EsDe || "";
   $("esde").checked = etat.EsDeActif;
   $("raccourcis").checked = !etat.Existe;
+  $("icone").checked = etat.Icone;
+  $("iconeLigne").classList.toggle("masque", !etat.IconeDisponible);
+  $("iconeAide").classList.toggle("masque", !etat.IconeDisponible);
   $("sectionOuvrir").classList.toggle("masque", !(etat.Configures || []).length);
   $("ouvrir").replaceChildren(...(etat.Configures || []).map(nom => {
     const b = texte("button", nom);

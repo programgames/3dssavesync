@@ -327,15 +327,17 @@ func retirer(l []enAttente, a enAttente) []enAttente {
 
 // reprendre : les Envois en attente, avant la Synchronisation du jeu lancé. Un Conflit passe par la question habituelle
 // (après la partie : garder le PC ou ne rien faire). Reste en attente : émulateur ouvert, ou réseau encore coupé.
-func (s *Session) reprendre() {
+// Rend la dernière erreur d'envoi (menu de l'icône, « Envoyer maintenant »).
+func (s *Session) reprendre() error {
 	var l []enAttente
 	if lireJSON(s.cheminAttente(), &l) != nil || len(l) == 0 {
-		return
+		return nil
 	}
 	profil, recupere, romDe := s.profil, s.recupere, s.romDe // romDe : la ROM lancée n'est pas celle d'un Envoi en attente
 	s.romDe = nil
 	defer func() { s.profil, s.recupere, s.romDe = profil, recupere, romDe }()
 	var faits []enAttente
+	var derniere error
 	for _, a := range l {
 		e := s.cfg.Emulateurs[a.Profil]
 		if e == nil || !existe(a.Fichier) {
@@ -355,6 +357,7 @@ func (s *Session) reprendre() {
 			continue
 		}
 		s.journal(a.Cle + " en attente : " + err.Error())
+		derniere = err
 		if fin(err) {
 			break
 		}
@@ -367,4 +370,5 @@ func (s *Session) reprendre() {
 			return l
 		})
 	}
+	return derniere
 }

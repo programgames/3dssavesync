@@ -62,6 +62,17 @@ chmod +x 3dssavesync-linux-amd64
 
 No browser on this machine (SSH, Steam Deck in Game mode)? Run `3dssavesync setup --sans-navigateur` to print the address, or `3dssavesync setup --texte` to answer the same questions in the terminal.
 
+### The icon near the clock does not show
+
+> The icon near the clock cannot be shown: the desktop has no compatible notification area … *(L'icône près de l'horloge ne peut pas s'afficher : le bureau n'a pas de zone de notification compatible …)*
+
+- **Windows**: click the arrow `^` next to the clock. The icon can hide there. Drag it next to the clock.
+- **Linux, GNOME** (Ubuntu, Fedora): GNOME has no system tray. Install the extension **AppIndicator and KStatusNotifierItem Support** (Ubuntu has it already), then log in again.
+- **Linux, other desktops**: the desktop must show StatusNotifierItem icons (KDE Plasma, Steam Deck in Desktop mode, Xfce and Cinnamon with their tray plugin).
+- **macOS**: there is no icon yet. Use the **3dssavesync settings** shortcut.
+
+The local server keeps running without the icon. To stop the message, untick **Show the icon near the clock** in the settings (part **Frontends and install**), then click **Save**.
+
 ### The program has stopped
 
 > The 3dssavesync program has stopped. Start it again. *(Le programme 3dssavesync s'est arrêté. Relancez-le.)*
@@ -229,7 +240,7 @@ Do what the message says. The 8 Pokémon games do not need this step.
 
 The 3DS cannot reach the server. With the local server, check each point:
 
-1. The PC is on, and the local server runs. It starts with your session. To start it by hand, run `3dssavesync serve`.
+1. The PC is on, and the local server runs. It starts with your session. The menu of the [icon near the clock](guide-pc.md#the-icon-near-the-clock) shows its state. To start it by hand, run `3dssavesync serve`.
 2. The 3DS and the PC are on the same home network. A guest Wi-Fi or a router with "AP isolation" or "client isolation" blocks the 3DS.
 3. Windows allows 3dssavesync on private networks: see [Windows Defender Firewall](#windows-defender-firewall-asks-about-3dssavesync).
 4. The PC address did not change. Open **3dssavesync settings** on the PC: compare the address it shows with the address in **SELECT** > **Server** on the 3DS. If they differ, prepare the SD card again. A DHCP reservation in your router keeps the PC address fixed.

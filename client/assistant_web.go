@@ -68,6 +68,7 @@ type EtatWeb struct {
 	Emulateurs                                    []EmuWeb
 	Profils                                       []string
 	Configures                                    []string // émulateurs de config.json : boutons « Ouvrir »
+	Icone, IconeDisponible                        bool     // icône près de l'horloge (tray.go)
 }
 
 // Ouvre un émulateur sans jeu, avec Synchronisation (launch), indépendant de la page. Remplacé par les tests.
@@ -81,6 +82,7 @@ type ChoixWeb struct {
 	Emulateurs       []EmuWeb
 	LaunchBox        string
 	EsDe, Raccourcis bool
+	Icone            bool
 }
 
 func commandeSetupWeb(config string, sansNavigateur bool) (int, error) {
@@ -404,6 +406,7 @@ func (a *AssistantWeb) etat() EtatWeb {
 		e.Port = cfg.ServeurLocal.Port
 		e.URL = ""
 	}
+	e.Icone, e.IconeDisponible = cfg.iconeHorloge(), trayDisponible
 	e.LaunchBox = cfg.Frontends["launchbox"]
 	if e.LaunchBox == "" && e.Windows {
 		e.LaunchBox = trouverLaunchBox()
@@ -530,6 +533,10 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 		emus[x.Nom] = e
 	}
 	cfg.Emulateurs = emus
+	cfg.IconeHorloge = nil // "icone_horloge": false seulement quand elle est retirée
+	if !c.Icone {
+		cfg.IconeHorloge = &c.Icone
+	}
 
 	var sortie bytes.Buffer
 	q := &Questions{out: &sortie}
@@ -564,10 +571,8 @@ func (a *AssistantWeb) appliquer(c ChoixWeb) ([]string, error) {
 	if c.Raccourcis {
 		creerRaccourcis(q, &cfg)
 	}
-	if cfg.ServeurLocal != nil {
-		if err := serveurLocal(q, &cfg, a.config); err != nil {
-			lignes = append(lignes, err.Error())
-		}
+	if err := serveurLocal(q, &cfg, a.config); err != nil { // icône près de l'horloge, serveur local
+		lignes = append(lignes, err.Error())
 	}
 	for _, l := range strings.Split(sortie.String(), "\n") {
 		if l = strings.TrimPrefix(strings.TrimSpace(l), "- "); l != "" && !strings.HasPrefix(l, "==") {

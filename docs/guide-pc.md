@@ -14,7 +14,7 @@ At the top, three boxes show the state at a glance: server reachable or not, emu
 2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. No card reader? **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
 3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS).
 4. **Emulators**: one card per emulator of your settings or found on the PC (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators), with its consoles and its state. **Settings** opens its save and ROM folders. **Add an emulator by hand** adds another one.
-5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), and the **3dssavesync settings** shortcut.
+5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), the **3dssavesync settings** shortcut, and **Show the icon near the clock** (see [The icon near the clock](#the-icon-near-the-clock)).
 6. **History**: search a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
 7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
 8. **Uninstall** (part Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin. See [ADR 0019](adr/0019-desinstallation.md).
@@ -26,6 +26,23 @@ No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --sans-navigateur`
 **Repair frontends**: after a frontend update or reset (EmuDeck rewrites the ES-DE files), close the frontend, open **3dssavesync settings** and click **Repair frontends**. What is already in place does not change. Same in a terminal: `3dssavesync repair`.
 
 Frontends to set up by hand (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode): [frontend guide](guide-frontends.md).
+
+## The icon near the clock
+
+A 3dssavesync icon sits near the clock (Windows notification area, Linux system tray). It starts with your session. Right-click it:
+
+- **Open settings**: opens the settings page. On Windows, a double-click on the icon does the same; on Linux, a left click.
+- **Send now (N pending)**: only when uploads are pending (see [Pending uploads](#pending-uploads)). It sends them now, then a notification gives the result.
+- **Local server: running (http://…)**: with the local server, the address to enter on the 3DS, or the error when the server stopped. The icon program runs the local server itself: one program stays in memory, not two.
+- **Quit**: removes the icon until the next session. The local server stops with it.
+
+To remove the icon, untick **Show the icon near the clock** in the part **Frontends and install**, then click **Save**. The local server then starts alone with the session (`3dssavesync serve`), as before version 3.7. Each **Save** restarts the icon with the new settings. The uninstall stops it first, so that the program can go to the Recycle Bin.
+
+- **Windows**: the icon can hide behind the arrow `^` of the taskbar. Drag it next to the clock to keep it visible.
+- **Linux**: KDE Plasma (Steam Deck in Desktop mode) shows it. GNOME shows it only with the extension **AppIndicator and KStatusNotifierItem Support** ([help](troubleshooting.md#the-icon-near-the-clock-does-not-show)).
+- **macOS**: no icon yet. Use the **3dssavesync settings** shortcut.
+
+Command: `3dssavesync tray`. A second one stops at once, without a message. See [ADR 0022](adr/0022-icone-pres-de-l-horloge.md).
 
 ## Configuration
 
@@ -42,6 +59,7 @@ Another place: option `--config <file>`. Example: [`client/config.example.json`]
 | `url`, `jeton` | The server address and its token. |
 | `copies` | Folder of the backup copies (optional; default: `copies` next to `config.json`). |
 | `serveur_local` | Optional: `{"port": 8765, "donnees": "…"}` for `3dssavesync serve`; `url` is then `http://127.0.0.1:<port>`. See the [server guide](guide-server.md). |
+| `icone_horloge` | `false` only when the icon near the clock is turned off. Absent: the icon is shown. |
 | `titres_3ds` | Optional: 3DS games to sync in addition to the 8 Pokémon games, `{"<title ID>": "<name>"}`. Same list as the **3DS games** screen of the 3DS. Only games with a single save file `main`. |
 | `alias` | Optional: `{"<ROM file name without extension>": "<key>"}`, for a ROM hack that keeps the key of its original game. See [ROM hacks](#rom-hacks). |
 | `emulateurs.<name>.exe` | The emulator executable. |
@@ -125,6 +143,7 @@ In the settings page, click **Add an emulator by hand**, then choose **Other emu
 3dssavesync setup [--texte] [--sans-navigateur]   (or no argument)
 3dssavesync repair
 3dssavesync serve             (local server, see guide-server.md)
+3dssavesync tray              (icon near the clock, and the local server)
 3dssavesync restore [--oui] [<key> [<number>]]
 ```
 

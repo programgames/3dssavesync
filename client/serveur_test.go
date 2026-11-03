@@ -106,7 +106,11 @@ func TestAssistantServeurLocal(t *testing.T) {
 	if cfg.ServeurLocal == nil || cfg.ServeurLocal.Port != port || cfg.URL != fmt.Sprintf("http://127.0.0.1:%d", port) || len(cfg.Jeton) != 32 {
 		t.Fatalf("config.json du serveur local incorrect : %+v", cfg)
 	}
-	if strings.Join(auto, " ") != "serve --config "+config || strings.Join(lance, " ") != strings.Join(auto, " ") {
+	attendu := "tray --config " + config // l'icône près de l'horloge fait tourner le serveur local (ADR 0022)
+	if !trayDisponible {
+		attendu = "serve --config " + config
+	}
+	if strings.Join(auto, " ") != attendu || strings.Join(lance, " ") != strings.Join(auto, " ") {
 		t.Errorf("démarrage automatique et lancement : %q %q", auto, lance)
 	}
 	if !strings.Contains(sortie.String(), "Serveur local en marche") || !strings.Contains(sortie.String(), "Jeton : "+cfg.Jeton) ||

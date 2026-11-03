@@ -7,6 +7,7 @@
 //	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
 //	3dssavesync repair                                   refait la configuration des frontends
 //	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
+//	3dssavesync tray                                     icône près de l'horloge (et serveur local), à l'ouverture de session
 //	3dssavesync restore [--oui] [<clé> [<n°>]]           remet une ancienne Version comme Version courante
 //
 // Option commune : --config <fichier> (défaut : <dossier de configuration>/3dssavesync/config.json).
@@ -46,6 +47,7 @@ type Config struct {
 	Alias      map[string]string     `json:"alias,omitempty"`      // nom de la ROM sans extension -> Clé choisie (ADR 0014)
 	// Serveur local (3dssavesync serve) : même jeton ; url = http://127.0.0.1:<port> pour ce PC.
 	ServeurLocal *ServeurLocal `json:"serveur_local,omitempty"`
+	IconeHorloge *bool         `json:"icone_horloge,omitempty"` // absent : icône près de l'horloge (tray.go)
 }
 
 type ServeurLocal struct {
@@ -140,6 +142,8 @@ func principal(args []string) int {
 		code, err = commandeUninstall(*config, *oui)
 	case "serve":
 		code, err = commandeServe(*config)
+	case "tray":
+		code, err = commandeTray(*config)
 	case "restore":
 		code = commandeRestoreConsole(*config, fl.Args(), *oui)
 	case "migrate-v2":

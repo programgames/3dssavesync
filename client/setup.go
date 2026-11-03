@@ -232,27 +232,32 @@ func assistant(q *Questions, config string) error {
 // Adaptateurs remplacés par les tests (aucun raccourci réel, serveur dans le test).
 var autostart, lancerServeur, creerRaccourci = demarrageAuto, demarrerDetache, raccourci
 
-// Serveur local : démarrage automatique, lancement s'il ne répond pas encore, test, puis ce qu'il faut entrer sur la 3DS.
+// Programmes résidents : démarrage automatique et lancement de l'icône près de l'horloge (tray.go), qui fait aussi
+// tourner le serveur local ; sans l'icône, le serveur local seul (serve). Puis le test du serveur local.
 func serveurLocal(q *Questions, cfg *Config, config string) error {
-	q.dire("\n== %s ==", tr("Serveur local", "Local server"))
-	lanceur := lanceurDe(cfg)
-	args := []string{"serve"}
-	if config != configDefaut() {
-		args = append(args, "--config", config)
+	if cfg.ServeurLocal != nil {
+		q.dire("\n== %s ==", tr("Serveur local", "Local server"))
 	}
-	f, err := autostart(tr("3dssavesync serveur", "3dssavesync server"), lanceur, args)
-	if err != nil {
-		q.dire("%s %s", tr("Démarrage automatique impossible :", "Autostart failed:"), texteErreur(err))
-	} else {
-		q.dire("%s %s", tr("Démarrage automatique :", "Autostart:"), f)
+	lanceur, args := lanceurDe(cfg), choixDemarrage(cfg, config)
+	demarrageAutomatique(q, lanceur, args, filepath.Dir(config))
+	icone := len(args) > 0 && args[0] == "tray"
+	if icone { // arrêtée par demarrageAutomatique : elle redémarre avec les nouveaux réglages
+		if err := lancerServeur(lanceur, args); err != nil {
+			q.dire("%s %s", tr("L'icône près de l'horloge ne démarre pas :", "The icon near the clock does not start:"), texteErreur(err))
+		}
+	}
+	if cfg.ServeurLocal == nil {
+		return nil
 	}
 	if testerServeur(cfg) != nil {
 		if runtime.GOOS == "windows" {
 			q.dire("%s", tr("Windows peut demander d'autoriser 3dssavesync sur le réseau : acceptez pour les réseaux privés.",
 				"Windows may ask to allow 3dssavesync on the network: accept for private networks."))
 		}
-		if err := lancerServeur(lanceur, args); err != nil {
-			return fmt.Errorf(tr("lancement du serveur local impossible : %s", "cannot start the local server: %s"), texteErreur(err))
+		if !icone { // l'icône vient de démarrer : son serveur local répond dans un instant
+			if err := lancerServeur(lanceur, args); err != nil {
+				return fmt.Errorf(tr("lancement du serveur local impossible : %s", "cannot start the local server: %s"), texteErreur(err))
+			}
 		}
 		for i := 0; i < 20 && testerServeur(cfg) != nil; i++ {
 			time.Sleep(250 * time.Millisecond)

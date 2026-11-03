@@ -147,6 +147,9 @@ func desinstaller(cfg *Config, config string) ([]string, error) {
 	if retires > 0 {
 		rapport = append(rapport, fmt.Sprintf(tr("%d raccourci(s) mis à la Corbeille", "%d shortcut(s) moved to the Recycle Bin"), retires))
 	}
+	if err := arreterTray(filepath.Dir(config)); err != nil { // sinon l'exe de l'icône ne peut pas aller à la Corbeille
+		rapport = append(rapport, err.Error())
+	}
 	if installe := emplacementInstalle(); existe(installe) {
 		if err := retirerProgramme(installe); err != nil {
 			rapport = append(rapport, tr("Programme : ", "Program: ")+texteErreur(err))
