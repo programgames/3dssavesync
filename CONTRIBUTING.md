@@ -48,7 +48,7 @@ make cia            # also needs makerom and bannertool in PATH
 
 `make VERSION=3.7.0` sets the version shown in the app. A `dev` build never offers an update.
 
-The parts of the app that don't depend on libctru (sync rule, keys, file helpers, settings files, Pokémon data, error messages, texts, update check) have tests that run on your PC with plain `gcc`. The exact commands are in the `tests-c` job of `.github/workflows/ci.yml`. They build with `-Wall -Wextra -Werror`. On Windows, use the `gcc` of devkitPro's MSYS2 shell: Git Bash's `gcc` has no C headers.
+The parts of the app that don't depend on libctru (sync rule, game status, keys, file helpers, settings files, Pokémon data, error messages, action results, texts, update check) have tests that run on your PC with plain `gcc`. The exact commands are in the `tests-c` job of `.github/workflows/ci.yml`. They build with `-Wall -Wextra -Werror`. On Windows, use the `gcc` of devkitPro's MSYS2 shell: Git Bash's `gcc` has no C headers.
 
 ### Server (`server/`)
 
