@@ -7,6 +7,9 @@
 #include "files.h"
 #include "settings.h"
 
+#define H1 "1111111111111111111111111111111111111111111111111111111111111111"
+#define H2 "2222222222222222222222222222222222222222222222222222222222222222"
+
 static int failures;
 
 static void check(int ok, const char *what)
@@ -33,10 +36,77 @@ static int contains(const char *path, const char *text)
     return ok;
 }
 
+static void count_entry(void *ctx, const char *k, const char *v)
+{
+    (void)k, (void)v;
+    ++*(int *)ctx;
+}
+
+/* config.ini, base.ini, alias.ini, maj.ini: formats on the SD card (read by the PC too), .tmp fallback, writes. */
+static void test_ini_files(void)
+{
+    static config_t c;
+    static bases_t b;
+    static aliases_t a;
+    update_info_t u;
+    int lines = 0;
+
+    remove("test.ini"), remove("test.ini.tmp");
+    check(read_ini("test.ini", count_entry, &lines) == -1 && lines == 0, "read_ini: no file");
+    write_text("test.ini.tmp", "a=1\nno equal sign\r\nb=\n");
+    check(read_ini("test.ini", count_entry, &lines) == 0 && lines == 2, "read_ini: .tmp read, line without = skipped");
+    remove("test.ini.tmp");
+
+    read_config("test.ini", &c);
+    check(!strcmp(c.roms, "sdmc:/roms/nds") && !strcmp(c.saves, "sdmc:/roms/nds/saves") && !strcmp(c.roms_gb, "sdmc:/roms/gb") &&
+              !c.saves_gb[0] && !strcmp(c.roms_gba, "sdmc:/roms/gba") && !c.saves_gba[0] && !c.url[0] && !c.token[0],
+          "config: defaults");
+    write_text("test.ini", "url=https://x\r\njeton=j=k\nsaves=\nsaves_gba=sdmc:/agb\ninconnu=1\n");
+    read_config("test.ini", &c);
+    check(!strcmp(c.url, "https://x") && !strcmp(c.token, "j=k") && !c.saves[0] && !strcmp(c.saves_gba, "sdmc:/agb") &&
+              !strcmp(c.roms, "sdmc:/roms/nds"), "config: read over the defaults");
+    check(write_config("test.ini", &c) == 0 &&
+              contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\nsaves_gb=\n"
+                                   "roms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\n"), "config: format");
+    mkdir("test.ini.tmp", 0777);
+    check(write_config("test.ini", &c) != 0 && contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\n"
+                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\n"),
+          "config: write failed, old file intact");
+    remove("test.ini.tmp");
+
+    write_text("test.ini", "IRBF=" H1 "\nABC=" H1 "\nGBA-BPEF=" H2 "x\nGB-POKEMON-1234=" H2 "\n");
+    read_bases("test.ini", &b);
+    check(b.n == 2 && !strcmp(base_of(&b, "IRBF"), H1) && !strcmp(base_of(&b, "GB-POKEMON-1234"), H2) && !base_of(&b, "ABC") &&
+              !base_of(&b, "GBA-BPEF"), "bases: Key of 4 characters at least, Hash of 64");
+    check(set_base("test.ini", &b, "IRBF", H2) == 0 && set_base("test.ini", &b, "3DS-0004000000055D00", H1) == 0 &&
+              contains("test.ini", "IRBF=" H2 "\nGB-POKEMON-1234=" H2 "\n3DS-0004000000055D00=" H1 "\n"), "bases: replaced, added, format");
+    mkdir("test.ini.tmp", 0777);
+    check(set_base("test.ini", &b, "IRBF", H1) == -1 && !strcmp(base_of(&b, "IRBF"), H1) &&
+              contains("test.ini", "IRBF=" H2 "\nGB-POKEMON-1234=" H2 "\n3DS-0004000000055D00=" H1 "\n"), "bases: write failed, old file intact");
+    remove("test.ini.tmp");
+
+    write_text("test.ini", "Pokemon Radical Red = GBA-0RAD\nHack=GBA-0HAK\n=GBA-VIDE\n   =GBA-ESPACES\n");
+    read_aliases("test.ini", &a);
+    check(a.n == 2 && !strcmp(alias_of(&a, "Pokemon Radical Red"), " GBA-0RAD") && !strcmp(alias_of(&a, "Hack"), "GBA-0HAK") &&
+              !alias_of(&a, "Pokemon Radical Red ") && !alias_of(&a, ""), "aliases: spaces before = dropped, empty name skipped");
+
+    remove("test.ini");
+    read_update_info("test.ini", &u);
+    check(u.day == -1 && !u.latest[0] && !u.installed[0], "maj.ini: no file");
+    write_text("test.ini", "jour=20395\nversion=3.7.1\ninstallee=3.7.0\n");
+    read_update_info("test.ini", &u);
+    check(u.day == 20395 && !strcmp(u.latest, "3.7.1") && !strcmp(u.installed, "3.7.0"), "maj.ini: read");
+    check(write_update_info("test.ini", &u, "3.7.1") == 0 && contains("test.ini", "jour=20395\nversion=3.7.1\ninstallee=3.7.1\n"),
+          "maj.ini: format, running version written");
+    remove("test.ini");
+}
+
 int main(void)
 {
     title_t t[MAX_TITLES], u[MAX_TITLES];
     int n;
+
+    test_ini_files();
 
     remove("test-titres.ini");
     n = read_titles("test-titres.ini", t, MAX_TITLES);

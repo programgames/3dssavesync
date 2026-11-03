@@ -87,13 +87,12 @@ static void make_short_name(const char *name, char *out, size_t n)
     snprintf(out, n, "%.*s", (int)n - 1, tmp); /* cut on purpose: display name */
 }
 
-static struct { char url[256], token[256], roms[256], saves[256], roms_gb[256], saves_gb[256], roms_gba[256], saves_gba[256]; } cfg;
+static config_t cfg;
 static title_t titles[MAX_TITLES]; /* synced 3DS games (titres.ini) */
 static int title_count;
 static game_t games[MAX_GAMES];
 static int game_count;
-static struct { char key[KEY_MAX], hash[65]; } bases[MAX_GAMES];
-static int base_count;
+static bases_t bases;
 static int visible[MAX_GAMES], visible_count;
 static char message[512];        /* message of the last action: band above the button bar */
 static char message_detail[200]; /* its technical line (HTTP, curl, path), in grey under the text */
@@ -116,9 +115,7 @@ static void clear_message(void)
 }
 
 /* Update (ADR 0021). VERSION comes from the Makefile: "3.7.0" for a tag, "dev" otherwise (never updated). */
-static long last_check_day = -1;   /* day of the last check (maj.ini) */
-static char latest_version[32]; /* last version seen on GitHub (maj.ini) */
-static char installed_version[32]; /* version that ran last (maj.ini): read by the PC before it copies a .cia */
+static update_info_t update_info; /* maj.ini */
 static char update_detail[400]; /* result of the last check or install: settings screen */
 static int update_failed;        /* update_detail describes a failure */
 static const char *path_3dsx = ""; /* argv[0]: the .3dsx started from the Homebrew Launcher (launched_from_sd) */
@@ -163,79 +160,17 @@ static void hash_hex(const unsigned char *bytes, size_t size, char out[65])
 
 /* ---------------------------------------------------------------- config and Base */
 
-static void read_ini(const char *path, void (*key)(const char *, const char *))
+static void save_config(void)
 {
-    FILE *f = fopen(path, "r");
-    char line[512];
-    if (!f) { /* power cut between removing the old file and the rename (replace_file): the .tmp is complete */
-        snprintf(line, sizeof line, "%s.tmp", path);
-        f = fopen(line, "r");
-    }
-    if (!f) return;
-    while (fgets(line, sizeof line, f)) {
-        char *eq;
-        line[strcspn(line, "\r\n")] = '\0';
-        if ((eq = strchr(line, '='))) {
-            *eq = '\0';
-            key(line, eq + 1);
-        }
-    }
-    fclose(f);
-}
-
-static void config_entry(const char *k, const char *v)
-{
-    if (!strcmp(k, "url")) snprintf(cfg.url, sizeof cfg.url, "%s", v);
-    else if (!strcmp(k, "jeton")) snprintf(cfg.token, sizeof cfg.token, "%s", v);
-    else if (!strcmp(k, "roms")) snprintf(cfg.roms, sizeof cfg.roms, "%s", v);
-    else if (!strcmp(k, "saves")) snprintf(cfg.saves, sizeof cfg.saves, "%s", v);
-    else if (!strcmp(k, "roms_gb")) snprintf(cfg.roms_gb, sizeof cfg.roms_gb, "%s", v);
-    else if (!strcmp(k, "roms_gba")) snprintf(cfg.roms_gba, sizeof cfg.roms_gba, "%s", v);
-    else if (!strcmp(k, "saves_gb")) snprintf(cfg.saves_gb, sizeof cfg.saves_gb, "%s", v);
-    else if (!strcmp(k, "saves_gba")) snprintf(cfg.saves_gba, sizeof cfg.saves_gba, "%s", v);
-}
-
-static void write_config(void)
-{
-    char t[sizeof cfg + 100];
     mkdir(APP_DIR, 0777);
-    snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\n", cfg.url,
-             cfg.token, cfg.roms, cfg.saves, cfg.roms_gb, cfg.saves_gb, cfg.roms_gba, cfg.saves_gba);
-    if (replace_file(APP_DIR "/config.ini", t, strlen(t)))
+    if (write_config(APP_DIR "/config.ini", &cfg))
         add_alert(T("Réglages non enregistrés. Vérifiez la carte SD.", "Settings not saved. Check the SD card."));
 }
 
-static void base_entry(const char *k, const char *v)
-{
-    if (base_count < MAX_GAMES && strlen(k) >= 4 && strlen(k) < KEY_MAX && strlen(v) == 64) {
-        snprintf(bases[base_count].key, KEY_MAX, "%s", k);
-        snprintf(bases[base_count].hash, 65, "%s", v);
-        base_count++;
-    }
-}
-
-static const char *base_of(const char *key)
-{
-    int i;
-    for (i = 0; i < base_count; i++)
-        if (!strcmp(bases[i].key, key)) return bases[i].hash;
-    return NULL;
-}
-
 /* The only write of the Base (design §1): after In sync, or a successful Upload or Download. */
-static void set_base(const char *key, const char *hash)
+static void save_base(const char *key, const char *hash)
 {
-    static char t[MAX_GAMES * (KEY_MAX + 66)];
-    size_t n = 0;
-    int i;
-    for (i = 0; i < base_count && strcmp(bases[i].key, key); i++);
-    if (i == base_count) {
-        if (base_count == MAX_GAMES) return;
-        snprintf(bases[base_count++].key, KEY_MAX, "%s", key);
-    }
-    snprintf(bases[i].hash, 65, "%s", hash);
-    for (i = 0; i < base_count; i++) n += snprintf(t + n, sizeof t - n, "%s=%s\n", bases[i].key, bases[i].hash);
-    if (replace_file(APP_DIR "/base.ini", t, n)) /* a power cut during the write no longer empties base.ini */
+    if (set_base(APP_DIR "/base.ini", &bases, key, hash)) /* a power cut during the write no longer empties base.ini */
         add_alert(T("État de synchronisation non enregistré : des conflits peuvent apparaître. Vérifiez la carte SD.",
                   "Sync state not saved: conflicts may appear. Check the SD card."));
 }
@@ -295,29 +230,6 @@ static int to_file_form(const game_t *j, unsigned char **bytes, size_t *size, si
     return 0;
 }
 
-/* Alias (alias.ini, ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
-#define MAX_ALIAS 64
-static struct { char name[256], value[KEY_MAX]; } alias[MAX_ALIAS];
-static int alias_count;
-
-static void alias_entry(const char *k, const char *v)
-{
-    size_t n = strlen(k);
-    while (n && k[n - 1] == ' ') n--; /* "Pokemon Radical Red = GBA-0RAD" */
-    if (alias_count == MAX_ALIAS || !n || n >= sizeof alias[0].name) return;
-    snprintf(alias[alias_count].name, sizeof alias[0].name, "%.*s", (int)n, k);
-    snprintf(alias[alias_count].value, sizeof alias[0].value, "%s", v); /* cut: alias_key will reject it */
-    alias_count++;
-}
-
-static const char *alias_of(const char *name)
-{
-    int i;
-    for (i = 0; i < alias_count; i++)
-        if (!strcmp(alias[i].name, name)) return alias[i].value;
-    return NULL;
-}
-
 /* Folders never read: saves, hidden, and those of TWiLight Menu++ and the system (_nds, 3ds, luma, Nintendo 3DS, mGBA). */
 static int is_ignored_dir(const char *name)
 {
@@ -336,6 +248,7 @@ static int is_dir(const struct dirent *e, const char *path)
  * ROM (save_path). Two ROMs with the same Key, or the same Save file (mGBA forwarder included): Duplicate. */
 #define MAX_DEPTH 4 /* levels of subfolders read */
 static int skipped_roms; /* ROMs beyond MAX_GAMES */
+static aliases_t aliases; /* alias.ini (ADR 0014) */
 
 static void scan_dir(system_t s, const char *roms, const char *saves, const char *dir, int depth)
 {
@@ -363,7 +276,7 @@ static void scan_dir(system_t s, const char *roms, const char *saves, const char
         n = fread(header, 1, sizeof header, f);
         fclose(f);
         if (n < sizeof header) continue;
-        if ((a = alias_of(name))) {
+        if ((a = alias_of(&aliases, name))) {
             if (alias_key(s, a, key)) {
                 char t[200];
                 snprintf(t, sizeof t, T("Alias invalide pour « %.40s » : ROM non synchronisée. Préparez de nouveau la carte SD depuis le PC.",
@@ -457,8 +370,8 @@ static void scan(void)
 {
     int i, before;
 
-    game_count = visible_count = loaded = skipped_roms = alias_count = 0; /* the list shown is no longer valid during the read */
-    read_ini(APP_DIR "/alias.ini", alias_entry);
+    game_count = visible_count = loaded = skipped_roms = 0; /* the list shown is no longer valid during the read */
+    read_aliases(APP_DIR "/alias.ini", &aliases);
     scan_dir(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* empty saves = next to the ROM */
     scan_dir(SYS_GB, cfg.roms_gb, cfg.saves_gb, cfg.roms_gb, 0);
     scan_dir(SYS_GBA, cfg.roms_gba, cfg.saves_gba, cfg.roms_gba, 0);
@@ -541,8 +454,8 @@ static int compute_states(int *outdated)
         game_t *j = &games[i];
         const obs_t local = { j->local_hash, j->local_size }, server = { j->server_hash, j->server_size };
         const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL };
-        j->status = game_status(&o, base_of(j->key), server_read);
-        if (base_outdated(j->status, base_of(j->key), j->local_hash)) outdated[n++] = i;
+        j->status = game_status(&o, base_of(&bases, j->key), server_read);
+        if (base_outdated(j->status, base_of(&bases, j->key), j->local_hash)) outdated[n++] = i;
         if (j->status != STATUS_HIDDEN) visible[visible_count++] = i;
     }
     qsort(visible, visible_count, sizeof *visible, compare_visible);
@@ -554,7 +467,7 @@ static void update_states(void)
 {
     static int outdated[MAX_GAMES];
     int i, n = compute_states(outdated);
-    for (i = 0; i < n; i++) set_base(games[outdated[i]].key, games[outdated[i]].local_hash);
+    for (i = 0; i < n; i++) save_base(games[outdated[i]].key, games[outdated[i]].local_hash);
 }
 
 /* After an action: the Game it touched is already read again (read_local), only the server changes. */
@@ -604,7 +517,7 @@ static int upload_save(game_t *j)
     status = net_put(url, cfg.token, condition, bytes, size);
     free(bytes);
     if (status == 200) {
-        set_base(j->key, hash);
+        save_base(j->key, hash);
         set_message(C_GREEN, NULL, T("%s : envoyé au serveur.", "%s: uploaded."), j->short_name);
     } else if (status == 412) {
         set_message(C_RED, NULL, T("%s : conflit, le serveur a changé entre-temps.", "%s: conflict, the server changed meanwhile."), j->short_name);
@@ -719,7 +632,7 @@ static int download_save(game_t *j)
             return 0;
         }
     }
-    set_base(j->key, j->server_hash);
+    save_base(j->key, j->server_hash);
     set_message(C_GREEN, NULL, T("%s : récupéré du serveur.", "%s: downloaded."), j->short_name);
     return 1;
 }
@@ -1077,7 +990,7 @@ static void draw_bottom(const game_t *j)
     screen_bottom();
     button_count = 0;
     if (j) {
-        const char *b = base_of(j->key), *ext = strrchr(j->rom, '.');
+        const char *b = base_of(&bases, j->key), *ext = strrchr(j->rom, '.');
         u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
         gb = j->system == SYS_GB || j->system == SYS_GBA;
         action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
@@ -1106,8 +1019,8 @@ static void draw_bottom(const game_t *j)
         }
     }
     if (message[0]) draw_message(BAR_TOP_2);
-    else if (update_is_newer(VERSION, latest_version)) { /* no message: the update, at the same place */
-        snprintf(t, sizeof t, T("Version %s disponible (SELECT)", "Version %s available (SELECT)"), latest_version);
+    else if (update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
+        snprintf(t, sizeof t, T("Version %s disponible (SELECT)", "Version %s available (SELECT)"), update_info.latest);
         draw_band(BAR_TOP_2, t, NULL, C_CYAN);
     }
 
@@ -1268,20 +1181,11 @@ static int test_connection(void)
 
 /* ---------------------------------------------------------------- update (ADR 0021) */
 
-static void update_entry(const char *k, const char *v)
-{
-    if (!strcmp(k, "jour")) last_check_day = strtol(v, NULL, 10);
-    else if (!strcmp(k, "version")) snprintf(latest_version, sizeof latest_version, "%s", v);
-    else if (!strcmp(k, "installee")) snprintf(installed_version, sizeof installed_version, "%s", v);
-}
-
 /* maj.ini: day of the check, last version seen, running version. On failure: written again at the next start. */
 static void write_update_ini(void)
 {
-    char t[120];
-    snprintf(t, sizeof t, "jour=%ld\nversion=%s\ninstallee=%s\n", last_check_day, latest_version, VERSION);
     mkdir(APP_DIR, 0777);
-    replace_file(APP_DIR "/maj.ini", t, strlen(t));
+    write_update_info(APP_DIR "/maj.ini", &update_info, VERSION);
 }
 
 /* Failure of a request to GitHub: what is not done, the text of github_text, then the curl or HTTP code. */
@@ -1292,7 +1196,7 @@ static void github_failure(const char *what, long status)
              status < 0 ? "curl" : "HTTP", status < 0 ? -status : status);
 }
 
-/* GET /releases/latest: r, latest_version, update_detail and maj.ini updated. 1 if a newer version exists. */
+/* GET /releases/latest: r, update_info.latest, update_detail and maj.ini updated. 1 if a newer version exists. */
 static int check_update(release_t *r)
 {
     char *body;
@@ -1304,8 +1208,8 @@ static int check_update(release_t *r)
     status = net_github(GITHUB_LATEST, NULL, &body, &size);
     ok = status == 200 && parse_release(body, r) == 0;
     if (status > 0) free(body);
-    if (ok) snprintf(latest_version, sizeof latest_version, "%s", r->version);
-    last_check_day = (long)(time(NULL) / 86400);
+    if (ok) snprintf(update_info.latest, sizeof update_info.latest, "%s", r->version);
+    update_info.day = (long)(time(NULL) / 86400);
     write_update_ini(); /* failure: checked again at the next start */
     if (!ok) {
         github_failure("", status);
@@ -1624,9 +1528,9 @@ static int selected_setting; /* selected settings line: also for the top screen 
 static const char *version_state(char *t, size_t n, u32 *color)
 {
     if (!strcmp(VERSION, "dev")) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Version de développement", "Development build"));
-    else if (update_is_newer(VERSION, latest_version)) *color = C_CYAN, snprintf(t, n, T("%s disponible", "%s available"), latest_version);
+    else if (update_is_newer(VERSION, update_info.latest)) *color = C_CYAN, snprintf(t, n, T("%s disponible", "%s available"), update_info.latest);
     else if (update_failed) *color = C_RED, snprintf(t, n, "%s", T("Vérification impossible", "Check failed"));
-    else if (!latest_version[0]) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Non vérifiée", "Not checked"));
+    else if (!update_info.latest[0]) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Non vérifiée", "Not checked"));
     else *color = C_GREEN, snprintf(t, n, "%s", T("À jour", "Up to date"));
     return t;
 }
@@ -1652,7 +1556,7 @@ static const char *setting_label(int i)
 static const char *setting_action(int i)
 {
     return i < SETTING_COUNT ? T("Modifier", "Change") : i == SETTING_COUNT ? T("Choisir", "Choose") : i == SETTING_COUNT + 1 ? T("Tester", "Test")
-         : update_is_newer(VERSION, latest_version) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
+         : update_is_newer(VERSION, update_info.latest) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
 }
 
 /* Top screen of the settings: label on the left, value in a column, "Ⓐ action" on the right of the selected line. */
@@ -1795,7 +1699,7 @@ static int settings_screen(int first)
     draw_current_top = draw_list_top;
     if (!first) clear_message(); /* first start: the result of the test stays shown */
     changed = memcmp(before, &cfg, sizeof cfg) || before_count != title_count || memcmp(before_titles, titles, sizeof titles);
-    if (memcmp(before, &cfg, sizeof cfg)) write_config();
+    if (memcmp(before, &cfg, sizeof cfg)) save_config();
     return changed;
 }
 
@@ -2032,15 +1936,11 @@ int main(int argc, char **argv)
     english = language != CFG_LANGUAGE_FR;
     if (migrate_dir(OLD_DIR, APP_DIR) == 1)
         snprintf(message, sizeof message, T("Réglages repris de %s.", "Settings taken from %s."), OLD_DIR);
-    snprintf(cfg.roms, sizeof cfg.roms, "sdmc:/roms/nds");
-    snprintf(cfg.saves, sizeof cfg.saves, "sdmc:/roms/nds/saves");
-    snprintf(cfg.roms_gb, sizeof cfg.roms_gb, "sdmc:/roms/gb");   /* TWiLight: .sav next to the ROMs */
-    snprintf(cfg.roms_gba, sizeof cfg.roms_gba, "sdmc:/roms/gba"); /* open_agb_firm, useSavesFolder=false */
-    read_ini(APP_DIR "/config.ini", config_entry);
-    read_ini(APP_DIR "/base.ini", base_entry);
+    read_config(APP_DIR "/config.ini", &cfg);
+    read_bases(APP_DIR "/base.ini", &bases);
     title_count = read_titles(APP_DIR "/titres.ini", titles, MAX_TITLES);
-    read_ini(APP_DIR "/maj.ini", update_entry);
-    if (strcmp(installed_version, VERSION)) write_update_ini(); /* the PC does not copy an older .cia (sdcard.go) */
+    read_update_info(APP_DIR "/maj.ini", &update_info);
+    if (strcmp(update_info.installed, VERSION)) write_update_ini(); /* the PC does not copy an older .cia (sdcard.go) */
     if (argc > 0 && argv[0]) path_3dsx = argv[0];
 
     if (net_init()) {
@@ -2071,7 +1971,7 @@ int main(int argc, char **argv)
     }
     if (!should_quit) refresh();
     show_alert();
-    if (!should_quit && strcmp(VERSION, "dev") && net_wifi() && update_check_due(last_check_day, time(NULL))) {
+    if (!should_quit && strcmp(VERSION, "dev") && net_wifi() && update_check_due(update_info.day, time(NULL))) {
         release_t r;
         check_update(&r); /* failure: detail in the settings only, the sync works as before */
     }
