@@ -188,49 +188,81 @@ func (e *httpError) Error() string { return fmt.Sprintf("%s : %d", e.request, e.
 // helpPage is the help page for error messages, added to the error windows of the PC.
 const helpPage = "https://github.com/programgames/3dssavesync/blob/main/docs/troubleshooting.md"
 
+// netCause is why a request failed: the same for the sync server and GitHub (gitHubError).
+type netCause int
+
+const (
+	notNetwork     netCause = iota // a file or another error
+	httpStatus                     // the server answered another HTTP status
+	badCertificate                 // TLS: certificate refused, or not a TLS server
+	noHost                         // DNS: name not found
+	refused                        // connection refused: server stopped or wrong port
+	noResponse                     // timeout, cut connection, or any other transport failure
+)
+
+// netFailure returns the cause of a failed request, and the HTTP status for httpStatus.
+func netFailure(err error) (netCause, int) {
+	var h *httpError
+	var cert *tls.CertificateVerificationError
+	var header tls.RecordHeaderError
+	var dns *net.DNSError
+	var errno syscall.Errno
+	var network net.Error
+	var ue *neturl.Error
+	errors.As(err, &errno)
+	switch {
+	case errors.As(err, &h):
+		return httpStatus, h.code
+	case errors.As(err, &cert) || errors.As(err, &header):
+		return badCertificate, 0
+	case errors.As(err, &dns):
+		return noHost, 0
+	case errors.Is(err, syscall.ECONNREFUSED) || runtime.GOOS == "windows" && errno == 10061: // WSAECONNREFUSED
+		return refused, 0
+	case errors.As(err, &network) && network.Timeout(), errors.As(err, &ue):
+		return noResponse, 0
+	}
+	return notNetwork, 0
+}
+
 // classify returns a text for the user (no HTTP code, no Go text); global = the server or the network is at fault,
 // so the other games of the pass would fail the same way. Unknown error: its own text, already written for the user.
 func classify(err error) (text string, global bool) {
-	var h *httpError
-	var dns *net.DNSError
-	var cert *tls.CertificateVerificationError
-	var header tls.RecordHeaderError
-	var network net.Error
-	var ue *neturl.Error
 	var errno syscall.Errno
 	var path *fs.PathError
 	errors.As(err, &errno)
 	windows := runtime.GOOS == "windows"
+	cause, code := netFailure(err)
 	switch {
 	case err == nil:
 		return "", false
-	case errors.As(err, &h) && h.code == 401:
+	case cause == httpStatus && code == 401:
 		return tr("Le serveur refuse ce jeton. Recopiez le jeton exact du serveur.",
 			"The server rejected this token. Copy the exact token from the server."), true
-	case errors.As(err, &h) && h.code == 404:
+	case cause == httpStatus && code == 404:
 		return tr("Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la.",
 			"This address isn't a 3dssavesync server. Check it."), true
-	case errors.As(err, &h) && h.code == 413:
+	case cause == httpStatus && code == 413:
 		return tr("sauvegarde trop grosse pour le serveur : augmentez la taille maximale acceptée par le serveur ou par son proxy",
 			"save too large for the server: raise the size limit on the server or its proxy"), false
-	case errors.As(err, &h) && h.code == 400:
+	case cause == httpStatus && code == 400:
 		return tr("le serveur a refusé cette sauvegarde (vide, trop grosse ou envoi interrompu). Relancez le jeu",
 			"the server rejected this save (empty, too large or cut off). Start the game again"), false
-	case errors.As(err, &h) && h.code >= 500:
+	case cause == httpStatus && code >= 500:
 		return tr("Le serveur a rencontré une erreur. Réessayez plus tard. Si le problème continue, consultez le journal du serveur.",
 			"The server ran into an error. Try again later. If it keeps happening, check the server log."), true
-	case errors.As(err, &h):
+	case cause == httpStatus:
 		return tr("Le serveur a répondu de façon inattendue. Vérifiez son adresse.", "The server sent an unexpected response. Check its address."), true
-	case errors.As(err, &cert) || errors.As(err, &header):
+	case cause == badCertificate:
 		return tr("Le certificat du serveur n'est pas valide. Vérifiez l'adresse (https://) et la date du PC.",
 			"The server's certificate isn't valid. Check the address (https://) and the PC's date."), true
-	case errors.As(err, &dns):
+	case cause == noHost:
 		return tr("Serveur introuvable. Vérifiez votre connexion Internet et l'adresse du serveur.",
 			"Can't find the server. Check your Internet connection and the server address."), true
-	case errors.Is(err, syscall.ECONNREFUSED) || windows && errno == 10061: // WSAECONNREFUSED
+	case cause == refused:
 		return tr("Le serveur refuse la connexion. Il est peut-être arrêté, ou le port est incorrect : démarrez le serveur ou vérifiez l'adresse.",
 			"The server refused the connection. It may be stopped, or the port is wrong. Start the server or check the address."), true
-	case errors.As(err, &network) && network.Timeout(), errors.As(err, &ue):
+	case cause == noResponse:
 		return tr("Le serveur ne répond pas. Vérifiez votre connexion Internet et l'adresse du serveur.", "The server isn't responding. Check your Internet connection and the server address."), true
 	case windows && (errno == 32 || errno == 33): // ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION
 		return tr("un autre programme utilise ce fichier. Fermez l'émulateur et relancez le jeu",
