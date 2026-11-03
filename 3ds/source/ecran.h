@@ -27,6 +27,9 @@ float ecran_largeur(float taille, const char *s);
 /* Texte sur plusieurs lignes, retour à la ligne avant largeur. Hauteur dessinée. */
 float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s);
 
+/* Le même sur max lignes au plus : la dernière finit par « … » s'il reste du texte. Hauteur dessinée. */
+float ecran_lignes(float x, float y, float taille, u32 couleur, float largeur, int max, const char *s);
+
 /* Hauteur qu'aurait ce paragraphe, sans le dessiner. */
 float ecran_hauteur(float taille, float largeur, const char *s);
 

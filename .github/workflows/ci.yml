@@ -33,6 +33,7 @@ jobs:
           gcc -std=c99 -Wall -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && (cd /tmp && /tmp/r)
           gcc -std=c99 -Wall -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
           gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e
+          gcc -std=c99 -Wall -I source source/texte.c test/test_texte.c -o /tmp/x && /tmp/x
           gcc -std=c99 -Wall -I source source/fichiers.c source/maj.c test/test_maj.c -o /tmp/m && /tmp/m test/release_latest.json
 
   lanceur-windows:

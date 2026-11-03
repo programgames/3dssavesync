@@ -329,11 +329,13 @@ The update is done. Open the shortcut, or log in again for the icon.
 
 ## 3DS
 
+On the 3DS, a message shows in a band above the buttons. A red line on its left means a failure, green a success. The grey line under a network failure gives the code and the address that was called, for example `curl 7 · http://192.168.1.20:8765/saves` or `HTTP 401 · …`: copy it if you [report a bug](#report-a-bug).
+
 ### Server unreachable
 
 > Server unreachable: check the address. *(Serveur injoignable : vérifiez l'adresse.)*
 
-The 3DS cannot reach the server. With the local server, check each point:
+The 3DS cannot reach the server (`curl 6` or `curl 7`). With the local server, check each point:
 
 1. The PC is on, and the local server runs. It starts with your session. The menu of the [icon near the clock](guide-pc.md#the-icon-near-the-clock) shows its state. To start it by hand, run `3dssavesync serve`.
 2. The 3DS and the PC are on the same home network. A guest Wi-Fi or a router with "AP isolation" or "client isolation" blocks the 3DS.
@@ -355,17 +357,17 @@ Turn on the Wi-Fi switch of the 3DS, and check its connection in the System Sett
 
 Copy the token from the PC settings page (box "To enter on the 3DS"), or prepare the SD card again. Check that it has no space.
 
-### This address does not lead to a 3dssavesync server
+### This address isn't a 3dssavesync server
 
-> This address does not lead to a 3dssavesync server: check it.
+> This address isn't a 3dssavesync server. Check it. *(Cette adresse n'est pas un serveur 3dssavesync. Vérifiez-la.)*
 
-The address leads to another program or site. Check the port (`:8765` by default for the local server) and that there is no extra path after it.
+The address leads to another program or site (`HTTP 404`). Check the port (`:8765` by default for the local server) and that there is no extra path after it.
 
-### Invalid server address
+### Check the server address
 
-> Invalid server address: check it (SELECT).
+> Check the server address (SELECT). *(Vérifiez l'adresse du serveur (SELECT).)*
 
-Type the full address, with `http://` for the local server (for example `http://192.168.1.20:8765`) or `https://` for your own server.
+The address is not a valid one (`curl 3`). Type the full address, with `http://` for the local server (for example `http://192.168.1.20:8765`) or `https://` for your own server.
 
 ### Certificate refused or secure connection failed
 
@@ -376,31 +378,33 @@ Type the full address, with `http://` for the local server (for example `http://
 - The local server uses `http://`, not `https://`.
 - Your own server needs a **Let's Encrypt** certificate and TLS 1.2 with ECDHE: see the [server guide](guide-server.md#https-and-the-3ds).
 
-### The server does not answer, connection cut, network error
+### The server isn't responding, connection cut, network error
 
-> The server does not answer: try again later.
+> Server not responding. Try again later. *(Le serveur ne répond pas : réessayez plus tard.)*
 > Connection cut: try again.
 > Network error: try again.
 
 Move closer to the router and press **Y** to try again. If it lasts, check the server.
 
-### Out of memory, or the network does not start
+### Out of memory, or the network doesn't start
 
 > Out of memory: restart 3dssavesync.
-> Network start failed. Restart the 3DS, then start 3dssavesync again.
-> Cannot read the installed games. Restart the 3DS, then try again.
+> Couldn't start the network. Restart the 3DS and 3dssavesync. *(Impossible de démarrer le réseau. Redémarrez la 3DS et relancez 3dssavesync.)*
+> Can't read the installed games. Restart the 3DS and try again. *(Impossible de lire la liste des jeux. Redémarrez la 3DS et réessayez.)*
 
 Do what the message says.
 
 ### Server not read
 
-> Cannot read the server. … — games show **Unknown** and "server not read".
+> Cannot read the server. … — games show **Unknown**, and the bottom line of the top screen shows "not read" in red.
 
 The list shows your games, but their state is unknown. **A** and **START** do nothing until the server is read. Fix the reason given in the message, then press **Y**.
 
-### First start: enter at least the server and the token
+### First start: enter the server and the token
 
-The 3DS SD card has no `config.ini`. Prepare the SD card from the PC settings page, or enter **Server** and **Token** on this screen.
+> Welcome! Enter the server and the token first. *(Bienvenue ! Entrez d'abord le serveur et le jeton.)*
+
+The 3DS SD card has no `config.ini`. Prepare the SD card from the PC settings page, or enter **Server** and **Token** on this screen (lines marked **Required**). **B** (**Test and continue**) tests the connection first; after a failure, **B** (**Continue anyway**) opens the list without a working server.
 
 ### A game is missing from the list
 
@@ -415,13 +419,13 @@ The 3DS SD card has no `config.ini`. Prepare the SD card from the PC settings pa
 
 ### Several ROMs hold this game
 
-> 2 ROMs hold this game: keep only one, or add the others in the PC settings (ROM hacks), then prepare the SD card.
+> 2 ROMs hold this game. Keep one, or add the others to ROM hacks on the PC, then prepare the SD card. *(2 ROM contiennent ce jeu. Gardez-en une, ou ajoutez les autres aux ROM hacks sur le PC, puis préparez la carte SD.)*
 
 Two ROMs have the same game key (two copies, or a ROM hack), or give the same save file. 3dssavesync does not guess which one is right. Delete or move the extra ROM, or [give the hack its own save](#a-rom-hack-is-not-synced).
 
 ### SD card errors
 
-> …: cannot read the save. Check the SD card.
+> …: can't read the save. Check the SD card.
 > …: backup copy failed, nothing written. Check the SD card.
 > Settings not saved. Check the SD card.
 
@@ -437,7 +441,7 @@ Start the game once, then try again.
 
 ### A 3DS game cannot be ticked
 
-> Several save files: this game cannot be synced.
+> This game can't be synced (several save files). *(Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).)*
 > No save yet: start the game once and save.
 
 Only native 3DS games with a single save file are supported.
@@ -448,11 +452,11 @@ open_agb_firm writes the `.sav` file only when you turn off the 3DS with POWER. 
 
 ### Update messages
 
-The **Update** line of the settings (**SELECT**) shows the result of the last check or install. The last line of a failure gives a code (`curl 6`, `HTTP 403`, `AM 0x…`): copy it if you [report a bug](#report-a-bug). After any of these failures, the old version of the app stays, and your saves do not change.
+The **Version** line of the settings (**SELECT**) shows the installed version and its state: **Up to date**, **3.7.1 available**, **Not checked** or **Check failed**. On that line, the bottom screen shows the result of the last check or install. The grey line under a failure gives a code (`curl 6`, `HTTP 403`, `AM 0x…`): copy it if you [report a bug](#report-a-bug). After any of these failures, the old version of the app stays, and your saves do not change.
 
 > No network: turn on the 3DS Wi-Fi, then try again. *(Pas de réseau : activez le Wi-Fi de la 3DS, puis réessayez.)*
 
-Turn on the Wi-Fi, then press **A** on **Update** again.
+Turn on the Wi-Fi, then press **A** on **Version** again.
 
 > GitHub unreachable: check the Internet access, then try again. *(GitHub injoignable : vérifiez l'accès à Internet, puis réessayez.)*
 
@@ -467,32 +471,33 @@ GitHub accepts 60 checks per hour from one Internet address, for all the devices
 Set the date and time of the 3DS (System Settings). If the message stays, GitHub changed its certificates: install the new version by hand (see the end of this section).
 
 > Connection to GitHub cut: move closer to the access point, then try again. *(Connexion à GitHub coupée : rapprochez-vous du point d'accès, puis réessayez.)*
-> Download failed: nothing is installed. … *(Téléchargement impossible : rien n'est installé. …)*
+> Download failed. … *(Le téléchargement a échoué. …)*
+> Couldn't download SHA256SUMS. … *(Impossible de télécharger SHA256SUMS. …)*
 
-The download stopped. Move closer to the router, then press **A** on **Update** again.
+The download stopped. Move closer to the router, then press **A** on **Version** again.
 
-> Downloaded file damaged (checksum differs): nothing is installed. Try again. *(Fichier téléchargé abîmé (somme de contrôle différente) : rien n'est installé. Réessayez.)*
+> The downloaded file is damaged. Try again. *(Le fichier téléchargé est abîmé. Réessayez.)*
 
-The downloaded file is not the file of the release. Try again. If the message stays, install the new version by hand.
+The downloaded file is not the file of the release (its SHA-256 differs from `SHA256SUMS`). Try again. If the message stays, install the new version by hand.
 
-> Not enough space on the SD card: free 2 MB, then try again. Nothing is installed. *(Pas assez de place sur la carte SD : libérez 2 Mo, puis réessayez. Rien n'est installé.)*
+> Not enough space on the SD card. Free 2 MB and try again. *(Pas assez de place sur la carte SD. Libérez 2 Mo et réessayez.)*
 
 Delete files you do not need from the SD card (not the saves), then try again.
 
-> Installation refused by the 3DS: the old version stays. Restart the 3DS, then try again. *(Installation refusée par la 3DS : l'ancienne version reste. Redémarrez la 3DS, puis réessayez.)*
+> The 3DS refused the install, the old version stays. Restart the 3DS and try again. *(La 3DS a refusé l'installation, l'ancienne version reste. Redémarrez la 3DS et réessayez.)*
 
 The 3DS refused the `.cia`. Restart the 3DS, then try again. If the message stays, install the new version by hand with FBI.
 
-> Version 3.7.0 incomplete on GitHub: nothing is installed. Install it by hand (3DS guide). *(Version 3.7.0 incomplète sur GitHub : rien n'est installé. Installez-la à la main (guide de la 3DS).)*
-> SHA256SUMS without 3dssavesync.cia: nothing is installed. … *(SHA256SUMS sans 3dssavesync.cia : rien n'est installé. …)*
+> Version 3.7.0 is incomplete on GitHub. Install it by hand (see the 3DS guide). *(Version 3.7.0 incomplète sur GitHub. Installez-la à la main (voir le guide 3DS).)*
+> SHA256SUMS has no 3dssavesync.cia. … *(SHA256SUMS ne contient pas 3dssavesync.cia. …)*
 
 The release has no `SHA256SUMS` file, or no file for your 3DS. The app installs nothing that it cannot check. Install the new version by hand.
 
-> Cannot write to the SD card: the old version stays. Check the SD card, then try again. *(Écriture sur la carte SD impossible : l'ancienne version reste. Vérifiez la carte SD, puis réessayez.)*
+> Can't write to the SD card, the old version stays. Check the card and try again. *(Impossible d'écrire sur la carte SD, l'ancienne version reste. Vérifiez la carte et réessayez.)*
 
 Only with the `.3dsx`. The SD card is full, locked (lock switch), or damaged.
 
-> New version not put in place, old one not put back: on a PC, rename …/3dssavesync.3dsx.bak to 3dssavesync.3dsx. *(Nouvelle version pas mise en place, ancienne pas remise : …)*
+> No version in place. On a PC, rename …/3dssavesync.3dsx.bak to 3dssavesync.3dsx to get the old one back. *(Aucune version en place. Sur un PC, renommez … pour retrouver l'ancienne.)*
 
 Only with the `.3dsx`. The old version is complete in the `.bak` file. Put the SD card in a PC, and rename the file as the message says.
 
@@ -622,7 +627,7 @@ The network was cut, or the server was off. The save waits on the PC. At the nex
 You played on both sides since the last sync. 3dssavesync never chooses for you. Each version shows its play time and trainer (Pokémon games) or its date.
 
 - **PC, before the game**: **Take the server**, **Keep the PC**, or **Don't play**. After the game: **Keep the PC** or **Do nothing**. Closing the window = the last button, the safest.
-- **3DS**: **A** keeps the 3DS, **X** takes the server, **B** does nothing.
+- **3DS**: **A** keeps the 3DS save (**3DS save** card), **X** uses the server save (**Server save** card), **B** does nothing. Both cards show the same lines: the date, the play time (Pokémon games), and what happens next.
 
 Nothing is lost: the other version stays in the server history, and a backup copy is made before a save is replaced. **START** (Sync all) on the 3DS skips conflicts: solve them one by one with **A**.
 
@@ -630,7 +635,7 @@ Nothing is lost: the other version stays in the server history, and a backup cop
 
 No window could open (no display, for example over SSH). Start the game again with a display to choose.
 
-> …: the server changed meanwhile (conflict).
+> …: conflict, the server changed meanwhile.
 
 Another device uploaded while the 3DS was syncing. The list is read again: choose with **A**.
 

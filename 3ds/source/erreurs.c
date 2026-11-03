@@ -1,4 +1,6 @@
 /* Textes des échecs de requête (erreurs.h). Sans curl.h : testé sur l'hôte (test/test_erreurs.c). */
+#include <stdio.h>
+#include <string.h>
 #include "erreurs.h"
 
 #define T(fr, en) (anglais ? (en) : (fr))
@@ -15,10 +17,10 @@ const char *texte_reseau(long statut, int wifi, int anglais)
     if (statut < 0 && !wifi) return T("Pas de réseau : activez le Wi-Fi de la 3DS.", "No network: turn on the 3DS Wi-Fi.");
     switch (statut) {
     case -PROTOCOLE:
-    case -URL_MAL: return T("Adresse du serveur invalide : vérifiez-la (SELECT).", "Invalid server address: check it (SELECT).");
+    case -URL_MAL: return T("Vérifiez l'adresse du serveur (SELECT).", "Check the server address (SELECT).");
     case -RESOLUTION:
     case -CONNEXION: return T("Serveur injoignable : vérifiez l'adresse.", "Server unreachable: check the address.");
-    case -DELAI: return T("Le serveur ne répond pas : réessayez plus tard.", "The server does not answer: try again later.");
+    case -DELAI: return T("Le serveur ne répond pas : réessayez plus tard.", "Server not responding. Try again later.");
     case -TLS: return T("Connexion sécurisée impossible : vérifiez l'adresse, la date et l'heure de la 3DS.",
                         "Secure connection failed: check the address, and the 3DS date and time.");
     case -CERT_CLIENT:
@@ -32,7 +34,7 @@ const char *texte_reseau(long statut, int wifi, int anglais)
     case -MEMOIRE: return T("Mémoire insuffisante : relancez 3dssavesync.", "Out of memory: restart 3dssavesync.");
     case 400: return T("Le serveur refuse cette sauvegarde : réessayez.", "The server refuses this save: try again.");
     case 401: return T("Jeton refusé : copiez le jeton exact du serveur (SELECT).", "Token refused: copy the exact server token (SELECT).");
-    case 404: return T("Cette adresse ne mène pas à un serveur 3dssavesync : vérifiez-la.", "This address does not lead to a 3dssavesync server: check it.");
+    case 404: return T("Cette adresse n'est pas un serveur 3dssavesync. Vérifiez-la.", "This address isn't a 3dssavesync server. Check it.");
     case 413: return T("Sauvegarde trop grande pour le serveur.", "Save too large for the server.");
     }
     if (statut >= 500) return T("Le serveur a un problème : réessayez plus tard.", "The server has a problem: try again later.");
@@ -57,11 +59,16 @@ const char *texte_github(long statut, int wifi, int anglais)
     case -ENVOI:
     case -RECEPTION: return T("Connexion à GitHub coupée : rapprochez-vous du point d'accès, puis réessayez.",
                               "Connection to GitHub cut: move closer to the access point, then try again.");
-    case -TROP_GRAND: return T("Fichier de mise à jour trop grand : il n'est pas téléchargé.", "Update file too large: it is not downloaded.");
+    case -TROP_GRAND: return T("Fichier de mise à jour trop gros, téléchargement annulé.", "Update file too large. Download canceled.");
     case -MEMOIRE: return T("Mémoire insuffisante : relancez 3dssavesync.", "Out of memory: restart 3dssavesync.");
     case 403:
     case 429: return T("GitHub limite les vérifications : réessayez dans une heure.", "GitHub limits the checks: try again in an hour.");
     }
     if (statut > 0) return T("Réponse inattendue de GitHub : réessayez plus tard.", "Unexpected answer from GitHub: try again later.");
     return T("GitHub injoignable : vérifiez l'accès à Internet, puis réessayez.", "GitHub unreachable: check the Internet access, then try again.");
+}
+
+void detail_reseau(long statut, const char *url, char *out, size_t n)
+{
+    snprintf(out, n, "%s %ld \xC2\xB7 %.50s%s", statut < 0 ? "curl" : "HTTP", statut < 0 ? -statut : statut, url, strlen(url) > 50 ? "\xE2\x80\xA6" : "");
 }

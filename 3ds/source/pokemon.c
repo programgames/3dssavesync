@@ -189,12 +189,21 @@ static int gen67(const unsigned char *d, size_t taille, partie_t *p)
 
 int pokemon_partie(const unsigned char *d, size_t taille, partie_t *p)
 {
+    int r;
     p->heures = p->minutes = 0;
     p->dresseur[0] = '\0';
     switch (taille) {
-    case 0x8000: return gen12(d, p);
-    case 0x20000: return gen3(d, p);
-    case 0x80000: return gen4(d, p) == 0 ? 0 : gen5(d, p);
+    case 0x8000: r = gen12(d, p); break;
+    case 0x20000: r = gen3(d, p); break;
+    case 0x80000: r = gen4(d, p) == 0 ? 0 : gen5(d, p); break;
+    default: r = gen67(d, taille, p);
     }
-    return gen67(d, taille, p);
+    /* Les jeux comptent jusqu'à 999 h 59 : au-delà, un autre fichier a passé la somme de contrôle par hasard
+     * (« 196 h 246 » sur une sauvegarde GB quelconque). */
+    if (r == 0 && (p->minutes > 59 || p->heures > 999)) {
+        p->heures = p->minutes = 0;
+        p->dresseur[0] = '\0';
+        r = -1;
+    }
+    return r;
 }

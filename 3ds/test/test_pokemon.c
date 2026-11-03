@@ -51,6 +51,10 @@ int main(void)
     for (s = 0, i = 0x2598; i < 0x3523; i++) s += d[i];
     d[0x3523] = ~s & 0xFF;
     verifie(d, 0x8000, 57, 32, "J?\xC3\xA9", "Gen 1");
+    d[0x2CEF] = 246; /* somme de contrôle juste, minutes impossibles : un autre fichier, pas une partie */
+    for (s = 0, i = 0x2598; i < 0x3523; i++) s += d[i];
+    d[0x3523] = ~s & 0xFF;
+    refuse(d, 0x8000, "Gen 1 à 57 h 246");
 
     /* Gen 2 Cristal : « Jean » ; 295 h 10 (heures big-endian) ; somme 0x2009..0x2B82 à 0x2D0D. */
     memset(d, 0, 0x8000);
@@ -108,6 +112,8 @@ int main(void)
     le16(d + 0x41000, 999), d[0x41002] = 30;
     for (i = 0; i < 15; i++) le16(d + 0x1438 + 2 * i, 'A' + i);
     verifie(d, 0x6CC00, 999, 30, "ABCDEFGHIJKLM", "Ultra-Soleil/Ultra-Lune");
+    le16(d + 0x41000, 1000);
+    refuse(d, 0x6CC00, "Ultra-Soleil à 1000 h");
     memset(d, 0, 0x6BE00);
     verifie(d, 0x6BE00, 0, 0, "", "Soleil/Lune jamais commencé");
 

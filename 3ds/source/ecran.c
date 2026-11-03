@@ -1,5 +1,6 @@
 /* Dessin citro2d (ecran.h). */
 #include <citro2d.h>
+#include <stdio.h>
 #include <string.h>
 #include "ecran.h"
 
@@ -77,18 +78,29 @@ float ecran_texte(float x, float y, float taille, u32 couleur, float largeur, co
     return l;
 }
 
-/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. dessiner = 0 : mesure. */
-static float paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s, int dessiner)
+/* Retour à la ligne fait ici (et pas par C2D_WordWrap) pour connaître la hauteur dessinée. dessiner = 0 : mesure.
+ * max > 0 : max lignes au plus, la dernière finit par « … » s'il reste du texte. */
+static float paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s, int max, int dessiner)
 {
     char ligne[256];
     float interligne = fontGetInfo(NULL)->lineFeed * taille, h = 0;
+    int lignes = 0;
     while (*s) {
         size_t n = 0, coupe = 0;
+        if (max && ++lignes == max && s[strcspn(s, "\n")]) { /* d'autres lignes suivent : la dernière les annonce */
+            snprintf(ligne, sizeof ligne, "%.*s\xE2\x80\xA6", (int)(strcspn(s, "\n") < sizeof ligne - 4 ? strcspn(s, "\n") : sizeof ligne - 4), s);
+            if (dessiner) ecran_texte(x, y + h, taille, couleur, largeur, ligne);
+            return h + interligne;
+        }
+        if (max && lignes == max) { /* dernière ligne permise : le reste, coupé par ecran_texte */
+            if (dessiner) ecran_texte(x, y + h, taille, couleur, largeur, s);
+            return h + interligne;
+        }
         while (s[n] && s[n] != '\n' && n < sizeof ligne - 1) {
             memcpy(ligne, s, n + 1);
             ligne[n + 1] = '\0';
             if (coupe && largeur_de(taille, ligne) > largeur) break;
-            if (s[++n] == ' ') coupe = n;
+            if (s[++n] == ' ' && !strchr(":;!?", s[n + 1])) coupe = n; /* jamais « : » en début de ligne */
         }
         if (s[n] && s[n] != '\n' && coupe) n = coupe; /* ligne trop longue : coupée au dernier espace */
         memcpy(ligne, s, n);
@@ -103,10 +115,15 @@ static float paragraphe(float x, float y, float taille, u32 couleur, float large
 
 float ecran_paragraphe(float x, float y, float taille, u32 couleur, float largeur, const char *s)
 {
-    return paragraphe(x, y, taille, couleur, largeur, s, 1);
+    return paragraphe(x, y, taille, couleur, largeur, s, 0, 1);
 }
 
-float ecran_hauteur(float taille, float largeur, const char *s) { return paragraphe(0, 0, taille, 0, largeur, s, 0); }
+float ecran_lignes(float x, float y, float taille, u32 couleur, float largeur, int max, const char *s)
+{
+    return paragraphe(x, y, taille, couleur, largeur, s, max, 1);
+}
+
+float ecran_hauteur(float taille, float largeur, const char *s) { return paragraphe(0, 0, taille, 0, largeur, s, 0, 0); }
 
 void ecran_icone(const u16 *pixels, int l, int h, float x, float y, float echelle)
 {
