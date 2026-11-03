@@ -67,12 +67,23 @@ static void test_ini_files(void)
               !strcmp(c.roms, "sdmc:/roms/nds"), "config: read over the defaults");
     check(write_config("test.ini", &c) == 0 &&
               contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\nsaves_gb=\n"
-                                   "roms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\n"), "config: format");
+                                   "roms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\n"), "config: format");
     mkdir("test.ini.tmp", 0777);
     check(write_config("test.ini", &c) != 0 && contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\n"
-                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\n"),
+                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\n"),
           "config: write failed, old file intact");
     remove("test.ini.tmp");
+    check(c.order == 0, "config: no tri line (older file): to do first");
+    write_text("test.ini", "url=https://x\ntri=nom\n");
+    read_config("test.ini", &c);
+    check(c.order == 1, "config: tri=nom");
+    c.order = 2;
+    check(write_config("test.ini", &c) == 0, "config: written with tri");
+    read_config("test.ini", &c);
+    check(c.order == 2, "config: tri=date read back");
+    write_text("test.ini", "tri=inconnu\n");
+    read_config("test.ini", &c);
+    check(c.order == 0, "config: unknown tri value: default");
 
     write_text("test.ini", "IRBF=" H1 "\nABC=" H1 "\nGBA-BPEF=" H2 "x\nGB-POKEMON-1234=" H2 "\n");
     read_bases("test.ini", &b);
@@ -84,6 +95,20 @@ static void test_ini_files(void)
     check(set_base("test.ini", &b, "IRBF", H1) == -1 && !strcmp(base_of(&b, "IRBF"), H1) &&
               contains("test.ini", "IRBF=" H2 "\nGB-POKEMON-1234=" H2 "\n3DS-0004000000055D00=" H1 "\n"), "bases: write failed, old file intact");
     remove("test.ini.tmp");
+
+    /* No limit: 600 Games (the old limit was 512), written and read back in order */
+    {
+        char k[16];
+        int i, ok = 1;
+        write_text("test.ini", "");
+        read_bases("test.ini", &b);
+        for (i = 0; i < 600 && ok; i++) {
+            snprintf(k, sizeof k, "K%04d", i);
+            ok = set_base("test.ini", &b, k, i % 2 ? H1 : H2) == 0;
+        }
+        check(ok && read_bases("test.ini", &b) == 0 && b.n == 600 && !strcmp(b.e[0].key, "K0000") && !strcmp(b.e[599].key, "K0599") &&
+                  !strcmp(base_of(&b, "K0599"), H1) && !strcmp(base_of(&b, "K0512"), H2), "bases: 600 Games kept");
+    }
 
     write_text("test.ini", "Pokemon Radical Red = GBA-0RAD\nHack=GBA-0HAK\n=GBA-VIDE\n   =GBA-ESPACES\n");
     read_aliases("test.ini", &a);
@@ -123,6 +148,12 @@ int main(void)
     check(write_titles("test-titres.ini", t, n) == 0, "écriture");
     check(contains("test-titres.ini", "0004000000055D00=Pokemon X\n00040000000EC300=Jeu a moi\n"), "format : 16 chiffres hexadécimaux en majuscules");
     check(read_titles("test-titres.ini", u, MAX_TITLES) == n && u[1].id == t[1].id, "relecture identique");
+    for (n = 0; n < 200; n++) {
+        t[n].id = 0x0004000000100000ULL + n;
+        snprintf(t[n].name, sizeof t[n].name, "Jeu %d", n);
+    }
+    check(write_titles("test-titres.ini", t, 200) == 0 && read_titles("test-titres.ini", u, MAX_TITLES) == 200 && u[199].id == 0x00040000001000C7ULL,
+          "200 jeux 3DS (ancienne limite : 64)");
     write_text("test-titres.ini", "");
     check(read_titles("test-titres.ini", t, MAX_TITLES) == 0, "fichier vide : aucun jeu 3DS (tout décoché)");
 

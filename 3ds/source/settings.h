@@ -14,9 +14,10 @@
  * file and the rename, replace_file: the .tmp is complete). 0 if a file was read, -1 if neither exists. */
 int read_ini(const char *path, void (*entry)(void *ctx, const char *key, const char *value), void *ctx);
 
-/* config.ini: server, token, ROM and Save folders. */
+/* config.ini: server, token, ROM and Save folders, order of the list ("tri": etat, nom or date; absent: etat). */
 typedef struct {
     char url[256], token[256], roms[256], saves[256], roms_gb[256], saves_gb[256], roms_gba[256], saves_gba[256];
+    int order; /* order_t (filter.h) */
 } config_t;
 
 /* Defaults (TWiLight Menu++, open_agb_firm), then the lines of path. */
@@ -25,20 +26,21 @@ void read_config(const char *path, config_t *c);
 /* 0 if written. */
 int write_config(const char *path, const config_t *c);
 
-/* base.ini: "KEY=hash", the Base of each Game. */
-#define MAX_BASES 512
+/* base.ini: "KEY=hash", the Base of each Game. No limit: e grows on the heap. */
 typedef struct {
-    struct { char key[KEY_MAX], hash[65]; } e[MAX_BASES];
-    int n;
+    struct base_entry { char key[KEY_MAX], hash[65]; } *e;
+    int n, cap;
+    int incomplete; /* out of memory while reading: base.ini is never written again (it would lose Bases) */
 } bases_t;
 
-void read_bases(const char *path, bases_t *b);
+/* 0 if read (or no file); -1 if out of memory (incomplete set). */
+int read_bases(const char *path, bases_t *b);
 
 /* Base of key, NULL if none. */
 const char *base_of(const bases_t *b, const char *key);
 
-/* Sets the Base of key, then writes path. 0 if written; -1 if path is not written (the Base is set in memory).
- * ponytail: beyond MAX_BASES Games, a new Key is not kept (0, nothing written); raise MAX_BASES with MAX_GAMES. */
+/* Sets the Base of key, then writes path. 0 if written; -1 if path is not written (the Base is set in memory unless out
+ * of memory), or if the read was incomplete. */
 int set_base(const char *path, bases_t *b, const char *key, const char *hash);
 
 /* alias.ini (ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
@@ -71,7 +73,7 @@ typedef struct {
     char name[48];
 } title_t;
 
-#define MAX_TITLES 64
+#define MAX_TITLES 256
 
 /* The 8 3DS Pokémon games (ADR 0009): the list when titres.ini does not exist. */
 int default_titles(title_t *t, int max);

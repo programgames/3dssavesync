@@ -14,6 +14,7 @@
 #include "app_update.h"
 #include "errors.h"
 #include "files.h"
+#include "filter.h"
 #include "games.h"
 #include "key.h"
 #include "list.h"
@@ -30,7 +31,6 @@
 
 #define OLD_DIR "sdmc:/3ds/nds-save-sync" /* name before v3: settings and Bases taken over at first start */
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Saves of the mGBA forwarders */
-#define MAX_GAMES 512 /* ponytail: fixed array; beyond 512 ROMs, the next ones are skipped (and reported) */
 
 int english; /* console language: French, otherwise English (views.h) */
 static u8 language;   /* CFG_LANGUAGE_*: title of the 3DS games in this language */
@@ -75,10 +75,17 @@ static void make_short_name(const char *name, char *out, size_t n)
 static config_t cfg;
 static title_t titles[MAX_TITLES]; /* synced 3DS games (titres.ini) */
 static int title_count;
-static game_t games[MAX_GAMES];
-static int game_count;
+/* No limit on the number of Games: games and the lists of indexes grow on the heap together (new_game). */
+static game_t *games;
+static int game_count, game_cap;
 static bases_t bases;
-static int visible[MAX_GAMES], visible_count;
+static int *visible, visible_count; /* Games with a status (not hidden), sorted: what Sync all goes through */
+static int *shown, shown_count;     /* the visible Games of the tab that match the search: the list on screen */
+static int *outdated;               /* compute_states */
+static tab_t tab;                   /* tab of the list (L, R) */
+static int tab_counts[TAB_COUNT];   /* Games of each tab that match the search */
+static status_t todo_status = STATUS_IN_SYNC; /* most urgent status of the To do tab: color of its count */
+static char query[48];              /* search of the list (Search button), empty: none */
 static char message[512];        /* message of the last action: band above the button bar */
 static char message_detail[200]; /* its technical line (HTTP, curl, path), in grey under the text */
 static u32 message_color = WHITE; /* band mark: red failure, green success, white information */
@@ -213,8 +220,29 @@ static int is_dir(const struct dirent *e, const char *path)
 /* One ROM source, subfolders included (ADR 0015): Key read in the header (or Alias), Save named like the
  * ROM (save_path). Two ROMs with the same Key, or the same Save file (mGBA forwarder included): Duplicate. */
 #define MAX_DEPTH 4 /* levels of subfolders read */
-static int skipped_roms; /* ROMs beyond MAX_GAMES */
 static aliases_t aliases; /* alias.ini (ADR 0014) */
+
+/* Room for one more Game (capacity doubled), cleared: games[game_count]. NULL if out of memory: reported, the scan
+ * goes on without it. */
+static game_t *new_game(void)
+{
+    int **lists[] = { &visible, &shown, &outdated }, cap = game_cap ? game_cap * 2 : 64, i;
+    void *p = NULL;
+    if (game_count == game_cap) {
+        if ((p = realloc(games, cap * sizeof *games))) games = p;
+        for (i = 0; p && i < 3; i++)
+            if ((p = realloc(*lists[i], cap * sizeof **lists[i]))) *lists[i] = p;
+        if (!p) {
+            add_alert(T("Mémoire insuffisante : des jeux manquent dans la liste. Redémarrez la 3DS, puis relancez 3dssavesync.",
+                        "Out of memory: some games are missing from the list. Restart the 3DS, then start 3dssavesync again."));
+            snprintf(alert_detail, sizeof alert_detail, T("realloc impossible après %d jeux", "realloc failed after %d games"), game_count);
+            return NULL;
+        }
+        game_cap = cap;
+    }
+    memset(&games[game_count], 0, sizeof *games);
+    return &games[game_count];
+}
 
 static void scan_dir(system_t s, const char *roms, const char *saves, const char *dir, int depth)
 {
@@ -259,12 +287,8 @@ static void scan_dir(system_t s, const char *roms, const char *saves, const char
             j->shares_save |= strcmp(j->key, key) != 0;
             continue;
         }
-        if (game_count == MAX_GAMES) {
-            skipped_roms++;
-            continue;
-        }
-        j = &games[game_count++];
-        memset(j, 0, sizeof *j);
+        if (!(j = new_game())) continue;
+        game_count++;
         snprintf(j->key, sizeof j->key, "%s", key);
         j->system = s;
         snprintf(j->name, sizeof j->name, "%s", name);
@@ -315,10 +339,10 @@ static void read_local(game_t *j)
 static void scan_3ds(void)
 {
     int i;
-    for (i = 0; i < title_count && game_count < MAX_GAMES; i++) {
-        game_t *j = &games[game_count];
+    for (i = 0; i < title_count; i++) {
+        game_t *j = new_game();
+        if (!j) break;
         show_progress(i + 1, title_count, T("Lecture des sauvegardes 3DS\n%s", "Reading 3DS saves\n%s"), titles[i].name);
-        memset(j, 0, sizeof *j);
         j->title = titles[i].id;
         j->system = SYS_3DS;
         j->rom_count = 1;
@@ -336,16 +360,11 @@ static void scan(void)
 {
     int i, before;
 
-    game_count = visible_count = loaded = skipped_roms = 0; /* the list shown is no longer valid during the read */
+    game_count = visible_count = shown_count = loaded = 0; /* the list shown is no longer valid during the read */
     read_aliases(APP_DIR "/alias.ini", &aliases);
     scan_dir(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* empty saves = next to the ROM */
     scan_dir(SYS_GB, cfg.roms_gb, cfg.saves_gb, cfg.roms_gb, 0);
     scan_dir(SYS_GBA, cfg.roms_gba, cfg.saves_gba, cfg.roms_gba, 0);
-    if (skipped_roms) {
-        char t[80];
-        snprintf(t, sizeof t, T("%d ROM ignorées : plus de %d jeux.", "%d ROMs skipped: more than %d games."), skipped_roms, MAX_GAMES);
-        add_alert(t);
-    }
     before = game_count;
     for (i = 0; i < before; i++) {
         show_progress(i + 1, before, T("Lecture des sauvegardes\n%s", "Reading saves\n%s"), games[i].short_name);
@@ -403,11 +422,56 @@ static int read_server(void)
     return 0;
 }
 
+static row_t row_of(const game_t *j)
+{
+    row_t r = { j->status, j->system, j->short_name, j->modified };
+    return r;
+}
+
 static int compare_visible(const void *a, const void *b)
 {
-    const game_t *x = &games[*(const int *)a], *y = &games[*(const int *)b];
-    int d = status_priority(x->status) - status_priority(y->status);
-    return d ? d : strcasecmp(x->short_name, y->short_name);
+    const row_t x = row_of(&games[*(const int *)a]), y = row_of(&games[*(const int *)b]);
+    return compare_rows((order_t)cfg.order, &x, &y);
+}
+
+/* Index of v in a[0..n), or -1. */
+static int index_of(const int *a, int n, int v)
+{
+    int i;
+    for (i = 0; i < n && a[i] != v; i++);
+    return i < n ? i : -1;
+}
+
+/* shown and the counts of the tabs, from visible: the search filters every tab (full name or display name). */
+static void filter_list(void)
+{
+    int i, t;
+    memset(tab_counts, 0, sizeof tab_counts);
+    todo_status = STATUS_IN_SYNC;
+    shown_count = 0;
+    for (i = 0; i < visible_count; i++) {
+        const game_t *j = &games[visible[i]];
+        const row_t r = row_of(j);
+        if (!name_matches(j->short_name, query) && !name_matches(j->name, query)) continue;
+        for (t = 0; t < TAB_COUNT; t++) tab_counts[t] += in_tab((tab_t)t, &r);
+        if (in_tab(TAB_TODO, &r) && status_priority(r.status) < status_priority(todo_status)) todo_status = r.status;
+        if (in_tab(tab, &r)) shown[shown_count++] = visible[i];
+    }
+}
+
+/* filter_list after a change of tab or search: the cursor stays on the same game if it is still shown, else the first. */
+static int refilter(int cursor)
+{
+    int selected = shown_count ? shown[cursor] : -1;
+    filter_list();
+    cursor = index_of(shown, shown_count, selected);
+    return cursor < 0 ? 0 : cursor;
+}
+
+static void sort_list(void)
+{
+    if (visible_count) qsort(visible, visible_count, sizeof *visible, compare_visible);
+    filter_list();
 }
 
 /* Status of each Game and the sorted list of the visible ones. No write: returns the number of Games whose Base must
@@ -424,14 +488,13 @@ static int compute_states(int *outdated)
         if (base_outdated(j->status, base_of(&bases, j->key), j->local_hash)) outdated[n++] = i;
         if (j->status != STATUS_HIDDEN) visible[visible_count++] = i;
     }
-    qsort(visible, visible_count, sizeof *visible, compare_visible);
+    sort_list();
     return n;
 }
 
 /* compute_states, then the Bases written (the only write of an In sync Base). */
 static void update_states(void)
 {
-    static int outdated[MAX_GAMES];
     int i, n = compute_states(outdated);
     for (i = 0; i < n; i++) save_base(games[outdated[i]].key, games[outdated[i]].local_hash);
 }
@@ -719,63 +782,98 @@ static void draw_game_icon(const game_t *j)
     else if (j->system != SYS_3DS && read_ds_icon(j, icon) == 0) screen_icon(icon, 32, 32, ICON_X, 6, 1.5f); /* 32 x 1.5 = 48 */
 }
 
-/* Counter of the title bar: "%d conflicts"… */
-static const char *counter_format(status_t s, int n)
+static const char *tab_label(tab_t t)
 {
-    switch (s) {
-    case STATUS_CONFLICT: return plural(n, english, T("%d conflit", "%d conflict"), T("%d conflits", "%d conflicts"));
-    case STATUS_TO_DOWNLOAD: return T("%d à récupérer", "%d to download");
-    case STATUS_TO_UPLOAD: return T("%d à envoyer", "%d to upload");
-    case STATUS_DUPLICATE: return plural(n, english, T("%d doublon", "%d duplicate"), T("%d doublons", "%d duplicates"));
-    default: return T("%d à jour", "%d in sync");
-    }
+    if (t == TAB_ALL) return T("Tous", "All");
+    if (t == TAB_TODO) return T("À faire", "To do");
+    return SYSTEM_NAMES[t - TAB_DS];
 }
 
-/* Top screen of the list: title and counters (those that do not fit are dropped, "in sync" first), the games, then
- * the footer: the server, when it was read, the position in the list. */
+/* Tabs right of the title, between the L and R glyphs: "All 312  To do 12  DS 150…", the current one highlighted, the
+ * To do count in the color of its most urgent game. A tab with no game is left out, except All and the current one.
+ * Smaller text if they do not fit. */
+static void draw_tabs(float left)
+{
+    char t[TAB_COUNT][32];
+    tab_t list[TAB_COUNT];
+    float w[TAB_COUNT], size = 0.44f, g, total, x;
+    int i, n = 0;
+    for (i = 0; i < TAB_COUNT; i++)
+        if (i == TAB_ALL || i == (int)tab || tab_counts[i]) {
+            list[n] = (tab_t)i;
+            snprintf(t[n++], sizeof t[0], "%s %d", tab_label((tab_t)i), tab_counts[i]);
+        }
+    do {
+        size -= 0.02f;
+        g = screen_text_width(size + 0.08f, "\xEE\x80\x84") + 2; /* L, R */
+        total = 2 * g;
+        for (i = 0; i < n; i++) total += w[i] = screen_text_width(size, t[i]) * WIDTH_MARGIN + 10;
+    } while (size > 0.34f && total > TOP_WIDTH - 4 - left);
+    x = TOP_WIDTH - 4 - total;
+    screen_text(x, 4, size + 0.08f, GREY_LIGHT, 0, "\xEE\x80\x84");
+    x += g;
+    for (i = 0; i < n; i++) {
+        const int on = list[i] == tab;
+        if (on) {
+            screen_rect(x, 3, w[i], 18, SEL);
+            screen_rect(x, 20, w[i], 2, ACCENT);
+        }
+        screen_text(x + 5, 6, size, list[i] == TAB_TODO && tab_counts[TAB_TODO] ? state_color(todo_status) : on ? WHITE : GREY_LIGHT, 0, t[i]);
+        x += w[i];
+    }
+    screen_text(x + 2, 4, size + 0.08f, GREY_LIGHT, 0, "\xEE\x80\x85");
+}
+
+/* Lines of a list on the top screen: one less under the search band. */
+static int list_lines(const char *q) { return q[0] ? TOP_LINES - 1 : TOP_LINES; }
+
+/* Band of an active search, under the title: what is searched, and B clears it. Returns the y of the first line. */
+static float draw_search_band(const char *q)
+{
+    char t[120];
+    if (!q[0]) return LIST_Y;
+    snprintf(t, sizeof t, T("Recherche : %s \xC2\xB7 \xEE\x80\x81 pour effacer", "Search: %s \xC2\xB7 \xEE\x80\x81 to clear"), q);
+    screen_rect(0, 25, TOP_WIDTH, 15, CARD);
+    screen_rect(0, 25, 2, 15, ACCENT);
+    screen_text(8, 25, 0.44f, WHITE, TOP_WIDTH - 16, t);
+    return LIST_Y + 15;
+}
+
+/* Top screen of the list: title and tabs, the search, the games, then the footer: the server, when it was read, the
+ * position in the list. */
 static void draw_list_top(void)
 {
-    static const status_t states[] = { STATUS_CONFLICT, STATUS_TO_DOWNLOAD, STATUS_TO_UPLOAD, STATUS_DUPLICATE, STATUS_IN_SYNC }; /* order of status_priority() */
     static const status_t all[] = { STATUS_TO_UPLOAD, STATUS_TO_DOWNLOAD, STATUS_CONFLICT, STATUS_DUPLICATE, STATUS_OFFLINE, STATUS_IN_SYNC };
-    const int cursor = list_cursor;
-    int i, count = 0, n[5] = { 0 }, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
-    status_t e[5];
-    char t[5][40], footer[200], age[32], pos[24];
+    const int cursor = list_cursor, lines = list_lines(query);
+    int i, start = cursor < lines ? 0 : cursor - lines + 1;
+    char footer[200], age[32], pos[24], empty[160];
     const char *host = strstr(cfg.url, "://") ? strstr(cfg.url, "://") + 3 : cfg.url;
-    float l[5], x, xs = 0, xn;
+    float x, xs = 0, xn, top;
 
     screen_top();
     x = 6 + screen_text(6, 4, 0.55f, WHITE, 0, "3dssavesync") + 12;
-    if (loaded && server_read) { /* without the server, the counters would be wrong */
-        for (i = 0; i < visible_count; i++) n[status_priority(games[visible[i]].status)]++;
-        for (i = 0; i < 5; i++) {
-            if (!n[i]) continue;
-            e[count] = states[i];
-            snprintf(t[count], sizeof t[count], counter_format(e[count], n[i]), n[i]);
-            l[count] = screen_text_width(0.42f, t[count]);
-            count++;
-        }
-        count = texts_fitting(l, count, 12, TOP_WIDTH - 6 - x);
-        x = TOP_WIDTH - 6;
-        for (i = count - 1; i >= 0; i--) {
-            x -= l[i];
-            screen_text(x, 7, 0.42f, e[i] == STATUS_IN_SYNC ? C_GREEN : state_color(e[i]), 0, t[i]);
-            x -= 12;
-        }
-    }
+    if (loaded) draw_tabs(x);
     screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
+    top = draw_search_band(query);
 
     /* Columns measured on all State words: nothing is cut, and they do not move from one frame to the next. */
     for (i = 0; i < 6; i++)
         if (screen_text_width(0.42f, state_label(all[i])) > xs) xs = screen_text_width(0.42f, state_label(all[i]));
     xs = 18 + xs * WIDTH_MARGIN + 6;
     xn = xs + screen_text_width(0.42f, "GBA") * WIDTH_MARGIN + 8;
-    if (!visible_count) screen_paragraph(10, 40, 0.5f, GREY_LIGHT, TOP_WIDTH - 20, !loaded ? T("Lecture en cours…", "Reading…")
-                                                              : server_read ? T("Aucun jeu à afficher.", "No game to show.")
-                                                              : T("Serveur non lu, et aucune sauvegarde sur la 3DS.", "Server not read, and no save on the 3DS."));
-    for (i = start; i < visible_count && i < start + TOP_LINES; i++) {
-        game_t *k = &games[visible[i]];
-        float y = LIST_Y + (i - start) * 15;
+    if (!shown_count) {
+        if (!loaded) snprintf(empty, sizeof empty, "%s", T("Lecture en cours…", "Reading…"));
+        else if (!visible_count) snprintf(empty, sizeof empty, "%s", server_read ? T("Aucun jeu à afficher.", "No game to show.")
+                                                                      : T("Serveur non lu, et aucune sauvegarde sur la 3DS.", "Server not read, and no save on the 3DS."));
+        else if (query[0]) snprintf(empty, sizeof empty, T("Aucun jeu ne correspond à « %s ».%s", "No game matches \"%s\".%s"), query,
+                                    tab_counts[TAB_ALL] ? T(" Changez d'onglet avec \xEE\x80\x84 et \xEE\x80\x85.", " Switch tabs with \xEE\x80\x84 and \xEE\x80\x85.") : "");
+        else snprintf(empty, sizeof empty, "%s", tab == TAB_TODO ? T("Rien à faire pour le moment.", "Nothing to do right now.")
+                                                                 : T("Aucun jeu dans cet onglet.", "No game in this tab."));
+        screen_paragraph(10, top + 13, 0.5f, GREY_LIGHT, TOP_WIDTH - 20, empty);
+    }
+    for (i = start; i < shown_count && i < start + lines; i++) {
+        game_t *k = &games[shown[i]];
+        float y = top + (i - start) * 15;
         if (i == cursor) {
             screen_rect(0, y - 1, TOP_WIDTH, 15, SEL);
             screen_rect(0, y - 1, 2, 15, dot_color(k->status));
@@ -785,9 +883,9 @@ static void draw_list_top(void)
         screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, SYSTEM_NAMES[k->system]);
         screen_text(xn, y, 0.5f, WHITE, TOP_WIDTH - xn - 8, k->short_name);
     }
-    if (visible_count > TOP_LINES) { /* scroll bar */
-        float h = 195.0f * TOP_LINES / visible_count;
-        screen_rect(TOP_WIDTH - 4, 26 + (195.0f - h) * start / (visible_count - TOP_LINES), 2, h, GREY_DARK);
+    if (shown_count > lines) { /* scroll bar */
+        float h = 15.0f * lines * lines / shown_count;
+        screen_rect(TOP_WIDTH - 4, top - 1 + (15.0f * lines - h) * start / (shown_count - lines), 2, h, GREY_DARK);
     }
 
     screen_rect(0, FOOTER_Y, TOP_WIDTH, SCREEN_HEIGHT - FOOTER_Y, BAR);
@@ -800,7 +898,7 @@ static void draw_list_top(void)
                  (int)strcspn(host, "/"), host);
     }
     pos[0] = '\0';
-    if (visible_count) snprintf(pos, sizeof pos, "%d / %d", cursor + 1, visible_count);
+    if (shown_count) snprintf(pos, sizeof pos, "%d / %d", cursor + 1, shown_count);
     x = TOP_WIDTH - 6 - screen_text_width(0.38f, pos);
     screen_text(x, FOOTER_Y + 2, 0.38f, GREY_LIGHT, 0, pos);
     screen_text(8, FOOTER_Y + 2, 0.38f, loaded && !server_read ? C_RED : GREY_LIGHT, x - 8 - 12, footer);
@@ -909,19 +1007,31 @@ static void draw_bottom(const game_t *j)
     {
         char x[80];
         button_t game_buttons[2] = { { KEY_A, action_label(j), action }, { KEY_X, x, 1 } };
-        const button_t general[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
-                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
+        const button_t general[5] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
+                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_TOUCH, T("Chercher", "Search"), 1 },
+                                        { KEY_B, query[0] ? T("Effacer", "Clear") : T("Quitter", "Quit"), 1 } };
         if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), forwarder(j) ? rom_program(j) : T("le forwarder mGBA", "the mGBA forwarder"));
         draw_button_row(game_buttons, gb ? 2 : 1, BAR_ROW_2, 18);
-        draw_button_row(general, 4, BAR_ROW_2 + BUTTON_HEIGHT, 0);
+        draw_button_row(general, 5, BAR_ROW_2 + BUTTON_HEIGHT, 0);
     }
 }
 
 static void draw(void)
 {
     modal_begin(draw_list_top); /* not modal, but the same frame: two-line bar instead of modal_end */
-    draw_bottom(visible_count ? &games[visible[list_cursor]] : NULL);
+    draw_bottom(shown_count ? &games[shown[list_cursor]] : NULL);
     screen_end();
+}
+
+/* Cursor after the arrows: UP and DOWN one line, LEFT and RIGHT one page, within the count lines. */
+static int move_cursor(u32 k, int cursor, int count, int lines)
+{
+    if (k & KEY_DOWN) cursor++;
+    if (k & KEY_UP) cursor--;
+    if (k & KEY_RIGHT) cursor += lines;
+    if (k & KEY_LEFT) cursor -= lines;
+    if (cursor >= count) cursor = count - 1;
+    return cursor < 0 ? 0 : cursor;
 }
 
 static void edit_text(const char *title, char *value, size_t n, int masked)
@@ -934,6 +1044,14 @@ static void edit_text(const char *title, char *value, size_t n, int masked)
     swkbdSetValidation(&s, SWKBD_ANYTHING, 0, 0); /* empty allowed: "next to the ROM" */
     if (masked) swkbdSetPasswordMode(&s, SWKBD_PASSWORD_HIDE_DELAY);
     if (swkbdInputText(&s, input, sizeof input) == SWKBD_BUTTON_CONFIRM) snprintf(value, n, "%s", input);
+}
+
+/* Search typed on the system keyboard, trailing spaces dropped; empty: no search. */
+static void edit_search(char *q, size_t n)
+{
+    size_t len;
+    edit_text(T("Nom du jeu (vide : tous les jeux)", "Game name (empty: all games)"), q, n, 0);
+    for (len = strlen(q); len && q[len - 1] == ' ';) q[--len] = '\0';
 }
 
 static int test_state;        /* Connection line of the settings: 0 not tested, 1 OK, -1 failure (test_short) */
@@ -974,25 +1092,46 @@ typedef struct {
     int main_only, ticked;
 } title_choice_t;
 
+/* Ticked games first, then by name. */
 static int compare_choices(const void *a, const void *b)
 {
-    return strcasecmp(((const title_choice_t *)a)->name, ((const title_choice_t *)b)->name);
+    const title_choice_t *x = a, *y = b;
+    return x->ticked != y->ticked ? y->ticked - x->ticked : compare_names(x->name, y->name);
 }
 
-static title_choice_t choices[200];
-static int choice_count, choice_cursor;
+static title_choice_t *choices; /* all the games of the choice (heap) */
+static int *choice_shown, choice_count, choice_shown_count, choice_cursor; /* choice_shown: those that match the search */
+static char choice_query[48];
+
+/* choice_shown from the search; the cursor stays on the same game if it is still shown, else the first. */
+static int filter_choices(int cursor)
+{
+    int selected = choice_shown_count ? choice_shown[cursor] : -1, i;
+    choice_shown_count = 0;
+    for (i = 0; i < choice_count; i++)
+        if (name_matches(choices[i].name, choice_query)) choice_shown[choice_shown_count++] = i;
+    cursor = index_of(choice_shown, choice_shown_count, selected);
+    return cursor < 0 ? 0 : cursor;
+}
 
 /* Top screen of the choice: a check box per game. */
 static void draw_choices_top(void)
 {
-    const int cursor = choice_cursor, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+    const int cursor = choice_cursor, lines = list_lines(choice_query), start = cursor < lines ? 0 : cursor - lines + 1;
     int i;
+    float top;
     screen_top();
     screen_text(6, 4, 0.55f, WHITE, 0, T("Jeux 3DS à synchroniser", "3DS games to sync"));
     screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
-    for (i = start; i < choice_count && i < start + TOP_LINES; i++) {
-        const title_choice_t *c = &choices[i];
-        float ly = LIST_Y + (i - start) * 15;
+    top = draw_search_band(choice_query);
+    if (!choice_shown_count && choice_query[0]) {
+        char t[120];
+        snprintf(t, sizeof t, T("Aucun jeu ne correspond à « %s ».", "No game matches \"%s\"."), choice_query);
+        screen_paragraph(10, top + 13, 0.5f, GREY_LIGHT, TOP_WIDTH - 20, t);
+    }
+    for (i = start; i < choice_shown_count && i < start + lines; i++) {
+        const title_choice_t *c = &choices[choice_shown[i]];
+        float ly = top + (i - start) * 15;
         if (i == cursor) {
             screen_rect(0, ly - 1, TOP_WIDTH, 15, SEL);
             screen_rect(0, ly - 1, 2, 15, ACCENT);
@@ -1002,25 +1141,35 @@ static void draw_choices_top(void)
         if (c->ticked) screen_rect(11, ly + 4, 6, 6, C_GREEN);
         screen_text(26, ly, 0.5f, c->ticked || c->main_only == 1 ? WHITE : GREY_DARK, TOP_WIDTH - 40, c->name);
     }
-    if (start > 0) screen_text(TOP_WIDTH - 12, 26, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xB2");
-    if (start + TOP_LINES < choice_count) screen_text(TOP_WIDTH - 12, FOOTER_Y, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xBC");
+    if (start > 0) screen_text(TOP_WIDTH - 12, top - 1, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xB2");
+    if (start + lines < choice_shown_count) screen_text(TOP_WIDTH - 12, FOOTER_Y, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xBC");
 }
 
 static void choose_titles(void)
 {
-    title_choice_t *c = choices;
-    static u64 ids[200];
-    static FS_MediaType medias[200];
-    int n, i, changed = 0;
+    title_choice_t *c;
+    u64 *ids;
+    FS_MediaType *medias;
+    int n, i, ticked = title_count, changed = 0;
 
     show_progress(0, 0, "%s", T("Lecture des jeux installés…", "Reading installed games…"));
     if (R_FAILED(amInit())) {
         set_message(C_RED, NULL, "%s", T("Impossible de lire la liste des jeux. Redémarrez la 3DS et réessayez.", "Can't read the installed games. Restart the 3DS and try again."));
         return;
     }
-    n = installed_titles(ids, medias, 200);
+    n = installed_titles(&ids, &medias, title_count); /* room for the games of titres.ini absent from the console */
     amExit();
-    for (i = 0; i < title_count && n < 200; i++) {
+    c = choices = n < 0 ? NULL : malloc((n + title_count + 1) * sizeof *c);
+    choice_shown = c ? malloc((n + title_count + 1) * sizeof *choice_shown) : NULL;
+    if (!choice_shown) {
+        set_message(C_RED, T("malloc impossible", "malloc failed"), "%s", T("Mémoire insuffisante pour lister les jeux. Redémarrez la 3DS et réessayez.", "Not enough memory to list the games. Restart the 3DS and try again."));
+        free(ids);
+        free(medias);
+        free(choices);
+        choices = NULL;
+        return;
+    }
+    for (i = 0; i < title_count; i++) {
         int k;
         for (k = 0; k < n && ids[k] != titles[i].id; k++);
         if (k == n) {
@@ -1047,20 +1196,25 @@ static void choose_titles(void)
         }
         n = m;
     }
+    free(ids);
+    free(medias);
     qsort(c, n, sizeof *c, compare_choices);
     clear_message();
     choice_count = n;
-    choice_cursor = 0;
+    choice_query[0] = '\0';
+    choice_shown_count = 0;
+    choice_cursor = filter_choices(0);
 
     while (aptMainLoop()) {
         const int cursor = choice_cursor;
-        const title_choice_t *ch = n ? &c[cursor] : NULL;
+        title_choice_t *ch = choice_shown_count ? &c[choice_shown[cursor]] : NULL;
         int tickable = ch && (ch->ticked || ch->main_only == 1);
         u16 icon[ICON_SIZE * ICON_SIZE];
         float y = 6;
         u32 k;
-        button_t t[2] = { { KEY_A, ch && ch->ticked ? T("Décocher", "Untick") : T("Cocher", "Tick"), tickable },
-                          { KEY_B, T("Enregistrer et revenir", "Save and go back"), 1 } };
+        button_t t[3] = { { KEY_A, ch && ch->ticked ? T("Décocher", "Untick") : T("Cocher", "Tick"), tickable },
+                          { KEY_TOUCH, T("Chercher", "Search"), 1 },
+                          { KEY_B, choice_query[0] ? T("Effacer la recherche", "Clear the search") : T("Enregistrer et revenir", "Save and go back"), 1 } };
 
         modal_begin(draw_choices_top);
         if (ch) {
@@ -1075,23 +1229,35 @@ static void choose_titles(void)
                 y += screen_paragraph(8, y, 0.45f, GREY_LIGHT, TEXT_WIDTH, T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.",
                                                                             "No save yet: start the game once and save.")) + 6;
         } else {
-            y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, TEXT_WIDTH, T("Aucun jeu trouvé.", "No game found.")) + 6;
+            y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, TEXT_WIDTH, choice_query[0] ? T("Aucun jeu ne correspond à la recherche.", "No game matches the search.")
+                                                                                     : T("Aucun jeu trouvé.", "No game found.")) + 6;
         }
         screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH, T("Un jeu manque ? Lancez-le une fois et sauvegardez.", "Game missing? Start it once and save."));
         draw_message(BAR_TOP_1);
-        k = modal_end(t, 2, 18);
+        k = modal_end(t, 3, 18);
 
-        if (k & (KEY_UP | KEY_DOWN)) clear_message();
-        if (k & KEY_B) break;
-        if (k & KEY_DOWN && choice_cursor + 1 < n) choice_cursor++;
-        if (k & KEY_UP && choice_cursor > 0) choice_cursor--;
-        if (k & KEY_A && n) {
+        if (k & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) clear_message();
+        if (k & KEY_B) {
+            if (!choice_query[0]) break;
+            choice_query[0] = '\0'; /* B clears the search first */
+            choice_cursor = filter_choices(cursor);
+            continue;
+        }
+        choice_cursor = move_cursor(k, cursor, choice_shown_count, list_lines(choice_query));
+        if (k & KEY_TOUCH) {
+            edit_search(choice_query, sizeof choice_query);
+            choice_cursor = filter_choices(cursor);
+        }
+        if (k & KEY_A && ch) {
             clear_message();
-            if (tickable) {
-                c[choice_cursor].ticked = !c[choice_cursor].ticked;
-                changed = 1;
-            } else {
+            if (!tickable) {
                 set_message(C_RED, NULL, "%s", T("Ce jeu ne peut pas être coché.", "This game cannot be ticked."));
+            } else if (!ch->ticked && ticked >= MAX_TITLES) {
+                set_message(C_RED, NULL, T("%d jeux 3DS au plus. Décochez-en un d'abord.", "%d 3DS games at most. Untick one first."), MAX_TITLES);
+            } else {
+                ch->ticked = !ch->ticked;
+                ticked += ch->ticked ? 1 : -1;
+                changed = 1;
             }
         }
     }
@@ -1108,9 +1274,14 @@ static void choose_titles(void)
             set_message(C_RED, APP_DIR "/titres.ini", "%s", T("Liste des jeux 3DS non enregistrée. Vérifiez la carte SD.", "3DS game list not saved. Check the SD card."));
         else set_message(C_GREEN, NULL, "%s", T("Liste des jeux 3DS enregistrée.", "3DS game list saved."));
     }
+    free(choices);
+    free(choice_shown);
+    choices = NULL;
+    choice_shown = NULL;
+    choice_count = choice_shown_count = 0;
 }
 
-/* Editable setting lines, then 3DS games, Connection and Version (settings screen). */
+/* Editable setting lines, then 3DS games, List order, Connection and Version (settings screen). */
 static const struct {
     const char *name, *name_en, *help, *help_en;
     char *value;
@@ -1131,6 +1302,7 @@ static const struct {
       "open_agb_firm (useSavesFolder=true): sdmc:/3ds/open_agb_firm/saves. Empty = next to the ROM.", cfg.saves_gba, sizeof cfg.saves_gba },
 };
 #define SETTING_COUNT ((int)(sizeof SETTINGS / sizeof *SETTINGS))
+enum { LINE_TITLES = SETTING_COUNT, LINE_ORDER, LINE_TEST, LINE_VERSION, LINE_COUNT }; /* lines after the editable ones */
 static int selected_setting; /* selected settings line: also for the top screen during a progress */
 
 /* State of the installed version, as on the Version line: "Up to date", "3.7.1 available"… in t (t may be NULL with
@@ -1170,30 +1342,38 @@ static void draw_version_value(float x, float y, float size, float end)
 static const char *setting_label(int i)
 {
     if (i < SETTING_COUNT) return T(SETTINGS[i].name, SETTINGS[i].name_en);
-    if (i == SETTING_COUNT) return T("Jeux 3DS", "3DS games");
-    if (i == SETTING_COUNT + 1) return T("Connexion", "Connection");
+    if (i == LINE_TITLES) return T("Jeux 3DS", "3DS games");
+    if (i == LINE_ORDER) return T("Tri de la liste", "List order");
+    if (i == LINE_TEST) return T("Connexion", "Connection");
     return T("Version", "Version");
+}
+
+static const char *order_label(int o)
+{
+    if (o == ORDER_NAME) return T("Nom", "Name");
+    if (o == ORDER_RECENT) return T("Dernière partie", "Last played");
+    return T("À faire d'abord", "To do first");
 }
 
 /* What A does on line i, drawn on the right of the selected line. */
 static const char *setting_action(int i)
 {
     if (i < SETTING_COUNT) return T("Modifier", "Change");
-    if (i == SETTING_COUNT) return T("Choisir", "Choose");
-    if (i == SETTING_COUNT + 1) return T("Tester", "Test");
+    if (i == LINE_TITLES) return T("Choisir", "Choose");
+    if (i == LINE_ORDER) return T("Changer", "Change");
+    if (i == LINE_TEST) return T("Tester", "Test");
     return update_is_newer(VERSION, update_info.latest) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
 }
 
 /* Top screen of the settings: label on the left, value in a column, "Ⓐ action" on the right of the selected line. */
 static void draw_settings_top(void)
 {
-    const int total = SETTING_COUNT + 3;
     float y = 29;
     int i;
     screen_top();
     screen_text(6, 4, 0.55f, WHITE, 0, T("Réglages", "Settings"));
     screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
-    for (i = 0; i < total; i++) {
+    for (i = 0; i < LINE_COUNT; i++) {
         char v[24];
         const char *value = v;
         u32 c = WHITE;
@@ -1211,10 +1391,12 @@ static void draw_settings_top(void)
                 value = T("À côté de la ROM", "Next to the ROM"); /* default value */
                 c = GREY_LIGHT;
             }
-        } else if (i == SETTING_COUNT) {
+        } else if (i == LINE_TITLES) {
             if (title_count) snprintf(v, sizeof v, plural(title_count, english, T("%d jeu", "%d game"), T("%d jeux", "%d games")), title_count);
             else snprintf(v, sizeof v, "%s", T("Aucun", "None"));
-        } else if (i == SETTING_COUNT + 1) {
+        } else if (i == LINE_ORDER) {
+            value = order_label(cfg.order);
+        } else if (i == LINE_TEST) {
             value = test_state > 0 ? T("Réussie", "OK") : test_state < 0 ? test_short : T("Non testée", "Not tested");
             c = test_state > 0 ? C_GREEN : test_state < 0 ? C_RED : GREY_LIGHT;
         }
@@ -1229,9 +1411,9 @@ static void draw_settings_top(void)
         }
         if (required) screen_rect(0, y - 1, 2, 16, C_RED);
         screen_text(8, y, 0.46f, i == selected_setting ? WHITE : GREY_LIGHT, 128, setting_label(i));
-        if (i == SETTING_COUNT + 2) draw_version_value(142, y, 0.46f, end);
+        if (i == LINE_VERSION) draw_version_value(142, y, 0.46f, end);
         else screen_text(142, y, 0.46f, c, end - 142, value);
-        y += 17 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groups: server, folders, the rest */
+        y += 16 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groups: server, folders, the rest */
     }
 }
 
@@ -1239,13 +1421,13 @@ static void draw_settings_top(void)
  * yet. 1 if a setting or the list of 3DS games changed (then everything must be read again). */
 static int settings_screen(int first)
 {
-    const int count = SETTING_COUNT, total = count + 3;
-    int changed;
+    const int count = SETTING_COUNT;
+    int changed, order_changed;
     static title_t before_titles[MAX_TITLES];
     int before_count = title_count;
-    char before[sizeof cfg];
+    config_t before;
 
-    memcpy(before, &cfg, sizeof cfg);
+    memcpy(&before, &cfg, sizeof cfg);
     memcpy(before_titles, titles, sizeof titles);
     selected_setting = 0;
     draw_current_top = draw_settings_top; /* progress and questions: the settings stay on top */
@@ -1269,7 +1451,7 @@ static int settings_screen(int first)
             screen_paragraph(10, 4, 0.45f, WHITE, BOTTOM_WIDTH - 24, b);
             y = h + 6;
         }
-        if (c == count + 2) {
+        if (c == LINE_VERSION) {
             y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, T("Mise à jour de 3dssavesync", "3dssavesync update")) + 8;
             screen_text(8, y, 0.42f, GREY_LIGHT, 100, T("Installée", "Installed"));
             draw_version_value(112, y, 0.42f, BOTTOM_WIDTH - 8);
@@ -1279,11 +1461,15 @@ static int settings_screen(int first)
         } else {
             y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, setting_label(c)) + 6;
             y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
-                                                         : c == count ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
+                                                         : c == LINE_TITLES ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
+                                                         : c == LINE_ORDER ? T("Ordre des jeux dans la liste : à faire d'abord, par nom, ou la dernière partie d'abord "
+                                                                               "(date de la sauvegarde sur la 3DS ; sans date, en fin de liste, comme les jeux 3DS).",
+                                                                               "Order of the games in the list: to do first, by name, or last played first "
+                                                                               "(date of the save on the 3DS; without a date, at the end, like 3DS games).")
                                                                    : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 6;
         }
         if (message[0]) draw_message(BAR_TOP_1);
-        else if (c == count + 2 && update_detail[0]) { /* last check: text, then its technical line (after the last line break) */
+        else if (c == LINE_VERSION && update_detail[0]) { /* last check: text, then its technical line (after the last line break) */
             char d[sizeof update_detail];
             char *nl;
             u32 color = version_state(NULL, 0);
@@ -1299,7 +1485,7 @@ static int settings_screen(int first)
             if (test_connection()) break;
             continue;
         }
-        if (k & KEY_DOWN && c + 1 < total) selected_setting++;
+        if (k & KEY_DOWN && c + 1 < LINE_COUNT) selected_setting++;
         if (k & KEY_UP && c > 0) selected_setting--;
         if (k & KEY_A) {
             clear_message();
@@ -1309,9 +1495,11 @@ static int settings_screen(int first)
                 edit_text(T(SETTINGS[c].name, SETTINGS[c].name_en), SETTINGS[c].value, SETTINGS[c].n, c == 1);
                 len = strlen(SETTINGS[c].value);
                 while (len > 0 && SETTINGS[c].value[len - 1] == '/') SETTINGS[c].value[--len] = '\0'; /* "…/saves/" -> "…/saves" */
-            } else if (c == count) {
+            } else if (c == LINE_TITLES) {
                 choose_titles();
-            } else if (c == count + 1) {
+            } else if (c == LINE_ORDER) {
+                cfg.order = (cfg.order + 1) % 3;
+            } else if (c == LINE_TEST) {
                 test_connection();
             } else {
                 should_quit = update_app();
@@ -1321,8 +1509,10 @@ static int settings_screen(int first)
     }
     draw_current_top = draw_list_top;
     if (!first) clear_message(); /* first start: the result of the test stays shown */
-    changed = memcmp(before, &cfg, sizeof cfg) || before_count != title_count || memcmp(before_titles, titles, sizeof titles);
-    if (memcmp(before, &cfg, sizeof cfg)) save_config();
+    order_changed = before.order != cfg.order;
+    before.order = cfg.order; /* the order only sorts the list again (sort_list): no new read */
+    changed = memcmp(&before, &cfg, sizeof cfg) || before_count != title_count || memcmp(before_titles, titles, sizeof titles);
+    if (order_changed || memcmp(&before, &cfg, sizeof cfg)) save_config();
     return changed;
 }
 
@@ -1497,7 +1687,7 @@ static void sync_all(void)
         if (do_upload || do_download) {
             result_t res;
             int ok;
-            list_cursor = i; /* the top screen follows the current game */
+            if (index_of(shown, shown_count, visible[i]) >= 0) list_cursor = index_of(shown, shown_count, visible[i]); /* the top screen follows the current game */
             progress_color = do_upload ? C_YELLOW : C_CYAN;
             show_progress(++done, total, "%s\n%s", do_upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
             res = do_upload ? upload_save(j) : download_save(j);
@@ -1546,7 +1736,11 @@ int main(int argc, char **argv)
     if (migrate_dir(OLD_DIR, APP_DIR) == 1)
         snprintf(message, sizeof message, T("Réglages repris de %s.", "Settings taken from %s."), OLD_DIR);
     read_config(APP_DIR "/config.ini", &cfg);
-    read_bases(APP_DIR "/base.ini", &bases);
+    if (read_bases(APP_DIR "/base.ini", &bases)) { /* nothing is written to base.ini then: it would lose Bases */
+        add_alert(T("Mémoire insuffisante pour lire l'état de synchronisation : il ne sera pas enregistré. Redémarrez la 3DS, puis relancez 3dssavesync.",
+                    "Not enough memory to read the sync state: it will not be saved. Restart the 3DS, then start 3dssavesync again."));
+        snprintf(alert_detail, sizeof alert_detail, "%s (%d)", APP_DIR "/base.ini", bases.n);
+    }
     title_count = read_titles(APP_DIR "/titres.ini", titles, MAX_TITLES);
     update_start(argc > 0 ? argv[0] : NULL);
 
@@ -1580,29 +1774,41 @@ int main(int argc, char **argv)
         draw();
         k = read_keys();
 
-        if (k & KEY_B) break;
-        if (k & (KEY_UP | KEY_DOWN)) clear_message(); /* the message is about the game being left */
-        if (k & KEY_DOWN && cursor + 1 < visible_count) cursor++;
-        if (k & KEY_UP && cursor > 0) cursor--;
+        if (k & KEY_B) {
+            if (!query[0]) break;
+            query[0] = '\0'; /* B clears the search first */
+            cursor = refilter(cursor);
+            continue;
+        }
+        if (k & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_L | KEY_R)) clear_message(); /* the message is about the game being left */
+        cursor = move_cursor(k, cursor, shown_count, list_lines(query));
+        if (k & (KEY_L | KEY_R)) {
+            tab = next_tab(tab, k & KEY_R ? 1 : -1, tab_counts);
+            cursor = refilter(cursor);
+        }
+        if (k & KEY_TOUCH) {
+            edit_search(query, sizeof query);
+            cursor = refilter(cursor);
+        }
         if (k & (KEY_A | KEY_START | KEY_X | KEY_Y | KEY_SELECT)) {
-            int selected = visible_count ? visible[cursor] : -1, i;
+            int selected = shown_count ? shown[cursor] : -1;
             clear_message();
             /* Read everything again: Y, or settings changed. After an action: the Game it touched is already read again, the server only. */
             if (k & KEY_SELECT) {
                 if (settings_screen(0) && !should_quit) refresh();
+                else sort_list(); /* the order may have changed */
             } else if (k & KEY_Y) {
                 refresh();
-            } else if (k & KEY_A && visible_count) {
+            } else if (k & KEY_A && shown_count) {
                 if (act(&games[selected])) reread_server();
-            } else if (k & KEY_X && visible_count) {
+            } else if (k & KEY_X && shown_count) {
                 if (switch_save_file(&games[selected])) reread_server();
             } else if (k & KEY_START) {
                 sync_all();
             }
             show_alert();
-            for (i = 0; i < visible_count && visible[i] != selected; i++);
-            if (i < visible_count) cursor = i; /* the same game, at its new place */
-            else if (cursor >= visible_count) cursor = visible_count ? visible_count - 1 : 0;
+            if (index_of(shown, shown_count, selected) >= 0) cursor = index_of(shown, shown_count, selected); /* the same game, at its new place */
+            else if (cursor >= shown_count) cursor = shown_count ? shown_count - 1 : 0;
             list_cursor = cursor;
         }
     }
