@@ -113,7 +113,7 @@ func principal(args []string) int {
 	rom := fl.String("rom", "", "ROM, avec une commande après --")
 	texte := fl.Bool("texte", false, "setup : assistant en texte dans une console, sans navigateur")
 	sansNavigateur := fl.Bool("sans-navigateur", false, "setup : affiche l'adresse de la page au lieu d'ouvrir le navigateur (SSH)")
-	oui := fl.Bool("oui", false, "restore : sans question de confirmation")
+	oui := fl.Bool("oui", false, "restore, uninstall : sans question de confirmation")
 	if err := fl.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -133,6 +133,8 @@ func principal(args []string) int {
 		code, err = commandeSetup(*config, *texte, *sansNavigateur)
 	case "repair":
 		code, err = commandeRepair(*config)
+	case "uninstall":
+		code, err = commandeUninstall(*config, *oui)
 	case "serve":
 		code, err = commandeServe(*config)
 	case "restore":

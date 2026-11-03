@@ -125,6 +125,32 @@ func commandeRepair(config string) (int, error) {
 	return 0, nil
 }
 
+// 3dssavesync uninstall [--oui] : la désinstallation (desinstaller.go), après confirmation.
+func commandeUninstall(config string, oui bool) (int, error) {
+	ouvrirConsole()
+	q := &Questions{in: bufio.NewReader(os.Stdin), out: os.Stdout}
+	var cfg Config
+	if err := lireConfig(config, &cfg); err != nil {
+		return 1, err
+	}
+	if !oui && !q.oui(tr("Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau les jeux sans synchronisation ; vos sauvegardes ne changent pas.",
+		"Uninstall 3dssavesync? LaunchBox and ES-DE will start the games without sync again; your saves do not change."), false) {
+		return 0, nil
+	}
+	lignes, err := desinstaller(&cfg, config)
+	if err != nil {
+		return 1, err
+	}
+	for _, l := range lignes {
+		q.dire("- %s", l)
+	}
+	if consolePropre {
+		q.dire("\n%s", tr("Appuyez sur Entrée pour fermer.", "Press Enter to close."))
+		q.ligne()
+	}
+	return 0, nil
+}
+
 // Exe vers lequel pointent les frontends : celui noté à l'installation, sinon l'exe en cours.
 func lanceurDe(cfg *Config) string {
 	if cfg.Lanceur != "" {

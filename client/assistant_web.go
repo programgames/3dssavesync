@@ -210,6 +210,17 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reponse = map[string]any{"Lignes": reparer(&cfg, lanceurDe(&cfg))}
 		}
+	case "api/desinstaller":
+		var cfg Config
+		if err := lireConfig(a.config, &cfg); err != nil {
+			reponse = map[string]any{"Erreur": texteErreur(err)}
+			break
+		}
+		lignes, err := desinstaller(&cfg, a.config)
+		reponse = map[string]any{"Lignes": lignes, "Erreur": texteErreur(err)}
+		if err == nil {
+			a.finir() // la réponse part, puis le programme s'arrête : son exe peut aller à la Corbeille
+		}
 	case "api/ouvrir":
 		var x struct{ Nom string }
 		json.NewDecoder(r.Body).Decode(&x)
@@ -237,7 +248,7 @@ func (a *AssistantWeb) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 	case "api/terminer":
-		close(a.fin)
+		a.finir()
 		reponse = true
 	default:
 		http.NotFound(w, r)
@@ -277,6 +288,15 @@ func (a *AssistantWeb) aliasWeb(nom, systeme string, retirer bool) map[string]an
 		x["Erreur"] = texteErreur(err)
 	}
 	return x
+}
+
+// finir : arrête le programme après la réponse ; un deuxième appel (deux onglets, deux clics) ne fait rien.
+func (a *AssistantWeb) finir() {
+	select {
+	case <-a.fin:
+	default:
+		close(a.fin)
+	}
 }
 
 // Émulateur pour la page : dossiers par Système (réglage de l'émulateur, ou valeur de config.json), conseil autoload.
