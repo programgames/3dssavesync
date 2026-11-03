@@ -1,12 +1,12 @@
-# Un Jeu = un Code jeu ; noms de fichiers ignorés, slot 0 seulement, Doublons ignorés
+# One Game = one Game code; file names ignored, slot 0 only, Duplicates ignored
 
-TWiLight et melonDS nomment le `.sav` d'après le nom de fichier de la ROM, et ces noms diffèrent entre la 3DS et le PC (noms No-Intro sur le PC). L'identité d'un Jeu est donc le Code jeu à l'offset `0x0C` de l'en-tête ROM, région incluse.
+TWiLight and melonDS name the `.sav` after the file name of the ROM, and these names differ between the 3DS and the PC (No-Intro names on the PC). The identity of a Game is therefore the Game code at offset `0x0C` of the ROM header, region included.
 
-- Codes `####`, vides ou non ASCII (homebrews) : exclus.
-- Seul le slot 0 (`<nom ROM>.sav`) est synchronisé ; les Slots TWiLight `.sav1`..`.sav9` sont ignorés.
-- Si un Client a plusieurs ROM avec le même Code jeu, le Jeu est marqué Doublon et n'est pas synchronisé : l'outil ne devine jamais quel fichier est le bon.
+- Codes `####`, empty or non-ASCII (homebrews): excluded.
+- Only slot 0 (`<ROM name>.sav`) is synced; TWiLight slots `.sav1`..`.sav9` are ignored.
+- If a Client has several ROMs with the same Game code, the Game is marked Duplicate and is not synced: the tool never guesses which file is the right one.
 
-## Conséquences
+## Consequences
 
-- Deux régions du même titre (`IRBF`, `IRBO`) sont deux Jeux distincts. La compatibilité des Sauvegardes entre langues n'est pas vérifiée, donc on ne les apparie pas.
-- Un ROM hack qui garde le Code jeu du jeu d'origine partage son identité : à éviter sur un même Client (il apparaîtra en Doublon). Complété par l'ADR 0014 (refus sur le PC, alias).
+- Two regions of the same title (`IRBF`, `IRBO`) are two distinct Games. Save compatibility between languages is not verified, so they are not paired.
+- A ROM hack that keeps the Game code of the original game shares its identity: avoid it on one Client (it will show as Duplicate). Completed by ADR 0014 (refusal on the PC, alias).

@@ -1,11 +1,11 @@
-# Outil maison (serveur + homebrew 3DS + Lanceur) plutôt qu'un projet existant
+# Home-made tool (server + 3DS homebrew + Launcher) rather than an existing project
 
-Trois pièces écrites pour ce besoin : un Serveur Python, un homebrew 3DS en C, un Lanceur PowerShell. Aucun projet existant ne couvre 3DS + melonDS + HTTPS public + Historique + Lanceur automatique (recherche du 2026-10-31, `docs/research.md` partie 2 §3).
+Three pieces written for this need: a Python Server, a 3DS homebrew in C, a PowerShell Launcher. No existing project covers 3DS + melonDS + public HTTPS + History + automatic Launcher (research of 2026-10-31, `docs/research.md` part 2 §3, French).
 
-## Options écartées
+## Rejected options
 
-- **DaeMoon** (mirusu400) : bon client 3DS HTTPS et serveur Docker, mais aucun client melonDS. Le PC aurait dû reproduire son protocole (paquets zip, manifeste, digest, appairage) ; son CLI semble ne parler qu'en HTTP clair. Plus cher que notre petit client 3DS, et dépendance à une v0.1.2 d'un seul auteur.
-- **GameSync** (pepasjc) : 3DS + PC, mais HTTP local seulement (`httpc`), client PC graphique et non automatique, projet couvrant 15 plateformes.
-- **ftpd + script PC** : aucun code 3DS, mais PC allumé et même réseau obligatoires, ftpd à lancer à la main, pas d'Historique.
+- **DaeMoon** (mirusu400): good HTTPS 3DS client and Docker server, but no melonDS client. The PC would have had to reproduce its protocol (zip packages, manifest, digest, pairing); its CLI seems to speak plain HTTP only. More costly than our small 3DS client, and a dependency on a v0.1.2 by a single author.
+- **GameSync** (pepasjc): 3DS + PC, but local HTTP only (`httpc`), graphical and non-automatic PC client, project covering 15 platforms.
+- **ftpd + PC script**: no 3DS code, but the PC must be on and on the same network, ftpd must be started by hand, no History.
 
-On reprend de DaeMoon les idées vérifiées sur matériel (curl + mbedTLS, racine ISRG embarquée, Code jeu lu dans la ROM), pas son code.
+We take from DaeMoon the ideas verified on hardware (curl + mbedTLS, embedded ISRG root, Game code read in the ROM), not its code.

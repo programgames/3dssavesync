@@ -1,23 +1,23 @@
-# Trailer d'horloge GB/GBA : reconnu par le reste modulo 512
+# GB/GBA Clock trailer: recognized by the remainder modulo 512
 
-L'ADR 0008 calcule la SRAM par `taille - (taille mod 1024)`. Pour une SRAM de 512 octets (GBA EEPROM 4 Kbit, GB MBC2 chez SameBoy, VBA-M, BGB), la règle donne 0 : le code garde alors le fichier entier, Trailer d'horloge compris. Une EEPROM 4 Kbit avec le Trailer mGBA (528 octets) n'a donc pas le même Hash que la même SRAM sans Trailer (512 octets) sur l'autre machine. Inversement, un fichier de 1536 octets sans Trailer serait coupé à 1024. Ticket #6, `docs/research-v3-emulateurs.md` §8.1.
+ADR 0008 computes the SRAM as `size - (size mod 1024)`. For a 512-byte SRAM (GBA EEPROM 4 Kbit, GB MBC2 in SameBoy, VBA-M, BGB), the rule gives 0: the code then keeps the whole file, Clock trailer included. A 4 Kbit EEPROM with the mGBA Trailer (528 bytes) therefore does not have the same Hash as the same SRAM without Trailer (512 bytes) on the other machine. Conversely, a 1536-byte file without a Trailer would be cut to 1024. Ticket #6, `docs/research-v3-emulateurs.md` §8.1 (French).
 
-Toutes les SRAM GB/GBA connues sont des multiples de 512 octets. Les Trailers connus font 16 octets (mGBA GBA), 44 octets (ancien format VBA) et 48 octets (mGBA, VBA-M, BGB, GB MBC3+TIMER). Règle, la même sur la 3DS (`sram_taille`, `3ds/source/cle.c`) et sur le PC (`lireLocal`, `client/sync.go`) :
+All known GB/GBA SRAMs are multiples of 512 bytes. Known Trailers are 16 bytes (mGBA GBA), 44 bytes (old VBA format) and 48 bytes (mGBA, VBA-M, BGB, GB MBC3+TIMER). Rule, the same on the 3DS (`sram_taille`, `3ds/source/cle.c`) and on the PC (`lireLocal`, `client/sync.go`):
 
-- `r = taille mod 512` ;
-- si `r` vaut 16, 44 ou 48 et que `taille > r`, la SRAM est `taille - r` ;
-- sinon la SRAM est le fichier entier.
+- `r = size mod 512`;
+- if `r` is 16, 44 or 48 and `size > r`, the SRAM is `size - r`;
+- otherwise the SRAM is the whole file.
 
-Le reste de l'ADR 0008 ne change pas : Hash, taille et Envoi portent sur la SRAM seule, et chaque machine garde son propre Trailer.
+The rest of ADR 0008 does not change: Hash, size and Upload cover the SRAM only, and each machine keeps its own Trailer.
 
-## Options écartées
+## Rejected options
 
-- **Garder `mod 1024`, avec un cas à part pour 512** : deux règles au lieu d'une, et le cas 1536 reste faux.
-- **Lire la taille de SRAM dans l'en-tête de la ROM** : exact pour le GB, impossible pour le GBA (pas de champ de taille) ; demande la ROM à chaque lecture.
+- **Keep `mod 1024`, with a special case for 512**: two rules instead of one, and the 1536 case stays wrong.
+- **Read the SRAM size in the ROM header**: exact for GB, impossible for GBA (no size field); needs the ROM at each read.
 
-## Conséquences
+## Consequences
 
-- Aucune Sauvegarde existante ne change de Hash pour les tailles Pokémon : GB 32 Kio (+ 0, 44 ou 48 octets), GBA 128 Kio (+ 0 ou 16 octets) donnent la même SRAM qu'avant.
-- Changent de SRAM : les fichiers de 512 octets + Trailer (avant : fichier entier) et les fichiers ≥ 1 Kio dont le reste n'est pas un Trailer (avant : coupés au Kio). Les jeux Pokémon ne sont pas dans ce cas.
-- GB MBC2 et GBA EEPROM restent hors périmètre pour d'autres raisons (tailles différentes selon l'émulateur, ordre des octets d'open_agb_firm) : §8.2 et synthèse de `docs/research-v3-emulateurs.md`.
-- `pc/sync.ps1` (Lanceur v2, remplacé par `3dssavesync`) garde l'ancienne règle.
+- No existing Save changes Hash for Pokémon sizes: GB 32 KiB (+ 0, 44 or 48 bytes), GBA 128 KiB (+ 0 or 16 bytes) give the same SRAM as before.
+- These change SRAM: 512-byte files + Trailer (before: whole file) and files ≥ 1 KiB whose remainder is not a Trailer (before: cut at the KiB). Pokémon games are not in this case.
+- GB MBC2 and GBA EEPROM stay out of scope for other reasons (sizes differ by emulator, open_agb_firm byte order): §8.2 and summary of `docs/research-v3-emulateurs.md`.
+- `pc/sync.ps1` (v2 Launcher, replaced by `3dssavesync`) keeps the old rule.

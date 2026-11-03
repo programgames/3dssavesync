@@ -1,17 +1,17 @@
-# Restauration depuis le PC, sans écriture locale
+# Restore from the PC, without local write
 
-La Restauration (ADR 0004) se fait sur le PC seulement : partie « Historique » de la page des réglages, et `3dssavesync restore`. Rien sur la 3DS.
+The Restore (ADR 0004) is done on the PC only: "History" part of the settings page, and `3dssavesync restore`. Nothing on the 3DS.
 
-Le Client lit l'ancienne Version (`GET /saves/<clé>/history/<version>`), vérifie son Hash, puis l'envoie comme nouvelle Version avec `If-Match` = le Hash de la Version courante que l'utilisateur a vue dans la liste. Il n'écrit aucun fichier local et ne change aucune Base.
+The Client reads the old Version (`GET /saves/<key>/history/<version>`), checks its Hash, then uploads it as a new Version with `If-Match` = the Hash of the Current version the user saw in the list. It writes no local file and changes no Base.
 
-Raison : la Base de chaque appareil reste le Hash de sa dernière Synchronisation. La Version restaurée est donc, pour chaque appareil, une Version plus récente (`L == B`, `S != B` : À récupérer). Chaque appareil la reçoit par sa Récupération normale, avec sa Copie de sécurité. Écrire la Sauvegarde locale du PC au moment de la Restauration demanderait de choisir un émulateur, de vérifier qu'il ne tourne pas et de refaire la Copie de sécurité : c'est déjà le travail de la Récupération.
+Reason: the Base of each device stays the Hash of its last sync. The restored Version is therefore, for most devices, a newer Version (`L == B`, `S != B`: To download). Exception: a device whose Base equals the restored Version (it never got the later Versions) and whose game changed since (`L != B`, `S == B`) sees To upload: its next sync brings back its own unsent game and undoes the Restore. Each device gets it through its normal Download, with its Backup copy. Writing the PC Local save at Restore time would require choosing an emulator, checking that it is not running and making the Backup copy again: this is already the job of the Download.
 
-## Conséquences
+## Consequences
 
-- Un Envoi arrivé entre l'affichage de la liste et la Restauration donne `412` : la Restauration est refusée, rien n'est écrasé. L'utilisateur recharge la liste.
-- Une Version au même contenu que la courante : rien n'est envoyé.
-- Un appareil avec une partie pas encore envoyée (`L != B`) passe en Conflit ; l'utilisateur choisit, comme pour tout Conflit.
-- Une Version d'une autre taille que la Sauvegarde locale donne aussi un Conflit (ADR 0001).
-- `X-Client: restauration` : l'Historique montre qu'une Version vient d'une Restauration.
-- Les Versions sont numérotées par leur `<seq>` du serveur : un numéro ne change jamais, même si une Version arrive entre la liste et la commande.
-- Liste limitée aux 30 dernières Versions. Pour un Pokémon, chaque Version de la liste est lue en entier (temps de jeu, dresseur) : jusqu'à 30 lectures par liste.
+- An Upload that arrives between the display of the list and the Restore gives `412`: the Restore is refused, nothing is overwritten. The user reloads the list.
+- A Version with the same content as the current one: nothing is uploaded.
+- Sync the other devices before restoring. Otherwise a device with a game not yet uploaded goes to Conflict, or (see Reason) brings back its unsent game; the page says so before the Restore.
+- A Version with a different size from the Local save also gives a Conflict (ADR 0001).
+- `X-Client: restauration`: the History shows that a Version comes from a Restore.
+- Versions are numbered by their server `<seq>`: a number never changes, even if a Version arrives between the list and the command.
+- List limited to the last 30 Versions. For a Pokémon game, each Version of the list is read in full (play time, trainer): up to 30 reads per list.

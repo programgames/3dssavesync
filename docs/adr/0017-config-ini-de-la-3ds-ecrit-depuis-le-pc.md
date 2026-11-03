@@ -1,14 +1,14 @@
-# config.ini de la 3DS écrit depuis le PC, adresse de la box en tête
+# 3DS config.ini written from the PC, router address first
 
-Premier lancement : le PC écrit l'adresse du serveur et le jeton dans `3ds/3dssavesync/config.ini` de la carte SD de la 3DS (page des réglages, « Préparer la carte SD de la 3DS » ; `setup --texte`, étape « Carte SD de la 3DS »). La 3DS lit ce fichier au démarrage et se connecte sans rien taper.
+First start: the PC writes the server address and the token to `3ds/3dssavesync/config.ini` on the 3DS SD card (settings page, "Prepare the 3DS SD card"; `setup --texte`, step "3DS SD card"). The 3DS reads this file at start and connects without typing anything.
 
-- Seul `config.ini` est écrit. Une racine sans dossier `Nintendo 3DS` est refusée. L'ancien fichier est copié avant (`config.ini.avant-3dssavesync-<date>`), ses autres lignes (`roms`, `saves`…) sont gardées ; écriture par fichier temporaire vérifié, renommage, relecture.
-- Ancien dossier `3ds/nds-save-sync` seul présent : `config.ini` y est écrit. Le homebrew le reprend au démarrage avec `base.ini` (`migrer_dossier`) ; un nouveau dossier créé à côté empêcherait cette reprise et perdrait les Bases.
-- « Télécharger config.ini » sert le même fichier, sans les autres lignes, pour une copie par FTP.
+- Only `config.ini` is written. A root without a `Nintendo 3DS` folder is refused. The old file is copied first (`config.ini.avant-3dssavesync-<date>`), its other lines (`roms`, `saves`…) are kept; write through a verified temporary file, rename, read back.
+- Old folder `3ds/nds-save-sync` alone present: `config.ini` is written there. The homebrew takes it over at start with `base.ini` (`migrer_dossier`); a new folder created next to it would prevent this takeover and lose the Bases.
+- "Download config.ini" serves the same file, without the other lines, for a copy by FTP.
 
-Adresse du serveur local pour la 3DS : la liste des IPv4 privées du PC, triée. D'abord une adresse qui ne finit pas en `.1` (le côté PC d'un réseau virtuel : WSL, Docker, VirtualBox, VMware), puis une adresse en `192.168.` (plage des box), puis l'adresse de la route par défaut. La route par défaut seule ne suffit pas : un VPN actif (NordVPN, WireGuard) la prend, et son adresse ne mène pas au PC depuis la 3DS. Les autres adresses restent affichées sous « Autres adresses ».
+Local server address for the 3DS: the list of private IPv4 addresses of the PC, sorted. First an address that does not end in `.1` (the PC side of a virtual network: WSL, Docker, VirtualBox, VMware), then an address in `192.168.` (home router range), then the default route address. The default route alone is not enough: an active VPN (NordVPN, WireGuard) takes it, and its address does not lead to the PC from the 3DS. The other addresses stay shown under "Other addresses".
 
-## Conséquences
+## Consequences
 
-- Une box en `10.x` avec un VPN actif sur le PC : l'adresse du VPN peut passer en tête. La bonne adresse est dans « Autres adresses ».
-- Le PC change d'adresse (DHCP) : il faut préparer la carte à nouveau, ou une réservation DHCP dans la box.
+- A router in `10.x` with an active VPN on the PC: the VPN address can come first. The right address is in "Other addresses".
+- The PC changes address (DHCP): prepare the card again, or set a DHCP reservation in the router.
