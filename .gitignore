@@ -1,11 +1,8 @@
-# Secrets : le jeton est dans ces trois fichiers
+# Secrets: these files hold the token
 server/.env
-pc/sync.config.json
 3ds/config.ini
 
 # État local du Lanceur
-pc/base.json
-pc/ndssync.log
 client/config.json
 client/*.exe
 client/3dssavesync

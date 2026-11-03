@@ -3,7 +3,6 @@
 //	3dssavesync run [--emulator <nom>] <rom>             un jeu (frontends)
 //	3dssavesync run [--emulator <nom>] --rom <rom> -- <commande…>  enveloppe une commande quelconque
 //	3dssavesync launch <nom>                             tous les jeux d'un émulateur, puis l'émulateur
-//	3dssavesync migrate-v2 <dossier de sync.ps1>         reprend sync.config.json et base.json
 //	3dssavesync setup [--texte] (ou sans argument)       assistant d'installation (navigateur, ou console)
 //	3dssavesync repair                                   refait la configuration des frontends
 //	3dssavesync serve                                    serveur local (réseau local, pour la 3DS)
@@ -153,12 +152,6 @@ func principal(args []string) int {
 			code, err = commandeTray(*config)
 		case "restore":
 			code = commandeRestoreConsole(*config, fl.Args(), *oui)
-		case "migrate-v2":
-			if fl.NArg() != 1 {
-				err = errors.New(tr("migrate-v2 attend le dossier de sync.ps1", "migrate-v2 needs the sync.ps1 folder"))
-				break
-			}
-			err = migrerV2(fl.Arg(0), *config)
 		default:
 			err = fmt.Errorf(tr("commande inconnue : %s", "unknown command: %s"), args[0])
 		}
@@ -605,65 +598,6 @@ func echec(echecs []string, j *Jeu, err error) []string {
 func fin(err error) bool {
 	_, global := classer(err)
 	return global
-}
-
-// migrerV2 : sync.config.json et base.json de sync.ps1 -> config.json et bases/ de 3dssavesync.
-// Rien n'est jamais remplacé ; l'installation v2 n'est pas modifiée.
-func migrerV2(depuis, config string) error {
-	dossier := filepath.Dir(config)
-	for _, f := range []string{config, filepath.Join(dossier, "bases")} {
-		if _, err := os.Stat(f); err == nil {
-			return fmt.Errorf(tr("%s existe déjà, il n'est pas remplacé", "%s already exists and wasn't replaced"), f)
-		}
-	}
-	var v2 map[string]string
-	if err := lireJSON(filepath.Join(depuis, "sync.config.json"), &v2); err != nil {
-		return err
-	}
-	cfg := Config{URL: v2["url"], Jeton: v2["jeton"], Emulateurs: map[string]*Emulateur{}}
-	ajouter := func(nom, exe string, sauvegardes map[string]string) {
-		for s, d := range sauvegardes {
-			if d == "" {
-				delete(sauvegardes, s)
-			}
-		}
-		if exe != "" && len(sauvegardes) > 0 {
-			cfg.Emulateurs[nom] = &Emulateur{Exe: exe, Sauvegardes: sauvegardes}
-		}
-	}
-	ajouter("melonds", v2["melonds"], map[string]string{"DS": v2["sauvegardes"]})
-	ajouter("mgba", v2["mgba"], map[string]string{"GB": v2["sauvegardes_gb"], "GBA": v2["sauvegardes_gba"]})
-	ajouter("azahar", v2["azahar"], map[string]string{"3DS": v2["azahar_sdmc"]})
-	if v2["sauvegardes"] != "" {
-		cfg.Copies = filepath.Join(filepath.Dir(v2["sauvegardes"]), "3dssavesync-copies")
-	}
-	base := map[string]string{}
-	if err := lireJSON(filepath.Join(depuis, "base.json"), &base); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	bases := map[string]map[string]string{}
-	for cle, h := range base {
-		e := "melonds"
-		if strings.HasPrefix(cle, "GB") {
-			e = "mgba"
-		} else if strings.HasPrefix(cle, "3DS-") {
-			e = "azahar"
-		}
-		if bases[e] == nil {
-			bases[e] = map[string]string{}
-		}
-		bases[e][cle] = h
-	}
-	if err := ecrireJSON(config, cfg, false); err != nil {
-		return err
-	}
-	for e, m := range bases {
-		if err := ecrireJSON(filepath.Join(dossier, "bases", e+".json"), m, false); err != nil {
-			return err
-		}
-	}
-	fmt.Printf("Configuration écrite : %s (%d émulateurs, %d Bases)\n", config, len(cfg.Emulateurs), len(base))
-	return nil
 }
 
 func lireJSON(chemin string, v any) error {

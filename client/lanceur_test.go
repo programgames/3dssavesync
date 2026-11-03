@@ -753,29 +753,6 @@ func TestLanceur(t *testing.T) {
 	verifier(len(notifications) == 0 && hachage(courante("GBA-AXVF")) == hachage(lire(filepath.Join(savesP, "Pokemon Rubis.srm"))),
 		"sauvegarde écrite pendant la partie : envoyée, aucun avertissement")
 
-	t.Log("migrate-v2 : sync.config.json et base.json repris, rien n'est remplacé")
-	reinitialiser()
-	v2dir := filepath.Join(tmp, "v2")
-	ecrire(t, filepath.Join(v2dir, "sync.config.json"), []byte("\xef\xbb\xbf"+`{"url":"https://saves.example","jeton":"j","melonds":"m.exe","sauvegardes":"D:\\S\\DS",
-		"mgba":"g.exe","sauvegardes_gb":"D:\\S\\GB","sauvegardes_gba":"D:\\S\\GBA","azahar":"a.exe","azahar_sdmc":"D:\\S\\sdmc","copies_3ds":"D:\\S\\c"}`))
-	ecrire(t, filepath.Join(v2dir, "base.json"), []byte("\xef\xbb\xbf"+`{"CPUF":"h1","GB-POKEMON_BLUE-56A4":"h2","GBA-BPEF":"h3","3DS-00040000001B5000":"h4"}`))
-	cible := filepath.Join(tmp, "migre", "config.json")
-	verifier(principal([]string{"migrate-v2", "--config", cible, v2dir}) == 0, "migration réussie")
-	var mc Config
-	lireJSON(cible, &mc)
-	verifier(mc.URL == "https://saves.example" && mc.Jeton == "j" && len(mc.Emulateurs) == 3, "URL, jeton, 3 émulateurs")
-	verifier(mc.Emulateurs["mgba"].Sauvegardes["GBA"] == `D:\S\GBA` && mc.Emulateurs["azahar"].Sauvegardes["3DS"] == `D:\S\sdmc`, "dossiers repris")
-	b := map[string]map[string]string{}
-	for _, e := range []string{"melonds", "mgba", "azahar"} {
-		m := map[string]string{}
-		lireJSON(filepath.Join(tmp, "migre", "bases", e+".json"), &m)
-		b[e] = m
-	}
-	verifier(b["melonds"]["CPUF"] == "h1" && b["mgba"]["GB-POKEMON_BLUE-56A4"] == "h2" && b["mgba"]["GBA-BPEF"] == "h3" && b["azahar"]["3DS-00040000001B5000"] == "h4", "Bases réparties par émulateur")
-	avantMigr := string(lire(cible))
-	reponses = []string{"OK"}
-	verifier(principal([]string{"migrate-v2", "--config", cible, v2dir}) == 1 && string(lire(cible)) == avantMigr, "seconde migration refusée, rien de remplacé")
-
 	t.Logf("%d vérifications", verifications)
 }
 

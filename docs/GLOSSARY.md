@@ -125,7 +125,7 @@ The Client replaces its Local save with the Current version, after a Backup copy
 _Avoid_: pull
 
 **Launcher** (*Lanceur*):
-The PC program (`3dssavesync`, formerly `pc/sync.ps1`) that a frontend or a shortcut calls in place of the emulator: Sync, game, then Sync.
+The PC program (`3dssavesync`; before v3, a PowerShell script) that a frontend or a shortcut calls in place of the emulator: Sync, game, then Sync.
 _Avoid_: wrapper, plugin, sync script
 
 **Profile** (*Profil*):

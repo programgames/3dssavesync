@@ -160,7 +160,6 @@ In the settings page, click **Add an emulator by hand**, then choose **Other emu
 3dssavesync run [--emulator <name>] <rom>
 3dssavesync run [--emulator <name>] --rom <rom> -- <command…>
 3dssavesync launch <name>
-3dssavesync migrate-v2 <sync.ps1 folder>
 3dssavesync setup [--texte] [--sans-navigateur]   (or no argument)
 3dssavesync repair
 3dssavesync serve             (local server, see guide-server.md)
@@ -172,7 +171,6 @@ In the settings page, click **Add an emulator by hand**, then choose **Other emu
 - **`run --rom <rom> -- <command>`**: syncs the ROM, then runs the given command as is. For frontends that go through their own launcher (RetroBat) or a command prefix (Lutris).
 - **`launch <name>`**: without a frontend. Syncs all games of the emulator (the ROMs of its `roms` folders, and the 3DS Pokémon games, even if never started in Azahar), starts the emulator without a game, then syncs everything when it closes. This is what the **3dssavesync &lt;emulator&gt;** shortcuts do. mGBA gets its save folder only if GB and GBA share the same folder.
 - **`restore`**: see [Restore an old version](#restore-an-old-version).
-- **`migrate-v2`**: takes over `sync.config.json` and `base.json` of the old PowerShell launcher. Nothing is replaced: the command refuses if the configuration already exists. The v2 install is not changed.
 
 A frontend that stops the program during the game (stop signal on Linux and macOS) does not prevent the upload: the program waits for the emulator to end. A forced stop (`SIGKILL`, "End task") cuts the upload; it goes out at the next launch.
 
