@@ -47,7 +47,7 @@ func TestMBC2(t *testing.T) {
 	if !bytes.Equal(read(j.File), mbc2File(other, 512)) {
 		t.Fatal("Récupération : taille du fichier existant non gardée")
 	}
-	fresh := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Neuf", File: filepath.Join(dir, "Neuf.sav")}
+	fresh := &Game{System: "GB", Key: "GB-KIRBY-0000", Name: "Neuf", File: filepath.Join(dir, "Neuf.sav"), MBC2: s.cfg.mbc2Size("mgba", "")}
 	if err := s.download(fresh, nil, &Version{Hash: sha256Hex(other), Size: 512}); err != nil {
 		t.Fatal(err)
 	}

@@ -33,13 +33,13 @@ func mbc2File(s []byte, n int) []byte {
 	return f
 }
 
-// mbc2Size returns the size of a new MBC2 file: 256 bytes for mGBA (app or RetroArch core), 512 elsewhere.
-func (s *Session) mbc2Size(j *Game) int {
-	p := s.profile
-	if e := s.cfg.Emulators[p]; e != nil && e.Profile != "" {
-		p = e.Profile
+// mbc2Size returns the size of a new MBC2 file for an emulator entry: 256 bytes for mGBA (app or RetroArch core),
+// 512 elsewhere.
+func (c *Config) mbc2Size(emulator, core string) int {
+	if e := c.Emulators[emulator]; e != nil && e.Profile != "" {
+		emulator = e.Profile
 	}
-	if p == "mgba" || j.Core == "mGBA" {
+	if emulator == "mgba" || core == "mGBA" {
 		return 256
 	}
 	return 512

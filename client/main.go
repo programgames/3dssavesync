@@ -311,7 +311,8 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 		if p.InternalName && internal != "" {
 			name = internal
 		}
-		j = &Game{system, key, name, savePath(dir, system, key, name, p.Ext), library(e.Cores[system])}
+		core := library(e.Cores[system])
+		j = &Game{system, key, name, savePath(dir, system, key, name, p.Ext), core, s.cfg.mbc2Size(s.profile, core)}
 		if system != "3DS" { // Azahar stores the Save by title ID: two ROMs of a 3DS game share it
 			why = s.romRefusal(j, rom, true)
 		}
@@ -445,7 +446,7 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 			dir := e.dir(p, system, "")
 			for id, title := range titles3DS {
 				key := "3DS-" + id
-				j := &Game{system, key, title, savePath(dir, system, key, title, ""), ""}
+				j := &Game{System: system, Key: key, Name: title, File: savePath(dir, system, key, title, "")}
 				if dir != "" && (exists(filepath.Dir(j.File)) || formats3DS[id] != nil) { // never started, unknown format: skipped
 					games = append(games, j)
 				}
@@ -472,7 +473,8 @@ func (s *Session) gamesOf(e *Emulator, p Profile) []*Game {
 				if p.InternalName && internal != "" {
 					name = internal
 				}
-				byKey[key] = append(byKey[key], &Game{sys, key, name, savePath(e.dir(p, sys, path), sys, key, name, p.Ext), library(e.Cores[sys])})
+				core := library(e.Cores[sys])
+				byKey[key] = append(byKey[key], &Game{sys, key, name, savePath(e.dir(p, sys, path), sys, key, name, p.Ext), core, s.cfg.mbc2Size(s.profile, core)})
 				roms[byKey[key][len(byKey[key])-1]] = path
 			}
 			return nil

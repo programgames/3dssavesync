@@ -351,6 +351,7 @@ func (s *Session) resume() error {
 		}
 		s.profile = a.Profile
 		j := a.Game
+		j.MBC2 = s.cfg.mbc2Size(a.Profile, a.Core) // not in en-attente.json
 		_, err := s.syncGame(&j, true)
 		if err == nil {
 			s.log(a.Key + " : Envoi en attente repris")

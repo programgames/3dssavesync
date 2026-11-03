@@ -59,6 +59,7 @@ type Game struct {
 	Name   string `json:"Nom"`
 	File   string `json:"Fichier"`
 	Core   string `json:"Coeur"` // RetroArch core library or "": gpSP and Beetle GBA have a .srm to convert (srm.go)
+	MBC2   int    `json:"-"`     // size of a new MBC2 file for this emulator (Config.mbc2Size); 0 = 512
 }
 
 var code4 = regexp.MustCompile(`^[A-Z0-9]{4}$`)
@@ -200,9 +201,8 @@ type Local struct {
 	Blank bool // blank SRAM (only 0x00 or only 0xFF), written before any play
 }
 
-// readLocal reads the Local save. GB/GBA: Hash, size and Upload cover the SRAM only; the Clock trailer stays local
-// (ADR 0008). srv: Current version of the server or nil; it gives the SRAM size of a gpSP or Beetle GBA .srm
-// (ADR 0011).
+// readLocal reads the Local save: Hash, size and Upload cover its SRAM only (decode). srv: Current version of the
+// server or nil.
 func readLocal(j *Game, srv *Version) (*Local, error) {
 	raw, err := os.ReadFile(j.File)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -211,23 +211,9 @@ func readLocal(j *Game, srv *Version) (*Local, error) {
 	if err != nil {
 		return nil, err
 	}
-	sram := raw
-	r := len(raw) % 512 // Clock trailer: 16, 44 or 48 bytes after the SRAM (ADR 0010)
-	if (j.System == "GB" || j.System == "GBA") && len(raw) > r && (r == 16 || r == 44 || r == 48) {
-		sram = raw[:len(raw)-r]
-	}
-	if isMBC2(j.System, len(sram)) { // server form (mbc2.go)
-		sram = normalizeMBC2(sram)
-	}
-	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME: footer removed (dsv.go)
-		if sram, err = sramDSV(raw); err != nil {
-			return nil, fmt.Errorf("%s : %w", j.File, err)
-		}
-	}
-	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA: fixed-size .srm (srm.go)
-		if sram, err = sramSRM(j.Core, raw, srv); err != nil {
-			return nil, fmt.Errorf("%s : %w", j.File, err)
-		}
+	sram, err := decode(j, raw, srv)
+	if err != nil {
+		return nil, fmt.Errorf("%s : %w", j.File, err)
 	}
 	return &Local{Version{Hash: sha256Hex(sram), Size: int64(len(sram))}, raw, sram, j.System != "3DS" && blank(sram)}, nil
 }
@@ -604,35 +590,16 @@ func (s *Session) download(j *Game, l *Local, srv *Version) error {
 		}
 		tmpDir = filepath.Dir(dir) // the archive must hold only main
 	}
-	content := o
+	var old []byte
 	if l != nil {
 		if err := s.copy(j, l.Raw); err != nil {
 			return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
 		}
-		if len(l.Raw) > len(l.SRAM) { // GB/GBA: put the Clock trailer of this PC back after the received SRAM
-			content = append(append([]byte{}, o...), l.Raw[len(l.SRAM):]...)
-		}
+		old = l.Raw
 	}
-	if strings.EqualFold(filepath.Ext(j.File), ".dsv") { // DeSmuME: received SRAM + footer (dsv.go)
-		var old []byte
-		if l != nil {
-			old = l.Raw
-		}
-		if content, err = dsv(o, old); err != nil {
-			return err
-		}
-	}
-	if isMBC2(j.System, len(o)) { // MBC2: at the size of the existing file, otherwise at the emulator size (mbc2.go)
-		n := s.mbc2Size(j)
-		if l != nil && isMBC2(j.System, len(l.Raw)) {
-			n = len(l.Raw)
-		}
-		content = mbc2File(normalizeMBC2(o), n)
-	}
-	if fixedSRM[j.Core] > 0 { // gpSP, Beetle GBA: received SRAM inside a fixed-size .srm (srm.go)
-		if content, err = srm(j.Core, o); err != nil {
-			return err
-		}
+	content, err := encode(j, o, old)
+	if err != nil {
+		return err
 	}
 	if err := writeAtomicIn(tmpDir, j.File, content); err != nil {
 		return err
