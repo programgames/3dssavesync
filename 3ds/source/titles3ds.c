@@ -121,30 +121,67 @@ int title_main_only(u64 id)
     return title_root(id, names, sizeof names) < 0 ? -1 : !strcmp(names, "main");
 }
 
+/* Opens the RomFS of title id (SD) with method m. ARCHIVE_SAVEDATA_AND_CONTENT, file path (3dbrew "Filesystem
+ * services", Title Access Archive Path Data Format): title access 0, content index 0, NCCH access 0 = RomFS, then the
+ * u64 of allowed content types (1 << type). libctru's romfsMountFromTitle sends all zeros (m = 1); on a real 3DS FS
+ * answers 0xD9004676, "command not allowed" (3dbrew Error codes, 630), for an SD application (libctru issue #516).
+ * DIAGNOSTIC (v3.10 rc2): 2 = only "Unspecified" allowed, 3 = all six types, 4 = OpenArchive + OpenFile. */
+static Result open_romfs(u64 id, int m, Handle *f, FS_Archive *a)
+{
+    u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, 0 };
+    u32 file[5] = { 0, 0, 0, m == 2 ? 1 : m == 3 ? 0x3F : 0, 0 };
+    FS_Path ap = { PATH_BINARY, sizeof archive, archive }, fp = { PATH_BINARY, sizeof file, file };
+    Result r;
+    *a = 0;
+    if (m != 4) return FSUSER_OpenFileDirectly(f, ARCHIVE_SAVEDATA_AND_CONTENT, ap, fp, FS_OPEN_READ, 0);
+    if (R_SUCCEEDED(r = FSUSER_OpenArchive(a, ARCHIVE_SAVEDATA_AND_CONTENT, ap)) &&
+        R_FAILED(r = FSUSER_OpenFile(f, *a, fp, FS_OPEN_READ, 0))) {
+        FSUSER_CloseArchive(*a);
+        *a = 0;
+    }
+    return r;
+}
+
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    Result r = romfsMountFromTitle(id, MEDIATYPE_SD, "vc");
-    DIR *d;
-    struct dirent *e;
-    size_t got = 0;
-    if (R_FAILED(r)) {
-        snprintf(why, wn, "romfsMountFromTitle %016llX: 0x%08lX", id, (unsigned long)r);
-        return -1;
-    }
-    /* RomFS of a VC title: the ROM is the file of rom/ (3dbrew, 3DS Virtual Console), its name does not matter. */
-    if ((d = opendir("vc:/rom/"))) {
-        while (got < n && (e = readdir(d))) {
-            char path[300];
-            FILE *f;
-            if (snprintf(path, sizeof path, "vc:/rom/%s", e->d_name) >= (int)sizeof path || !(f = fopen(path, "rb"))) continue;
-            got = fread(header, 1, n, f);
-            fclose(f);
+    int m;
+    why[0] = '\0';
+    for (m = 1; m <= 4; m++) {
+        Handle f;
+        FS_Archive a;
+        DIR *d = NULL;
+        struct dirent *e;
+        size_t got = 0, l = strlen(why);
+        char magic[4] = "";
+        u32 bytes_read;
+        Result r = open_romfs(id, m, &f, &a);
+        if (R_SUCCEEDED(r)) {
+            /* FS gives the level-3 image (3dbrew "Filesystem services", RomFS); a whole RomFS starts with its IVFC
+             * header, its level 3 then at 0x1000 (3dbrew "RomFS"). */
+            FSFILE_Read(f, &bytes_read, 0, magic, sizeof magic);
+            r = romfsMountFromFile(f, memcmp(magic, "IVFC", 4) ? 0 : 0x1000, "vc"); /* closes f on failure */
         }
-        closedir(d);
+        if (R_SUCCEEDED(r)) {
+            /* RomFS of a VC title: the ROM is the file of rom/ (3dbrew, 3DS Virtual Console), its name does not matter. */
+            if ((d = opendir("vc:/rom/"))) {
+                while (got < n && (e = readdir(d))) {
+                    char path[300];
+                    FILE *g;
+                    if (snprintf(path, sizeof path, "vc:/rom/%s", e->d_name) >= (int)sizeof path || !(g = fopen(path, "rb"))) continue;
+                    got = fread(header, 1, n, g);
+                    fclose(g);
+                }
+                closedir(d);
+            }
+            romfsUnmount("vc");
+        }
+        if (a) FSUSER_CloseArchive(a);
+        if (R_FAILED(r)) snprintf(why + l, wn - l, "%s%d:%08lX", l ? " " : "", m, (unsigned long)r);
+        else if (got == n) {
+            snprintf(why + l, wn - l, "%s%d:OK", l ? " " : "", m);
+            return 0;
+        } else snprintf(why + l, wn - l, "%s%d:%s", l ? " " : "", m, d ? "no ROM" : "no rom/");
     }
-    romfsUnmount("vc");
-    if (got == n) return 0;
-    snprintf(why, wn, "vc:/rom/ %016llX: %s", id, d ? "no ROM file" : "no folder");
     return -1;
 }
 

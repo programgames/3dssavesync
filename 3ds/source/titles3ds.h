@@ -23,7 +23,8 @@ int title_main_only(u64 id);
 int title_root(u64 id, char *names, size_t n);
 
 /* First 0x200 bytes (n) of the GB ROM of a Virtual Console title installed on the SD card: the file of rom/ in its
- * RomFS. 0 if read; otherwise -1 and the technical reason in why. */
+ * RomFS, tried with the methods of titles3ds.c in turn. In why, each method tried and its result ("1:D9004676 2:OK").
+ * 0 if read, -1 otherwise. */
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn);
 
 /* Short name of the game (SMDH), in the given language, in UTF-8. 0 if read. */

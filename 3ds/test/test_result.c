@@ -87,6 +87,16 @@ int main(void)
            "Files: sav.dat, SecureValue, rsm2.dat");
     expect(make(RESULT_VC_UNEXPECTED, ""), 0, KIND_FAILURE, /* archive no longer readable: no empty technical line */
            "Zelda : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.", "");
+    expect(make(RESULT_VC_NO_KEY, "1:D9004676 2:D9004676"), 1, KIND_FAILURE,
+           "Zelda: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line.",
+           "ROM : 1:D9004676 2:D9004676");
+    expect(make(RESULT_VC_NO_KEY, "1:D9004676"), 0, KIND_FAILURE,
+           "Zelda : la ROM de ce jeu Virtual Console est illisible, sa clé est inconnue. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
+           "ROM : 1:D9004676");
+    expect(make(RESULT_VC_BY_ROM, "1:OK GB-PM_CRYSTAL-BE2C"), 0, KIND_INFO,
+           "Zelda : ce jeu est déjà synchronisé par sa ROM (forwarder mGBA / TWiLight Menu++).", "ROM : 1:OK GB-PM_CRYSTAL-BE2C");
+    expect(make(RESULT_VC_BY_ROM, "1:OK GB-PM_CRYSTAL-BE2C"), 1, KIND_INFO,
+           "Zelda: this game is already synced by its ROM (mGBA forwarder / TWiLight Menu++).", "ROM : 1:OK GB-PM_CRYSTAL-BE2C");
     expect(make(RESULT_CONFLICT_LEFT, ""), 0, KIND_INFO, "Zelda : conflit laissé tel quel.", "");
     r = make(RESULT_DUPLICATE_SHARED, "");
     r.count = 2;

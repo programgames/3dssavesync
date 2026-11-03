@@ -25,6 +25,8 @@ typedef enum {
     RESULT_GB_GBA_ONLY,
     RESULT_VC_READ_ONLY,     /* Download of a Virtual Console game: not yet, nothing written */
     RESULT_VC_UNEXPECTED,    /* path: the files of its archive (title_root) */
+    RESULT_VC_NO_KEY,        /* ROM of a Virtual Console game unreadable; path: the result of each read method */
+    RESULT_VC_BY_ROM,        /* Virtual Console game with the Key of a ROM, which keeps the sync; path: as for RESULT_VC_NO_KEY, with the Key */
     RESULT_CONFLICT_LEFT,
     RESULT_DUPLICATE_SHARED, /* count */
     RESULT_DUPLICATE,        /* count */

@@ -12,4 +12,8 @@ int vc_title(unsigned long long id);
  * (rsm*.dat savestates, folders, other files: not synced). */
 int vc_root_ok(const char *root);
 
+/* Key of the VC title id from a fixed table with sources (vc.c), for when its ROM can't be read. NULL if unknown: the
+ * game is then not synced. */
+const char *vc_known_key(unsigned long long id);
+
 #endif

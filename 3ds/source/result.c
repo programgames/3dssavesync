@@ -85,6 +85,16 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
                             "%s: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line."), game);
         return KIND_FAILURE;
+    case RESULT_VC_NO_KEY:
+        if (r->path[0]) snprintf(detail, dn, "ROM : %s", r->path);
+        snprintf(text, n, T("%s : la ROM de ce jeu Virtual Console est illisible, sa clé est inconnue. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
+                            "%s: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line."), game);
+        return KIND_FAILURE;
+    case RESULT_VC_BY_ROM:
+        if (r->path[0]) snprintf(detail, dn, "ROM : %s", r->path);
+        snprintf(text, n, T("%s : ce jeu est déjà synchronisé par sa ROM (forwarder mGBA / TWiLight Menu++).",
+                            "%s: this game is already synced by its ROM (mGBA forwarder / TWiLight Menu++)."), game);
+        return KIND_INFO;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);
         return KIND_INFO;

@@ -1,6 +1,7 @@
 /* Checks vc.c: Virtual Console Pokémon title IDs, content of the Save archive.
  * Built on the PC: gcc -std=c99 -Wall -I source source/vc.c test/test_vc.c -o /tmp/v && /tmp/v */
 #include <stdio.h>
+#include <string.h>
 #include "vc.h"
 
 static int failures, total;
@@ -41,6 +42,11 @@ int main(void)
     check(vc_root_ok("SecureValue"), 0, "no sav.dat");
     check(vc_root_ok(""), 0, "empty archive");
     check(vc_root_ok("SAV.DAT"), 0, "other case");
+
+    check(!strcmp(vc_known_key(0x0004000000171000ULL), "GB-POKEMON_RED-91E6"), 1, "Red EN: key from the table");
+    check(!strcmp(vc_known_key(0x0004000000171200ULL), "GB-POKEMON_YELLOW-047C"), 1, "Yellow EN: key from the table");
+    check(vc_known_key(0x0004000000172E00ULL) == NULL, 1, "Cristal FR: no source, no key");
+    check(vc_known_key(0x0004000000171600ULL) == NULL, 1, "Rouge FR: no source, no key");
 
     printf("%d/%d cas OK\n", total - failures, total);
     return failures != 0;
