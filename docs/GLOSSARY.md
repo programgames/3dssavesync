@@ -2,7 +2,7 @@
 
 3dssavesync keeps the same game save between a 3DS and the emulators of a PC (DS, GB, GBC, GBA and native 3DS games), through a server that never loses anything.
 
-This glossary fixes one word per idea, for the design docs and the ADRs. The code is written in French: each term gives its French name, used in code identifiers and comments.
+This glossary fixes one word per idea, for the code, the design docs and the ADRs. Each term also gives its French name, used in the French texts of the apps and in older notes.
 
 ## Games
 

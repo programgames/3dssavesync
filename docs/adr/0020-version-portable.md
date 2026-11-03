@@ -4,7 +4,7 @@ Some users keep their whole setup in one folder they can move: `LaunchBox\ThirdP
 
 ## Decision
 
-- A file `portable.txt` next to the running program makes it portable. The rule is checked in one place (`dossierPortable`).
+- A file `portable.txt` next to the running program makes it portable. The rule is checked in one place (`portableDir`).
 - The settings folder is then the program folder: `config.json`, the log, `bases/`, the pending uploads, `copies/`, `serveur/`. Only the default changes: `--config` and the paths in `config.json` still win.
 - The program is never copied elsewhere: the fixed place is the running program, so the settings page hides its "Program" part. Frontends and shortcuts always point to the running program, not to the path saved in `config.json` (a USB drive letter changes).
 - The folder must be writable. If it is not (read-only drive, `Program Files`), the program stops with a message: move the folder, or delete `portable.txt`. It never falls back to the user folder without saying so: the settings would split in two places.

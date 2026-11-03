@@ -24,7 +24,7 @@ At the top, four badges show the state at a glance: server reachable or not, emu
 
 The **Save** bar shows only on **Server**, **Emulators** and **Frontends and install**: the settings of these parts apply when you click **Save**. The buttons that do one thing (**Prepare the 3DS SD card**, **Repair frontends**, **Restore this version**, **Add** a ROM hack, **Update**, **Uninstall 3dssavesync**) act at once. A personal server that isn't responding blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "Enter these on the 3DS". The program stops when you click **Close settings**, or 2 minutes after you close the tab.
 
-No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --sans-navigateur` prints the address of the page, and `3dssavesync setup --texte` asks the same questions in the terminal.
+No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --no-browser` prints the address of the page, and `3dssavesync setup --text` asks the same questions in the terminal.
 
 **Repair frontends**: after a frontend update or reset (EmuDeck rewrites the ES-DE files), close the frontend, open **3dssavesync settings** and click **Repair frontends**. What is already in place does not change. Same in a terminal: `3dssavesync repair`.
 
@@ -160,12 +160,14 @@ In the settings page, click **Add an emulator by hand**, then choose **Other emu
 3dssavesync run [--emulator <name>] <rom>
 3dssavesync run [--emulator <name>] --rom <rom> -- <command…>
 3dssavesync launch <name>
-3dssavesync setup [--texte] [--sans-navigateur]   (or no argument)
+3dssavesync setup [--text] [--no-browser]   (or no argument)
 3dssavesync repair
 3dssavesync serve             (local server, see guide-server.md)
 3dssavesync tray              (icon near the clock, and the local server)
-3dssavesync restore [--oui] [<key> [<number>]]
+3dssavesync restore [--yes] [<key> [<number>]]
 ```
+
+The French flag names of older versions (`--texte`, `--sans-navigateur`, `--oui`) still work.
 
 - **`run <rom>`**: one game. For frontends (LaunchBox, Playnite, ES-DE…). `--emulator` is required only when two emulators handle the same system.
 - **`run --rom <rom> -- <command>`**: syncs the ROM, then runs the given command as is. For frontends that go through their own launcher (RetroBat) or a command prefix (Lutris).
@@ -186,7 +188,7 @@ The server keeps every version of every save. To make an old version the current
 2. Choose the game. The page lists its last 30 versions: date, device, size, and play time and trainer for a Pokémon game.
 3. Click **Restore this version**, then confirm.
 
-In a terminal: `3dssavesync restore` lists the games of the server and their key. `3dssavesync restore <key>` lists the last 30 versions, with a number. `3dssavesync restore <key> <number>` restores that version after a confirmation (`--oui`: no question). On Windows, the command opens its own console, like `repair`.
+In a terminal: `3dssavesync restore` lists the games of the server and their key. `3dssavesync restore <key>` lists the last 30 versions, with a number. `3dssavesync restore <key> <number>` restores that version after a confirmation (`--yes`: no question). On Windows, the command opens its own console, like `repair`.
 
 Nothing is written on the PC. Each device gets the version at its next sync, after a backup copy. A device with a game not yet uploaded shows a conflict, and you choose. If an upload arrives between the list and the restore, the restore is refused and nothing is overwritten: show the list again. Details: [ADR 0016](adr/0016-restauration-depuis-le-pc-sans-ecriture-locale.md).
 

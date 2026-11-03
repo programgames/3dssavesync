@@ -33,7 +33,7 @@ int main(void)
     check_rom(SYS_GB, 0x134, "PM_CRYSTAL", 0xF2E2, "GB-PM_CRYSTAL-F2E2");
     check_rom(SYS_GB, 0x134, "pokemon yel", 0x0001, "GB-POKEMON_YEL-0001");
     check_rom(SYS_GB, 0x134, "POKEMON_GLDAAUF", 0x6FC6, "GB-POKEMON_GLDAAUF-6FC6"); /* 15 characters, no 0x00 */
-    check_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* bytes >= 0x80: same Key as client/profils_test.go */
+    check_rom(SYS_GB, 0x134, "Pok\xe9mon\x99", 0x91E6, "GB-POK_MON_-91E6"); /* bytes >= 0x80: same Key as client/profiles_test.go */
     check_rom(SYS_GB, 0x134, "", 0x1234, NULL);
     check_rom(SYS_GBA, 0xAC, "BPEF", 0, "GBA-BPEF");
     check_rom(SYS_GBA, 0xAC, "bp f", 0, NULL);
@@ -43,7 +43,7 @@ int main(void)
     key_3ds(0x00040000001B5000ULL, key);
     check(!strcmp(key, "3DS-00040000001B5000"), "3DS-00040000001B5000");
 
-    /* Alias (ADR 0014): same cases as TestCleAlias in client/cas_test.go */
+    /* Alias (ADR 0014): same cases as TestAliasKey in client/cases_test.go */
     check(alias_key(SYS_DS, "0rad", key) == 0 && !strcmp(key, "0RAD"), "alias DS 0rad -> 0RAD");
     check(alias_key(SYS_GBA, " GBA-0RAD ", key) == 0 && !strcmp(key, "GBA-0RAD"), "alias GBA avec espaces");
     check(alias_key(SYS_GB, "GB-MONHACK-0001", key) == 0 && !strcmp(key, "GB-MONHACK-0001"), "alias GB");

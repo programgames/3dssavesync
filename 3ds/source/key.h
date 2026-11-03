@@ -12,7 +12,7 @@ typedef enum { SYS_DS, SYS_GB, SYS_GBA, SYS_3DS } system_t;
 int rom_key(system_t s, const unsigned char *header, char key[KEY_MAX]);
 
 /* Alias of a ROM (alias.ini, ADR 0014): value trimmed, uppercased, in the form of a Key of the System
- * (DS "0RAD", GBA "GBA-0RAD", GB "GB-MONHACK-0001"). 0 if valid (Key in key), -1 otherwise. Same rule as client/cas.go. */
+ * (DS "0RAD", GBA "GBA-0RAD", GB "GB-MONHACK-0001"). 0 if valid (Key in key), -1 otherwise. Same rule as client/cases.go. */
 int alias_key(system_t s, const char *value, char key[KEY_MAX]);
 
 /* "3DS-00040000001B5000" */

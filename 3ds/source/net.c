@@ -149,7 +149,7 @@ long net_put(const char *url, const char *token, const char *condition, const vo
 _Static_assert(CURLE_COULDNT_RESOLVE_HOST == 6 && CURLE_COULDNT_CONNECT == 7 && CURLE_OPERATION_TIMEDOUT == 28 &&
                CURLE_SSL_CONNECT_ERROR == 35 && CURLE_PEER_FAILED_VERIFICATION == 60 && CURLE_RECV_ERROR == 56 &&
                CURLE_PARTIAL_FILE == 18 && CURLE_FILESIZE_EXCEEDED == 63,
-               "codes curl de erreurs.c");
+               "codes curl de errors.c");
 
 int net_wifi(void)
 {

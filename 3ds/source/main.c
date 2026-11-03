@@ -2048,7 +2048,7 @@ int main(int argc, char **argv)
     read_ini(APP_DIR "/base.ini", base_entry);
     title_count = read_titles(APP_DIR "/titres.ini", titles, MAX_TITLES);
     read_ini(APP_DIR "/maj.ini", update_entry);
-    if (strcmp(installed_version, VERSION)) write_update_ini(); /* the PC does not copy an older .cia (carte3ds.go) */
+    if (strcmp(installed_version, VERSION)) write_update_ini(); /* the PC does not copy an older .cia (sdcard.go) */
     if (argc > 0 && argv[0]) path_3dsx = argv[0];
 
     if (net_init()) {

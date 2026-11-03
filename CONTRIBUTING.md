@@ -33,7 +33,7 @@ go test ./...
 
 CI also runs `go vet` for Linux and macOS, and [staticcheck](https://staticcheck.dev/) (the pinned version is in `.github/workflows/ci.yml`).
 
-Tests that touch the user profile (shortcuts, autostart, Recycle Bin, settings folder) go through `maisonFactice(t)` and the test adapters in `client/profils_test.go`. A test must never create a real shortcut or write in your real settings folder.
+Tests that touch the user profile (shortcuts, autostart, Recycle Bin, settings folder) go through `fakeHome(t)` and the test adapters in `client/profiles_test.go`. A test must never create a real shortcut or write in your real settings folder.
 
 ### 3DS app (`3ds/`)
 
@@ -78,7 +78,7 @@ Run every check of the part you changed. GitHub Actions runs all of them on Wind
 3dssavesync started as a French project. Here's where things stand:
 
 - **Docs, commits, pull requests and issues are in English** from v3.7 on. `README.fr.md` is a short French summary. The notes in `docs/notes/` stay in French: they're the record of past research.
-- **Code is moving to English.** Most identifiers and comments are still French. They're being renamed in dedicated pull requests, a part at a time. Write new code in English, and don't mix renames into a fix or a feature. [docs/GLOSSARY.md](docs/GLOSSARY.md) gives the English term for each French name.
+- **Code is in English**: identifiers and comments, in the PC program, the 3DS app and the server. What stays French on purpose, so existing installs keep working: the keys of `config.json`, the files on the 3DS SD card (`config.ini` and its keys, `base.ini`, `alias.ini`, `titres.ini`, `maj.ini`), the JSON fields of the server protocol and of the settings page, and the names of files on disk (`bases/`, `en-attente.json`…). The renames are pure commits listed in [.git-blame-ignore-revs](.git-blame-ignore-revs): run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, and `git blame` skips them.
 - **The apps speak French and English.** Every text shown to users exists in both languages: `tr("fr", "en")` in Go, `T("fr", "en")` in C, `{{t}}` in the settings page. French texts use "vous", never "tu". Keep 3DS texts short: the screen is small.
 
 ## AI-assisted development

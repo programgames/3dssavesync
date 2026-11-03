@@ -77,16 +77,14 @@ jobs:
         run: |
           out=$(gofmt -l .)
           if [ -n "$out" ]; then echo "Run gofmt -w on:"; echo "$out"; exit 1; fi
-      # Every finding is printed. These three are reported without failing the job until the code cleanup that
-      # fixes them: SA1019 (syscall.StringToUTF16 in tray_windows.go, ui_windows.go), SA4006 (majpc_test.go),
-      # ST1013 (assistant_web.go). Any other finding fails the job.
+      # Any finding fails the job, for each target system (build tags select different files).
       - name: staticcheck
         working-directory: client
         run: |
           go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
           for goos in windows linux darwin; do
             echo "::group::GOOS=$goos"
-            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" -fail "all,-SA1019,-SA4006,-ST1013" ./... || status=1
+            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" ./... || status=1
             echo "::endgroup::"
           done
           exit ${status:-0}

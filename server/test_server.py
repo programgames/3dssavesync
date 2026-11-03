@@ -214,7 +214,7 @@ class ApiTest(unittest.TestCase):
     @unittest.skipIf(REMOTE, "accès au dossier data du serveur")
     def test_list_matches_tests_saves_json(self):
         """tests/saves.json: the reference list, read by the 3DS C test (test_list.c) and compared with the list of the
-        Go server (serveur_test.go). NDSSYNC_FIXTURE=1 python -m unittest test_server.py rewrites it."""
+        Go server (server_test.go). NDSSYNC_FIXTURE=1 python -m unittest test_server.py rewrites it."""
         games = {  # 3DS: latest only; ADAF without a name, between two named games; name with } and "
             "3DS-0004000000055D00": [("000003-20260101T120000Z-3ds", b"x" * 1024, "Pokémon X")],
             "ADAF": [("000001-20260102T080910Z-pc", b"v1", None), ("000002-20260102T081011Z-pc", b"\0" * 524288, None)],
