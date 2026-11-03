@@ -1001,18 +1001,18 @@ static void draw_bottom(const game_t *j)
         draw_band(BAR_TOP_2, t, NULL, C_CYAN);
     }
 
-    /* Bar: on top, what A (always shown, greyed out when there is nothing to do) and X (GB/GBA) do for this game;
-     * at the bottom, the general buttons. */
+    /* Bar: on top, what A (always shown, greyed out when there is nothing to do) and X (GB/GBA) do for this game, and
+     * Search on the right; at the bottom, the general buttons. */
     draw_bar_background(2);
     {
         char x[80];
-        button_t game_buttons[2] = { { KEY_A, action_label(j), action }, { KEY_X, x, 1 } };
-        const button_t general[5] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
-                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_TOUCH, T("Chercher", "Search"), 1 },
-                                        { KEY_B, query[0] ? T("Effacer", "Clear") : T("Quitter", "Quit"), 1 } };
+        button_t game_buttons[3] = { { KEY_A, action_label(j), action }, { KEY_X, x, 1 }, { KEY_TOUCH, T("Chercher", "Search"), 1 } };
+        const button_t general[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
+                                        { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, query[0] ? T("Effacer", "Clear") : T("Quitter", "Quit"), 1 } };
         if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), forwarder(j) ? rom_program(j) : T("le forwarder mGBA", "the mGBA forwarder"));
-        draw_button_row(game_buttons, gb ? 2 : 1, BAR_ROW_2, 18);
-        draw_button_row(general, 5, BAR_ROW_2 + BUTTON_HEIGHT, 0);
+        else game_buttons[1] = game_buttons[2];
+        draw_button_row(game_buttons, gb ? 3 : 2, BAR_ROW_2, 0);
+        draw_button_row(general, 4, BAR_ROW_2 + BUTTON_HEIGHT, 0);
     }
 }
 
@@ -1462,10 +1462,12 @@ static int settings_screen(int first)
             y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, setting_label(c)) + 6;
             y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
                                                          : c == LINE_TITLES ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
-                                                         : c == LINE_ORDER ? T("Ordre des jeux dans la liste : à faire d'abord, par nom, ou la dernière partie d'abord "
-                                                                               "(date de la sauvegarde sur la 3DS ; sans date, en fin de liste, comme les jeux 3DS).",
-                                                                               "Order of the games in the list: to do first, by name, or last played first "
-                                                                               "(date of the save on the 3DS; without a date, at the end, like 3DS games).")
+                                                         : c == LINE_ORDER ? T("Ordre des jeux dans la liste. À faire d'abord : les conflits, puis ce qu'il faut récupérer "
+                                                                               "ou envoyer. Dernière partie : la sauvegarde la plus récente de la 3DS en premier ; "
+                                                                               "les jeux sans date (dont les jeux 3DS) vont à la fin.",
+                                                                               "Order of the games in the list. To do first: conflicts, then what to download or "
+                                                                               "upload. Last played: the newest save on the 3DS first; games without a date "
+                                                                               "(3DS games included) go last.")
                                                                    : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 6;
         }
         if (message[0]) draw_message(BAR_TOP_1);
