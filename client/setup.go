@@ -667,32 +667,29 @@ func etapeFrontends(q *Questions, cfg *Config) {
 	creerRaccourcis(q, cfg)
 }
 
-// Un raccourci par émulateur (launch) et un pour les réglages.
+// Un raccourci par émulateur (launch) et un pour les réglages. Sans dossier des ROM (hors 3DS), le raccourci ne
+// synchroniserait rien : pas de raccourci, les jeux se lancent depuis le frontend.
 func creerRaccourcis(q *Questions, cfg *Config) {
 	lanceur := lanceurDe(cfg)
-	var noms []string
+	var noms, sansRoms []string
 	for n := range cfg.Emulateurs {
 		noms = append(noms, n)
 	}
 	sort.Strings(noms)
 	for _, n := range noms {
+		e := cfg.Emulateurs[n]
+		if p, err := e.profil(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systemes(p), []string{"3DS"}) {
+			sansRoms = append(sansRoms, e.processus())
+			continue
+		}
 		f, err := creerRaccourci("3dssavesync "+n, lanceur, []string{"launch", n}, false)
 		afficherRaccourci(q, f, err)
 	}
 	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, false)
 	afficherRaccourci(q, f, err)
-	var sansRoms []string
-	for _, n := range noms {
-		e := cfg.Emulateurs[n]
-		if p, err := e.profil(n); err == nil && len(e.Roms) == 0 && !slices.Equal(e.systemes(p), []string{"3DS"}) {
-			sansRoms = append(sansRoms, n)
-		}
-	}
 	if len(sansRoms) > 0 {
-		q.dire(tr("Note : %s n'ont pas de dossier des ROM : leur raccourci lance l'émulateur sans rien synchroniser. "+
-			"Pour en ajouter un : « 3dssavesync réglages », dossier des ROM de l'émulateur.",
-			"Note: %s have no ROM folder: their shortcut starts the emulator without syncing anything. "+
-				"To add one: \"3dssavesync settings\", the emulator ROM folder."), strings.Join(sansRoms, ", "))
+		q.dire(tr("Pas de raccourci pour %s : sans dossier de jeux, il ne synchroniserait rien. Lancez ces jeux depuis votre frontend (LaunchBox…).",
+			"No shortcut for %s: without a games folder, it would sync nothing. Start these games from your frontend (LaunchBox…)."), strings.Join(sansRoms, ", "))
 	}
 }
 

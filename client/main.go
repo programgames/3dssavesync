@@ -490,8 +490,10 @@ func (s *Session) jeuxDe(e *Emulateur, p Profil) []*Jeu {
 		notifier(tr("Non synchronisé : ", "Not synced: ") + strings.Join(refus, "\n"))
 	}
 	if len(sansRoms) > 0 {
-		notifier(fmt.Sprintf(tr("Jeux %s non synchronisés : %s n'a pas de dossier des ROM %s. Ajoutez-le dans « 3dssavesync réglages ».",
-			"%s games not synced: %s has no %s ROM folder. Add it in \"3dssavesync settings\"."), strings.Join(sansRoms, ", "), s.profil, strings.Join(sansRoms, ", ")))
+		notifier(fmt.Sprintf(tr("%s est ouvert sans synchronisation : 3dssavesync ne connaît pas votre dossier de jeux %s. "+
+			"Lancez vos jeux depuis LaunchBox, ou ajoutez ce dossier dans « 3dssavesync réglages ».",
+			"%s is open without sync: 3dssavesync does not know your %s games folder. "+
+				"Start your games from LaunchBox, or add this folder in \"3dssavesync settings\"."), e.processus(), strings.Join(sansRoms, ", ")))
 	}
 	sort.Slice(jeux, func(a, b int) bool { return jeux[a].Nom < jeux[b].Nom })
 	return jeux
