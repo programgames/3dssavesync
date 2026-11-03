@@ -32,9 +32,9 @@ What the caller must know, and nothing else:
 6. `serveur.hash == base` → `A_ENVOYER`
 7. otherwise → `CONFLIT`
 
-### Two implementations, one case table
+### Three implementations, one case table
 
-The module exists in C (3DS homebrew) and in Go (PC program). Both read `tests/cas_etat.csv` in their tests. A case added to the file is checked on both sides.
+The module exists in C (3DS homebrew), in Go (PC program) and in Kotlin (Android app, ADR 0026). All three read `tests/cas_etat.csv` in their tests. A case added to the file is checked on both sides.
 
 | case | local | server | base | expected |
 |---|---|---|---|---|

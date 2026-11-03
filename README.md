@@ -66,6 +66,10 @@ Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
 
 The local server syncs at home, when the PC is on. To sync from anywhere, run the server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. See the [server guide](docs/guide-server.md).
 
+### Android (first version)
+
+An Android app syncs RetroArch, Azahar, melonDS and NooDS saves with the same server. It is new and not tested on many phones yet: start with a copy of one save. See the [Android guide](docs/guide-android.md).
+
 ### Portable version
 
 Keep everything in one folder, for example `LaunchBox\ThirdParty\3dssavesync`, a USB drive or the SD card of a Steam Deck:
@@ -96,13 +100,14 @@ The `portable.txt` file next to the program is what makes it portable: settings,
 |---|---|
 | **3DS apps** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), mGBA forwarders (GB/GBC/GBA), native 3DS games (any game with a single save file; default: the 8 Pokémon) |
 | **PC emulators** | melonDS, mGBA, Azahar, RetroArch (cores melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA), VBA-M, SameBoy, DeSmuME, SkyEmu, NanoBoyAdvance, BGB, and any emulator with a custom command line |
+| **Android emulators** (first version) | RetroArch, Azahar (3DS Pokémon), melonDS, NooDS, and other emulators by folder: [Android guide](docs/guide-android.md) |
 | **Set up automatically** | LaunchBox / BigBox, ES-DE, desktop shortcuts |
 | **Guides** | [Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode](docs/guide-frontends.md); [HOME menu icons (forwarders)](docs/guide-forwarders.md) |
 | **PC systems** | Windows, Linux, macOS (amd64 and arm64) |
 | **Languages** | English, French (follows the system language) |
 
 **Tested on real hardware**: New 3DS XL (Luma3DS, TWiLight Menu++, open_agb_firm, mGBA forwarders) with the local server and with a Docker server; Windows 11 with LaunchBox, melonDS, mGBA and Azahar.
-**Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, DeSmuME, SkyEmu, NanoBoyAdvance, BGB, ES-DE. Reports are welcome.
+**Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, DeSmuME, SkyEmu, NanoBoyAdvance, BGB, ES-DE, the Android app. Reports are welcome.
 
 ## Good to know
 

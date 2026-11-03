@@ -97,7 +97,7 @@ _Avoid_: rollback
 ## Sync
 
 **Client**:
-A machine or an emulator where you play, with its own Local saves and Bases: the 3DS, or an emulator of the PC. Two emulators of the same System on one PC are two Clients.
+A machine or an emulator where you play, with its own Local saves and Bases: the 3DS, an emulator of the PC, or an emulator of an Android phone. Two emulators of the same System on one PC are two Clients.
 _Avoid_: device, console, station
 
 **Server** (*Serveur*):
