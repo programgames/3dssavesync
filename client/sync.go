@@ -96,18 +96,18 @@ func readLocal(j *Game, srv *Version) (*Local, error) {
 	return &Local{Version{Hash: sha256Hex(sram), Size: int64(len(sram))}, raw, sram, j.System != "3DS" && blank(sram)}, nil
 }
 
-// State of a Game (docs/design.md §1, ADR 0001). nil = absent; empty base = never synced.
+// State of a Game (docs/design.md §1, ADR 0001), named like tests/cas_etat.csv.
+type State string
+
 const (
-	inSync     = "A_JOUR"
-	toUpload   = "A_ENVOYER"
-	toDownload = "A_RECUPERER"
-	conflict   = "CONFLIT"
-	force      = "FORCER"
-	nothing    = "RIEN"
-	cancel     = "ANNULER"
+	inSync     State = "A_JOUR"
+	toUpload   State = "A_ENVOYER"
+	toDownload State = "A_RECUPERER"
+	conflict   State = "CONFLIT"
 )
 
-func state(local, server *Version, base string) string {
+// state compares Local save, Current version and Base. nil = absent; empty base = never synced.
+func state(local, server *Version, base string) State {
 	switch {
 	case local != nil && server != nil && local.Hash == server.Hash:
 		return inSync
@@ -511,7 +511,7 @@ func formatAge(age *int64) string {
 
 // resolveConflict returns the choice of the user on a Conflict. If no window can open, nothing is replaced.
 // remote: content of the server Version if it was read (Pokémon), to show its play time.
-func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool) string {
+func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool) Choice {
 	pc := tr("sauvegarde présente", "save found")
 	if i, err := os.Stat(j.File); err == nil {
 		pc = fmt.Sprintf(tr("modifiée le %s", "modified on %s"), i.ModTime().Format("02/01/2006 15:04"))
@@ -542,17 +542,27 @@ func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool)
 	}
 	switch choice {
 	case server:
-		return toDownload
+		return takeServer
 	case pc:
-		return force
+		return keepPC
 	case noPlay:
-		return cancel
+		return dontPlay
 	case "":
 		notify(fmt.Sprintf(tr("Conflit sur %s. Le jeu démarre avec la sauvegarde du PC, rien n'a été remplacé.",
 			"Conflict on %s. The game starts with the PC save, nothing was replaced."), j.Name))
 	}
-	return nothing
+	return keepNothing
 }
+
+// Choice is the answer of the user to a Conflict.
+type Choice int
+
+const (
+	keepNothing Choice = iota // "Do nothing", or no window: nothing is replaced
+	takeServer
+	keepPC
+	dontPlay
+)
 
 // setName gives the game name to the server, for the History (ADR 0018). A failure does not block the Sync: it is
 // logged, and the name is marked as known so that this session does not try again.
@@ -596,20 +606,29 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		action := state(seen, srv, b[j.Key])
-		if action == conflict {
+		st := state(seen, srv, b[j.Key])
+		if st == conflict {
 			var remote []byte // Pokémon: read the server Version to compare the play times
 			if _, ok := pokemonPlayInfo(l.SRAM); ok {
 				if st, o, err := s.api("GET", "/saves/"+j.Key, nil, nil); err == nil && st == 200 {
 					remote = o
 				}
 			}
-			action = resolveConflict(j, l, srv, remote, after)
+			switch resolveConflict(j, l, srv, remote, after) {
+			case takeServer:
+				st = toDownload
+			case keepPC:
+				st = toUpload
+			case dontPlay:
+				return true, nil
+			default:
+				return false, nil
+			}
 		}
-		switch action {
+		switch st {
 		case inSync:
 			return false, s.setBase(j.Key, l.Hash)
-		case toUpload, force:
+		case toUpload:
 			if ok, err := s.upload(j, l, srv); ok || err != nil {
 				return false, err
 			}
@@ -618,10 +637,6 @@ func (s *Session) syncGame(j *Game, after bool) (cancelled bool, err error) {
 			if err := s.download(j, l, srv); !errors.As(err, new(damagedError)) || attempt == 2 {
 				return false, err
 			}
-		case cancel:
-			return true, nil
-		default:
-			return false, nil
 		}
 	}
 	return false, errors.New(tr("un autre appareil envoie cette sauvegarde en même temps. Relancez le jeu dans un moment",
