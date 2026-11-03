@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.programgames.savesync.core.Choice
 import io.github.programgames.savesync.core.PlayInfo
+import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.pokemonPlayInfo
@@ -123,7 +124,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             OutlinedButton({ App.refresh() }, enabled = App.busy == null) { Text(stringResource(R.string.refresh)) }
             Button({
                 val replaced = App.entries.filter { it.shown == Shown.TO_DOWNLOAD && it.status?.local != null }
-                if (replaced.isEmpty()) App.syncAll() else confirm = replaced
+                if (replaced.isEmpty()) App.syncAll(emptyList()) else confirm = replaced
             }, enabled = App.busy == null && App.loaded && App.serverError == null) { Text(stringResource(R.string.sync_all)) }
         }
         App.busy?.let {
@@ -156,7 +157,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             confirmButton = {
                 TextButton({
                     confirm = null
-                    App.syncAll()
+                    App.syncAll(list)
                 }) { Text(stringResource(R.string.sync)) }
             },
             dismissButton = { TextButton({ confirm = null }) { Text(stringResource(R.string.cancel)) } },
@@ -323,7 +324,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             confirmButton = {
                 TextButton({
                     download = false
-                    App.act(e)
+                    App.act(e, mayReplace = true)
                 }) { Text(stringResource(R.string.download)) }
             },
             dismissButton = { TextButton({ download = false }) { Text(stringResource(R.string.cancel)) } },

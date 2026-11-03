@@ -54,7 +54,7 @@ Each line shows the state, the system and the game. The states are the same word
 
 Games with no save anywhere are hidden; a line at the end of the list counts them. Use the chips (**All**, **To do**, **DS**, **GB**, **GBA**, **3DS**) and the search field (accents ignored) to find a game.
 
-**Sync all** syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail.
+**Sync all** syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
 
 **Close the emulator before you sync.** Android gives no way to see if an emulator is running. RetroArch writes its save every few seconds while a game runs, and would write the old progress back over a downloaded save.
 
@@ -69,7 +69,7 @@ If the server changed while you were choosing, nothing is done and the screen sh
 
 ## Backup copies
 
-Before any save is replaced, the app writes a copy, reads it back and compares it. Then it writes the new save, reads it back and compares it; if the new save does not match, it puts the old one back. The copies are in:
+Before any save is replaced, the app writes a copy, reads it back and compares it. Then it reads the save again: if the emulator changed it since the sync read it, nothing is written. Then it writes the new save, reads it back and compares it; if the new save does not match, it puts the old one back. If the phone had no save for this game, a failed write leaves an empty file, which the app sees as no save. The copies are in:
 
 `Android/data/io.github.programgames.savesync/files/copies/<emulator>/<game>-<date>.<ext>`
 

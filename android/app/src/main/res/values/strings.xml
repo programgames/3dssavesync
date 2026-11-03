@@ -86,7 +86,7 @@
     <string name="summary_title">Sync finished</string>
     <string name="summary_counts">Uploaded: %1$d\nDownloaded: %2$d\nAlready in sync: %3$d</string>
     <string name="summary_conflicts">Conflicts, waiting for your choice: %1$s. Open each game to choose which save to keep.</string>
-    <string name="summary_not_replaced">New on the server since the list was read, so not replaced yet: %1$s. Check them, then sync again.</string>
+    <string name="summary_not_replaced">Not replaced, because you didn\'t confirm the replacement of the save on this phone: %1$s. Open each game to check it.</string>
     <string name="summary_stopped">The sync stopped: the next games were not tried.</string>
 
     <!-- States -->
@@ -143,6 +143,7 @@
     <string name="done_uploaded">Uploaded.</string>
     <string name="done_downloaded">Downloaded. The previous save is in the backup copies.</string>
     <string name="done_conflict">The server changed meanwhile: compare the two saves again, then choose.</string>
+    <string name="done_not_replaced">Nothing was replaced: the state changed meanwhile. Check it, then try again.</string>
     <string name="done_in_sync">Already in sync.</string>
     <string name="done_failed">Sync failed.</string>
 
@@ -162,6 +163,8 @@
     <string name="p_backup">The backup copy couldn\'t be made, so nothing was replaced. Check the free space on the phone.</string>
     <string name="p_write">The new save couldn\'t be written correctly, so the previous one was put back. Check the folder in Emulators, then try again.</string>
     <string name="p_restore">The save couldn\'t be written, and the previous one couldn\'t be put back. Don\'t play this game: copy the backup copy named below back into the save folder.</string>
+    <string name="p_not_written">The new save couldn\'t be written. This phone had no save for this game, so nothing was lost. If a save file of this game is now in the folder, delete it before you play. Then check the folder in Emulators and try again.</string>
+    <string name="p_changed">The save on this phone changed during the sync, so it wasn\'t replaced. Close the emulator, then try again.</string>
     <string name="p_format">This save file has an unexpected format, so it wasn\'t synced. Check the emulator and its core in Emulators.</string>
     <string name="p_permission">The app can no longer open this folder or file. Choose the folder again in Emulators.</string>
     <string name="p_other">Something went wrong. Try again. If it happens again, report the detail below.</string>

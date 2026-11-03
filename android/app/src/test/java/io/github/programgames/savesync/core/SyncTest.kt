@@ -15,12 +15,14 @@ import java.net.ServerSocket
 import java.net.URL
 
 // MemoryFile is a fake Save file. bad: number of next writes that keep only half of the content (provider failure).
-class MemoryFile(override val name: String, var content: ByteArray? = null, var bad: Int = 0) : SaveFile {
+// fail: number of next writes that throw before they touch the file (permission lost, folder gone).
+class MemoryFile(override val name: String, var content: ByteArray? = null, var bad: Int = 0, var fail: Int = 0) : SaveFile {
     override val location get() = "test/$name"
 
     override fun read() = content?.copyOf()
 
     override fun write(content: ByteArray) {
+        if (fail-- > 0) throw java.io.IOException("$location: write refused")
         this.content = if (bad-- > 0) content.copyOf(content.size / 2) else content.copyOf()
     }
 
@@ -67,6 +69,37 @@ class ReplaceTest {
         val copy = File(tmp.root, "drastic").listFiles()!!.single()
         assertTrue(e.message!!.contains(copy.path))
         assertArrayEquals(random(1024, 1), copy.readBytes())
+    }
+
+    // The write fails before it touches the file: the old save is still there, so WRITE, not RESTORE.
+    @Test
+    fun writeRefused() {
+        val f = MemoryFile("a.sav", random(1024, 1), fail = 9)
+        val e = runCatching { replace(game(f), f.content, random(1024, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
+        assertEquals(Problem.WRITE, e.problem)
+        assertArrayEquals(random(1024, 1), f.content)
+    }
+
+    // The emulator wrote the save after it was read: the Backup copy doesn't hold it, so nothing is written.
+    @Test
+    fun changedMeanwhile() {
+        val f = MemoryFile("a.sav", random(1024, 3))
+        val e = runCatching { replace(game(f), random(1024, 1), random(1024, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
+        assertEquals(Problem.CHANGED, e.problem)
+        assertArrayEquals(random(1024, 3), f.content)
+        val n = MemoryFile("b.sav", random(8, 3)) // created after the read: no Backup copy of it
+        val e2 = runCatching { replace(game(n), null, random(8, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
+        assertEquals(Problem.CHANGED, e2.problem)
+        assertArrayEquals(random(8, 3), n.content)
+    }
+
+    // A first file that can't be written fully is emptied: blank counts as absent, never as a Local save to upload.
+    @Test
+    fun newFileFailed() {
+        val f = MemoryFile("new.sav", bad = 1)
+        val e = runCatching { replace(game(f), null, random(1024, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
+        assertEquals(Problem.NOT_WRITTEN, e.problem)
+        assertEquals(0, f.content!!.size)
     }
 
     @Test
@@ -145,7 +178,7 @@ class PythonServerTest {
         assertEquals(State.TO_DOWNLOAD, b.status(gb).state)
         assertEquals(Outcome.NOT_REPLACED, b.sync(gb, mayReplace = false)) // Sync all without confirmation
         assertArrayEquals(sram, fb.content)
-        assertEquals(Outcome.DOWNLOADED, b.sync(gb))
+        assertEquals(Outcome.DOWNLOADED, b.sync(gb, mayReplace = true)) // confirmed by the user
         assertArrayEquals(sram2, fb.content)
         assertArrayEquals(sram, File(tmp.root, "copies-b/pizzaboy").listFiles()!!.single().readBytes())
 
@@ -174,6 +207,59 @@ class PythonServerTest {
         // A Blank save counts as absent: Download, after a copy of the blank file.
         val fc = MemoryFile("blank.sav", ByteArray(128 shl 10))
         assertEquals(State.TO_DOWNLOAD, a.status(gba("other", fc)).state)
+    }
+
+    // A choice to keep the phone save never downloads, even when the State became To download meanwhile.
+    @Test
+    fun keepPhoneNeverDownloads() {
+        val a = syncer("a")
+        val b = syncer("b")
+        val fa = MemoryFile("e.sav", random(32 shl 10, 1))
+        val fb = MemoryFile("e.sav")
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", fa)))
+        assertEquals(Outcome.DOWNLOADED, b.sync(gba("pizzaboy", fb)))
+        fa.content = random(32 shl 10, 2)
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", fa)))
+        b.refresh()
+        val choice = Choice(keepPhone = true, serverHash = sha256(random(32 shl 10, 2)))
+        assertEquals(Outcome.NOT_REPLACED, b.sync(gba("pizzaboy", fb), choice, mayReplace = false))
+        assertArrayEquals(random(32 shl 10, 1), fb.content)
+    }
+
+    // The written file must give back the received SRAM: a trailer that would no longer be found is refused.
+    @Test
+    fun downloadKeepsShape() {
+        val a = syncer("a")
+        val b = syncer("b")
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", MemoryFile("e.sav", random(1000, 1)))))
+        val old = ByteArray(32 shl 10) + random(16, 9) // blank, with a Clock trailer
+        val fb = MemoryFile("e.sav", old)
+        val e = runCatching { b.sync(gba("pizzaboy", fb), mayReplace = true) }.exceptionOrNull()!!
+        assertEquals(Problem.FORMAT, problem(e))
+        assertArrayEquals(old, fb.content)
+    }
+
+    // Sync all never replaces a save the user did not confirm (here: blank, created after the list was shown), and
+    // stops after a failed write on this phone.
+    @Test
+    fun syncAll() {
+        val a = syncer("a")
+        val b = syncer("b")
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", MemoryFile("e.sav", random(32 shl 10, 1)))))
+        val fb = MemoryFile("e.sav", ByteArray(32 shl 10))
+        val gb = gba("pizzaboy", fb)
+        val s = b.syncAll(listOf(gb), emptySet())
+        assertEquals(listOf("Pokemon Emeraude"), s.notReplaced)
+        assertArrayEquals(ByteArray(32 shl 10), fb.content)
+        assertEquals(1, b.syncAll(listOf(gb), setOf(gb)).downloaded)
+        assertArrayEquals(random(32 shl 10, 1), fb.content)
+
+        val bad = gba("other", MemoryFile("e.sav", ByteArray(32 shl 10), bad = 2))
+        val next = Game(System.GBA, "GBA-AXVE", "Pokemon Ruby", MemoryFile("r.sav", random(32 shl 10, 5)), Format(), "other")
+        val r = b.syncAll(listOf(bad, next), setOf(bad))
+        assertEquals(Problem.RESTORE, problem(r.failures.single().second))
+        assertTrue(r.stopped)
+        assertNull(b.serverVersion("GBA-AXVE"))
     }
 
     @Test

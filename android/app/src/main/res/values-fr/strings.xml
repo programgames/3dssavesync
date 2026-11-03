@@ -86,7 +86,7 @@
     <string name="summary_title">Synchronisation terminée</string>
     <string name="summary_counts">Envoyées : %1$d\nRécupérées : %2$d\nDéjà à jour : %3$d</string>
     <string name="summary_conflicts">Conflits, en attente de votre choix : %1$s. Ouvrez chaque jeu pour choisir la sauvegarde à garder.</string>
-    <string name="summary_not_replaced">Nouveau sur le serveur depuis la lecture de la liste, donc pas encore remplacé : %1$s. Vérifiez ces jeux, puis synchronisez de nouveau.</string>
+    <string name="summary_not_replaced">Pas remplacé, car vous n\'avez pas confirmé le remplacement de la sauvegarde de ce téléphone : %1$s. Ouvrez chaque jeu pour le vérifier.</string>
     <string name="summary_stopped">La synchronisation s\'est arrêtée : les jeux suivants n\'ont pas été essayés.</string>
 
     <!-- States -->
@@ -144,6 +144,7 @@
     <string name="done_uploaded">Envoyée.</string>
     <string name="done_downloaded">Récupérée. L\'ancienne sauvegarde est dans les copies de sécurité.</string>
     <string name="done_conflict">Le serveur a changé entre-temps : comparez de nouveau les deux sauvegardes, puis choisissez.</string>
+    <string name="done_not_replaced">Rien n\'a été remplacé : l\'état a changé entre-temps. Vérifiez-le, puis réessayez.</string>
     <string name="done_in_sync">Déjà à jour.</string>
     <string name="done_failed">Échec de la synchronisation.</string>
 
@@ -163,6 +164,8 @@
     <string name="p_backup">La copie de sécurité n\'a pas pu être faite : rien n\'a été remplacé. Vérifiez la place libre sur le téléphone.</string>
     <string name="p_write">La nouvelle sauvegarde n\'a pas pu être écrite correctement : l\'ancienne a été remise en place. Vérifiez le dossier dans Émulateurs, puis réessayez.</string>
     <string name="p_restore">La sauvegarde n\'a pas pu être écrite, et l\'ancienne n\'a pas pu être remise en place. Ne jouez pas à ce jeu : recopiez la copie de sécurité indiquée ci-dessous dans le dossier des sauvegardes.</string>
+    <string name="p_not_written">La nouvelle sauvegarde n\'a pas pu être écrite. Ce téléphone n\'avait pas de sauvegarde pour ce jeu : rien n\'est perdu. Si un fichier de sauvegarde de ce jeu est maintenant dans le dossier, supprimez-le avant de jouer. Vérifiez ensuite le dossier dans Émulateurs, puis réessayez.</string>
+    <string name="p_changed">La sauvegarde de ce téléphone a changé pendant la synchronisation : elle n\'a pas été remplacée. Fermez l\'émulateur, puis réessayez.</string>
     <string name="p_format">Ce fichier de sauvegarde a un format inattendu : il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>

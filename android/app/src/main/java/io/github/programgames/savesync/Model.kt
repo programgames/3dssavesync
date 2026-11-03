@@ -18,13 +18,12 @@ import io.github.programgames.savesync.core.PlayInfo
 import io.github.programgames.savesync.core.Remote
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
+import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.Syncer
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
-import io.github.programgames.savesync.core.isGlobal
 import io.github.programgames.savesync.core.pokemonPlayInfo
-import io.github.programgames.savesync.core.problem
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.splitDuplicates
 import io.github.programgames.savesync.core.titles3DS
@@ -65,17 +64,6 @@ data class Entry(
             }
         }
 }
-
-// Summary of Sync all.
-data class Summary(
-    val uploaded: Int,
-    val downloaded: Int,
-    val inSync: Int,
-    val conflicts: List<String>,
-    val notReplaced: List<String>, // the server changed after the list was shown: not replaced without a new look
-    val failures: List<Pair<String, Throwable>>,
-    val stopped: Boolean, // the server or the network failed: the other games were not tried
-)
 
 // App holds the state of the screens and runs every file and network access on one background thread, so two actions
 // never touch the same save at once.
@@ -162,52 +150,30 @@ object App {
         else runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) })
     }
 
-    // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user.
-    fun syncAll() = run(text(R.string.syncing)) {
+    // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user. confirmed: the games whose save
+    // on this phone the user agreed to see replaced (the list of the confirmation); no other save is replaced.
+    fun syncAll(confirmed: List<Entry>) = run(text(R.string.syncing)) {
         val s = syncer ?: newSyncer()
-        var up = 0
-        var down = 0
-        var same = 0
-        val conflicts = mutableListOf<String>()
-        val notReplaced = mutableListOf<String>()
-        val failures = mutableListOf<Pair<String, Throwable>>()
-        var stopped = false
-        val todo = entries.filter { it.game != null && it.status?.state != null }
-        for ((i, e) in todo.withIndex()) {
-            busy = text(R.string.syncing_game, i + 1, todo.size, e.name)
-            try {
-                when (withContext(io) { s.sync(e.game!!, mayReplace = e.shown == Shown.TO_DOWNLOAD) }) {
-                    Outcome.UPLOADED -> up++
-                    Outcome.DOWNLOADED -> down++
-                    Outcome.IN_SYNC -> same++
-                    Outcome.CONFLICT -> conflicts += e.name
-                    Outcome.NOT_REPLACED -> notReplaced += e.name
-                    Outcome.NOTHING -> {}
-                }
-            } catch (t: Throwable) {
-                failures += e.name to t
-                if (isGlobal(problem(t))) {
-                    stopped = true
-                    break
-                }
-            }
-        }
-        summary = Summary(up, down, same, conflicts, notReplaced, failures, stopped)
+        val todo = entries.mapNotNull { e -> e.game?.takeIf { e.status?.state != null } }
+        val ok = confirmed.mapNotNull { it.game }.toSet()
+        summary = withContext(io) { s.syncAll(todo, ok) { i, g -> busy = text(R.string.syncing_game, i + 1, todo.size, g.name) } }
         s.refresh()
         serverError = withContext(io) { runCatching { s.serverList() }.exceptionOrNull() }
         entries = withContext(io) { statuses(entries, s) }
     }
 
-    // act runs the action of one Game (or the choice of a Conflict), then reads its State again.
-    fun act(e: Entry, choice: Choice? = null) = run(text(R.string.syncing)) {
+    // act runs the action of one Game (or the choice of a Conflict), then reads its State again. mayReplace: the user
+    // confirmed that the server version replaces the save on this phone; else no existing save is replaced.
+    fun act(e: Entry, choice: Choice? = null, mayReplace: Boolean = false) = run(text(R.string.syncing)) {
         val s = syncer ?: newSyncer()
-        val r = withContext(io) { runCatching { s.sync(e.game!!, choice) } }
+        val r = withContext(io) { runCatching { s.sync(e.game!!, choice, mayReplace) } }
         message = r.fold({
             text(
                 when (it) {
                     Outcome.UPLOADED -> R.string.done_uploaded
                     Outcome.DOWNLOADED -> R.string.done_downloaded
                     Outcome.CONFLICT -> R.string.done_conflict
+                    Outcome.NOT_REPLACED -> R.string.done_not_replaced
                     else -> R.string.done_in_sync
                 },
             ) to null

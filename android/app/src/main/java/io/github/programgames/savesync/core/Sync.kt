@@ -109,6 +109,20 @@ class Status(val local: Local?, val server: Version?, val base: String?, val sta
 
 enum class Outcome { NOTHING, IN_SYNC, UPLOADED, DOWNLOADED, CONFLICT, NOT_REPLACED }
 
+// Summary of Sync all. stopped: the next games were not tried.
+data class Summary(
+    val uploaded: Int,
+    val downloaded: Int,
+    val inSync: Int,
+    val conflicts: List<String>,
+    val notReplaced: List<String>, // an existing save the user did not confirm: not replaced without a new look
+    val failures: List<Pair<String, Throwable>>,
+    val stopped: Boolean,
+)
+
+// writeProblems: a write on this phone failed, so the storage may be at fault for the next games too.
+private val writeProblems = setOf(Problem.BACKUP, Problem.WRITE, Problem.RESTORE, Problem.NOT_WRITTEN)
+
 // Choice on a Conflict, for the Current version the user saw: if the server changed since, nothing is done.
 data class Choice(val keepPhone: Boolean, val serverHash: String)
 
@@ -135,7 +149,8 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
 
     // sync runs the Sync of one Game, like syncGame on the PC. A Conflict without a matching choice changes nothing.
     // mayReplace = false: a Download over an existing save is not done (NOT_REPLACED): the user did not confirm it.
-    fun sync(g: Game, choice: Choice? = null, mayReplace: Boolean = true): Outcome {
+    // Only a choice to take this same server Version stands for that confirmation; keeping the phone save never does.
+    fun sync(g: Game, choice: Choice? = null, mayReplace: Boolean = false): Outcome {
         repeat(3) { attempt -> // a 412 starts a new pass with the new Current version
             if (attempt > 0) refresh()
             val srv = serverVersion(g.key)
@@ -155,7 +170,8 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
                 }
                 State.TO_UPLOAD -> if (upload(g, l!!, srv)) return Outcome.UPLOADED
                 State.TO_DOWNLOAD -> try {
-                    if (l != null && !mayReplace && choice == null) return Outcome.NOT_REPLACED
+                    val takeServer = choice != null && !choice.keepPhone && choice.serverHash == srv!!.hash
+                    if (l != null && !mayReplace && !takeServer) return Outcome.NOT_REPLACED
                     download(g, l, srv!!)
                     return Outcome.DOWNLOADED
                 } catch (e: SyncException) {
@@ -166,6 +182,36 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
             }
         }
         throw SyncException(Problem.BUSY, "PUT /saves/${g.key}: 412 three times")
+    }
+
+    // syncAll runs Sync all: one Sync per Game, never a Conflict choice. confirmed: the Games whose save on this phone
+    // the user agreed to see replaced; any other existing save is not replaced (NOT_REPLACED). It stops when the
+    // server or the network fails, or a write on this phone fails: the next games are not tried.
+    fun syncAll(games: List<Game>, confirmed: Set<Game>, progress: (Int, Game) -> Unit = { _, _ -> }): Summary {
+        var up = 0
+        var down = 0
+        var same = 0
+        val conflicts = mutableListOf<String>()
+        val notReplaced = mutableListOf<String>()
+        val failures = mutableListOf<Pair<String, Throwable>>()
+        for ((i, g) in games.withIndex()) {
+            progress(i, g)
+            try {
+                when (sync(g, mayReplace = g in confirmed)) {
+                    Outcome.UPLOADED -> up++
+                    Outcome.DOWNLOADED -> down++
+                    Outcome.IN_SYNC -> same++
+                    Outcome.CONFLICT -> conflicts += g.name
+                    Outcome.NOT_REPLACED -> notReplaced += g.name
+                    Outcome.NOTHING -> {}
+                }
+            } catch (t: Throwable) {
+                failures += g.name to t
+                val p = problem(t)
+                if (isGlobal(p) || p in writeProblems) return Summary(up, down, same, conflicts, notReplaced, failures, true)
+            }
+        }
+        return Summary(up, down, same, conflicts, notReplaced, failures, false)
     }
 
     // nameOnServer gives the game name to the server once per pass (ADR 0018); a failure never blocks the Sync.
@@ -184,24 +230,44 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
     private fun download(g: Game, l: Local?, srv: Version) {
         val o = remote.get(g.key)
         if (sha256(o) != srv.hash) throw SyncException(Problem.DAMAGED, "GET /saves/${g.key}: hash ${sha256(o)} instead of ${srv.hash}")
-        replace(g, l?.raw, encode(g.system, g.format, o, l?.raw), backups)
+        val content = encode(g.system, g.format, o, l?.raw)
+        // The file must give back the received SRAM: else the next pass would see another save, and upload it.
+        if (sha256(decode(g.system, g.format, content, srv)) != srv.hash) {
+            throw FormatException("${g.file.location}: a ${content.size}-byte file wouldn't give back the ${o.size}-byte save")
+        }
+        replace(g, l?.raw, content, backups)
         bases.set(g.emulator, g.key, srv.hash)
     }
 }
 
 // replace writes a new Save file: verified Backup copy of the old one first, then the new content, read back and
 // compared. On a mismatch the old content is written back. SAF has no atomic rename on every provider: this order
-// keeps a verified copy outside the folder before the file is touched (ADR 0026).
+// keeps a verified copy outside the folder before the file is touched (ADR 0026). old: the file as the pass read it,
+// null if there was none; a file that differs now (the emulator wrote it) is not touched: no copy holds it.
 fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups): File? {
     val copy = old?.let { backups.copy(g.emulator, g.name, "." + g.file.name.substringAfterLast('.', "sav"), it) }
+    val now = g.file.read()
+    if (if (old == null) now != null else now?.contentEquals(old) != true) {
+        throw SyncException(Problem.CHANGED, "${g.file.location}: changed since it was read (${old?.size} bytes, now ${now?.size})")
+    }
     val written = runCatching { g.file.write(content) }.exceptionOrNull()
     val back = if (written == null) runCatching { g.file.read() }.getOrNull() else null
     if (back != null && back.contentEquals(content)) return copy
     val why = written?.toString() ?: "${g.file.location}: the written file doesn't match (${back?.size} bytes read, ${content.size} written)"
-    if (old == null) throw SyncException(Problem.WRITE, why)
+    if (old == null) {
+        // A new file: emptied, so the next pass sees a blank save (absent), never a Local save to upload.
+        val emptied = runCatching {
+            g.file.write(ByteArray(0))
+            g.file.read()?.isEmpty() != false
+        }.getOrDefault(false)
+        throw SyncException(Problem.NOT_WRITTEN, if (emptied) why else "$why\n${g.file.location}: an incomplete file may remain")
+    }
+    // A write that failed before it touched the file leaves the old save: nothing to write back.
     val restored = runCatching {
-        g.file.write(old)
-        g.file.read().contentEquals(old)
+        g.file.read().contentEquals(old) || run {
+            g.file.write(old)
+            g.file.read().contentEquals(old)
+        }
     }.getOrDefault(false)
     if (restored) throw SyncException(Problem.WRITE, "$why\nbackup copy: $copy")
     throw SyncException(Problem.RESTORE, "$why\nbackup copy: $copy")
