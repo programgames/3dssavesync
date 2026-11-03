@@ -107,10 +107,10 @@ func defaireLaunchbox(texte, dossierLB, lanceur string, cfg *Config) (string, []
 		}
 		texte = strings.Replace(texte, b, "", 1)
 		if idOrig == "" {
-			rapport = append(rapport, fmt.Sprintf(tr("émulateur « %s » retiré ; son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox",
-				"emulator \"%s\" removed; its original emulator no longer exists: choose a default emulator in LaunchBox"), unescape(champ(b, "Title"))))
+			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré. Son émulateur d'origine n'existe plus : choisissez un émulateur par défaut dans LaunchBox.",
+				"Removed the \"%s\" emulator. Its original emulator no longer exists, so choose a default emulator in LaunchBox."), unescape(champ(b, "Title"))))
 		} else {
-			rapport = append(rapport, fmt.Sprintf(tr("émulateur « %s » retiré, « %s » de nouveau par défaut", "emulator \"%s\" removed, \"%s\" is the default again"),
+			rapport = append(rapport, fmt.Sprintf(tr("Émulateur « %s » retiré, « %s » est de nouveau celui par défaut", "Removed the \"%s\" emulator. \"%s\" is the default again"),
 				unescape(champ(b, "Title")), unescape(titre)))
 		}
 	}
@@ -131,10 +131,10 @@ func defaireEsde(systems, regles string) (string, string, []string) {
 		n := champ(b, "name")
 		b = commandeESDE.ReplaceAllLiteralString(b, "")
 		if !strings.Contains(b, "<command") {
-			rapport = append(rapport, fmt.Sprintf(tr("%s : système ajouté par 3dssavesync retiré", "%s: system added by 3dssavesync removed"), n))
+			rapport = append(rapport, fmt.Sprintf(tr("%s : système ajouté par 3dssavesync retiré", "%s: removed the system added by 3dssavesync"), n))
 			return ""
 		}
-		rapport = append(rapport, fmt.Sprintf(tr("%s : commande 3dssavesync retirée", "%s: 3dssavesync command removed"), n))
+		rapport = append(rapport, fmt.Sprintf(tr("%s : commande 3dssavesync retirée", "%s: removed the 3dssavesync command"), n))
 		return b
 	})
 	return systems, regles, rapport
@@ -146,10 +146,10 @@ func desinstaller(cfg *Config, config string) ([]string, error) {
 	lb, es := cfg.Frontends["launchbox"], cfg.Frontends["esde"]
 	switch {
 	case lb != "" && (emulateurActif("LaunchBox") || emulateurActif("BigBox")):
-		return nil, errors.New(tr("LaunchBox est ouvert : fermez LaunchBox et BigBox, puis recommencez. Rien n'est fait.",
-			"LaunchBox is open: close LaunchBox and BigBox, then try again. Nothing is done."))
+		return nil, errors.New(tr("LaunchBox est ouvert. Fermez LaunchBox et BigBox, puis réessayez.",
+			"LaunchBox is open. Close LaunchBox and BigBox, then try again."))
 	case es != "" && emulateurActif("ES-DE"):
-		return nil, errors.New(tr("ES-DE est ouvert : fermez ES-DE, puis recommencez. Rien n'est fait.", "ES-DE is open: close ES-DE, then try again. Nothing is done."))
+		return nil, errors.New(tr("ES-DE est ouvert. Fermez-le et réessayez.", "ES-DE is open. Close it and try again."))
 	}
 	lanceur := lanceurDe(cfg)
 	var rapport []string
@@ -190,33 +190,33 @@ func desinstaller(cfg *Config, config string) ([]string, error) {
 		retires += len(l)
 	}
 	if retires > 0 {
-		rapport = append(rapport, fmt.Sprintf(tr("%d raccourci(s) mis à la Corbeille", "%d shortcut(s) moved to the Recycle Bin"), retires))
+		rapport = append(rapport, fmt.Sprintf(tr("Raccourcis mis à la Corbeille : %d", "Shortcuts moved to the Recycle Bin: %d"), retires))
 	}
 	if err := arreterTray(filepath.Dir(config)); err != nil { // sinon l'exe de l'icône ne peut pas aller à la Corbeille
 		rapport = append(rapport, err.Error())
 	}
 	if portable := dossierPortable(); portable != "" {
-		rapport = append(rapport, fmt.Sprintf(tr("Version portable : le programme reste dans %s. Supprimez ce dossier vous-même quand vous n'en avez plus besoin (il contient aussi vos réglages).",
-			"Portable version: the program stays in %s. Delete this folder yourself when you no longer need it (it also holds your settings)."), portable))
+		rapport = append(rapport, fmt.Sprintf(tr("Version portable : le programme reste dans %s. Supprimez ce dossier quand vous n'en aurez plus besoin. Il contient aussi vos réglages.",
+			"Portable version: the program stays in %s. Delete this folder when you no longer need it. It also holds your settings."), portable))
 	} else if installe := emplacementInstalle(); existe(installe) {
 		if err := retirerProgramme(installe); err != nil {
 			rapport = append(rapport, tr("Programme : ", "Program: ")+texteErreur(err))
 		} else {
-			rapport = append(rapport, fmt.Sprintf(tr("Programme : %s part à la Corbeille dès sa fermeture", "Program: %s goes to the Recycle Bin as soon as it closes"), installe))
+			rapport = append(rapport, fmt.Sprintf(tr("Programme : %s ira à la Corbeille dès sa fermeture", "Program: %s goes to the Recycle Bin when it closes"), installe))
 		}
 	}
-	rapport = append(rapport, fmt.Sprintf(tr("Gardés (vos données) : réglages %s, copies de sécurité %s", "Kept (your data): settings %s, backup copies %s"),
+	rapport = append(rapport, fmt.Sprintf(tr("Conservés : vos réglages (%s) et vos copies de sécurité (%s)", "Kept: your settings (%s) and your backups (%s)"),
 		filepath.Dir(config), cfg.dossierCopies(filepath.Dir(config))))
 	if cfg.ServeurLocal != nil {
 		donnees := cfg.ServeurLocal.Donnees
 		if donnees == "" {
 			donnees = filepath.Join(filepath.Dir(config), "serveur")
 		}
-		rapport = append(rapport, fmt.Sprintf(tr("Gardées : les versions du serveur local, %s. Le serveur local s'arrête au prochain redémarrage du PC.",
-			"Kept: the local server versions, %s. The local server stops at the next restart of the PC."), donnees))
+		rapport = append(rapport, fmt.Sprintf(tr("Conservées : les versions du serveur local (%s). Le serveur local s'arrêtera au prochain redémarrage du PC.",
+			"Kept: the local server versions (%s). The local server stops the next time you restart the PC."), donnees))
 	}
-	rapport = append(rapport, tr("3DS : dans FBI, Titles, 3dssavesync, Delete Title. Vos sauvegardes de la 3DS ne changent pas.",
-		"3DS: in FBI, Titles, 3dssavesync, Delete Title. Your 3DS saves do not change."))
+	rapport = append(rapport, tr("Sur la 3DS : dans FBI, ouvrez Titles, 3dssavesync et choisissez Delete Title. Vos sauvegardes de la 3DS restent.",
+		"On the 3DS: in FBI, open Titles, 3dssavesync and choose Delete Title. Your 3DS saves stay."))
 	return rapport, nil
 }
 

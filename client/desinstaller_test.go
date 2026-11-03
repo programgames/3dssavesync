@@ -120,7 +120,7 @@ func TestDesinstaller(t *testing.T) {
 		t.Errorf("programme installé à mettre à la Corbeille : %q", programme)
 	}
 	// raccourcis vers l'exe noté (Lanceur) et vers l'exe installé
-	if strings.Join(raccourcisPour, "|") != lanceur+"|"+emplacementInstalle() || !strings.Contains(texte, "2 raccourci(s)") || !strings.Contains(texte, filepath.Join(tmp, "cfg", "serveur")) ||
+	if strings.Join(raccourcisPour, "|") != lanceur+"|"+emplacementInstalle() || !strings.Contains(texte, "Raccourcis mis à la Corbeille : 2") || !strings.Contains(texte, filepath.Join(tmp, "cfg", "serveur")) ||
 		!strings.Contains(texte, filepath.Join(tmp, "cfg", "copies")) || !strings.Contains(texte, "FBI") {
 		t.Errorf("rapport :\n%s", texte)
 	}
@@ -149,7 +149,7 @@ func TestDesinstallerPortable(t *testing.T) {
 	if programme || !existe(exe) {
 		t.Error("version portable : le programme ne doit pas partir à la Corbeille")
 	}
-	if strings.Join(raccourcisPour, "|") != exe || !strings.Contains(texte, "Supprimez ce dossier vous-même") || !strings.Contains(texte, dossier) {
+	if strings.Join(raccourcisPour, "|") != exe || !strings.Contains(texte, "Supprimez ce dossier quand vous n'en aurez plus besoin") || !strings.Contains(texte, dossier) {
 		t.Errorf("raccourcis %q, rapport :\n%s", raccourcisPour, texte)
 	}
 }

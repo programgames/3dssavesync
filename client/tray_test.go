@@ -23,7 +23,7 @@ func TestMenuTray(t *testing.T) {
 	if m := textes(menuTray(0, "", "")); m != "Ouvrir les réglages=reglages|3dssavesync dev=|=|Quitter=quitter" {
 		t.Errorf("sans attente ni serveur local : %s", m)
 	}
-	if m := textes(menuTray(2, "Serveur local : en marche (x)", "3.8.0")); m != "Ouvrir les réglages=reglages|Version 3.8.0 disponible : mettre à jour=reglages|"+
+	if m := textes(menuTray(2, "Serveur local : en marche (x)", "3.8.0")); m != "Ouvrir les réglages=reglages|Mettre à jour vers la version 3.8.0=reglages|"+
 		"Envoyer maintenant (2 en attente)=envoyer|Serveur local : en marche (x)=|3dssavesync dev=|=|Quitter=quitter" {
 		t.Errorf("2 en attente, serveur local, mise à jour : %s", m)
 	}
@@ -207,7 +207,7 @@ func TestInstallerExeArreteIcone(t *testing.T) {
 	}
 	ecrire(t, exe, []byte("encore"))
 	l := installerExe(&Config{}, d)
-	if !strings.HasPrefix(l, "Copie du programme impossible : le programme installé tourne encore. Quittez l'icône près de l'horloge et fermez les autres fenêtres de 3dssavesync, puis enregistrez de nouveau.\nDétail : rename ") ||
+	if !strings.HasPrefix(l, "Impossible de copier le programme\u00a0: la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.\nDétail : rename ") ||
 		string(lire(cible)) != "nouveau" || existe(cible+".3dssavesync-tmp") {
 		t.Errorf("exe installé pris : %q, exe %q", l, lire(cible))
 	}

@@ -219,7 +219,7 @@ func TestPortable(t *testing.T) {
 		t.Errorf("frontends et raccourcis vers l'exe en cours attendus : %s, %s", emplacementInstalle(), lanceurDe(&Config{Lanceur: "x"}))
 	}
 	cfg := &Config{}
-	if l := installerExe(cfg, t.TempDir()); !strings.Contains(l, "Exe en place") || cfg.Lanceur != exe || existe(normal) {
+	if l := installerExe(cfg, t.TempDir()); !strings.Contains(l, "Programme déjà installé") || cfg.Lanceur != exe || existe(normal) {
 		t.Errorf("l'exe ne doit pas être copié : %q, Lanceur %q", l, cfg.Lanceur)
 	}
 	if err := verifierPortable(dossier); err != nil {
@@ -229,7 +229,7 @@ func TestPortable(t *testing.T) {
 		t.Errorf("fichier d'essai laissé : %v", n)
 	}
 	err := verifierPortable(filepath.Join(dossier, "absent"))
-	if err == nil || !strings.Contains(err.Error(), "Déplacez ce dossier") || !strings.Contains(err.Error(), "supprimez portable.txt") ||
+	if err == nil || !strings.Contains(err.Error(), "Déplacez ce dossier là où vous pouvez écrire") || !strings.Contains(err.Error(), "supprimez portable.txt") ||
 		!strings.Contains(err.Error(), "\nDétail : ") {
 		t.Errorf("dossier où rien ne s'écrit : message attendu, %v", err)
 	}

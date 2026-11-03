@@ -109,7 +109,7 @@ func TestMettreAJour(t *testing.T) {
 	}
 	ecrire(t, exe, []byte("programme 3.6.1"))
 
-	if _, err := mettreAJour(r, exe, "plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "n'a pas de fichier 3dssavesync-plan9-amd64") {
+	if _, err := mettreAJour(r, exe, "plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "(fichier 3dssavesync-plan9-amd64 ou SHA256SUMS manquant)") {
 		t.Errorf("système sans fichier : %v", err)
 	}
 	espaceLibre = func(string) (uint64, error) { return 1000, nil }
@@ -145,7 +145,7 @@ func TestMettreAJour(t *testing.T) {
 	}
 	reste("programme 3.7.0")
 	// Encore une fois (onglet resté ouvert, autre fenêtre) : l'exe sur le disque est déjà celui de la release.
-	if _, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH); err == nil || !strings.HasPrefix(err.Error(), "Le programme sur le disque est déjà la version 3.7.0") {
+	if _, err := mettreAJour(r, exe, runtime.GOOS, runtime.GOARCH); err == nil || !strings.HasPrefix(err.Error(), "La version 3.7.0 est déjà installée") {
 		t.Errorf("déjà à jour : %v", err)
 	}
 	reste("programme 3.7.0")
@@ -204,14 +204,14 @@ func TestErreurGitHub(t *testing.T) {
 		reponse       func(w http.ResponseWriter)
 		debut, detail string
 	}{
-		{"pas de réseau", ferme.URL, nil, "GitHub ne répond pas : pas d'Internet, ou connexion coupée.", "\nDétail : Get \"" + ferme.URL + "\""},
-		{"403", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(403) }, "GitHub refuse pour l'instant : trop de demandes depuis cette adresse Internet. Réessayez dans une heure.", "\nDétail : GET " + srv.URL + " : 403"},
-		{"429", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(429) }, "GitHub refuse pour l'instant", " : 429"},
-		{"404", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(404) }, "Fichier absent de la version sur GitHub : rien n'est changé. Téléchargez la version à la main depuis https://github.com/programgames/3dssavesync/releases/latest.", " : 404"},
-		{"500", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(500) }, "GitHub a un problème pour l'instant", " : 500"},
-		{"pas du JSON", srv.URL, func(w http.ResponseWriter) { w.Write([]byte("<html>")) }, "Réponse de GitHub illisible : rien n'est changé.", "réponse illisible"},
-		{"sans tag_name", srv.URL, func(w http.ResponseWriter) { w.Write([]byte(`{"assets":[]}`)) }, "Réponse de GitHub illisible", `tag_name ""`},
-		{"trop grand", srv.URL, func(w http.ResponseWriter) { w.Write(make([]byte, 4<<20+1)) }, "Fichier de GitHub plus grand que prévu : rien n'est changé.", "réponse trop grande (4194304)"},
+		{"pas de réseau", ferme.URL, nil, "GitHub ne répond pas. Vérifiez votre connexion Internet et réessayez.", "\nDétail : Get \"" + ferme.URL + "\""},
+		{"403", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(403) }, "GitHub limite pour l'instant les demandes venant de votre connexion. Réessayez dans une heure.", "\nDétail : GET " + srv.URL + " : 403"},
+		{"429", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(429) }, "GitHub limite pour l'instant", " : 429"},
+		{"404", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(404) }, "Il manque un fichier dans cette version sur GitHub, la mise à jour n'a pas été faite. Téléchargez-la vous-même sur https://github.com/programgames/3dssavesync/releases/latest.", " : 404"},
+		{"500", srv.URL, func(w http.ResponseWriter) { w.WriteHeader(500) }, "GitHub rencontre un problème.", " : 500"},
+		{"pas du JSON", srv.URL, func(w http.ResponseWriter) { w.Write([]byte("<html>")) }, "GitHub a envoyé une réponse illisible. Réessayez plus tard.", "réponse illisible"},
+		{"sans tag_name", srv.URL, func(w http.ResponseWriter) { w.Write([]byte(`{"assets":[]}`)) }, "GitHub a envoyé une réponse illisible", `tag_name ""`},
+		{"trop grand", srv.URL, func(w http.ResponseWriter) { w.Write(make([]byte, 4<<20+1)) }, "Le fichier de GitHub est plus gros que prévu, la mise à jour n'a pas été faite.", "réponse trop grande (4194304)"},
 	} {
 		adresseRelease, reponse = c.adresse, c.reponse
 		_, err := derniereRelease(t.TempDir(), true)

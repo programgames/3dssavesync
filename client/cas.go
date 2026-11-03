@@ -29,8 +29,8 @@ func (c *Config) cleAlias(systeme, nom, cle string) (string, error) {
 		return cle, nil
 	}
 	if a = strings.ToUpper(strings.TrimSpace(a)); !formesCle[systeme].MatchString(a) {
-		return "", fmt.Errorf(tr("l'alias « %s » de %s est invalide (exemple pour un jeu %s : %s). Retirez-le dans « 3dssavesync réglages », section ROM hacks, puis ajoutez de nouveau la ROM.",
-			"the alias \"%s\" of %s is not valid (example for a %s game: %s). Remove it in \"3dssavesync settings\", ROM hacks section, then add the ROM again."), c.Alias[nom], nom, systeme, exemplesCle[systeme])
+		return "", fmt.Errorf(tr("L'alias « %s » de %s n'est pas valable (exemple pour un jeu %s : %s). Retirez-le dans les réglages, section ROM hacks, et ajoutez de nouveau la ROM.",
+			"The alias \"%s\" of %s isn't valid (example for a %s game: %s). Remove it in the settings, ROM hacks section, and add the ROM again."), c.Alias[nom], nom, systeme, exemplesCle[systeme])
 	}
 	return a, nil
 }
@@ -86,18 +86,18 @@ func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
 	if j.Cle == "" || rom == "" {
 		return ""
 	}
-	aPart, sans := tr("Synchroniser à part (ROM hack)", "Sync separately (ROM hack)"), tr("Jouer sans synchroniser", "Play without sync")
-	conseil := tr("Pour lui donner sa propre sauvegarde : lancez-le depuis votre frontend et choisissez « Synchroniser à part », ou ajoutez-le dans « 3dssavesync réglages », section ROM hacks.",
-		"To give it its own save: start it from your frontend and choose \"Sync separately\", or add it in \"3dssavesync settings\", ROM hacks section.")
+	aPart, sans := tr("Synchroniser à part", "Sync separately"), tr("Jouer sans synchroniser", "Play without syncing")
+	conseil := tr("Pour lui donner sa propre sauvegarde, lancez-le depuis votre frontend et choisissez « Synchroniser à part ». Vous pouvez aussi l'ajouter dans les réglages, section ROM hacks.",
+		"To give it its own save, start it from your frontend and choose \"Sync separately\". You can also add it in the settings, ROM hacks section.")
 	choix := ""
 	m, _ := s.romsRetenues()
 	if a, err := os.Stat(m[j.Cle]); err == nil {
 		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) {
 			s.journal(fmt.Sprintf("même Clé %s que %s : %s", j.Cle, m[j.Cle], rom))
-			texte := fmt.Sprintf(tr("%s est vu comme le même jeu que %s, déjà synchronisé. C'est sans doute un ROM hack.",
-				"%s is seen as the same game as %s, already synced. It is probably a ROM hack."), filepath.Base(rom), filepath.Base(m[j.Cle]))
+			texte := fmt.Sprintf(tr("%s ressemble à %s, déjà synchronisé. C'est sans doute un ROM hack.",
+				"%s looks like %s, which is already synced. It's probably a ROM hack."), filepath.Base(rom), filepath.Base(m[j.Cle]))
 			if question {
-				choix = demander(texte+"\n\n"+tr("Synchroniser cette ROM à part, avec sa propre sauvegarde ?", "Sync this ROM separately, with its own save?"),
+				choix = demander(texte+"\n\n"+tr("Lui donner sa propre sauvegarde ?", "Give it its own save?"),
 					[]string{aPart, sans})
 			}
 			if choix != aPart {
@@ -109,15 +109,15 @@ func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
 			s.journal(fmt.Sprintf("Clé %s déjà synchronisée, aucune ROM retenue, pas de sauvegarde : %s", j.Cle, rom))
 			oui := tr("Synchroniser", "Sync")
 			if question {
-				choix = demander(fmt.Sprintf(tr("%s : cette ROM n'a pas de sauvegarde dans cet émulateur, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
-					"Même jeu : « Synchroniser » lui donne la sauvegarde du serveur.\nROM hack : « Synchroniser à part » lui donne sa propre sauvegarde.",
-					"%s: this ROM has no save in this emulator, and this game was already synced on this PC, maybe with another ROM.\n\n"+
-						"Same game: \"Sync\" gives it the server save.\nROM hack: \"Sync separately\" gives it its own save."), filepath.Base(rom)),
+				choix = demander(fmt.Sprintf(tr("%s n'a pas encore de sauvegarde dans cet émulateur, mais ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM.\n\n"+
+					"C'est le même jeu ? « Synchroniser » récupère la sauvegarde du serveur.\nC'est un ROM hack ? « Synchroniser à part » lui donne sa propre sauvegarde.",
+					"%s has no save in this emulator yet, but this game was already synced on this PC, maybe with another ROM.\n\n"+
+						"Same game? \"Sync\" downloads the server save.\nROM hack? \"Sync separately\" gives it its own save."), filepath.Base(rom)),
 					[]string{oui, aPart, sans})
 			}
 			if choix != oui && choix != aPart {
-				return fmt.Sprintf(tr("%s n'a pas de sauvegarde ici, et ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM. Lancez-le depuis votre frontend pour choisir.",
-					"%s has no save here, and this game was already synced on this PC, maybe with another ROM. Start it from your frontend to choose."), filepath.Base(rom))
+				return fmt.Sprintf(tr("%s n'a pas encore de sauvegarde ici, mais ce jeu a déjà été synchronisé sur ce PC, peut-être avec une autre ROM. Lancez-le depuis votre frontend pour choisir.",
+					"%s has no save here yet, but this game was already synced on this PC, maybe with another ROM. Start it from your frontend to choose."), filepath.Base(rom))
 			}
 		}
 	}
@@ -125,11 +125,11 @@ func (s *Session) romAutre(j *Jeu, rom string, question bool) string {
 		cle, err := s.creerAlias(j.Systeme, strings.TrimSuffix(filepath.Base(rom), filepath.Ext(rom)))
 		if err != nil {
 			s.journal("alias impossible pour " + rom + " : " + err.Error())
-			return fmt.Sprintf(tr("%s : synchronisation à part impossible (%v).", "%s: cannot sync separately (%v)."), filepath.Base(rom), err)
+			return fmt.Sprintf(tr("%s : impossible de le synchroniser à part (%v).", "%s: couldn't sync it separately (%v)."), filepath.Base(rom), err)
 		}
 		s.journal(fmt.Sprintf("alias créé : %s -> %s", rom, cle))
-		notifier(fmt.Sprintf(tr("%s a maintenant sa propre sauvegarde. Pour y jouer aussi sur la 3DS : « 3dssavesync réglages », Préparer la carte SD.",
-			"%s now has its own save. To play it on the 3DS too: \"3dssavesync settings\", Prepare the SD card."), filepath.Base(rom)))
+		notifier(fmt.Sprintf(tr("%s a maintenant sa propre sauvegarde. Pour y jouer aussi sur la 3DS, préparez de nouveau la carte SD dans les réglages.",
+			"%s now has its own save. To play it on the 3DS too, prepare the SD card again in the settings."), filepath.Base(rom)))
 		j.Cle = cle
 	}
 	if abs, err := filepath.Abs(rom); err == nil {
@@ -171,10 +171,10 @@ func ecrireConfigCopie(chemin string, cfg *Config) error {
 // reçoit la même Clé sur chaque PC ; une Clé déjà prise par un autre alias en donne une autre.
 func ajouterAlias(cfg *Config, systeme, nom string) (string, error) {
 	if formesCle[systeme] == nil {
-		return "", fmt.Errorf(tr("les jeux %s n'ont pas d'alias", "%s games have no alias"), systeme)
+		return "", fmt.Errorf(tr("Les jeux %s n'ont pas d'alias.", "%s games don't use aliases."), systeme)
 	}
 	if strings.TrimSpace(nom) == "" || strings.ContainsAny(nom, "=\r\n") {
-		return "", fmt.Errorf(tr("nom de ROM invalide pour un alias : « %s »", "invalid ROM name for an alias: \"%s\""), nom)
+		return "", fmt.Errorf(tr("Ce nom de ROM ne peut pas servir d'alias : « %s »", "This ROM name can't be used as an alias: \"%s\""), nom)
 	}
 	if a := strings.ToUpper(cfg.Alias[nom]); formesCle[systeme].MatchString(a) {
 		return a, nil
@@ -280,8 +280,8 @@ func (s *Session) modifierAttente(f func([]enAttente) []enAttente) error {
 			return e
 		}
 		s.journal("en-attente.json illisible, mis de côté dans " + cote + " : " + err.Error())
-		notifier(fmt.Sprintf(tr("La liste des envois en attente était illisible. Elle est gardée dans %s. Ses jeux partiront à leur prochain lancement.",
-			"The list of pending uploads could not be read. It is kept in %s. Its games will be sent at their next launch."), cote))
+		notifier(fmt.Sprintf(tr("La liste des envois en attente était illisible. Elle a été mise de côté dans %s, et ses jeux seront envoyés à leur prochain lancement.",
+			"The list of pending uploads couldn't be read. It was set aside in %s, and its games will be uploaded the next time you start them."), cote))
 		l = nil
 	}
 	err := ecrireJSON(s.cheminAttente(), f(l), true)

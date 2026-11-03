@@ -32,7 +32,7 @@ func sramDSV(brut []byte) ([]byte, error) {
 	n := len(brut) - piedDSV
 	if n < 0 || string(brut[len(brut)-len(cookieDSV):]) != cookieDSV || binary.LittleEndian.Uint32(brut[n+86:]) != uint32(n) ||
 		binary.LittleEndian.Uint32(brut[n+102:]) != 0 {
-		return nil, errors.New(tr("pied de page DeSmuME absent ou inconnu", "DeSmuME footer missing or unknown"))
+		return nil, errors.New(tr("fin de fichier DeSmuME absente ou inconnue", "DeSmuME footer missing or unknown"))
 	}
 	return brut[:n], nil
 }
@@ -52,5 +52,5 @@ func dsv(sram, ancien []byte) ([]byte, error) {
 			return append(o, cookieDSV...), nil
 		}
 	}
-	return nil, fmt.Errorf(tr("taille de sauvegarde inconnue de DeSmuME : %d octets", "save size unknown to DeSmuME: %d bytes"), len(sram))
+	return nil, fmt.Errorf(tr("DeSmuME ne connaît pas cette taille de sauvegarde : %d octets", "DeSmuME doesn't know this save size: %d bytes"), len(sram))
 }

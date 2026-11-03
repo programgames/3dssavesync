@@ -36,20 +36,20 @@ func vierge(o []byte) bool {
 // vierge (autre type de sauvegarde : rien n'est coupé), ou sans Version (taille inconnue) ; un .srm tout vierge passe.
 func sramSRM(coeur string, brut []byte, srv *Version) ([]byte, error) {
 	if len(brut) != srmFixes[coeur] {
-		return nil, fmt.Errorf(tr(".srm %s de %d octets, %d attendus", "%s .srm of %d bytes, %d expected"), coeur, len(brut), srmFixes[coeur])
+		return nil, fmt.Errorf(tr("taille du .srm %s inattendue : %d octets au lieu de %d", "unexpected %s .srm size: %d bytes instead of %d"), coeur, len(brut), srmFixes[coeur])
 	}
 	if srv == nil {
 		if vierge(brut) {
 			return brut, nil
 		}
-		return nil, fmt.Errorf(tr("%s : taille de la sauvegarde inconnue tant que le serveur n'a pas ce jeu. Synchronisez-le d'abord depuis mGBA ou la 3DS",
-			"%s: save size unknown while the server does not have this game. Sync it first from mGBA or the 3DS"), coeur)
+		return nil, fmt.Errorf(tr("%s : synchronisez d'abord ce jeu depuis mGBA ou la 3DS, pour que le serveur connaisse la taille de sa sauvegarde",
+			"%s: sync this game from mGBA or the 3DS first, so the server knows its save size"), coeur)
 	}
 	n := int(srv.Taille)
 	d := zoneSRM(coeur, n)
 	if n <= 0 || n > 0x20000 || !vierge(brut[:d]) || !vierge(brut[d+n:]) {
-		return nil, fmt.Errorf(tr("%s : le .srm a des données hors des %d octets de la version du serveur. Synchronisation refusée",
-			"%s: the .srm has data outside the %d bytes of the server version. Sync refused"), coeur, n)
+		return nil, fmt.Errorf(tr("%s : synchronisation arrêtée, le .srm contient des données au-delà des %d octets de la version du serveur",
+			"%s: sync stopped, the .srm has data beyond the %d bytes of the server version"), coeur, n)
 	}
 	return brut[d : d+n], nil
 }

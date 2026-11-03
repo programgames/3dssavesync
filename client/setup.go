@@ -107,8 +107,8 @@ func dossierPortable() string {
 func verifierPortable(d string) error {
 	f, err := os.CreateTemp(d, ".3dssavesync-essai-*")
 	if err != nil {
-		return fmt.Errorf(tr("Version portable : 3dssavesync ne peut pas écrire dans son dossier %s. Déplacez ce dossier vers un emplacement modifiable (pas Program Files, pas une clé en lecture seule), ou supprimez portable.txt pour garder les réglages dans le dossier de l'utilisateur.\nDétail : %v",
-			"Portable version: 3dssavesync cannot write to its folder %s. Move this folder to a writable place (not Program Files, not a read-only drive), or delete portable.txt to keep the settings in the user folder.\nDetail: %v"), d, err)
+		return fmt.Errorf(tr("Version portable : 3dssavesync ne peut pas écrire dans son dossier %s. Déplacez ce dossier là où vous pouvez écrire (pas dans Program Files ni sur une clé en lecture seule), ou supprimez portable.txt pour garder les réglages dans votre dossier utilisateur.\nDétail : %v",
+			"Portable version: 3dssavesync can't write to its folder %s. Move this folder somewhere you can write (not Program Files or a read-only drive), or delete portable.txt to keep the settings in your user folder.\nDetail: %v"), d, err)
 	}
 	f.Close()
 	os.Remove(f.Name())
@@ -160,8 +160,8 @@ func commandeUninstall(config string, oui bool) (int, error) {
 	if err := lireConfig(config, &cfg); err != nil {
 		return 1, err
 	}
-	if !oui && !q.oui(tr("Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau les jeux sans synchronisation ; vos sauvegardes ne changent pas.",
-		"Uninstall 3dssavesync? LaunchBox and ES-DE will start the games without sync again; your saves do not change."), false) {
+	if !oui && !q.oui(tr("Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau vos jeux sans synchronisation. Vos sauvegardes restent en place.",
+		"Uninstall 3dssavesync? LaunchBox and ES-DE will start your games without syncing again. Your saves stay where they are."), false) {
 		return 0, nil
 	}
 	lignes, err := desinstaller(&cfg, config)
@@ -201,11 +201,11 @@ func assistant(q *Questions, config string) error {
 	}
 	etapes := []string{"serveur", "installation", "emulateurs", "frontends"}
 	if trouvee {
-		q.dire("%s %s", tr("Configuration trouvée :", "Configuration found:"), config)
+		q.dire("%s %s", tr("Configuration actuelle :", "Current configuration:"), config)
 		q.dire("  1. %s", tr("Ajouter ou modifier un émulateur", "Add or change an emulator"))
-		q.dire("  2. %s", tr("Réparer la configuration des frontends", "Repair the frontend configuration"))
-		q.dire("  3. %s", tr("Changer le serveur ou le jeton", "Change the server or the token"))
-		q.dire("  4. %s", tr("Tout refaire (installation complète)", "Redo everything (full setup)"))
+		q.dire("  2. %s", tr("Réparer les frontends", "Repair frontends"))
+		q.dire("  3. %s", tr("Changer le serveur ou le jeton", "Change the server or token"))
+		q.dire("  4. %s", tr("Tout reconfigurer", "Set up everything again"))
 		q.dire("  5. %s", tr("Quitter", "Quit"))
 		switch q.texte(tr("Choix", "Choice"), "1") {
 		case "1":
@@ -271,7 +271,7 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 	icone := len(args) > 0 && args[0] == "tray"
 	if icone { // arrêtée par demarrageAutomatique : elle redémarre avec les nouveaux réglages
 		if err := lancerServeur(lanceur, args); err != nil {
-			q.dire("%s %s", tr("L'icône près de l'horloge ne démarre pas :", "The icon near the clock does not start:"), texteErreur(err))
+			q.dire("%s %s", tr("L'icône près de l'horloge n'a pas pu démarrer :", "The icon near the clock couldn't start:"), texteErreur(err))
 		}
 	}
 	if cfg.ServeurLocal == nil {
@@ -279,12 +279,12 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 	}
 	if testerServeur(cfg) != nil {
 		if runtime.GOOS == "windows" {
-			q.dire("%s", tr("Windows peut demander d'autoriser 3dssavesync sur le réseau : acceptez pour les réseaux privés.",
-				"Windows may ask to allow 3dssavesync on the network: accept for private networks."))
+			q.dire("%s", tr("Si Windows demande d'autoriser 3dssavesync sur le réseau, acceptez pour les réseaux privés.",
+				"If Windows asks to allow 3dssavesync on the network, allow it for private networks."))
 		}
 		if !icone { // l'icône vient de démarrer : son serveur local répond dans un instant
 			if err := lancerServeur(lanceur, args); err != nil {
-				return fmt.Errorf(tr("lancement du serveur local impossible : %s", "cannot start the local server: %s"), texteErreur(err))
+				return fmt.Errorf(tr("impossible de lancer le serveur local : %s", "couldn't start the local server: %s"), texteErreur(err))
 			}
 		}
 		for i := 0; i < 20 && testerServeur(cfg) != nil; i++ {
@@ -292,7 +292,7 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 		}
 	}
 	if err := testerServeur(cfg); err != nil {
-		return fmt.Errorf(tr("le serveur local ne répond pas. %s", "the local server does not answer. %s"), texteErreur(err))
+		return fmt.Errorf(tr("le serveur local ne répond pas. %s", "the local server isn't responding. %s"), texteErreur(err))
 	}
 	q.dire("%s", tr("Serveur local en marche.", "Local server running."))
 	return nil
@@ -302,16 +302,16 @@ func serveurLocal(q *Questions, cfg *Config, config string) error {
 func dire3DS(q *Questions, cfg *Config) {
 	url, autres := adresse3DS(cfg)
 	if url == "" {
-		url = tr("adresse du PC introuvable : vérifiez que le PC est relié à la box", "PC address not found: check that the PC is connected to the router")
+		url = tr("impossible de trouver l'adresse du PC sur le réseau. Vérifiez que le PC est connecté à la box", "couldn't find the PC's network address. Check that the PC is connected to the router")
 	}
-	q.dire("\n%s", tr("Sur la 3DS (3dssavesync, SELECT) :", "On the 3DS (3dssavesync, SELECT):"))
+	q.dire("\n%s", tr("Sur la 3DS, ouvrez 3dssavesync, appuyez sur SELECT et entrez :", "On the 3DS, open 3dssavesync, press SELECT and enter:"))
 	q.dire("  %s %s", tr("Serveur :", "Server:"), url)
 	q.dire("  %s %s", tr("Jeton :", "Token:"), cfg.Jeton)
 	if len(autres) > 0 {
-		q.dire("  %s %s", tr("Autres adresses, si la 3DS ne se connecte pas :", "Other addresses, if the 3DS does not connect:"), strings.Join(autres, ", "))
+		q.dire("  %s %s", tr("Si la 3DS ne se connecte pas, essayez :", "If the 3DS can't connect, try:"), strings.Join(autres, ", "))
 	}
-	q.dire("%s", tr("Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur).",
-		"Keep this token private. Never open this port on the Internet (router)."))
+	q.dire("%s", tr("Gardez ce jeton pour vous. N'ouvrez jamais ce port sur Internet depuis votre box.",
+		"Keep this token private. Never open this port to the Internet on your router."))
 }
 
 // config.json : copie datée de l'ancien, puis écriture vérifiée. Rien si rien n'a changé.
@@ -326,7 +326,7 @@ func enregistrerConfig(q *Questions, chemin string, cfg *Config) error {
 	if err := ecrireJSON(chemin, cfg, true); err != nil {
 		return err
 	}
-	q.dire("%s %s", tr("Configuration écrite :", "Configuration written:"), chemin)
+	q.dire("%s %s", tr("Configuration enregistrée :", "Configuration saved:"), chemin)
 	return nil
 }
 
@@ -334,10 +334,10 @@ func jsonDe(c *Config) string { o, _ := json.Marshal(c); return string(o) }
 
 func etapeServeur(q *Questions, cfg *Config) error {
 	q.dire("\n== %s ==", tr("Serveur", "Server"))
-	q.dire("  1. %s", tr("Serveur personnel (Docker, adresse https://…) : synchronisation partout",
-		"Personal server (Docker, https://… address): sync anywhere"))
-	q.dire("  2. %s", tr("Serveur local sur ce PC : à la maison, PC allumé, rien d'autre à installer",
-		"Local server on this PC: at home, PC on, nothing else to install"))
+	q.dire("  1. %s", tr("Serveur personnel (Docker, adresse https://…) : synchronisation de n'importe où",
+		"Personal server (Docker, https://… address): sync from anywhere"))
+	q.dire("  2. %s", tr("Serveur local sur ce PC : rien à installer, synchronisation à la maison quand le PC est allumé",
+		"Local server on this PC: nothing to install, syncs at home while the PC is on"))
 	defaut := "1"
 	if cfg.ServeurLocal != nil || cfg.URL == "" { // premier lancement : serveur local, rien d'autre à installer
 		defaut = "2"
@@ -368,21 +368,21 @@ func etapeServeur(q *Questions, cfg *Config) error {
 	}
 	for {
 		cfg.URL = strings.TrimRight(q.texte(tr("Adresse du serveur (https://…)", "Server address (https://…)"), cfg.URL), "/")
-		question := tr("Jeton (la saisie reste cachée)", "Token (input stays hidden)")
+		question := tr("Jeton (rien ne s'affiche pendant la saisie)", "Token (nothing shows as you type)")
 		if cfg.Jeton != "" {
-			question = tr("Jeton (Entrée = garder l'actuel)", "Token (Enter = keep the current one)")
+			question = tr("Jeton (Entrée pour garder l'actuel)", "Token (Enter to keep the current one)")
 		}
 		if j := q.secret(question); j != "" {
 			cfg.Jeton = j
 		}
 		err := testerServeur(cfg)
 		if err == nil {
-			q.dire("%s", tr("Connexion réussie.", "Connection OK."))
+			q.dire("%s", tr("Connexion réussie.", "Connected."))
 			return nil
 		}
 		q.dire("%s", texteErreur(err))
 		if !q.oui(tr("Réessayer ?", "Try again?"), true) {
-			return fmt.Errorf("%s", tr("serveur injoignable : rien n'est écrit", "server unreachable: nothing is written"))
+			return fmt.Errorf("%s", tr("serveur injoignable, la configuration n'est pas enregistrée", "server unreachable, so the configuration wasn't saved"))
 		}
 	}
 }
@@ -406,7 +406,7 @@ func etapeInstallation(q *Questions, cfg *Config, config string) {
 	courant, cible := executable(), emplacementInstalle()
 	cfg.Lanceur = courant
 	if courant == "" || strings.EqualFold(filepath.Clean(courant), filepath.Clean(cible)) {
-		q.dire("%s %s", tr("Exe en place :", "Exe in place:"), courant)
+		q.dire("%s %s", tr("Programme déjà installé :", "Program already installed:"), courant)
 		return
 	}
 	if !q.oui(fmt.Sprintf(tr("Copier le programme dans %s ?", "Copy the program to %s?"), cible), true) {
@@ -425,7 +425,7 @@ func installerExe(cfg *Config, dossier string) string {
 	}
 	if courant == "" || strings.EqualFold(filepath.Clean(courant), filepath.Clean(cible)) {
 		cfg.Lanceur = courant
-		return tr("Exe en place : ", "Exe in place: ") + courant
+		return tr("Programme déjà installé : ", "Program already installed: ") + courant
 	}
 	arreterTray(dossier) // échec : l'exe installé reste peut-être pris, le message de la copie dit quoi faire
 	o, err := os.ReadFile(courant)
@@ -438,14 +438,14 @@ func installerExe(cfg *Config, dossier string) string {
 			os.Chmod(cible+".3dssavesync-tmp", 0o755)
 			if err = renommer(cible+".3dssavesync-tmp", cible); err != nil { // exe installé en marche
 				os.Remove(cible + ".3dssavesync-tmp")
-				return tr("Copie du programme impossible : le programme installé tourne encore. Quittez l'icône près de l'horloge et fermez les autres fenêtres de 3dssavesync, puis enregistrez de nouveau.",
-					"Copying the program failed: the installed program is still running. Quit the icon near the clock and close the other 3dssavesync windows, then save again.") +
+				return tr("Impossible de copier le programme : la version installée est encore ouverte. Quittez l'icône près de l'horloge, fermez les autres fenêtres de 3dssavesync et enregistrez de nouveau.",
+					"Couldn't copy the program: the installed version is still running. Quit the icon near the clock, close the other 3dssavesync windows and save again.") +
 					"\n" + tr("Détail : ", "Detail: ") + err.Error()
 			}
 		}
 	}
 	if err != nil {
-		return tr("Copie du programme impossible (il tourne peut-être) : ", "Copying the program failed (it may be running): ") + texteErreur(err)
+		return tr("Impossible de copier le programme, il est peut-être encore ouvert : ", "Couldn't copy the program, it may still be running: ") + texteErreur(err)
 	}
 	cfg.Lanceur = cible
 	return tr("Programme copié : ", "Program copied: ") + cible
@@ -607,7 +607,7 @@ func etapeEmulateurs(q *Questions, cfg *Config) {
 	sort.Strings(configures)
 	for _, n := range configures {
 		e := cfg.Emulateurs[n]
-		if q.oui(fmt.Sprintf(tr("%s est configuré (%s). Modifier ses dossiers ?", "%s is set up (%s). Change its folders?"), n, e.Exe), false) {
+		if q.oui(fmt.Sprintf(tr("%s est déjà configuré (%s). Modifier ses dossiers ?", "%s is already set up (%s). Change its folders?"), n, e.Exe), false) {
 			ajouterEmulateur(q, cfg, Trouve{Profil: n, Exe: e.Exe, Processus: e.Processus}, false)
 		}
 	}
@@ -616,11 +616,11 @@ func etapeEmulateurs(q *Questions, cfg *Config) {
 		switch {
 		case a != nil && strings.EqualFold(a.Exe, t.Exe):
 		case a != nil:
-			if q.oui(fmt.Sprintf(tr("Autre installation de %s trouvée (%s) : %s. L'utiliser à la place de %s ?", "Another %s install found (%s): %s. Use it instead of %s?"),
+			if q.oui(fmt.Sprintf(tr("Une autre installation de %s a été trouvée (%s) : %s. L'utiliser à la place de %s ?", "Found another %s install (%s): %s. Use it instead of %s?"),
 				t.Profil, t.Source, t.Exe, a.Exe), false) {
 				ajouterEmulateur(q, cfg, t, true)
 			}
-		case q.oui(fmt.Sprintf(tr("%s trouvé (%s) : %s. L'utiliser ?", "%s found (%s): %s. Use it?"), t.Profil, t.Source, t.Exe), true):
+		case q.oui(fmt.Sprintf(tr("%s trouvé (%s) : %s. L'utiliser ?", "Found %s (%s): %s. Use it?"), t.Profil, t.Source, t.Exe), true):
 			ajouterEmulateur(q, cfg, t, false)
 		}
 	}
@@ -658,8 +658,8 @@ func ajouterEmulateur(q *Questions, cfg *Config, t Trouve, remplacer bool) {
 	if nom == "retroarch" && len(e.Coeurs) == 0 {
 		e.Coeurs = coeursRetroArch(t.Exe)
 		if len(e.Coeurs) == 0 {
-			q.dire("%s", tr("Aucun cœur géré trouvé (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA) : installez-les dans RetroArch, puis relancez l'assistant.",
-				"No supported core found (melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA): install them in RetroArch, then run the assistant again."))
+			q.dire("%s", tr("Aucun cœur compatible trouvé dans RetroArch. Installez au moins l'un de ceux-ci, puis relancez l'assistant : melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA.",
+				"No supported core found in RetroArch. Install at least one of these, then run the assistant again: melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA."))
 			return
 		}
 	}
@@ -684,7 +684,7 @@ func ajouterEmulateur(q *Questions, cfg *Config, t Trouve, remplacer bool) {
 			e.Sauvegardes[s] = r
 		}
 		if s != "3DS" {
-			if r := q.texte(fmt.Sprintf(tr("Dossier des ROM %s pour la commande launch (Entrée = aucun)", "%s ROM folder for the launch command (Enter = none)"), s), e.Roms[s]); r != "" {
+			if r := q.texte(fmt.Sprintf(tr("Dossier des ROM %s, pour la commande launch (Entrée pour passer)", "%s ROM folder, for the launch command (Enter to skip)"), s), e.Roms[s]); r != "" {
 				if e.Roms == nil {
 					e.Roms = map[string]string{}
 				}
@@ -720,11 +720,11 @@ func etapeFrontends(q *Questions, cfg *Config) {
 		if d == "" {
 			d = trouverLaunchBox()
 		}
-		d = q.texte(tr("Dossier de LaunchBox (Entrée = pas de LaunchBox)", "LaunchBox folder (Enter = no LaunchBox)"), d)
+		d = q.texte(tr("Dossier de LaunchBox (Entrée si vous n'utilisez pas LaunchBox)", "LaunchBox folder (Enter if you don't use LaunchBox)"), d)
 		if d != "" && existe(filepath.Join(d, "Data", "Emulators.xml")) {
 			cfg.Frontends["launchbox"] = d
 		} else if d != "" {
-			q.dire("%s", tr("Emulators.xml introuvable dans ce dossier : LaunchBox est ignoré.", "Emulators.xml not found in this folder: LaunchBox is skipped."))
+			q.dire("%s", tr("LaunchBox introuvable dans ce dossier, il est ignoré.", "LaunchBox wasn't found in this folder, so it's skipped."))
 		}
 	}
 	esde := cfg.Frontends["esde"]
@@ -739,12 +739,12 @@ func etapeFrontends(q *Questions, cfg *Config) {
 		if !lb && !es {
 			break
 		}
-		q.texte(tr("Fermez LaunchBox, BigBox et ES-DE, puis appuyez sur Entrée", "Close LaunchBox, BigBox and ES-DE, then press Enter"), "")
+		q.texte(tr("Fermez LaunchBox, BigBox et ES-DE, et appuyez sur Entrée", "Close LaunchBox, BigBox and ES-DE, and press Enter"), "")
 	}
 	for _, l := range reparer(cfg, lanceurDe(cfg)) {
 		q.dire("- %s", l)
 	}
-	if !q.oui(tr("Créer un raccourci par émulateur (synchronise tout, lance l'émulateur) ?", "Create one shortcut per emulator (syncs everything, starts the emulator)?"), true) {
+	if !q.oui(tr("Créer un raccourci par émulateur ? Il synchronise tous les jeux et ouvre l'émulateur.", "Create a shortcut for each emulator? It syncs all games and opens the emulator."), true) {
 		return
 	}
 	creerRaccourcis(q, cfg)
@@ -771,15 +771,15 @@ func creerRaccourcis(q *Questions, cfg *Config) {
 	f, err := creerRaccourci(tr("3dssavesync réglages", "3dssavesync settings"), lanceur, []string{"setup"}, false)
 	afficherRaccourci(q, f, err)
 	if len(sansRoms) > 0 {
-		q.dire(tr("Pas de raccourci pour %s : sans dossier de jeux, il ne synchroniserait rien. Lancez ces jeux depuis votre frontend (LaunchBox…).",
-			"No shortcut for %s: without a games folder, it would sync nothing. Start these games from your frontend (LaunchBox…)."), strings.Join(sansRoms, ", "))
+		q.dire(tr("Pas de raccourci pour %s, car aucun dossier de jeux n'est indiqué. Lancez ces jeux depuis votre frontend.",
+			"No shortcut for %s, because no games folder is set. Start these games from your frontend."), strings.Join(sansRoms, ", "))
 	}
 }
 
 func afficherRaccourci(q *Questions, f string, err error) {
 	if err != nil {
-		q.dire("- %s %s", tr("Raccourci impossible :", "Shortcut failed:"), texteErreur(err))
+		q.dire("- %s %s", tr("Impossible de créer le raccourci :", "Couldn't create the shortcut:"), texteErreur(err))
 		return
 	}
-	q.dire("- %s %s", tr("Raccourci :", "Shortcut:"), f)
+	q.dire("- %s %s", tr("Raccourci créé :", "Shortcut created:"), f)
 }

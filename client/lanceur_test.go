@@ -344,9 +344,9 @@ func TestLanceur(t *testing.T) {
 	verifier(localHash() == hachage(v4), "le PC garde sa Sauvegarde")
 	verifier(hachage(courante("IRBF")) == hachage(v5), "le serveur garde la sienne")
 
-	t.Log("Conflit avant la partie, Prendre le serveur")
+	t.Log("Conflit avant la partie, Prendre celle du serveur")
 	reinitialiser()
-	reponses = []string{"Prendre le serveur"}
+	reponses = []string{"Prendre celle du serveur"}
 	run(rom)
 	verifier(joue, "melonDS lancé")
 	verifier(localHash() == hachage(v5), "le PC a la Version du serveur")
@@ -356,12 +356,12 @@ func TestLanceur(t *testing.T) {
 	}
 	verifier(copie, "Copie de sécurité de la Sauvegarde du PC")
 
-	t.Log("Conflit avant la partie, Garder le PC : il envoie la sienne")
+	t.Log("Conflit avant la partie, Garder celle du PC : il envoie la sienne")
 	reinitialiser()
 	v6, v7 := suite(6, 205), suite(7, 206)
 	ecrire(t, noire, v6)
 	envoi3ds("IRBF", v7, v5)
-	reponses = []string{"Garder le PC"}
+	reponses = []string{"Garder celle du PC"}
 	run(rom)
 	verifier(joue, "melonDS lancé")
 	verifier(hachage(courante("IRBF")) == hachage(v6), "le serveur a la Sauvegarde du PC")
@@ -377,11 +377,11 @@ func TestLanceur(t *testing.T) {
 	verifier(hachage(courante("IRBF")) == hachage(v8), "le serveur garde la Version de la 3DS")
 	verifier(localHash() == hachage(v9), "le PC garde la Sauvegarde jouée")
 
-	t.Log("Conflit après la partie, Garder le PC : il envoie la sienne")
+	t.Log("Conflit après la partie, Garder celle du PC : il envoie la sienne")
 	reinitialiser()
 	v10, v11 := suite(10, 209), suite(11, 210)
 	partie = func() { envoi3ds("IRBF", v10, v8); ecrire(t, noire, v11) }
-	reponses = []string{"Prendre le serveur", "Garder le PC"}
+	reponses = []string{"Prendre celle du serveur", "Garder celle du PC"}
 	run(rom)
 	verifier(len(questions) == 2, "deux questions de Conflit")
 	verifier(hachage(courante("IRBF")) == hachage(v11), "le serveur a la Sauvegarde du PC")
@@ -415,14 +415,14 @@ func TestLanceur(t *testing.T) {
 	reponses = []string{"", ""}
 	run(rom)
 	verifier(joue, "melonDS lancé")
-	verifier(contient(notifications, "rien n'est remplacé"), "notification")
+	verifier(contient(notifications, "rien n'a été remplacé"), "notification")
 	verifier(localHash() == hachage(v12) && hachage(courante("IRBF")) == hachage(v13), "rien n'a bougé")
 
 	t.Log("melonDS ouvert hors de 3dssavesync : son jeu est inconnu, refus")
 	reinitialiser()
 	actifs = 1
 	verifier(run(rom) == 1, "code de sortie 1")
-	verifier(len(questions) == 0 && contient(notifications, "hors de 3dssavesync"), "notification, aucune fenêtre")
+	verifier(len(questions) == 0 && contient(notifications, "sans passer par 3dssavesync"), "notification, aucune fenêtre")
 	verifier(strings.Contains(string(lire(filepath.Join(tmp, "cfg", "3dssavesync.log"))), "refus"), "le refus est écrit dans 3dssavesync.log")
 	verifier(!joue, "melonDS non lancé")
 
@@ -444,7 +444,7 @@ func TestLanceur(t *testing.T) {
 	reinitialiser()
 	actifs = 1
 	f = verrou("IRBF")
-	verifier(run(rom) == 1 && !joue && contient(notifications, "déjà en cours"), "refus du même jeu")
+	verifier(run(rom) == 1 && !joue && contient(notifications, "est déjà ouvert dans"), "refus du même jeu")
 	os.Remove(f)
 
 	t.Log("Verrou d'un Lanceur disparu (plantage) : retiré ; l'instance est alors inconnue, refus")
@@ -456,7 +456,7 @@ func TestLanceur(t *testing.T) {
 	}
 	mort := filepath.Join(tmp, "cfg", "en-cours", fmt.Sprintf("inutilise.%d", fini.Process.Pid))
 	ecrire(t, mort, []byte("XXXX"))
-	verifier(run(rom) == 1 && !joue && !existe(mort) && contient(notifications, "hors de 3dssavesync"), "verrou périmé retiré, refus")
+	verifier(run(rom) == 1 && !joue && !existe(mort) && contient(notifications, "sans passer par 3dssavesync"), "verrou périmé retiré, refus")
 
 	t.Log("Homebrew (code ####) : partie sans Synchronisation")
 	reinitialiser()
@@ -474,7 +474,7 @@ func TestLanceur(t *testing.T) {
 	avant = codes()
 	verifier(run("--emulator", "melonds", sept) == 0 && joue && commandeLancee[len(commandeLancee)-1] == sept, "melonDS lancé avec le .7z")
 	verifier(codes() == avant && len(questions) == 0 && len(notifications) == 1 &&
-		contient(notifications, "format de ROM non lu (.7z)"), "rien envoyé, une seule notification")
+		contient(notifications, "ne sait pas lire ce format de ROM (.7z)"), "rien envoyé, une seule notification")
 	reinitialiser()
 	verifier(run(sept) == 1 && !joue, "sans --emulator et plusieurs émulateurs : refus")
 
@@ -807,24 +807,24 @@ func TestClasser(t *testing.T) {
 	}
 	transport := func(err error) error { return &neturl.Error{Op: "Get", URL: "https://x/saves", Err: err} }
 	l := []cas{
-		{&erreurHTTP{"GET /saves", 401}, "Le serveur répond, mais refuse ce jeton. Copiez le jeton exact du serveur.", true},
-		{&erreurHTTP{"GET /saves", 404}, "Cette adresse ne mène pas à un serveur 3dssavesync. Vérifiez l'adresse.", true},
-		{&erreurHTTP{"PUT /saves/IRBF", 413}, "sauvegarde trop grande pour le serveur", false},
-		{&erreurHTTP{"PUT /saves/IRBF", 400}, "le serveur refuse cette sauvegarde", false},
-		{&erreurHTTP{"GET /saves", 502}, "Le serveur a un problème interne.", true},
-		{&erreurHTTP{"GET /saves", 418}, "Réponse inattendue du serveur.", true},
-		{transport(&net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}), "Adresse du serveur introuvable", true},
+		{&erreurHTTP{"GET /saves", 401}, "Le serveur refuse ce jeton. Recopiez le jeton exact du serveur.", true},
+		{&erreurHTTP{"GET /saves", 404}, "Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la.", true},
+		{&erreurHTTP{"PUT /saves/IRBF", 413}, "sauvegarde trop grosse pour le serveur", false},
+		{&erreurHTTP{"PUT /saves/IRBF", 400}, "le serveur a refusé cette sauvegarde", false},
+		{&erreurHTTP{"GET /saves", 502}, "Le serveur a rencontré une erreur.", true},
+		{&erreurHTTP{"GET /saves", 418}, "Le serveur a répondu de façon inattendue.", true},
+		{transport(&net.DNSError{Err: "no such host", Name: "x", IsNotFound: true}), "Serveur introuvable.", true},
 		{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}), "Le serveur refuse la connexion", true},
-		{transport(os.ErrDeadlineExceeded), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
-		{transport(io.ErrUnexpectedEOF), "Le serveur ne répond pas (pas d'Internet, ou adresse fausse).", true},
-		{transport(&tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}), "certificat du serveur invalide", true},
+		{transport(os.ErrDeadlineExceeded), "Le serveur ne répond pas. Vérifiez votre connexion Internet", true},
+		{transport(io.ErrUnexpectedEOF), "Le serveur ne répond pas. Vérifiez votre connexion Internet", true},
+		{transport(&tls.CertificateVerificationError{Err: x509.UnknownAuthorityError{}}), "Le certificat du serveur n'est pas valide.", true},
 		{fmt.Errorf("copie de sécurité impossible : %w", &fs.PathError{Op: "write", Path: "c.sav", Err: syscall.ENOSPC}), "disque plein", false},
 		{&fs.PathError{Op: "open", Path: "x/a.sav", Err: fs.ErrPermission}, "accès refusé à x/a.sav", false},
 		{errors.New("jeu jamais lancé dans Azahar"), "jeu jamais lancé dans Azahar", false},
 	}
 	if runtime.GOOS == "windows" {
 		l = append(l,
-			cas{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier : fermez l'émulateur", false},
+			cas{&fs.PathError{Op: "open", Path: "a.sav", Err: syscall.Errno(32)}, "un autre programme utilise ce fichier. Fermez l'émulateur", false},
 			cas{&os.LinkError{Op: "rename", Old: "a.tmp", New: "a.sav", Err: syscall.Errno(112)}, "disque plein", false},
 			cas{transport(&net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connectex", syscall.Errno(10061))}), "Le serveur refuse la connexion", true})
 	}

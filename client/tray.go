@@ -45,10 +45,10 @@ type ElementMenu struct {
 func menuTray(attente int, serveur, maj string) []ElementMenu {
 	m := []ElementMenu{{tr("Ouvrir les réglages", "Open settings"), "reglages"}}
 	if maj != "" {
-		m = append(m, ElementMenu{fmt.Sprintf(tr("Version %s disponible : mettre à jour", "Version %s available: update"), maj), "reglages"})
+		m = append(m, ElementMenu{fmt.Sprintf(tr("Mettre à jour vers la version %s", "Update to version %s"), maj), "reglages"})
 	}
 	if attente > 0 {
-		m = append(m, ElementMenu{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Send now (%d pending)"), attente), "envoyer"})
+		m = append(m, ElementMenu{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Upload now (%d pending)"), attente), "envoyer"})
 	}
 	if serveur != "" {
 		m = append(m, ElementMenu{serveur, ""})
@@ -89,11 +89,11 @@ func envoyerMaintenant(config string) string {
 	err = s.reprendre()
 	reste := nombreEnAttente(s.dossier)
 	if reste == 0 {
-		return fmt.Sprintf(tr("Envois en attente terminés : %d sauvegarde(s).", "Pending uploads done: %d save(s)."), avant)
+		return fmt.Sprintf(tr("Sauvegardes envoyées : %d", "Saves uploaded: %d"), avant)
 	}
-	texte := fmt.Sprintf(tr("%d sauvegarde(s) toujours en attente. ", "%d save(s) still pending. "), reste)
+	texte := fmt.Sprintf(tr("Sauvegardes encore en attente : %d. ", "Saves still pending: %d. "), reste)
 	if err == nil { // jeu sauté : son émulateur est ouvert
-		return texte + tr("Fermez l'émulateur, puis recommencez.", "Close the emulator, then try again.")
+		return texte + tr("Fermez l'émulateur et réessayez.", "Close the emulator and try again.")
 	}
 	return texte + texteErreur(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
 }
@@ -127,13 +127,13 @@ func demarrageAutomatique(q *Questions, lanceur string, args []string, dossier s
 	if args != nil {
 		f, err := autostart(nomDemarrage, lanceur, args)
 		if err != nil { // l'ancienne entrée reste : mieux qu'aucune
-			q.dire("%s %s", tr("Démarrage automatique impossible :", "Autostart failed:"), texteErreur(err))
+			q.dire("%s %s", tr("Impossible d'activer le démarrage automatique :", "Couldn't turn on autostart:"), texteErreur(err))
 			return
 		}
-		q.dire("%s %s", tr("Démarrage automatique :", "Autostart:"), f)
+		q.dire("%s %s", tr("Démarrage automatique activé :", "Autostart on:"), f)
 	}
 	if err := retirerAutostart(args != nil); err != nil {
-		q.dire("%s %s", tr("Ancien démarrage automatique impossible à retirer :", "Cannot remove the old autostart:"), texteErreur(err))
+		q.dire("%s %s", tr("Impossible de retirer l'ancien démarrage automatique :", "Couldn't remove the old autostart:"), texteErreur(err))
 	}
 }
 
@@ -182,10 +182,10 @@ func arreterTray(dossier string) error {
 		return nil
 	}
 	if err == nil {
-		err = errors.New(f + tr(" : sans effet après 6 s", ": no effect after 6 s"))
+		err = errors.New(f + tr(" : toujours actif après 6 s", ": still running after 6 s"))
 	}
-	return fmt.Errorf("%s\n%s%v", tr("L'icône près de l'horloge ne s'arrête pas. Quittez-la : clic droit sur l'icône, Quitter.",
-		"The icon near the clock does not stop. Quit it: right-click the icon, Quit."), tr("Détail : ", "Detail: "), err)
+	return fmt.Errorf("%s\n%s%v", tr("L'icône près de l'horloge ne s'arrête pas. Faites un clic droit dessus et choisissez Quitter.",
+		"The icon near the clock won't stop. Right-click it and choose Quit."), tr("Détail : ", "Detail: "), err)
 }
 
 // surveillerArret : appelle quitter quand le fichier d'arrêt apparaît (il est retiré), jusqu'à la fin.
@@ -247,7 +247,7 @@ func commandeTray(config string) (int, error) {
 			_, err := commandeServe(config) // rend la main seulement sur une erreur, ou s'il tourne déjà ailleurs
 			if err != nil {
 				s.journal("tray : serveur local : " + err.Error())
-				notifier(tr("Le serveur local ne tourne pas : ", "The local server is not running: ") + texteErreur(err))
+				notifier(tr("Le serveur local ne fonctionne pas : ", "The local server isn't running: ") + texteErreur(err))
 				serveur.Lock()
 				serveur.err = err
 				serveur.Unlock()
@@ -283,7 +283,7 @@ func commandeTray(config string) (int, error) {
 		switch action {
 		case "reglages":
 			if err := ouvrirDetache(executable(), avecConfig([]string{"setup"}, config)); err != nil {
-				notifier(tr("Les réglages ne s'ouvrent pas. Ouvrez le raccourci « 3dssavesync réglages ».", "The settings do not open. Open the \"3dssavesync settings\" shortcut.") +
+				notifier(tr("Impossible d'ouvrir les réglages. Utilisez le raccourci « 3dssavesync réglages ».", "Couldn't open the settings. Use the \"3dssavesync settings\" shortcut.") +
 					"\n" + tr("Détail : ", "Detail: ") + err.Error())
 			}
 		case "envoyer":
@@ -312,7 +312,7 @@ func commandeTray(config string) (int, error) {
 	if cfg.ServeurLocal == nil {
 		return 1, err
 	}
-	notifier(err.Error() + "\n" + tr("Le serveur local continue de tourner.", "The local server keeps running."))
+	notifier(err.Error() + "\n" + tr("Le serveur local reste en marche.", "The local server is still running."))
 	<-fin
 	return 0, nil
 }

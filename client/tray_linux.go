@@ -181,10 +181,10 @@ func (m *menuDBus) AboutToShowGroup(ids []int32) ([]int32, []int32, *dbus.Error)
 // afficherIcone : inscrit l'icône auprès du StatusNotifierWatcher du bureau, puis sert ses appels jusqu'à la fin.
 func afficherIcone(menu func() []ElementMenu, choisir func(string), fin <-chan struct{}) error {
 	echec := func(err error) error {
-		return fmt.Errorf("%s\n%s%v", tr("L'icône près de l'horloge ne peut pas s'afficher : le bureau n'a pas de zone de notification compatible "+
-			"(GNOME : installez l'extension « AppIndicator and KStatusNotifierItem Support »). Pour ne plus voir ce message, décochez « Afficher l'icône près de l'horloge » dans les réglages.",
-			"The icon near the clock cannot be shown: the desktop has no compatible notification area "+
-				"(GNOME: install the \"AppIndicator and KStatusNotifierItem Support\" extension). To stop this message, untick \"Show the icon near the clock\" in the settings."),
+		return fmt.Errorf("%s\n%s%v", tr("Impossible d'afficher l'icône près de l'horloge : votre bureau n'a pas de zone de notification compatible. "+
+			"Sous GNOME, installez l'extension « AppIndicator and KStatusNotifierItem Support ». Pour ne plus voir ce message, décochez « Afficher l'icône près de l'horloge » dans les réglages.",
+			"Can't show the icon near the clock: your desktop has no compatible notification area. "+
+				"On GNOME, install the \"AppIndicator and KStatusNotifierItem Support\" extension. To stop seeing this message, untick \"Show the icon near the clock\" in the settings."),
 			tr("Détail : ", "Detail: "), err)
 	}
 	conn, err := dbus.ConnectSessionBus()

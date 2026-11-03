@@ -8,20 +8,20 @@ import (
 )
 
 func TestDialogues(t *testing.T) {
-	b := []string{"Prendre le serveur", "Garder le PC", "Ne pas jouer"}
+	b := []string{"Prendre celle du serveur", "Garder celle du PC", "Ne pas jouer"}
 	cas := []struct {
 		outil, sortie string
 		code          int
 		attendu       string
 	}{
-		{"zenity", "", 0, "Prendre le serveur"},
-		{"zenity", "Garder le PC\n", 1, "Garder le PC"},
+		{"zenity", "", 0, "Prendre celle du serveur"},
+		{"zenity", "Garder celle du PC\n", 1, "Garder celle du PC"},
 		{"zenity", "", 1, "Ne pas jouer"}, // Annuler ou fenêtre fermée : le plus prudent
 		{"zenity", "", 255, ""},           // erreur de zenity : aucune fenêtre (Q16)
-		{"kdialog", "", 1, "Garder le PC"},
+		{"kdialog", "", 1, "Garder celle du PC"},
 		{"kdialog", "", 2, "Ne pas jouer"},
 		{"kdialog", "", 254, ""},
-		{"osascript", "Garder le PC\n", 0, "Garder le PC"},
+		{"osascript", "Garder celle du PC\n", 0, "Garder celle du PC"},
 		{"osascript", "", 1, ""},
 	}
 	for _, c := range cas {
@@ -30,13 +30,13 @@ func TestDialogues(t *testing.T) {
 		}
 	}
 	z := strings.Join(argsDialogue("zenity", "<texte>", b), "|")
-	if z != "--question|--no-markup|--title=3dssavesync|--text=<texte>|--ok-label=Prendre le serveur|--cancel-label=Ne pas jouer|--extra-button=Garder le PC" {
+	if z != "--question|--no-markup|--title=3dssavesync|--text=<texte>|--ok-label=Prendre celle du serveur|--cancel-label=Ne pas jouer|--extra-button=Garder celle du PC" {
 		t.Errorf("zenity : %s", z)
 	}
-	if k := argsDialogue("kdialog", "t", b[1:]); strings.Join(k[2:], "|") != "--yesno|t|--yes-label|Garder le PC|--no-label|Ne pas jouer" {
+	if k := argsDialogue("kdialog", "t", b[1:]); strings.Join(k[2:], "|") != "--yesno|t|--yes-label|Garder celle du PC|--no-label|Ne pas jouer" {
 		t.Errorf("kdialog : %q", k)
 	}
-	if o := argsDialogue("osascript", "t", b); strings.Join(o[len(o)-4:], "|") != "t|Prendre le serveur|Garder le PC|Ne pas jouer" {
+	if o := argsDialogue("osascript", "t", b); strings.Join(o[len(o)-4:], "|") != "t|Prendre celle du serveur|Garder celle du PC|Ne pas jouer" {
 		t.Errorf("osascript : texte et boutons en arguments attendus : %q", o)
 	}
 }
