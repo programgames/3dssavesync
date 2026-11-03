@@ -26,30 +26,16 @@
 #include "text.h"
 #include "titles3ds.h"
 #include "update.h"
+#include "views.h"
 
 #define APP_DIR "sdmc:/3ds/3dssavesync"
 #define OLD_DIR "sdmc:/3ds/nds-save-sync" /* name before v3: settings and Bases taken over at first start */
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Saves of the mGBA forwarders */
 #define MAX_GAMES 512 /* ponytail: fixed array; beyond 512 ROMs, the next ones are skipped (and reported) */
-#define TOP_LINES 13 /* lines of a list on the top screen (footer below) */
 #define GITHUB_LATEST "https://api.github.com/repos/programgames/3dssavesync/releases/latest" /* updates (ADR 0021) */
 
-static int english; /* console language: French, otherwise English */
+int english; /* console language: French, otherwise English (views.h) */
 static u8 language;   /* CFG_LANGUAGE_*: title of the 3DS games in this language */
-#define T(fr, en) (english ? (en) : (fr))
-
-/* Palette: one meaning per color (yellow only says "To upload"). */
-#define WHITE RGB(0xE8EAED)
-#define GREY_LIGHT RGB(0x8A929C)  /* label */
-#define GREY_DARK RGB(0x5A626C)  /* disabled */
-#define C_GREEN RGB(0x4CC060)  /* In sync, success */
-#define C_YELLOW RGB(0xF0C040) /* To upload */
-#define C_CYAN RGB(0x40C8E8)  /* To download, version available */
-#define C_RED RGB(0xF05050) /* Conflict, failure */
-#define BAR RGB(0x1E242C)   /* button bar, footer of the top screen */
-#define CARD RGB(0x2A313B)   /* Conflict cards, message band */
-#define SEL RGB(0x263445)     /* selected line */
-#define ACCENT RGB(0x4A8FE0)  /* mark of the selected settings line */
 
 typedef struct {
     char key[KEY_MAX]; /* ADR 0007 */
@@ -143,11 +129,7 @@ static int list_cursor; /* game selected in the list: the top screen of dialogs 
 static int loaded;            /* 0 until the first read is done */
 static int server_read;    /* 0 if the last server read failed: the local games stay listed */
 static u64 read_time;      /* osGetTime() of the last successful server read */
-static void show_progress(int done, int total, const char *format, ...);
 static void draw_list_top(void);
-static void (*draw_current_top)(void) = draw_list_top; /* top screen during a question or a progress */
-static const char *operation; /* title of the long operation in progress (Sync all), otherwise NULL */
-static u32 progress_color = C_GREEN; /* progress bar: yellow Upload, cyan Download, green the rest */
 
 /* ---------------------------------------------------------------- files */
 
@@ -726,7 +708,7 @@ static u32 state_color(status_t s)
 }
 
 /* Dot and mark of the State: dark green for In sync, which does not catch the eye. */
-static u32 dot_color(status_t s) { return s == STATUS_IN_SYNC ? RGB(0x2F6B3A) : state_color(s); }
+static u32 dot_color(status_t s) { return s == STATUS_IN_SYNC ? DARK_GREEN : state_color(s); }
 
 /* One word per State, the same in the list, the counters and the details. */
 static const char *state_label(status_t s)
@@ -741,107 +723,24 @@ static const char *state_label(status_t s)
     }
 }
 
-/* Button bar at the bottom of the bottom screen: each button can also be tapped with the stylus. */
-typedef struct {
-    u32 button;
-    const char *text;
-    int actif; /* 0: greyed out (A with nothing to do) */
-} button_t;
-static struct { float x, y, l, h; u32 button; } buttons[8];
-static int button_count;
-#define BUTTON_HEIGHT 22
-#define BAR_Y (240 - 2 * BUTTON_HEIGHT - 4)
-#define BAR_TOP_1 (240 - BUTTON_HEIGHT - 7) /* top of the background of a one-line button bar */
-#define BAR_TOP_2 (240 - 2 * BUTTON_HEIGHT - 7)
-
-/* Glyph of the system font (U+E000 A, E001 B, E002 X, E003 Y) in the New 3DS color, or START / SELECT. */
-static const char *glyph(u32 t)
-{
-    return t == KEY_A ? "\xEE\x80\x80" : t == KEY_B ? "\xEE\x80\x81" : t == KEY_X ? "\xEE\x80\x82" : t == KEY_Y ? "\xEE\x80\x83" : t == KEY_START ? "START" : "SELECT";
-}
-
-/* START and SELECT: the word in a pill, 6 pixels wider. */
-static float glyph_width(u32 t)
-{
-    return t & (KEY_START | KEY_SELECT) ? screen_text_width(0.34f, glyph(t)) + 6 : screen_text_width(0.55f, glyph(t));
-}
-
-static float button_width(const button_t *t, float size) { return glyph_width(t->button) + 4 + screen_text_width(size, t->text); }
-
-/* One row of buttons from y; gap = 0: buttons spread over the whole width.
- * Smaller text if the row does not fit (margin included) with at least 10 pixels between two buttons. */
-static void draw_button_row(const button_t *t, int n, float y, float gap)
-{
-    float l[6], total, x = 6, size = 0.44f;
-    int i;
-    do {
-        size -= 0.02f;
-        for (total = 0, i = 0; i < n; i++) total += l[i] = button_width(&t[i], size);
-    } while (size > 0.34f && total * WIDTH_MARGIN + 10 * (n - 1) > 308);
-    if (!gap) gap = n > 1 ? (308 - total) / (n - 1) : 0;
-    for (i = 0; i < n; i++) {
-        u32 c = !t[i].actif ? GREY_DARK : t[i].button == KEY_A ? RGB(0xE04848) : t[i].button == KEY_B ? RGB(0xF0C030)
-              : t[i].button == KEY_X ? RGB(0x4080F0) : t[i].button == KEY_Y ? RGB(0x40B060) : GREY_LIGHT;
-        float g = glyph_width(t[i].button);
-        if (t[i].button & (KEY_START | KEY_SELECT)) { /* read as a button, not as text */
-            screen_rect(x, y + 4, g, 12, GREY_DARK);
-            screen_text(x + 3, y + 4, 0.34f, WHITE, 0, glyph(t[i].button));
-        } else screen_text(x, y + 2, 0.55f, c, 0, glyph(t[i].button));
-        screen_text(x + g + 4, y + 3, size, t[i].actif ? WHITE : GREY_DARK, 0, t[i].text);
-        if (button_count < 8) { /* touch area: the button and half of the gap on each side */
-            buttons[button_count].x = x - gap / 2;
-            buttons[button_count].y = y - 2;
-            buttons[button_count].l = l[i] + gap;
-            buttons[button_count].h = BUTTON_HEIGHT;
-            buttons[button_count++].button = t[i].button;
-        }
-        x += l[i] + gap;
-    }
-}
-
 /* Choice card of the Conflict screen (152 × 92), touchable: button and action, the version (same form on both
  * sides), what happens. */
 static void draw_choice_card(float x, float y, u32 button, const char *action, const char *version, const char *outcome)
 {
     screen_rect(x, y, 152, 92, CARD);
-    screen_text(x + 6, y + 4, 0.55f, button == KEY_A ? RGB(0xE04848) : RGB(0x4080F0), 0, glyph(button));
+    screen_text(x + 6, y + 4, 0.55f, button == KEY_A ? GLYPH_A : GLYPH_X, 0, glyph(button));
     screen_text(x + 24, y + 5, 0.45f, WHITE, 122, action);
     screen_lines(x + 6, y + 26, 0.42f, WHITE, 140, 3, version);
     screen_lines(x + 6, y + 68, 0.38f, GREY_LIGHT, 140, 2, outcome);
-    if (button_count < 8) {
-        buttons[button_count].x = x;
-        buttons[button_count].y = y;
-        buttons[button_count].l = 152;
-        buttons[button_count].h = 92;
-        buttons[button_count++].button = button;
-    }
-}
-
-/* Button under the stylus, 0 if none. */
-static u32 touched_button(void)
-{
-    touchPosition p;
-    int i;
-    hidTouchRead(&p);
-    for (i = 0; i < button_count; i++)
-        if (p.px >= buttons[i].x && p.px < buttons[i].x + buttons[i].l && p.py >= buttons[i].y && p.py < buttons[i].y + buttons[i].h)
-            return buttons[i].button;
-    return 0;
-}
-
-/* Background of the button bar: 1 or 2 lines, at the bottom of the bottom screen. */
-static void draw_bar_background(int lines)
-{
-    float y = 240 - lines * BUTTON_HEIGHT - 7;
-    screen_rect(0, y, 320, 240 - y, BAR);
+    touch_area(x, y, 152, 92, button);
 }
 
 /* Game icon at the top right of the bottom screen. */
 static void draw_game_icon(const game_t *j)
 {
-    u16 icon[48 * 48];
-    if (j->system == SYS_3DS ? title_icon(j->title, j->media, icon) == 0 : read_ds_icon(j, icon) == 0)
-        screen_icon(icon, j->system == SYS_3DS ? 48 : 32, j->system == SYS_3DS ? 48 : 32, 320 - 6 - 48, 6, j->system == SYS_3DS ? 1.0f : 1.5f);
+    u16 icon[ICON_SIZE * ICON_SIZE];
+    if (j->system == SYS_3DS && title_icon(j->title, j->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f);
+    else if (j->system != SYS_3DS && read_ds_icon(j, icon) == 0) screen_icon(icon, 32, 32, ICON_X, 6, 1.5f); /* 32 x 1.5 = 48 */
 }
 
 /* Top screen of the list: title and counters (those that do not fit are dropped, "in sync" first), the games, then
@@ -872,41 +771,41 @@ static void draw_list_top(void)
             l[count] = screen_text_width(0.42f, t[count]);
             count++;
         }
-        count = texts_fitting(l, count, 12, 400 - 6 - x);
-        for (x = 400 - 6, i = count - 1; i >= 0; i--) {
+        count = texts_fitting(l, count, 12, TOP_WIDTH - 6 - x);
+        for (x = TOP_WIDTH - 6, i = count - 1; i >= 0; i--) {
             x -= l[i];
             screen_text(x, 7, 0.42f, e[i] == STATUS_IN_SYNC ? C_GREEN : state_color(e[i]), 0, t[i]);
             x -= 12;
         }
     }
-    screen_rect(0, 23, 400, 1, GREY_DARK);
+    screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
 
     /* Columns measured on all State words: nothing is cut, and they do not move from one frame to the next. */
     for (i = 0; i < 6; i++)
         if (screen_text_width(0.42f, state_label(all[i])) > xs) xs = screen_text_width(0.42f, state_label(all[i]));
     xs = 18 + xs * WIDTH_MARGIN + 6;
     xn = xs + screen_text_width(0.42f, "GBA") * WIDTH_MARGIN + 8;
-    if (!visible_count) screen_paragraph(10, 40, 0.5f, GREY_LIGHT, 380, !loaded ? T("Lecture en cours…", "Reading…")
+    if (!visible_count) screen_paragraph(10, 40, 0.5f, GREY_LIGHT, TOP_WIDTH - 20, !loaded ? T("Lecture en cours…", "Reading…")
                                                               : server_read ? T("Aucun jeu à afficher.", "No game to show.")
                                                               : T("Serveur non lu, et aucune sauvegarde sur la 3DS.", "Server not read, and no save on the 3DS."));
     for (i = start; i < visible_count && i < start + TOP_LINES; i++) {
         game_t *k = &games[visible[i]];
-        float y = 27 + (i - start) * 15;
+        float y = LIST_Y + (i - start) * 15;
         if (i == cursor) {
-            screen_rect(0, y - 1, 400, 15, SEL);
+            screen_rect(0, y - 1, TOP_WIDTH, 15, SEL);
             screen_rect(0, y - 1, 2, 15, dot_color(k->status));
         }
         screen_rect(8, y + 5, 5, 5, dot_color(k->status));
         screen_text(18, y + 1, 0.42f, state_color(k->status), 0, state_label(k->status));
         screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, SYSTEM_NAMES[k->system]);
-        screen_text(xn, y, 0.5f, WHITE, 400 - xn - 8, k->short_name);
+        screen_text(xn, y, 0.5f, WHITE, TOP_WIDTH - xn - 8, k->short_name);
     }
     if (visible_count > TOP_LINES) { /* scroll bar */
         float h = 195.0f * TOP_LINES / visible_count;
-        screen_rect(396, 26 + (195.0f - h) * start / (visible_count - TOP_LINES), 2, h, GREY_DARK);
+        screen_rect(TOP_WIDTH - 4, 26 + (195.0f - h) * start / (visible_count - TOP_LINES), 2, h, GREY_DARK);
     }
 
-    screen_rect(0, 224, 400, 16, BAR);
+    screen_rect(0, FOOTER_Y, TOP_WIDTH, SCREEN_HEIGHT - FOOTER_Y, BAR);
     if (!loaded) snprintf(footer, sizeof footer, T("Serveur %.*s", "Server %.*s"), (int)strcspn(host, "/"), host);
     else if (server_read) {
         format_age((long)((osGetTime() - read_time) / 1000), english, 0, age, sizeof age);
@@ -917,17 +816,9 @@ static void draw_list_top(void)
     }
     pos[0] = '\0';
     if (visible_count) snprintf(pos, sizeof pos, "%d / %d", cursor + 1, visible_count);
-    x = 400 - 6 - screen_text_width(0.38f, pos);
-    screen_text(x, 226, 0.38f, GREY_LIGHT, 0, pos);
-    screen_text(8, 226, 0.38f, loaded && !server_read ? C_RED : GREY_LIGHT, x - 8 - 12, footer);
-}
-
-/* One "label  value" line of the details. */
-static float detail(float y, const char *label, const char *value)
-{
-    screen_text(8, y, 0.42f, GREY_LIGHT, 100, label);
-    screen_text(112, y, 0.42f, WHITE, 200, value);
-    return y + 15;
+    x = TOP_WIDTH - 6 - screen_text_width(0.38f, pos);
+    screen_text(x, FOOTER_Y + 2, 0.38f, GREY_LIGHT, 0, pos);
+    screen_text(8, FOOTER_Y + 2, 0.38f, loaded && !server_read ? C_RED : GREY_LIGHT, x - 8 - 12, footer);
 }
 
 /* Under the State word: why, and what A does. */
@@ -950,56 +841,33 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
     }
 }
 
-/* Message band, right above the button bar (bottom): color mark, text, then the technical line
- * in grey, both on several lines. It grows as high as the text needs, over the details:
- * the message stays whole (a bit smaller if needed; "…" only if it still overflows the screen). */
-static void draw_band(float bottom, const char *text, const char *technical, u32 color)
-{
-    float size, l1, l2 = technical && technical[0] ? screen_paragraph_height(0.38f, 302, technical) : 0, h;
-    int lines, room;
-    if (!text[0]) return;
-    for (size = 0.42f;; size = 0.36f) {
-        l1 = screen_paragraph_height(size, 302, "X");
-        lines = (int)(screen_paragraph_height(size, 302, text) / l1 + 0.5f);
-        room = (int)((bottom - 12 - l2) / l1); /* up to 6 px from the top of the screen */
-        if (lines <= room || size < 0.4f) break;
-    }
-    if (lines > room) lines = room < 1 ? 1 : room;
-    h = lines * l1 + l2 + 6;
-    screen_rect(0, bottom - h, 320, h, CARD);
-    screen_rect(0, bottom - h, 3, h, color);
-    screen_lines(10, bottom - h + 3, size, WHITE, 302, lines, text);
-    if (l2) screen_paragraph(10, bottom - h + 3 + lines * l1, 0.38f, GREY_LIGHT, 302, technical);
-}
-
 /* Message of the last action, in its band. */
 static void draw_message(float bottom) { draw_band(bottom, message, message_detail, message_color); }
 
+/* Bottom screen of the list: the selected game, the message, and the two-line bar. */
 static void draw_bottom(const game_t *j)
 {
     char t[600];
     float y = 6;
     int action = 0, gb = 0;
 
-    screen_bottom();
-    button_count = 0;
     if (j) {
         const char *b = base_of(&bases, j->key), *ext = strrchr(j->rom, '.');
         u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
         gb = j->system == SYS_GB || j->system == SYS_GBA;
         action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
         draw_game_icon(j);
-        y += screen_lines(8, y, 0.6f, WHITE, 250, 2, j->short_name);
+        y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
         /* System, and for GB/GBA the program whose save is synced (X changes it). */
         snprintf(t, sizeof t, "%s%s%s", j->system == SYS_DS ? "Nintendo DS" : j->system == SYS_GB ? (ext && !strcasecmp(ext, ".gbc") ? "Game Boy Color" : "Game Boy")
                                        : j->system == SYS_GBA ? "Game Boy Advance" : "Nintendo 3DS",
                  gb ? " \xC2\xB7 " : "", !gb ? "" : forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
-        screen_text(8, y + 1, 0.4f, GREY_LIGHT, 250, t);
-        y = y + 18 < 58 ? 58 : y + 20; /* under the icon */
+        screen_text(8, y + 1, 0.4f, GREY_LIGHT, ICON_X - 16, t);
+        y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;
         screen_rect(8, y + 2, 3, 13, c);
         screen_text(15, y, 0.5f, c, 0, state_label(j->status));
         y += 19;
-        y += screen_lines(8, y, 0.42f, WHITE, 304, j->status == STATUS_DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
+        y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
         if (j->status != STATUS_DUPLICATE) { /* a Duplicate has no save and no version to show */
             local_text(j, t, sizeof t);
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
@@ -1031,106 +899,16 @@ static void draw_bottom(const game_t *j)
                                         { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
         if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), forwarder(j) ? (j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++")
                                                                                       : T("le forwarder mGBA", "the mGBA forwarder"));
-        draw_button_row(game_buttons, gb ? 2 : 1, BAR_Y, 18);
-        draw_button_row(general, 4, BAR_Y + BUTTON_HEIGHT, 0);
+        draw_button_row(game_buttons, gb ? 2 : 1, BAR_ROW_2, 18);
+        draw_button_row(general, 4, BAR_ROW_2 + BUTTON_HEIGHT, 0);
     }
 }
 
 static void draw(void)
 {
-    screen_begin();
-    draw_list_top();
+    modal_begin(draw_list_top); /* not modal, but the same frame: two-line bar instead of modal_end */
     draw_bottom(visible_count ? &games[visible[list_cursor]] : NULL);
     screen_end();
-}
-
-/* Buttons pressed (with repeat for the arrows), or bar button under the stylus. B if the app closes. */
-static u32 read_keys(void)
-{
-    u32 k = 0;
-    while (!k && aptMainLoop()) {
-        gspWaitForVBlank();
-        hidScanInput();
-        k = hidKeysDownRepeat() & ~KEY_TOUCH;
-        if (hidKeysDown() & KEY_TOUCH) k |= touched_button();
-    }
-    return k ? k : KEY_B;
-}
-
-/* Progress of long loops: the top screen keeps its context (draw_current_top); at the bottom, the operation, the text
- * ("step\ngame": the step in grey, then the game) and a bar if total > 0.
- * At most 20 frames per second: a frame waits for the screen, and must not slow down the read. */
-static void show_progress(int done, int total, const char *format, ...)
-{
-    static u64 last_frame;
-    char t[300], *nl;
-    float y = 40;
-    va_list a;
-    u64 now = osGetTime();
-    if (total && done > 1 && done < total && now - last_frame < 50) return;
-    last_frame = now;
-    va_start(a, format);
-    vsnprintf(t, sizeof t, format, a);
-    va_end(a);
-    screen_begin();
-    draw_current_top();
-    screen_bottom();
-    if (operation) {
-        screen_text(16, y, 0.55f, WHITE, 288, operation);
-        y += 22;
-    }
-    if ((nl = strchr(t, '\n'))) {
-        *nl = '\0';
-        screen_text(16, y, 0.45f, GREY_LIGHT, 288, t);
-        screen_lines(16, y + 18, 0.55f, WHITE, 288, 2, nl + 1);
-    } else screen_lines(16, y, 0.55f, WHITE, 288, 3, t);
-    if (total > 0) {
-        char n[32];
-        screen_rect(16, 140, 288, 10, CARD);
-        screen_rect(16, 140, 288.0f * done / total, 10, progress_color);
-        snprintf(n, sizeof n, "%d / %d", done, total);
-        screen_text(16, 156, 0.45f, GREY_LIGHT, 0, n);
-        snprintf(n, sizeof n, T("%d %%", "%d%%"), (int)(100LL * done / total));
-        screen_text(304 - screen_text_width(0.45f, n), 156, 0.45f, GREY_LIGHT, 0, n);
-    }
-    screen_end();
-}
-
-/* Question on the bottom screen (the top screen keeps its context): the title is the question, the subtitle the game;
- * in the text, a "label\tvalue" line goes into the grid of the details; the warning goes into a red
- * band. 1 if A, the named action; 0 if B, Cancel. */
-static int confirm(const char *title, const char *subtitle, const char *text, const char *warning, const char *action)
-{
-    const button_t t[2] = { { KEY_A, action, 1 }, { KEY_B, T("Annuler", "Cancel"), 1 } };
-    for (;;) {
-        char line[300], *tab;
-        const char *s = text;
-        float y = 6;
-        u32 k;
-        screen_begin();
-        draw_current_top();
-        screen_bottom();
-        button_count = 0;
-        y += screen_lines(8, y, 0.55f, WHITE, 304, 2, title) + 2;
-        if (subtitle) y += screen_lines(8, y, 0.45f, GREY_LIGHT, 304, 1, subtitle);
-        y += 8;
-        while (*s) {
-            size_t n = strcspn(s, "\n");
-            snprintf(line, sizeof line, "%.*s", (int)n, s);
-            if ((tab = strchr(line, '\t'))) {
-                *tab = '\0';
-                y = detail(y, line, tab + 1);
-            } else y += line[0] ? screen_paragraph(8, y, 0.45f, WHITE, 304, line) : 6;
-            s += n + (s[n] == '\n');
-        }
-        if (warning) draw_band(BAR_TOP_1, warning, NULL, C_RED);
-        draw_bar_background(1);
-        draw_button_row(t, 2, 240 - BUTTON_HEIGHT - 4, 18);
-        screen_end();
-        k = read_keys();
-        if (k & KEY_A) return 1;
-        if (k & KEY_B) return 0;
-    }
 }
 
 static void edit_text(const char *title, char *value, size_t n, int masked)
@@ -1329,18 +1107,16 @@ static void install_update(const release_t *r)
         const button_t b = { KEY_A, T("Fermer 3dssavesync", "Close 3dssavesync"), 1 };
         char title[80];
         snprintf(title, sizeof title, T("Version %s installée", "Version %s installed"), r->version);
+        const char *restart = dsx ? T("3dssavesync va se fermer. Relancez-le depuis le Homebrew Launcher.", "3dssavesync will close. Start it again from the Homebrew Launcher.")
+                                  : T("3dssavesync va se fermer. Relancez-le depuis le menu HOME.", "3dssavesync will close. Start it again from the HOME Menu.");
+        u32 k;
         do {
-            screen_begin();
-            draw_current_top();
-            screen_bottom();
-            button_count = 0;
-            screen_paragraph(8, 8 + screen_paragraph(8, 8, 0.55f, C_GREEN, 304, title) + 6, 0.5f, WHITE, 304,
-                             dsx ? T("3dssavesync va se fermer. Relancez-le depuis le Homebrew Launcher.", "3dssavesync will close. Start it again from the Homebrew Launcher.")
-                                 : T("3dssavesync va se fermer. Relancez-le depuis le menu HOME.", "3dssavesync will close. Start it again from the HOME Menu."));
-            draw_bar_background(1);
-            draw_button_row(&b, 1, 240 - BUTTON_HEIGHT - 4, 0);
-            screen_end();
-        } while (!(read_keys() & (KEY_A | KEY_B)));
+            float y;
+            modal_begin(NULL);
+            y = 8 + screen_paragraph(8, 8, 0.55f, C_GREEN, TEXT_WIDTH, title) + 6;
+            screen_paragraph(8, y, 0.5f, WHITE, TEXT_WIDTH, restart);
+            k = modal_end(&b, 1, 0);
+        } while (!(k & (KEY_A | KEY_B)));
     }
 end:
     free(checksums);
@@ -1374,12 +1150,39 @@ static int compare_choices(const void *a, const void *b)
     return strcasecmp(((const title_choice_t *)a)->name, ((const title_choice_t *)b)->name);
 }
 
+static title_choice_t choices[200];
+static int choice_count, choice_cursor;
+
+/* Top screen of the choice: a check box per game. */
+static void draw_choices_top(void)
+{
+    const int cursor = choice_cursor, start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+    int i;
+    screen_top();
+    screen_text(6, 4, 0.55f, WHITE, 0, T("Jeux 3DS à synchroniser", "3DS games to sync"));
+    screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
+    for (i = start; i < choice_count && i < start + TOP_LINES; i++) {
+        const title_choice_t *c = &choices[i];
+        float ly = LIST_Y + (i - start) * 15;
+        if (i == cursor) {
+            screen_rect(0, ly - 1, TOP_WIDTH, 15, SEL);
+            screen_rect(0, ly - 1, 2, 15, ACCENT);
+        }
+        screen_rect(9, ly + 2, 10, 10, c->ticked || c->main_only == 1 ? GREY_LIGHT : GREY_DARK); /* box: border, background, tick */
+        screen_rect(10, ly + 3, 8, 8, i == cursor ? SEL : BOX);
+        if (c->ticked) screen_rect(11, ly + 4, 6, 6, C_GREEN);
+        screen_text(26, ly, 0.5f, c->ticked || c->main_only == 1 ? WHITE : GREY_DARK, TOP_WIDTH - 40, c->name);
+    }
+    if (start > 0) screen_text(TOP_WIDTH - 12, 26, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xB2");
+    if (start + TOP_LINES < choice_count) screen_text(TOP_WIDTH - 12, FOOTER_Y, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xBC");
+}
+
 static void choose_titles(void)
 {
-    static title_choice_t c[200];
+    title_choice_t *c = choices;
     static u64 ids[200];
     static FS_MediaType medias[200];
-    int n, i, cursor = 0, changed = 0;
+    int n, i, changed = 0;
 
     show_progress(0, 0, "%s", T("Lecture des jeux installés…", "Reading installed games…"));
     if (R_FAILED(amInit())) {
@@ -1417,63 +1220,43 @@ static void choose_titles(void)
     }
     qsort(c, n, sizeof *c, compare_choices);
     clear_message();
+    choice_count = n;
+    choice_cursor = 0;
 
     while (aptMainLoop()) {
-        int start = cursor < TOP_LINES ? 0 : cursor - TOP_LINES + 1;
+        const int cursor = choice_cursor;
         const title_choice_t *ch = n ? &c[cursor] : NULL;
         int tickable = ch && (ch->ticked || ch->main_only == 1);
-        u16 icon[48 * 48];
+        u16 icon[ICON_SIZE * ICON_SIZE];
         float y = 6;
         u32 k;
         button_t t[2] = { { KEY_A, ch && ch->ticked ? T("Décocher", "Untick") : T("Cocher", "Tick"), tickable },
                           { KEY_B, T("Enregistrer et revenir", "Save and go back"), 1 } };
 
-        screen_begin();
-        screen_top();
-        screen_text(6, 4, 0.55f, WHITE, 0, T("Jeux 3DS à synchroniser", "3DS games to sync"));
-        screen_rect(0, 23, 400, 1, GREY_DARK);
-        for (i = start; i < n && i < start + TOP_LINES; i++) {
-            float ly = 27 + (i - start) * 15;
-            if (i == cursor) {
-                screen_rect(0, ly - 1, 400, 15, SEL);
-                screen_rect(0, ly - 1, 2, 15, ACCENT);
-            }
-            screen_rect(9, ly + 2, 10, 10, c[i].ticked || c[i].main_only == 1 ? GREY_LIGHT : GREY_DARK); /* box: border, background, tick */
-            screen_rect(10, ly + 3, 8, 8, i == cursor ? SEL : RGB(0x0C0E12));
-            if (c[i].ticked) screen_rect(11, ly + 4, 6, 6, C_GREEN);
-            screen_text(26, ly, 0.5f, c[i].ticked || c[i].main_only == 1 ? WHITE : GREY_DARK, 400 - 26 - 14, c[i].name);
-        }
-        if (start > 0) screen_text(388, 26, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xB2");
-        if (start + TOP_LINES < n) screen_text(388, 224, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xBC");
-
-        screen_bottom();
-        button_count = 0;
+        modal_begin(draw_choices_top);
         if (ch) {
-            if (title_icon(ch->id, ch->media, icon) == 0) screen_icon(icon, 48, 48, 320 - 6 - 48, 6, 1.0f);
-            y += screen_lines(8, y, 0.55f, WHITE, 320 - 8 - 62, 2, ch->name) + 4;
-            y = y < 58 ? 62 : y + 4;
-            y += screen_paragraph(8, y, 0.45f, ch->main_only == 1 ? C_GREEN : ch->main_only == 0 ? C_RED : GREY_LIGHT, 304,
+            if (title_icon(ch->id, ch->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f);
+            y += screen_lines(8, y, 0.55f, WHITE, ICON_X - 16, 2, ch->name) + 4;
+            y = y < UNDER_ICON ? UNDER_ICON + 4 : y + 4;
+            y += screen_paragraph(8, y, 0.45f, ch->main_only == 1 ? C_GREEN : ch->main_only == 0 ? C_RED : GREY_LIGHT, TEXT_WIDTH,
                                   ch->main_only == 1 ? T("Ce jeu peut être synchronisé.", "This game can be synced.")
                                   : ch->main_only == 0 ? T("Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).", "This game can't be synced (several save files).")
                                                   : T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.", "No save yet: start the game once and save.")) + 6;
         } else {
-            y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, 304, T("Aucun jeu trouvé.", "No game found.")) + 6;
+            y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, TEXT_WIDTH, T("Aucun jeu trouvé.", "No game found.")) + 6;
         }
-        y += screen_paragraph(8, y, 0.42f, GREY_LIGHT, 304, T("Un jeu manque ? Lancez-le une fois et sauvegardez.", "Game missing? Start it once and save.")) + 6;
+        screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH, T("Un jeu manque ? Lancez-le une fois et sauvegardez.", "Game missing? Start it once and save."));
         draw_message(BAR_TOP_1);
-        draw_bar_background(1);
-        draw_button_row(t, 2, 240 - BUTTON_HEIGHT - 4, 18);
-        screen_end();
+        k = modal_end(t, 2, 18);
 
-        k = read_keys();
         if (k & (KEY_UP | KEY_DOWN)) clear_message();
         if (k & KEY_B) break;
-        if (k & KEY_DOWN && cursor + 1 < n) cursor++;
-        if (k & KEY_UP && cursor > 0) cursor--;
+        if (k & KEY_DOWN && choice_cursor + 1 < n) choice_cursor++;
+        if (k & KEY_UP && choice_cursor > 0) choice_cursor--;
         if (k & KEY_A && n) {
             clear_message();
             if (tickable) {
-                c[cursor].ticked = !c[cursor].ticked;
+                c[choice_cursor].ticked = !c[choice_cursor].ticked;
                 changed = 1;
             } else {
                 set_message(C_RED, NULL, "%s", T("Ce jeu ne peut pas être coché.", "This game cannot be ticked."));
@@ -1561,13 +1344,13 @@ static void draw_settings_top(void)
     int i;
     screen_top();
     screen_text(6, 4, 0.55f, WHITE, 0, T("Réglages", "Settings"));
-    screen_rect(0, 23, 400, 1, GREY_DARK);
+    screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
     for (i = 0; i < total; i++) {
         char v[96]; /* test_short: 80 */
         const char *value = v;
         u32 c = WHITE;
         int required = 0;
-        float end = 400 - 8;
+        float end = TOP_WIDTH - 8;
         if (i < SETTING_COUNT) {
             value = SETTINGS[i].value;
             if (i <= 1 && (!value[0] || !strcmp(value, "https://"))) value = T("À remplir", "Required"), c = GREY_LIGHT, required = 1;
@@ -1583,10 +1366,10 @@ static void draw_settings_top(void)
         }
         if (i == selected_setting) {
             const char *a = setting_action(i);
-            float xa = 392 - screen_text_width(0.44f, a), g = screen_text_width(0.5f, glyph(KEY_A));
-            screen_rect(0, y - 1, 400, 16, SEL);
+            float xa = TOP_WIDTH - 8 - screen_text_width(0.44f, a), g = screen_text_width(0.5f, glyph(KEY_A));
+            screen_rect(0, y - 1, TOP_WIDTH, 16, SEL);
             screen_rect(0, y - 1, 2, 16, ACCENT);
-            screen_text(xa - g - 3, y - 1, 0.5f, RGB(0xE04848), 0, glyph(KEY_A));
+            screen_text(xa - g - 3, y - 1, 0.5f, GLYPH_A, 0, glyph(KEY_A));
             screen_text(xa, y + 1, 0.44f, WHITE, 0, a);
             end = xa - g - 3 - 10;
         }
@@ -1623,28 +1406,25 @@ static int settings_screen(int first)
                                    : test_state < 0           ? T("Continuer quand même", "Continue anyway")
                                                              : T("Tester et continuer", "Test and continue"), 1 } };
 
-        screen_begin();
-        draw_settings_top();
-        screen_bottom();
-        button_count = 0;
+        modal_begin(draw_settings_top);
         if (first) {
             const char *b = T("Bienvenue ! Entrez d'abord le serveur et le jeton.", "Welcome! Enter the server and the token first.");
-            float h = screen_paragraph_height(0.45f, 296, b) + 8;
-            screen_rect(0, 0, 320, h, CARD);
+            float h = screen_paragraph_height(0.45f, BOTTOM_WIDTH - 24, b) + 8;
+            screen_rect(0, 0, BOTTOM_WIDTH, h, CARD);
             screen_rect(0, 0, 3, h, ACCENT);
-            screen_paragraph(10, 4, 0.45f, WHITE, 296, b);
+            screen_paragraph(10, 4, 0.45f, WHITE, BOTTOM_WIDTH - 24, b);
             y = h + 6;
         }
         if (c == count + 2) {
-            y += screen_lines(8, y, 0.55f, WHITE, 304, 1, T("Mise à jour de 3dssavesync", "3dssavesync update")) + 8;
+            y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, T("Mise à jour de 3dssavesync", "3dssavesync update")) + 8;
             screen_text(8, y, 0.42f, GREY_LIGHT, 100, T("Installée", "Installed"));
-            draw_version_value(112, y, 0.42f, 312);
+            draw_version_value(112, y, 0.42f, BOTTOM_WIDTH - 8);
             y += 15 + 6;
-            y += screen_paragraph(8, y, 0.42f, GREY_LIGHT, 304, T("Cherche une nouvelle version sur GitHub et vous demande avant de l'installer.",
+            y += screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH, T("Cherche une nouvelle version sur GitHub et vous demande avant de l'installer.",
                                                               "Looks for a new version on GitHub and asks before installing it.")) + 6;
         } else {
-            y += screen_lines(8, y, 0.55f, WHITE, 304, 1, setting_label(c)) + 6;
-            y += screen_paragraph(8, y, 0.45f, WHITE, 304, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
+            y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, setting_label(c)) + 6;
+            y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
                                                          : c == count ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
                                                                    : T("Vérifie l'adresse et le jeton du serveur.", "Checks the server address and token.")) + 6;
         }
@@ -1659,11 +1439,7 @@ static int settings_screen(int first)
             if (nl) *nl++ = '\0';
             draw_band(BAR_TOP_1, d, nl, color == GREY_LIGHT ? WHITE : color);
         }
-        draw_bar_background(1);
-        draw_button_row(t, 2, 240 - BUTTON_HEIGHT - 4, 18);
-        screen_end();
-
-        k = read_keys();
+        k = modal_end(t, 2, 18);
         if (k & KEY_B) {
             if (!first || test_state) break;
             clear_message();
@@ -1738,26 +1514,20 @@ static int act(game_t *j)
         } else local_text(j, loc, sizeof loc);
         do {
             float y = 6, w;
-            screen_begin();
-            draw_current_top();
-            screen_bottom();
-            button_count = 0;
+            modal_begin(NULL);
             draw_game_icon(j);
             screen_rect(8, y + 2, 3, 14, C_RED);
             w = screen_text(15, y, 0.55f, C_RED, 0, T("Conflit", "Conflict"));
             w += screen_text(15 + w, y, 0.55f, GREY_LIGHT, 0, " \xC2\xB7 ");
-            screen_text(15 + w, y, 0.55f, WHITE, 250 - 15 - w, j->short_name);
+            screen_text(15 + w, y, 0.55f, WHITE, ICON_X - 16 - 15 - w, j->short_name);
             y += 22;
-            y += screen_lines(8, y, 0.45f, WHITE, 250, 2, T("La sauvegarde a changé sur la 3DS et sur le serveur. Quelle version garder ?",
+            y += screen_lines(8, y, 0.45f, WHITE, ICON_X - 16, 2, T("La sauvegarde a changé sur la 3DS et sur le serveur. Quelle version garder ?",
                                                              "The save changed on the 3DS and on the server. Which one to keep?"));
-            y = y < 58 ? 60 : y + 6;
+            y = y < UNDER_ICON ? UNDER_ICON + 2 : y + 6;
             draw_choice_card(6, y, KEY_A, T("Version 3DS", "3DS save"), loc, T("Puis envoyée au serveur.", "Then uploaded to the server."));
             draw_choice_card(162, y, KEY_X, T("Version serveur", "Server save"), srv, T("La 3DS est copiée avant.", "The 3DS is backed up first."));
-            screen_paragraph(8, y + 98, 0.42f, GREY_LIGHT, 304, T("Rien n'est perdu : l'autre version est gardée.", "Nothing is lost: the other one is kept."));
-            draw_bar_background(1);
-            draw_button_row(&b, 1, 240 - BUTTON_HEIGHT - 4, 0);
-            screen_end();
-            k = read_keys();
+            screen_paragraph(8, y + 98, 0.42f, GREY_LIGHT, TEXT_WIDTH, T("Rien n'est perdu : l'autre version est gardée.", "Nothing is lost: the other one is kept."));
+            k = modal_end(&b, 1, 0);
         } while (!(k & (KEY_A | KEY_X | KEY_B)));
         done = (k & (KEY_A | KEY_X)) != 0;
         if (k & KEY_A) r = upload_save(j);
@@ -1904,10 +1674,18 @@ static void sync_all(void)
 
 /* ---------------------------------------------------------------- loop */
 
+/* Top screen with the app name only (network not started). */
+static void draw_title_top(void)
+{
+    screen_top();
+    screen_text(6, 4, 0.55f, WHITE, 0, "3dssavesync");
+}
+
 int main(int argc, char **argv)
 {
     int cursor = 0;
 
+    draw_current_top = draw_list_top;
     gfxInitDefault();
     osSetSpeedupEnable(true); /* 804 MHz on New 3DS (no effect on Old 3DS): faster TLS and SHA-256 */
     screen_init();
@@ -1927,18 +1705,13 @@ int main(int argc, char **argv)
 
     if (net_init()) {
         const button_t b = { KEY_B, T("Quitter", "Quit"), 1 };
+        u32 k;
         loaded = 1;
         do {
-            screen_begin();
-            screen_top();
-            screen_text(6, 4, 0.55f, WHITE, 0, "3dssavesync");
-            screen_bottom();
-            button_count = 0;
-            screen_paragraph(16, 70, 0.55f, C_RED, 288, T("Impossible de démarrer le réseau. Redémarrez la 3DS et relancez 3dssavesync.", "Couldn't start the network. Restart the 3DS and 3dssavesync."));
-            draw_bar_background(1);
-            draw_button_row(&b, 1, 240 - BUTTON_HEIGHT - 4, 0);
-            screen_end();
-        } while (!(read_keys() & (KEY_B | KEY_START)));
+            modal_begin(draw_title_top);
+            screen_paragraph(16, 70, 0.55f, C_RED, PROGRESS_WIDTH, T("Impossible de démarrer le réseau. Redémarrez la 3DS et relancez 3dssavesync.", "Couldn't start the network. Restart the 3DS and 3dssavesync."));
+            k = modal_end(&b, 1, 0);
+        } while (!(k & (KEY_B | KEY_START)));
         screen_exit();
         gfxExit();
         return 0;
