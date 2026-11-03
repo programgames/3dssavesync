@@ -72,6 +72,7 @@ data class Summary(
     val downloaded: Int,
     val inSync: Int,
     val conflicts: List<String>,
+    val notReplaced: List<String>, // the server changed after the list was shown: not replaced without a new look
     val failures: List<Pair<String, Throwable>>,
     val stopped: Boolean, // the server or the network failed: the other games were not tried
 )
@@ -168,17 +169,19 @@ object App {
         var down = 0
         var same = 0
         val conflicts = mutableListOf<String>()
+        val notReplaced = mutableListOf<String>()
         val failures = mutableListOf<Pair<String, Throwable>>()
         var stopped = false
         val todo = entries.filter { it.game != null && it.status?.state != null }
         for ((i, e) in todo.withIndex()) {
             busy = text(R.string.syncing_game, i + 1, todo.size, e.name)
             try {
-                when (withContext(io) { s.sync(e.game!!) }) {
+                when (withContext(io) { s.sync(e.game!!, mayReplace = e.shown == Shown.TO_DOWNLOAD) }) {
                     Outcome.UPLOADED -> up++
                     Outcome.DOWNLOADED -> down++
                     Outcome.IN_SYNC -> same++
                     Outcome.CONFLICT -> conflicts += e.name
+                    Outcome.NOT_REPLACED -> notReplaced += e.name
                     Outcome.NOTHING -> {}
                 }
             } catch (t: Throwable) {
@@ -189,7 +192,7 @@ object App {
                 }
             }
         }
-        summary = Summary(up, down, same, conflicts, failures, stopped)
+        summary = Summary(up, down, same, conflicts, notReplaced, failures, stopped)
         s.refresh()
         serverError = withContext(io) { runCatching { s.serverList() }.exceptionOrNull() }
         entries = withContext(io) { statuses(entries, s) }

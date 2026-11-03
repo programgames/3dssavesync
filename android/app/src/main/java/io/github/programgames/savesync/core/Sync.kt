@@ -107,7 +107,7 @@ class Backups(val root: File) {
 // Status of a Game for the list and the details. state null: nothing to sync (no save on either side).
 class Status(val local: Local?, val server: Version?, val base: String?, val state: State?)
 
-enum class Outcome { NOTHING, IN_SYNC, UPLOADED, DOWNLOADED, CONFLICT }
+enum class Outcome { NOTHING, IN_SYNC, UPLOADED, DOWNLOADED, CONFLICT, NOT_REPLACED }
 
 // Choice on a Conflict, for the Current version the user saw: if the server changed since, nothing is done.
 data class Choice(val keepPhone: Boolean, val serverHash: String)
@@ -134,7 +134,8 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
     }
 
     // sync runs the Sync of one Game, like syncGame on the PC. A Conflict without a matching choice changes nothing.
-    fun sync(g: Game, choice: Choice? = null): Outcome {
+    // mayReplace = false: a Download over an existing save is not done (NOT_REPLACED): the user did not confirm it.
+    fun sync(g: Game, choice: Choice? = null, mayReplace: Boolean = true): Outcome {
         repeat(3) { attempt -> // a 412 starts a new pass with the new Current version
             if (attempt > 0) refresh()
             val srv = serverVersion(g.key)
@@ -154,6 +155,7 @@ class Syncer(private val remote: Remote, private val bases: Bases, private val b
                 }
                 State.TO_UPLOAD -> if (upload(g, l!!, srv)) return Outcome.UPLOADED
                 State.TO_DOWNLOAD -> try {
+                    if (l != null && !mayReplace && choice == null) return Outcome.NOT_REPLACED
                     download(g, l, srv!!)
                     return Outcome.DOWNLOADED
                 } catch (e: SyncException) {

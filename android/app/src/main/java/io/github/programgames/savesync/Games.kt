@@ -192,6 +192,7 @@ private fun SummaryDialog(s: Summary) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(stringResource(R.string.summary_counts, s.uploaded, s.downloaded, s.inSync))
                 if (s.conflicts.isNotEmpty()) Text(stringResource(R.string.summary_conflicts, s.conflicts.joinToString(", ")))
+                if (s.notReplaced.isNotEmpty()) Text(stringResource(R.string.summary_not_replaced, s.notReplaced.joinToString(", ")))
                 if (s.stopped) Text(stringResource(R.string.summary_stopped), color = MaterialTheme.colorScheme.error)
                 for ((name, t) in s.failures) ErrorText(t, name)
             }
@@ -257,7 +258,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             if (e.shown == Shown.UNKNOWN) App.serverError?.let { ErrorText(it, stringResource(R.string.server_not_read)) }
             App.message?.let { (text, t) -> if (t == null) Text(text, color = MaterialTheme.colorScheme.primary) else ErrorText(t, text) }
             App.busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            if (e.game == null) return@Column
+            if (e.game == null || st == null) return@Column // Duplicate, or nothing read: no cards
 
             val phoneLines = if (local == null) listOf(stringResource(R.string.no_local_save)) else listOfNotNull(
                 e.game.file.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },

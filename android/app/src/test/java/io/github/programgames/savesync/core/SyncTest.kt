@@ -143,6 +143,8 @@ class PythonServerTest {
         assertEquals(Outcome.UPLOADED, a.sync(ga))
         b.refresh()
         assertEquals(State.TO_DOWNLOAD, b.status(gb).state)
+        assertEquals(Outcome.NOT_REPLACED, b.sync(gb, mayReplace = false)) // Sync all without confirmation
+        assertArrayEquals(sram, fb.content)
         assertEquals(Outcome.DOWNLOADED, b.sync(gb))
         assertArrayEquals(sram2, fb.content)
         assertArrayEquals(sram, File(tmp.root, "copies-b/pizzaboy").listFiles()!!.single().readBytes())

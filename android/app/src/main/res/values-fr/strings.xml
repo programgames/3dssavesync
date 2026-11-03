@@ -86,6 +86,7 @@
     <string name="summary_title">Synchronisation terminée</string>
     <string name="summary_counts">Envoyées : %1$d\nRécupérées : %2$d\nDéjà à jour : %3$d</string>
     <string name="summary_conflicts">Conflits, en attente de votre choix : %1$s. Ouvrez chaque jeu pour choisir la sauvegarde à garder.</string>
+    <string name="summary_not_replaced">Nouveau sur le serveur depuis la lecture de la liste, donc pas encore remplacé : %1$s. Vérifiez ces jeux, puis synchronisez de nouveau.</string>
     <string name="summary_stopped">La synchronisation s\'est arrêtée : les jeux suivants n\'ont pas été essayés.</string>
 
     <!-- States -->

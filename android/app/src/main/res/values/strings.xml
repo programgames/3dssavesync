@@ -86,6 +86,7 @@
     <string name="summary_title">Sync finished</string>
     <string name="summary_counts">Uploaded: %1$d\nDownloaded: %2$d\nAlready in sync: %3$d</string>
     <string name="summary_conflicts">Conflicts, waiting for your choice: %1$s. Open each game to choose which save to keep.</string>
+    <string name="summary_not_replaced">New on the server since the list was read, so not replaced yet: %1$s. Check them, then sync again.</string>
     <string name="summary_stopped">The sync stopped: the next games were not tried.</string>
 
     <!-- States -->
