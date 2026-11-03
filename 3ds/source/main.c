@@ -19,6 +19,7 @@
 #include "list.h"
 #include "net.h"
 #include "pokemon.h"
+#include "result.h"
 #include "screen.h"
 #include "settings.h"
 #include "state.h"
@@ -495,19 +496,40 @@ static int refresh(void)
 
 /* ---------------------------------------------------------------- actions */
 
-/* Conditional Upload: If-Match = Current version seen by this Client (ADR 0001). 1 if accepted.
+/* Result with the file of the failure (or NULL). */
+static result_t make_result(result_code_t code, const char *path)
+{
+    result_t r = { code, 0, 1, 0, 0, NULL, "" };
+    snprintf(r.path, sizeof r.path, "%s", path ? path : "");
+    return r;
+}
+
+/* Failed request: its status, whether the 3DS is on a Wi-Fi access point, and its address for the technical line. */
+static result_t network_failure(result_code_t code, long status, const char *url)
+{
+    result_t r = make_result(code, url);
+    r.status = status;
+    r.wifi = net_wifi();
+    return r;
+}
+
+/* The message band says the result of an action on the Game j. */
+static void show_result(const result_t *r, const game_t *j)
+{
+    static const u32 COLORS[] = { [KIND_INFO] = WHITE, [KIND_SUCCESS] = C_GREEN, [KIND_FAILURE] = C_RED };
+    message_color = COLORS[result_text(r, j->short_name, english, message, sizeof message, message_detail, sizeof message_detail)];
+}
+
+/* Conditional Upload: If-Match = Current version seen by this Client (ADR 0001).
  * GB/GBA: only the SRAM goes, the Clock trailer stays on the 3DS (ADR 0008). */
-static int upload_save(game_t *j)
+static result_t upload_save(game_t *j)
 {
     char url[300], condition[100], hash[65];
     unsigned char *bytes;
     size_t size;
     long status;
 
-    if (read_save(j, &bytes, &size)) {
-        set_message(C_RED, NULL, T("%s : sauvegarde illisible. Vérifiez la carte SD.", "%s: can't read the save. Check the SD card."), j->short_name);
-        return 0;
-    }
+    if (read_save(j, &bytes, &size)) return make_result(RESULT_UPLOAD_UNREADABLE, NULL);
     size = sram_size(j->system, size);
     to_server_form(j, &bytes, &size);
     hash_hex(bytes, size, hash);
@@ -516,17 +538,10 @@ static int upload_save(game_t *j)
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_put(url, cfg.token, condition, bytes, size);
     free(bytes);
-    if (status == 200) {
-        save_base(j->key, hash);
-        set_message(C_GREEN, NULL, T("%s : envoyé au serveur.", "%s: uploaded."), j->short_name);
-    } else if (status == 412) {
-        set_message(C_RED, NULL, T("%s : conflit, le serveur a changé entre-temps.", "%s: conflict, the server changed meanwhile."), j->short_name);
-    } else {
-        char d[200];
-        network_detail(status, url, d, sizeof d);
-        set_message(C_RED, d, T("%s : envoi impossible. %s", "%s: upload failed. %s"), j->short_name, network_text(status, net_wifi(), english));
-    }
-    return status == 200;
+    if (status == 412) return make_result(RESULT_UPLOAD_CONFLICT, NULL);
+    if (status != 200) return network_failure(RESULT_UPLOAD_FAILED, status, url);
+    save_base(j->key, hash);
+    return make_result(RESULT_UPLOADED, NULL);
 }
 
 /* Creates the folder that holds path if it is missing (saves folder of a first game). */
@@ -543,8 +558,8 @@ static void make_parent_dir(const char *path)
 /* Download (design §4): Backup copy first, then
  *  - file (DS, GB, GBA): received SRAM + local Clock trailer (ADR 0008) in a .tmp, then replace;
  *  - 3DS: rewrite /main with commit and Secure value (ADR 0009).
- * 1 if done; on failure, the Local save is intact. */
-static int download_save(game_t *j)
+ * On failure, the Local save is intact. */
+static result_t download_save(game_t *j)
 {
     char tmp[610], backup[700], url[300], hash[65], date[20];
     char *body;
@@ -553,22 +568,18 @@ static int download_save(game_t *j)
     long status;
     int failed, exists = j->system == SYS_3DS || access(j->sav, F_OK) == 0;
     time_t t = time(NULL);
+    result_t r;
 
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_get(url, cfg.token, &body, &size);
     if (status != 200) {
-        char d[200];
         if (status > 0) free(body);
-        network_detail(status, url, d, sizeof d);
-        set_message(C_RED, d, T("%s : récupération impossible. %s La sauvegarde de la 3DS reste intacte.", "%s: download failed. %s The 3DS save is intact."),
-             j->short_name, network_text(status, net_wifi(), english));
-        return 0;
+        return network_failure(RESULT_DOWNLOAD_FAILED, status, url);
     }
     hash_hex((unsigned char *)body, size, hash);
     if (strcmp(hash, j->server_hash)) {
         free(body);
-        set_message(C_RED, NULL, T("%s : version reçue abîmée, rien n'est écrit. Réessayez.", "%s: received version damaged, nothing written. Try again."), j->short_name);
-        return 0;
+        return make_result(RESULT_DOWNLOAD_DAMAGED, NULL);
     }
     /* Copy as soon as the Save exists, even if the scan could not read it: never overwrite without a copy. */
     if (exists) {
@@ -581,8 +592,7 @@ static int download_save(game_t *j)
         if (failed) {
             free(old_data);
             free(body);
-            set_message(C_RED, backup, T("%s : copie de sécurité impossible, rien n'est écrit. Vérifiez la carte SD.", "%s: backup copy failed, nothing written. Check the SD card."), j->short_name);
-            return 0;
+            return make_result(RESULT_BACKUP_FAILED, backup);
         }
     }
 
@@ -590,10 +600,7 @@ static int download_save(game_t *j)
         failed = write_title_save(j->title, j->media, body, size);
         free(old_data);
         free(body);
-        if (failed) {
-            set_message(C_RED, NULL, T("%s : écriture 3DS refusée, sauvegarde intacte.", "%s: 3DS write refused, save intact."), j->short_name);
-            return 0;
-        }
+        if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
     } else {
         /* Received SRAM (file form) + local Clock trailer (what lies past the SRAM of the old file). */
         unsigned char *received = (unsigned char *)body;
@@ -602,8 +609,7 @@ static int download_save(game_t *j)
         if (!new_data) {
             free(old_data);
             free(received);
-            set_message(C_RED, NULL, T("%s : mémoire insuffisante, rien n'est écrit.", "%s: out of memory, nothing written."), j->short_name);
-            return 0;
+            return make_result(RESULT_OUT_OF_MEMORY, NULL);
         }
         memcpy(new_data, received, size);
         if (n > sram) memcpy(new_data + size, old_data + sram, n - sram);
@@ -613,28 +619,16 @@ static int download_save(game_t *j)
         /* .tmp written and read back, then the old one (already copied) removed, the .tmp renamed and read back (files.h). */
         failed = replace_file(j->sav, new_data, size + (n - sram));
         free(new_data);
-        if (failed == -1) {
-            set_message(C_RED, j->sav, T("%s : écriture impossible, sauvegarde de la 3DS intacte.", "%s: write failed, 3DS save intact."), j->short_name);
-            return 0;
-        }
-        snprintf(tmp, sizeof tmp, "%s.tmp", j->sav);
-        if (failed && access(tmp, F_OK)) { /* renamed, but read back different: no Base on this file */
-            set_message(C_RED, j->sav, T("%s : sauvegarde écrite abîmée. Vérifiez la carte SD, puis récupérez de nouveau.%s", "%s: written save damaged. Check the SD card, then download again.%s"),
-                 j->short_name, exists ? T(" Ancienne copiée dans /3ds/3dssavesync/copies.", " Old one copied to /3ds/3dssavesync/copies.") : "");
-            return 0;
-        }
+        if (failed == -1) return make_result(RESULT_WRITE_FAILED, j->sav);
         if (failed) {
-            const char *b = strrchr(j->sav, '/') ? strrchr(j->sav, '/') + 1 : j->sav, *ext = strrchr(b, '.');
-            int l = (int)strlen(b), cut = l > 60; /* bottom screen: name shortened, extension kept */
-            set_message(C_RED, NULL, T("%s : renommage impossible. Sauvegarde reçue : %.*s%s%s.tmp%s", "%s: rename failed. Downloaded save: %.*s%s%s.tmp%s"),
-                     j->short_name, cut ? 50 : l, b, cut ? "…" : "", cut && ext ? ext : "",
-                     exists ? T(". Ancienne copiée dans /3ds/3dssavesync/copies.", ". Old one copied to /3ds/3dssavesync/copies.") : ".");
-            return 0;
+            snprintf(tmp, sizeof tmp, "%s.tmp", j->sav);
+            r = make_result(access(tmp, F_OK) ? RESULT_WRITTEN_DAMAGED : RESULT_RENAME_FAILED, j->sav); /* renamed, but read back different */
+            r.had_save = exists;
+            return r;
         }
     }
     save_base(j->key, j->server_hash);
-    set_message(C_GREEN, NULL, T("%s : récupéré du serveur.", "%s: downloaded."), j->short_name);
-    return 1;
+    return make_result(RESULT_DOWNLOADED, NULL);
 }
 
 /* ---------------------------------------------------------------- screen */
@@ -1709,9 +1703,10 @@ static int act(game_t *j)
     char q[500], srv[200], loc[200], t[80];
     progress_t p;
     int done = 0;
+    result_t r = make_result(RESULT_NONE, NULL);
     switch (j->status) {
     case STATUS_TO_UPLOAD:
-        upload_save(j);
+        r = upload_save(j);
         done = 1;
         break;
     case STATUS_TO_DOWNLOAD: {
@@ -1723,7 +1718,7 @@ static int act(game_t *j)
         if ((done = confirm(T("Récupérer la version du serveur ?", "Download the server version?"), j->short_name, q,
                               j->has_local ? T("La sauvegarde de la 3DS sera remplacée, après une copie de sécurité.", "The 3DS save will be replaced, after a backup.") : NULL,
                               T("Récupérer", "Download"))))
-            download_save(j);
+            r = download_save(j);
         break;
     }
     case STATUS_CONFLICT: {
@@ -1764,29 +1759,23 @@ static int act(game_t *j)
             screen_end();
             k = read_keys();
         } while (!(k & (KEY_A | KEY_X | KEY_B)));
-        if (k & KEY_A) {
-            done = 1;
-            upload_save(j);
-        } else if (k & KEY_X) {
-            done = 1;
-            download_save(j);
-        } else {
-            set_message(WHITE, NULL, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), j->short_name);
-        }
+        done = (k & (KEY_A | KEY_X)) != 0;
+        if (k & KEY_A) r = upload_save(j);
+        else if (k & KEY_X) r = download_save(j);
+        else r = make_result(RESULT_CONFLICT_LEFT, NULL);
         break;
     }
     case STATUS_DUPLICATE:
-        if (j->shares_save) set_message(C_RED, NULL, T("%s : %d ROM ont ce nom de fichier et partageraient une sauvegarde. Renommez-en une.",
-                                              "%s: %d ROMs have this file name and would share one save. Rename one."), j->short_name, j->rom_count);
-        else set_message(C_RED, NULL, T("%s : %d ROM contiennent ce jeu. Gardez-en une, ou ajoutez les autres aux ROM hacks sur le PC.",
-                                   "%s: %d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC."), j->short_name, j->rom_count);
+        r = make_result(j->shares_save ? RESULT_DUPLICATE_SHARED : RESULT_DUPLICATE, NULL);
+        r.count = j->rom_count;
         break;
     case STATUS_OFFLINE:
-        set_message(C_RED, NULL, T("%s : serveur non lu. Appuyez sur \xEE\x80\x83 pour réessayer.", "%s: server not read. Press \xEE\x80\x83 to try again."), j->short_name);
+        r = make_result(RESULT_OFFLINE, NULL);
         break;
     default:
-        set_message(WHITE, NULL, T("%s : déjà à jour.", "%s: already in sync."), j->short_name);
+        r = make_result(RESULT_ALREADY_IN_SYNC, NULL);
     }
+    show_result(&r, j);
     if (done) read_local(j);
     return done;
 }
@@ -1801,9 +1790,11 @@ static int switch_save_file(game_t *j)
     const char *other = j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++";
     int to_rom;
     time_t t = time(NULL);
+    result_t r;
 
     if (j->system != SYS_GB && j->system != SYS_GBA) {
-        set_message(WHITE, NULL, "%s", T("X : seulement pour les jeux GB et GBA.", "X: GB and GBA games only."));
+        r = make_result(RESULT_GB_GBA_ONLY, NULL);
+        show_result(&r, j);
         return 0;
     }
     snprintf(fwd, sizeof fwd, FORWARDERS "/%s.sav", j->name);
@@ -1826,36 +1817,24 @@ static int switch_save_file(game_t *j)
     mkdir(FORWARDERS, 0777);
     make_parent_dir(j->sav_rom);
     if (backup_path(APP_DIR "/copies", j->name, date, "sav", backup, sizeof backup) ||
-        move_save(j->sav, to_rom ? j->sav_rom : fwd, backup, to_rom))
-        set_message(C_RED, j->sav, T("%s : changement impossible, rien n'est perdu.", "%s: switch failed, nothing lost."), j->short_name);
-    else
-        set_message(C_GREEN, NULL, T("%s : se joue maintenant avec %s.", "%s: now played with %s."), j->short_name, to_rom ? other : T("le forwarder mGBA", "the mGBA forwarder"));
+        move_save(j->sav, to_rom ? j->sav_rom : fwd, backup, to_rom)) {
+        r = make_result(RESULT_SWITCH_FAILED, j->sav);
+    } else {
+        r = make_result(RESULT_SWITCHED, NULL);
+        r.program = to_rom ? other : NULL; /* NULL: the mGBA forwarder */
+    }
+    show_result(&r, j);
     read_local(j);
     return 1;
-}
-
-/* "2 uploads, 1 download, 1 skipped": only what counts. */
-static void sync_summary(char *out, size_t n, int uploads, int downloads, int failures, int skipped)
-{
-    const int v[4] = { uploads, downloads, failures, skipped };
-    const char *one[4] = { T("%d envoi", "%d upload"), T("%d récupération", "%d download"), T("%d échec", "%d failed"), T("%d ignoré", "%d skipped") };
-    const char *many[4] = { T("%d envois", "%d uploads"), T("%d récupérations", "%d downloads"), T("%d échecs", "%d failed"), T("%d ignorés", "%d skipped") };
-    size_t l = 0;
-    int i;
-    out[0] = '\0';
-    for (i = 0; i < 4; i++)
-        if (v[i] && l < n) {
-            if (l) l += snprintf(out + l, n - l, ", ");
-            if (l < n) l += snprintf(out + l, n - l, plural(v[i], english, one[i], many[i]), v[i]);
-        }
-    if (!l) snprintf(out, n, "%s", T("Rien à synchroniser.", "Nothing to sync."));
 }
 
 /* START: Uploads and Downloads; skips Conflicts and Duplicates; one confirmation for the overwrites. Then reads the
  * server again, and the message says what was done. */
 static void sync_all(void)
 {
-    char q[1200], first[200] = "", first_detail[200] = "", r[120];
+    char q[1200], first_text[512], first_detail[200], r[120];
+    result_t first = make_result(RESULT_NONE, NULL); /* first failure, of first_game */
+    const char *first_game = "";
     int i, overwrites = 0, uploads = 0, downloads = 0, skipped = 0, failures = 0, may_overwrite = 1, total = 0, done = 0;
     int planned_uploads = 0, planned_downloads = 0;
     u64 start = osGetTime();
@@ -1870,7 +1849,7 @@ static void sync_all(void)
         planned_downloads += e == STATUS_TO_DOWNLOAD;
         skipped += e == STATUS_CONFLICT || e == STATUS_DUPLICATE;
     }
-    sync_summary(r, sizeof r, planned_uploads, planned_downloads, 0, skipped);
+    sync_summary(r, sizeof r, planned_uploads, planned_downloads, 0, skipped, english);
     snprintf(q, sizeof q, "%s\n\n%s", r, T("Ces sauvegardes de la 3DS seront remplacées par celles du serveur, après une copie de sécurité :\n",
                                            "These 3DS saves will be replaced by the server's, after a backup:\n"));
     for (i = 0; i < visible_count; i++) {
@@ -1897,16 +1876,18 @@ static void sync_all(void)
         int do_upload = j->status == STATUS_TO_UPLOAD;
         int do_download = j->status == STATUS_TO_DOWNLOAD && (may_overwrite || !j->has_local);
         if (do_upload || do_download) {
+            result_t res;
             int ok;
             list_cursor = i; /* the top screen follows the current game */
             progress_color = do_upload ? C_YELLOW : C_CYAN;
             show_progress(++done, total, "%s\n%s", do_upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
-            ok = do_upload ? upload_save(j) : download_save(j);
+            res = do_upload ? upload_save(j) : download_save(j);
+            ok = result_ok(&res);
             uploads += do_upload && ok;
             downloads += do_download && ok;
-            if (!ok && !failures++) { /* "game: reason", and its technical line */
-                snprintf(first, sizeof first, "%.199s", message);
-                snprintf(first_detail, sizeof first_detail, "%s", message_detail);
+            if (!ok && !failures++) {
+                first = res;
+                first_game = j->short_name;
             }
             read_local(j);
         }
@@ -1915,9 +1896,10 @@ static void sync_all(void)
     progress_color = C_GREEN;
     if (total) reread_server();
     /* Summary, then the first failure: the message of the last action says nothing about the others. */
-    sync_summary(r, sizeof r, uploads, downloads, failures, skipped);
+    sync_summary(r, sizeof r, uploads, downloads, failures, skipped, english);
     if (total) snprintf(r + strlen(r), sizeof r - strlen(r), " \xC2\xB7 %llu s", (osGetTime() - start) / 1000);
-    set_message(failures ? C_RED : total ? C_GREEN : WHITE, first_detail, "%s%s%s%s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first);
+    result_text(&first, first_game, english, first_text, sizeof first_text, first_detail, sizeof first_detail); /* "game: reason", and its technical line */
+    set_message(failures ? C_RED : total ? C_GREEN : WHITE, first_detail, "%s%s%s%.199s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first_text);
 }
 
 /* ---------------------------------------------------------------- loop */
