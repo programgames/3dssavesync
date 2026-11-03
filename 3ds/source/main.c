@@ -1057,7 +1057,7 @@ static void draw_bottom(const game_t *j)
         y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
         /* System, and for GB/GBA the program whose save is synced (X changes it); title ID of a Virtual Console game. */
         if (gb) snprintf(t, sizeof t, "%s \xC2\xB7 %s", system_label(j), forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : rom_program(j));
-        else if (vc(j)) snprintf(t, sizeof t, "%s \xC2\xB7 Virtual Console \xC2\xB7 %016llX", system_label(j), j->title);
+        else if (vc(j)) snprintf(t, sizeof t, "GB \xC2\xB7 Virtual Console \xC2\xB7 %016llX", j->title);
         else snprintf(t, sizeof t, "%s", system_label(j));
         screen_text(8, y + 1, 0.4f, GREY_LIGHT, ICON_X - 16, t);
         y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;

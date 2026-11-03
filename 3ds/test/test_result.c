@@ -85,6 +85,8 @@ int main(void)
     expect(make(RESULT_VC_UNEXPECTED, "sav.dat, SecureValue, rsm2.dat"), 1, KIND_FAILURE,
            "Zelda: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line.",
            "Files: sav.dat, SecureValue, rsm2.dat");
+    expect(make(RESULT_VC_UNEXPECTED, ""), 0, KIND_FAILURE, /* archive no longer readable: no empty technical line */
+           "Zelda : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.", "");
     expect(make(RESULT_CONFLICT_LEFT, ""), 0, KIND_INFO, "Zelda : conflit laissé tel quel.", "");
     r = make(RESULT_DUPLICATE_SHARED, "");
     r.count = 2;

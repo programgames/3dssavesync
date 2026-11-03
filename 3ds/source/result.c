@@ -81,7 +81,7 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
                             "%s: downloading Virtual Console games comes in a later version. Your save was not changed."), game);
         return KIND_INFO;
     case RESULT_VC_UNEXPECTED:
-        snprintf(detail, dn, T("Fichiers : %s", "Files: %s"), r->path);
+        if (r->path[0]) snprintf(detail, dn, T("Fichiers : %s", "Files: %s"), r->path);
         snprintf(text, n, T("%s : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
                             "%s: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line."), game);
         return KIND_FAILURE;
