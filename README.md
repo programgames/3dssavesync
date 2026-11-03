@@ -109,6 +109,14 @@ The local server syncs at home, when the PC is on. To sync from anywhere, run th
 
 With the local server, nothing leaves your home network. Your saves stay in your emulator and 3DS app folders, as before.
 
+## Uninstall
+
+1. Close LaunchBox and ES-DE.
+2. Open **3dssavesync settings**, part **Frontends and install**, then click **Uninstall 3dssavesync**.
+3. On the 3DS, open FBI, **Titles**, **3dssavesync**, **Delete Title**.
+
+LaunchBox and ES-DE get their original emulators back, so your games start as before. The shortcuts and the program go to the Recycle Bin. Your saves do not move; the settings, the backup copies and the local server data stay, and the report says where. Without the settings page: `3dssavesync uninstall`.
+
 ## How it works
 
 ```

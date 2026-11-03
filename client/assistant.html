@@ -194,6 +194,12 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
     <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
   </section>
 
+  <section id="sectionDesinstaller" class="masque" data-page="frontends">
+    <h2>{{t "Désinstaller" "Uninstall"}}</h2>
+    <p class="aide">{{t "LaunchBox et ES-DE retrouvent leur émulateur d'origine par défaut ; les raccourcis et le programme vont à la Corbeille. Vos sauvegardes, les réglages et les copies de sécurité restent. Fermez d'abord LaunchBox et ES-DE." "LaunchBox and ES-DE get their original default emulator back; the shortcuts and the program go to the Recycle Bin. Your saves, the settings and the backup copies stay. Close LaunchBox and ES-DE first."}}</p>
+    <button type="button" id="desinstaller">{{t "Désinstaller 3dssavesync" "Uninstall 3dssavesync"}}</button>
+  </section>
+
   <section id="sectionHistorique" class="masque" data-page="historique">
       <h2>{{t "Historique : restaurer une ancienne version" "History: restore an old version"}}</h2>
       <p class="aide">{{t "Le serveur garde chaque version reçue. Restaurer une version en fait la version actuelle du serveur ; chaque appareil la reçoit ensuite à sa prochaine synchronisation, après une copie de sécurité. Rien n'est écrit sur ce PC maintenant." "The server keeps every version it receives. Restoring a version makes it the current server version; each device then gets it at its next sync, after a backup copy. Nothing is written on this PC now."}}</p>
@@ -266,6 +272,8 @@ const T = {
   restaurer: {{t "Restaurer cette version" "Restore this version"}},
   confirmer: {{t "Restaurer la version du %s ?" "Restore the version of %s?"}},
   retirer: {{t "Retirer" "Remove"}},
+  confirmerDesinstall: {{t "Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau les jeux sans synchronisation. Vos sauvegardes ne changent pas." "Uninstall 3dssavesync? LaunchBox and ES-DE will start the games without sync again. Your saves do not change."}},
+  desinstalle: {{t "3dssavesync est désinstallé. Fermez cet onglet." "3dssavesync is uninstalled. Close this tab."}},
   pret: {{t "Prêt" "Ready"}},
   aVerifier: {{t "À vérifier" "To check"}},
   nonUtilise: {{t "Non utilisé" "Not used"}},
@@ -530,6 +538,7 @@ async function charger() {
   basculer();
   $("sectionHistorique").classList.toggle("masque", !etat.Existe);
   $("sectionHacks").classList.toggle("masque", !etat.Existe);
+  $("sectionDesinstaller").classList.toggle("masque", !etat.Existe);
   const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
   $("sectionCarte").classList.toggle("masque", !sd);
   $("adresseCarte").textContent = etat.Adresse3DS || "";
@@ -678,6 +687,14 @@ $("reparer").onclick = e => action(e.target, async titre => {
   const r = await api("reparer");
   afficher(titre, r.Lignes, r.Erreur);
 });
+$("desinstaller").onclick = e => {
+  if (!confirm(T.confirmerDesinstall)) return;
+  action(e.target, async titre => {
+    const r = await api("desinstaller");
+    afficher(r.Erreur ? titre : T.desinstalle, r.Lignes, r.Erreur);
+    if (!r.Erreur) document.querySelector(".barre").remove(); // le programme s'arrête
+  });
+};
 $("terminer").onclick = async () => {
   await api("terminer").catch(() => {});
   document.querySelector("main").replaceChildren(texte("h1", T.fini), texte("p", T.ferme, "sous"));

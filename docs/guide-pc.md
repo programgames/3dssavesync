@@ -17,6 +17,7 @@ At the top, three boxes show the state at a glance: server reachable or not, emu
 5. **Frontends and shortcuts**: LaunchBox (Windows), ES-DE, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), and the **3dssavesync settings** shortcut.
 6. **History**: search a game, then get back an old version of its save (see [Restore an old version](#restore-an-old-version)).
 7. **ROM hacks**: give a hack its own save (see [ROM hacks](#rom-hacks)).
+8. **Uninstall** (part Frontends and install): gives LaunchBox and ES-DE their original emulators back, then moves the shortcuts and the program to the Recycle Bin. See [ADR 0019](adr/0019-desinstallation.md).
 
 Nothing is written before you click **Save**. A personal server that does not answer blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "To enter on the 3DS". The program stops when you click **Finish**, or 2 minutes after you close the tab.
 

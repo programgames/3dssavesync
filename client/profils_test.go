@@ -19,6 +19,10 @@ func maisonFactice(t *testing.T) string {
 	creerRaccourci = func(nom, _ string, _ []string, _ bool) (string, error) { return "test:" + nom, nil }
 	autostart = func(nom, _ string, _ []string) (string, error) { return "test:" + nom, nil }
 	ouvrirDetache = func(string, []string) error { return nil } // jamais un vrai émulateur
+	rr, rp := retirerRaccourcis, retirerProgramme               // désinstallation : jamais les vrais raccourcis ni le vrai programme
+	t.Cleanup(func() { retirerRaccourcis, retirerProgramme = rr, rp })
+	retirerRaccourcis = func(string) ([]string, error) { return nil, nil }
+	retirerProgramme = func(string) error { return nil }
 	return m
 }
 
