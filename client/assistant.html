@@ -101,6 +101,7 @@ input.interrupteur:checked::before { left: 23px; background: var(--accent-texte)
 .message.info { background: var(--accent-doux); border-color: var(--accent); }
 .message.alerte { background: var(--alerte-fond); border-color: var(--alerte); }
 .message.erreur { background: var(--erreur-fond); border-color: var(--erreur); }
+.entete .actions { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e3); align-items: center; margin-top: var(--e3); }
 .message.compact { display: block; margin: var(--e2) 0 0; padding: var(--e2) var(--e3); overflow-wrap: anywhere; }
 .detail { display: block; margin-top: var(--e1); font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; font-weight: 400; }
 .resultat { padding: var(--e4); }
@@ -451,7 +452,10 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
   <section id="sectionHistorique" class="masque" data-page="historique">
     <div class="entete"><h1>{{t "Jeux" "Games"}}</h1>
       <p>{{t "Le serveur garde toutes les versions de vos sauvegardes. Restaurer une version change seulement le serveur : chaque appareil la recevra à sa prochaine synchronisation, après une copie de sécurité." "The server keeps every version of your saves. Restoring one only changes the server: each device gets it at its next sync, after a backup."}}</p>
-      <p id="histoEtat" class="statut" role="status"></p></div>
+      <p id="histoEtat" class="statut" role="status"></p>
+      <div class="actions"><button type="button" id="toutSynchro">{{t "Tout synchroniser" "Sync all"}}</button>
+        <span class="legende">{{t "Synchronise les jeux de tous vos émulateurs fermés, sans en lancer un." "Syncs the games of all your closed emulators, without starting one."}}</span></div>
+      <div id="synchroResultat"></div></div>
     <div class="groupe histo">
       <div class="liste">
         <div id="filtresConsole" class="filtres" role="group" aria-label="{{t "Console" "Console"}}"></div>
@@ -540,6 +544,7 @@ const T = {
   tous: {{t "Tous" "All"}},
   aucunResultat: {{t "Aucun jeu ne correspond." "No game matches."}},
   instant: {{t "à l'instant" "just now"}},
+  synchroEnCours: {{t "Synchronisation en cours… Cela peut prendre une minute avec beaucoup de jeux." "Syncing… This can take a minute with many games."}},
   aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
   colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
   sur3DS: {{t "Entrez-les sur la 3DS (3dssavesync, touche SELECT), ou écrivez-les sur sa carte SD plus bas" "Enter these on the 3DS (3dssavesync, SELECT button), or write them to its SD card below"}},
@@ -741,7 +746,7 @@ async function ouvrir(nom) {
 
 // Serveur et nombre de jeux : une lecture de la liste du serveur (api/jeux), gardée pour l'historique.
 async function bandeauServeur() {
-  listeJeux = null;
+  listeJeux = parties = null;
   $("etatJeux").textContent = "…";
   if (!etat.Existe) {
     $("etatServeur").textContent = T.pasEnregistre; $("etatServeur").className = "pastille neutre"; $("etatJeux").textContent = "—";
@@ -1032,7 +1037,7 @@ function age(s) { // secondes depuis le dernier envoi -> « il y a 3 j »
     if (s >= n) return ilYA.format(-Math.floor(s / n), u);
   return T.instant;
 }
-let listeJeux = null, jeuChoisi = "", consoleChoisie = "";
+let listeJeux = null, parties = null, jeuChoisi = "", consoleChoisie = "";
 async function jeux() {
   if (!listeJeux) {
     statut(T.attente);
@@ -1043,6 +1048,10 @@ async function jeux() {
   if (!listeJeux.length) return statut(T.aucunJeu);
   if ($("histoEtat").textContent === T.attente) statut("");
   filtrer();
+  if (!parties) { // Pokémon play times: one read per game, after the list is shown
+    parties = {};
+    api("parties").then(r => { if (r.Parties) { parties = r.Parties; filtrer(); } }).catch(() => {});
+  }
   if (!jeuChoisi) $("versions").replaceChildren(texte("p", T.choisirJeu, "doux"));
 }
 function filtrer() {
@@ -1065,7 +1074,7 @@ function filtrer() {
     b.type = "button";
     if (j.Cle === jeuChoisi) b.setAttribute("aria-current", "true");
     const nom = texte("span", j.Nom || j.Cle); // la Clé seulement si aucun nom n'est connu
-    nom.append(texte("span", [j.Nom ? j.Cle : T.nomInconnu, age(j.Age), APPAREILS[j.Client] || j.Client].filter(Boolean).join(" · "), "cle"));
+    nom.append(texte("span", [j.Nom ? j.Cle : T.nomInconnu, parties && parties[j.Cle], age(j.Age), APPAREILS[j.Client] || j.Client].filter(Boolean).join(" · "), "cle"));
     b.append(SYS(consoleDe(j.Cle)), nom);
     b.onclick = () => { jeuChoisi = j.Cle; filtrer(); versions(j.Cle).catch(e => statut(T.erreur + e.message, "erreur")); };
     const li = document.createElement("li");
@@ -1074,6 +1083,16 @@ function filtrer() {
   }));
 }
 $("chercheJeu").oninput = $("triJeux").onchange = filtrer;
+$("toutSynchro").onclick = async () => {
+  $("toutSynchro").disabled = true;
+  $("synchroResultat").replaceChildren(message("info", T.synchroEnCours));
+  try {
+    const r = await api("synchro");
+    $("synchroResultat").replaceChildren(message(/^(Envoyées|Uploaded)/.test(r.Texte) ? "info" : "alerte", r.Texte));
+    bandeauServeur(); // the list and the server badge read again
+  } catch (e) { $("synchroResultat").replaceChildren(message("erreur", T.erreur + e.message)); }
+  $("toutSynchro").disabled = false;
+};
 
 const APPAREILS = {"3ds": "3DS", "pc": "PC", "restauration": {{t "restauration" "restore"}}};
 async function versions(cle, message, classe) {

@@ -20,10 +20,10 @@ func TestTrayMenu(t *testing.T) {
 		}
 		return strings.Join(l, "|")
 	}
-	if m := texts(trayMenuItems(0, "", "")); m != "Ouvrir les réglages=reglages|3dssavesync dev=|=|Quitter=quitter" {
+	if m := texts(trayMenuItems(0, "", "")); m != "Ouvrir les réglages=reglages|Tout synchroniser=synchro|3dssavesync dev=|=|Quitter=quitter" {
 		t.Errorf("sans attente ni serveur local : %s", m)
 	}
-	if m := texts(trayMenuItems(2, "Serveur local : en marche (x)", "3.8.0")); m != "Ouvrir les réglages=reglages|Mettre à jour vers la version 3.8.0=reglages|"+
+	if m := texts(trayMenuItems(2, "Serveur local : en marche (x)", "3.8.0")); m != "Ouvrir les réglages=reglages|Mettre à jour vers la version 3.8.0=reglages|Tout synchroniser=synchro|"+
 		"Envoyer maintenant (2 en attente)=envoyer|Serveur local : en marche (x)=|3dssavesync dev=|=|Quitter=quitter" {
 		t.Errorf("2 en attente, serveur local, mise à jour : %s", m)
 	}

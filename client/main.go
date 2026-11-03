@@ -22,6 +22,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -379,7 +380,87 @@ func cmdLaunch(config, name string) (int, error) {
 			dir = d
 		}
 	}
-	return c.play(c.gamesOf(e, p), e.command(p, "", "", dir), hint(e, p))
+	games, refusal, noRoms := c.gamesOf(e, p)
+	if len(refusal) > 0 {
+		notify(tr("Non synchronisé : ", "Not synced: ") + strings.Join(refusal, "\n"))
+	}
+	if len(noRoms) > 0 {
+		notify(fmt.Sprintf(tr("%s s'ouvre sans synchronisation, car 3dssavesync ne connaît pas votre dossier de jeux %s. "+
+			"Lancez vos jeux depuis votre frontend, ou ajoutez ce dossier dans les réglages.",
+			"%s is opening without sync because 3dssavesync doesn't know your %s games folder. "+
+				"Start your games from your frontend, or add this folder in the settings."), e.process(), strings.Join(noRoms, ", ")))
+	}
+	return c.play(games, e.command(p, "", "", dir), hint(e, p))
+}
+
+// syncAll runs a Sync of every game of the configured emulators (Sync all: settings page, tray menu). An open
+// emulator is skipped, since its game may still write its save. A Conflict is not resolved here: the next start of
+// the game asks. Returns the text for the user, problems first (a notification is cut at 255 characters).
+func syncAll(config string) string {
+	s, err := newSession(config)
+	if err != nil {
+		return tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err)
+	}
+	s.log("tout synchroniser")
+	if err := s.resume(); err != nil && end(err) {
+		return tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
+	}
+	n := &syncCount{}
+	var open, refused, failures []string
+	names := slices.Sorted(maps.Keys(s.cfg.Emulators))
+emulators:
+	for _, name := range names {
+		e := s.cfg.Emulators[name]
+		p, err := e.profile(name)
+		if err != nil {
+			failures = append(failures, name+" : "+errorText(err))
+			continue
+		}
+		if instances(e.process()) > 0 {
+			if !slices.Contains(open, e.process()) {
+				open = append(open, e.process())
+			}
+			continue
+		}
+		c := s.client(name)
+		c.batch = n
+		games, refusal, noRoms := c.gamesOf(e, p)
+		refused = append(refused, refusal...)
+		if len(noRoms) > 0 {
+			refused = append(refused, fmt.Sprintf(tr("%s : dossier de jeux %s inconnu. Ajoutez-le dans les réglages.",
+				"%s: unknown %s games folder. Add it in the settings."), name, strings.Join(noRoms, ", ")))
+		}
+		for _, j := range games {
+			if _, err := c.syncGame(j, true); err != nil {
+				c.log(j.Key + " tout synchroniser : " + err.Error())
+				if failures = addFailure(failures, j, err); end(err) {
+					break emulators
+				}
+			}
+		}
+	}
+	var text []string
+	if len(n.conflicts) > 0 {
+		text = append(text, fmt.Sprintf(tr("Conflit sur %s : lancez ce jeu pour choisir la version à garder.",
+			"Conflict on %s: start this game to choose which version to keep."), strings.Join(n.conflicts, ", ")))
+	}
+	if len(failures) > 0 {
+		text = append(text, tr("Non synchronisé :", "Not synced:"))
+		text = append(text, failures...)
+	}
+	if len(open) > 0 {
+		text = append(text, fmt.Sprintf(tr("Jeux laissés de côté, car l'émulateur est ouvert : %s. Fermez-le, puis recommencez.",
+			"Games skipped because the emulator is open: %s. Close it, then try again."), strings.Join(open, ", ")))
+	}
+	text = append(text, refused...)
+	if len(text) == 0 && n.uploaded+n.downloaded+n.inSync == 0 {
+		text = append(text, tr("Aucun jeu trouvé. Vérifiez les dossiers de jeux dans la partie Émulateurs.",
+			"No game found. Check the games folders in the Emulators part."))
+	}
+	text = append(text, fmt.Sprintf(tr("Envoyées : %d · Récupérées : %d · Déjà à jour : %d", "Uploaded: %d · Downloaded: %d · Already up to date: %d"),
+		n.uploaded, n.downloaded, n.inSync))
+	s.log(strings.Join(text, " | "))
+	return strings.Join(text, "\n")
 }
 
 // refusal: the emulator already runs. Refuse if its game is unknown (instance opened outside 3dssavesync, or
@@ -438,10 +519,9 @@ func (s *Session) acquireLock(process, key string) func() {
 	return func() { os.Remove(f) }
 }
 
-// gamesOf returns an emulator's games for launch: the ROMs of its roms folders, and the 3DS Pokémon seen by Azahar.
-func (c *Client) gamesOf(e *Emulator, p Profile) []*Game {
-	var games []*Game
-	var noRoms, refusal []string
+// gamesOf returns an emulator's games (launch, Sync all): the ROMs of its roms folders, and the 3DS Pokémon seen by
+// Azahar. refusal: why some ROMs are not synced; noRoms: the systems with no roms folder.
+func (c *Client) gamesOf(e *Emulator, p Profile) (games []*Game, refusal, noRoms []string) {
 	byKey, roms := map[string][]*Game{}, map[*Game]string{} // roms: ROM path of each Game
 	for _, system := range e.systems(p) {
 		if system == "3DS" {
@@ -520,17 +600,8 @@ func (c *Client) gamesOf(e *Emulator, p Profile) []*Game {
 		refusal = append(refusal, fmt.Sprintf(tr("ces ROM utiliseraient le même fichier de sauvegarde : %s. Renommez-en une.",
 			"these ROMs would use the same save file: %s. Rename one of them."), strings.Join(shares, ", ")))
 	}
-	if len(refusal) > 0 {
-		notify(tr("Non synchronisé : ", "Not synced: ") + strings.Join(refusal, "\n"))
-	}
-	if len(noRoms) > 0 {
-		notify(fmt.Sprintf(tr("%s s'ouvre sans synchronisation, car 3dssavesync ne connaît pas votre dossier de jeux %s. "+
-			"Lancez vos jeux depuis votre frontend, ou ajoutez ce dossier dans les réglages.",
-			"%s is opening without sync because 3dssavesync doesn't know your %s games folder. "+
-				"Start your games from your frontend, or add this folder in the settings."), e.process(), strings.Join(noRoms, ", ")))
-	}
 	sort.Slice(games, func(a, b int) bool { return games[a].Name < games[b].Name })
-	return games
+	return games, refusal, noRoms
 }
 
 // play runs the pending Uploads, the Sync before, the game, the Sync after. One read of the server list per pass.

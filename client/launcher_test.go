@@ -858,3 +858,50 @@ func TestHiddenFlagAliases(t *testing.T) {
 		t.Errorf("help with the English names only expected:\n%s", h)
 	}
 }
+
+// Sync all: every game of every closed emulator, in one pass; a Conflict is listed, never asked nor replaced.
+func TestSyncAll(t *testing.T) {
+	tmp = t.TempDir()
+	fakeHome(t)
+	startTestServer(t)
+	reset()
+	saves, gba := filepath.Join(tmp, "saves"), filepath.Join(tmp, "gba")
+	config := writeConfig(t, filepath.Join(tmp, "cfg", "config.json"), Config{
+		URL: url, Token: "jeton-test", Copies: filepath.Join(tmp, "copies"),
+		Emulators: map[string]*Emulator{
+			"melonds": {Exe: "inutilise.exe", Roms: map[System]string{"DS": filepath.Join(tmp, "roms")}, Saves: map[System]string{"DS": saves}},
+			"mgba":    {Exe: "inutilise.exe", Roms: map[System]string{"GBA": filepath.Join(tmp, "romsgba")}, Saves: map[System]string{"GBA": gba}},
+		},
+	})
+	romDS(t, "Pokemon Noire", "IRBF")
+	romDS(t, "Pokemon Blanche", "IRAF")
+	write(t, filepath.Join(tmp, "romsgba", "Pokemon Emeraude.gba"), gbaHeader("BPEF"))
+	black, white, emerald := filepath.Join(saves, "Pokemon Noire.sav"), filepath.Join(saves, "Pokemon Blanche.sav"), filepath.Join(gba, "Pokemon Emeraude.sav")
+	write(t, black, random(0x8000, 1))        // only on the PC: uploaded
+	upload3ds("IRAF", random(0x8000, 2), nil) // only on the server: downloaded
+	write(t, emerald, random(0x8000, 3))      // both, different, no Base: Conflict
+	upload3ds("GBA-BPEF", random(0x8000, 4), nil)
+
+	text := syncAll(config)
+	if !strings.Contains(text, "Envoyées : 1 · Récupérées : 1 · Déjà à jour : 0") || !strings.Contains(text, "Conflit sur Pokemon Emeraude") {
+		t.Errorf("premier passage : %q", text)
+	}
+	if !bytes.Equal(current("IRBF"), read(black)) || !bytes.Equal(read(white), random(0x8000, 2)) {
+		t.Error("Noire envoyée et Blanche récupérée attendues")
+	}
+	if !bytes.Equal(read(emerald), random(0x8000, 3)) || !bytes.Equal(current("GBA-BPEF"), random(0x8000, 4)) {
+		t.Error("Conflit : rien ne doit être remplacé")
+	}
+	if len(questions) > 0 || len(notifications) > 0 {
+		t.Errorf("aucune fenêtre ni notification attendue : %q %q", questions, notifications)
+	}
+
+	if text := syncAll(config); !strings.HasSuffix(text, "Envoyées : 0 · Récupérées : 0 · Déjà à jour : 2") {
+		t.Errorf("deuxième passage : %q", text)
+	}
+	running = 1
+	if text := syncAll(config); !strings.Contains(text, "l'émulateur est ouvert : inutilise.") || !strings.HasSuffix(text, "Déjà à jour : 0") {
+		t.Errorf("émulateur ouvert : %q", text)
+	}
+	running = 0
+}

@@ -8,7 +8,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 - **Big game lists on the 3DS.** Tabs for All, To do, DS, GB, GBA and 3DS (L and R), page jumps (left and right), and a **Search** button on the touch screen. The search ignores accents: "pokemon" finds "Pokémon".
 - **List order** in the 3DS settings: to do first (as before), by name, or last played.
-- **Games page** in the PC settings (it was History): a filter per console, a sort by name or last save, and the date and device of each game's last save. The search ignores accents and matches every word.
+- **Games page** in the PC settings (it was History): a filter per console, a sort by name or last save, the date and device of each game's last save, and the play time and trainer of Pokémon games. The search ignores accents and matches every word.
+- **Sync all on the PC**, in the Games page and in the menu of the icon near the clock: syncs the games of every closed emulator without starting one. A game in conflict is left as it is until you start it.
 
 ### Changed
 

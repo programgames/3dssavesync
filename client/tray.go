@@ -37,7 +37,7 @@ func (c *Config) trayIcon() bool { return c.TrayIcon == nil || *c.TrayIcon }
 // MenuItem is an item of the tray icon menu. Empty Text: separator; empty Action: greyed information line.
 type MenuItem struct {
 	Text   string
-	Action string // "reglages", "envoyer" or "quitter"
+	Action string // "reglages", "synchro", "envoyer" or "quitter"
 }
 
 // trayMenuItems builds the menu from the state. pending: number of pending Uploads; server: local Server line
@@ -47,6 +47,7 @@ func trayMenuItems(pending int, server, update string) []MenuItem {
 	if update != "" {
 		m = append(m, MenuItem{fmt.Sprintf(tr("Mettre à jour vers la version %s", "Update to version %s"), update), "reglages"})
 	}
+	m = append(m, MenuItem{tr("Tout synchroniser", "Sync all"), "synchro"})
 	if pending > 0 {
 		m = append(m, MenuItem{fmt.Sprintf(tr("Envoyer maintenant (%d en attente)", "Upload now (%d pending)"), pending), "envoyer"})
 	}
@@ -289,6 +290,11 @@ func cmdTray(config string) (int, error) {
 			if upload.TryLock() { // two clicks: one Upload only
 				defer upload.Unlock()
 				notify(uploadNow(config))
+			}
+		case "synchro":
+			if upload.TryLock() {
+				defer upload.Unlock()
+				notify(syncAll(config))
 			}
 		case "quitter":
 			quit()
