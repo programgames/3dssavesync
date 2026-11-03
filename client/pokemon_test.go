@@ -125,11 +125,11 @@ func mainSoleilLune(h, m int, nom string) []byte {
 func TestConflitTempsDeJeu(t *testing.T) {
 	reinitialiser()
 	reponses = []string{""}
-	pc := mainSoleilLune(152, 30, "Julien")
+	pc := mainSoleilLune(152, 30, "Sacha")
 	srv := &Version{Hash: strings.Repeat("b", 64), Client: "azahar", Age: new(int64)}
 	resoudreConflit(&Jeu{Nom: "Pokemon Lune", Systeme: "3DS"}, &Local{Version: Version{Hash: strings.Repeat("a", 64)}, Brut: pc, SRAM: pc},
 		srv, mainSoleilLune(0, 0, ""), false)
-	if len(questions) != 1 || !strings.Contains(questions[0], "152 h 30 · Julien") || !strings.Contains(questions[0], "0 h 00 · partie non commencée") {
+	if len(questions) != 1 || !strings.Contains(questions[0], "152 h 30 · Sacha") || !strings.Contains(questions[0], "0 h 00 · partie non commencée") {
 		t.Errorf("temps de jeu des deux Versions attendu : %q", questions)
 	}
 }

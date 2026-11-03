@@ -174,7 +174,7 @@ func gen67(d []byte) (h, m int, nom string, ok bool) {
 	return int(le.Uint16(d[f[0]:])), int(d[f[0]+2]), nom16(d[f[1]:], 13, func(c int) rune { return rune(c) }), true
 }
 
-// « 152 h 30 · Julien » pour une sauvegarde (SRAM seule) d'un Pokémon reconnu ; false sinon.
+// « 152 h 30 · Sacha » pour une sauvegarde (SRAM seule) d'un Pokémon reconnu ; false sinon.
 func partiePokemon(d []byte) (string, bool) {
 	var lire func([]byte) (int, int, string, bool)
 	switch len(d) {
