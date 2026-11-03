@@ -180,7 +180,7 @@ func TestUpdateLock(t *testing.T) {
 	if exists(filepath.Join(d, "maj-pc.verrou")) {
 		t.Error("verrou retiré attendu")
 	}
-	release, _ = updateLock(d)
+	updateLock(d) // never released: it goes stale below
 	stale := time.Now().Add(-16 * time.Minute)
 	os.Chtimes(filepath.Join(d, "maj-pc.verrou"), stale, stale)
 	if l, err := updateLock(d); err != nil {

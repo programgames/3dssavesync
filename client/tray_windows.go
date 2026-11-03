@@ -144,7 +144,7 @@ func showIcon(menu func() []MenuItem, choose func(string), end <-chan struct{}) 
 	}
 	trayData = notifyIconData{HWnd: hwnd, UID: 1, UFlags: 0x1 | 0x2 | 0x4, UCallbackMessage: wmIcon, HIcon: icon} // NIF_MESSAGE|NIF_ICON|NIF_TIP
 	trayData.CbSize = uint32(unsafe.Sizeof(trayData))
-	copy(trayData.SzTip[:127], syscall.StringToUTF16("3dssavesync"))
+	copy(trayData.SzTip[:127], utf16z("3dssavesync"))
 	notif := shell32.NewProc("Shell_NotifyIconW")
 	// At logon, the taskbar is not always ready: try again for one minute.
 	for i := 0; ; i++ {

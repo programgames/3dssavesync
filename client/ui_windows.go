@@ -20,6 +20,13 @@ var (
 	comctl32 = syscall.NewLazyDLL("comctl32.dll") // loaded under the activation context: version 6
 )
 
+// utf16z returns s as a NUL-terminated UTF-16 string for the Windows API. A NUL inside s would end the text early, so
+// it is dropped (syscall.UTF16FromString refuses it; the deprecated StringToUTF16 panicked).
+func utf16z(s string) []uint16 {
+	u, _ := syscall.UTF16FromString(strings.ReplaceAll(s, "\x00", ""))
+	return u
+}
+
 // A Go binary has no manifest: without one, comctl32 v5 has no TaskDialog.
 const manifest = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
@@ -153,9 +160,9 @@ func notification(text string) {
 	icon, _, _ := user32.NewProc("LoadIconW").Call(0, 32516)                                       // IDI_INFORMATION
 	n := notifyIconData{HWnd: hwnd, UID: 1, UFlags: 0x2 | 0x4 | 0x10, HIcon: icon, DwInfoFlags: 1} // NIF_ICON|NIF_TIP|NIF_INFO, NIIF_INFO
 	n.CbSize = uint32(unsafe.Sizeof(n))
-	copy(n.SzTip[:127], syscall.StringToUTF16("3dssavesync"))
-	copy(n.SzInfoTitle[:63], syscall.StringToUTF16("3dssavesync"))
-	info := syscall.StringToUTF16(text)
+	copy(n.SzTip[:127], utf16z("3dssavesync"))
+	copy(n.SzInfoTitle[:63], utf16z("3dssavesync"))
+	info := utf16z(text)
 	if len(info) > 256 { // 255 characters at most: cut with "…", never in the middle of a UTF-16 pair
 		n := 254
 		if info[n-1] >= 0xD800 && info[n-1] < 0xDC00 {

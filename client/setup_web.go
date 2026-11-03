@@ -179,7 +179,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method != "POST" || r.Header.Get("Content-Type") != "application/json" { // another page can't send this type without CORS
-		http.Error(w, "", 405)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
 	var response any
