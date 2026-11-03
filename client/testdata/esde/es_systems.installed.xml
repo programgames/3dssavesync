@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<!-- This is the ES-DE game systems configuration file, customized by EmuDeck. -->
+<systemList>
+    <system>
+        <name>gba</name>
+        <fullname>Nintendo Game Boy Advance</fullname>
+        <path>%ROMPATH%/gba</path>
+        <extension>.agb .AGB .bin .BIN .cgb .CGB .dmg .DMG .gb .GB .gba .GBA .gbc .GBC .sgb .SGB .7z .7Z .zip .ZIP</extension>
+        <command label="3dssavesync (retroarch)">%EMULATOR_3DSSAVESYNC% run --emulator retroarch %ROM%</command>
+        <command label="mGBA">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/mgba_libretro.so %ROM%</command>
+        <command label="mGBA (Standalone)">%EMULATOR_MGBA% -f %ROM%</command>
+        <platform>gba</platform>
+        <theme>gba</theme>
+    </system>
+    <system>
+        <name>nds</name>
+        <fullname>Nintendo DS</fullname>
+        <path>%ROMPATH%/nds</path>
+        <extension>.app .APP .bin .BIN .nds .NDS .7z .7Z .zip .ZIP</extension>
+        <command label="3dssavesync (melonds)">%EMULATOR_3DSSAVESYNC% run --emulator melonds %ROM%</command>
+        <command label="melonDS (Standalone)">%EMULATOR_MELONDS% -f %ROM%</command>
+        <command label="DeSmuME">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/desmume_libretro.so %ROM%</command>
+        <platform>nds</platform>
+        <theme>nds</theme>
+    </system>
+    <system>
+        <name>snes</name>
+        <fullname>Nintendo SNES (Super Nintendo)</fullname>
+        <path>%ROMPATH%/snes</path>
+        <extension>.sfc .SFC .smc .SMC .7z .7Z .zip .ZIP</extension>
+        <command label="Snes9x - Current">%EMULATOR_RETROARCH% -L %CORE_RETROARCH%/snes9x_libretro.so %ROM%</command>
+        <platform>snes</platform>
+        <theme>snes</theme>
+    </system>
+    <system>
+        <name>gb</name>
+        <fullname>Nintendo Game Boy</fullname>
+        <path>%ROMPATH%/gb</path>
+        <extension>.gb .GB .zip .ZIP</extension>
+        <command label="3dssavesync (retroarch)">%EMULATOR_3DSSAVESYNC% run --emulator retroarch %ROM%</command>
+        <platform>gb</platform>
+        <theme>gb</theme>
+    </system>
+    <system>
+        <name>gbc</name>
+        <fullname>Nintendo Game Boy Color</fullname>
+        <path>%ROMPATH%/gbc</path>
+        <extension>.gbc .GBC .zip .ZIP</extension>
+        <command label="3dssavesync (retroarch)">%EMULATOR_3DSSAVESYNC% run --emulator retroarch %ROM%</command>
+        <platform>gbc</platform>
+        <theme>gbc</theme>
+    </system>
+    <system>
+        <name>n3ds</name>
+        <fullname>Nintendo 3DS</fullname>
+        <path>%ROMPATH%/n3ds</path>
+        <extension>.3ds .3DS .cci .CCI .cxi .CXI</extension>
+        <command label="3dssavesync (azahar)">%EMULATOR_3DSSAVESYNC% run --emulator azahar %ROM%</command>
+        <platform>n3ds</platform>
+        <theme>n3ds</theme>
+    </system>
+</systemList>

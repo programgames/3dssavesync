@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/xml"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -261,5 +262,55 @@ func TestLaunchBoxOptions(t *testing.T) {
 	inPlace := strings.Replace(emulatorsXML, `Emulators\MelonDS\melonDS.exe`, launcher, 1)
 	if o := launchBoxOptions(inPlace, lb, melon, []System{"DS"}); o != "" {
 		t.Errorf("émulateur modifié sur place : rien à reprendre : %q", o)
+	}
+}
+
+// Golden files (testdata/): real-looking frontend files, the exact install output, a second install that changes
+// nothing, and an uninstall that gives back the same bytes. UPDATE_GOLDEN=1 go test -run Golden rewrites the
+// expected files: read the diff before committing it.
+func TestFrontendsGolden(t *testing.T) {
+	golden := func(name, got string) {
+		t.Helper()
+		f := filepath.Join("testdata", name)
+		if os.Getenv("UPDATE_GOLDEN") != "" {
+			os.WriteFile(f, []byte(got), 0o644)
+		}
+		if got != string(read(f)) {
+			t.Errorf("%s: different output:\n%s", name, got)
+		}
+	}
+	launcher := "/opt/3dssavesync/3dssavesync"
+
+	original := string(read(filepath.Join("testdata", "launchbox", "Emulators.xml")))
+	entries := []LBEntry{
+		{"azahar", "x/azahar.exe", []System{N3DS}},
+		{"melonds", "x/melonDS.exe", []System{DS}},
+		{"retroarch", "x/retroarch.exe", []System{GB, GBA}},
+	}
+	installed, _ := launchbox(original, "LaunchBox", launcher, entries)
+	for i, b := range lbEmulatorBlock.FindAllString(installed, -1) { // newID: random
+		if strings.HasSuffix(field(b, "Title"), " (3dssavesync)") {
+			installed = strings.ReplaceAll(installed, field(b, "ID"), fmt.Sprintf("00000000-0000-4000-8000-00000000000%d", i))
+		}
+	}
+	golden(filepath.Join("launchbox", "Emulators.installed.xml"), installed)
+	if again, _ := launchbox(installed, "LaunchBox", launcher, entries); again != installed {
+		t.Errorf("LaunchBox: a second install changes the file:\n%s", again)
+	}
+	if undone, _ := undoLaunchbox(installed, "LaunchBox", launcher, &Config{}); undone != original {
+		t.Errorf("LaunchBox: the uninstall doesn't give back the original file:\n%s", undone)
+	}
+
+	systems := string(read(filepath.Join("testdata", "esde", "es_systems.xml")))
+	rules := string(read(filepath.Join("testdata", "esde", "es_find_rules.xml")))
+	emus := map[System]string{DS: "melonds", GB: "retroarch", GBA: "retroarch", N3DS: "azahar"}
+	s, r, _ := esde(systems, rules, launcher, emus)
+	golden(filepath.Join("esde", "es_systems.installed.xml"), s)
+	golden(filepath.Join("esde", "es_find_rules.installed.xml"), r)
+	if s2, r2, _ := esde(s, r, launcher, emus); s2 != s || r2 != r {
+		t.Errorf("ES-DE: a second install changes the files:\n%s\n%s", s2, r2)
+	}
+	if ds, dr, _ := undoEsde(s, r); ds != systems || dr != rules {
+		t.Errorf("ES-DE: the uninstall doesn't give back the original files:\n%s\n%s", ds, dr)
 	}
 }
