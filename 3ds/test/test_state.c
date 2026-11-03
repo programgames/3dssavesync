@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "etat.h"
+#include "state.h"
 
 static const char *NOMS[] = { "A_JOUR", "A_ENVOYER", "A_RECUPERER", "CONFLIT" };
 

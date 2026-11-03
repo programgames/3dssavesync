@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "fichiers.h"
-#include "liste.h"
+#include "files.h"
+#include "list.h"
 
 static int echecs;
 

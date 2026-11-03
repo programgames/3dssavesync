@@ -2,7 +2,7 @@
 #include <citro2d.h>
 #include <stdio.h>
 #include <string.h>
-#include "ecran.h"
+#include "screen.h"
 
 static C3D_RenderTarget *haut, *bas;
 static C2D_TextBuf tampon, mesure; /* mesure : vidé à chaque mesure */

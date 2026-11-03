@@ -12,18 +12,18 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
-#include "cle.h"
-#include "ecran.h"
-#include "erreurs.h"
-#include "etat.h"
-#include "fichiers.h"
-#include "liste.h"
-#include "maj.h"
+#include "errors.h"
+#include "files.h"
+#include "key.h"
+#include "list.h"
 #include "net.h"
 #include "pokemon.h"
-#include "reglages.h"
-#include "texte.h"
-#include "titres3ds.h"
+#include "screen.h"
+#include "settings.h"
+#include "state.h"
+#include "text.h"
+#include "titles3ds.h"
+#include "update.h"
 
 #define DOSSIER "sdmc:/3ds/3dssavesync"
 #define ANCIEN "sdmc:/3ds/nds-save-sync" /* nom avant la v3 : réglages et Bases repris au premier lancement */

@@ -1,6 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
-#include "liste.h"
+#include "list.h"
 
 static const char *espaces(const char *p)
 {

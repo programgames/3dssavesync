@@ -2,7 +2,7 @@
  * Compilé sur PC : gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e */
 #include <stdio.h>
 #include <string.h>
-#include "erreurs.h"
+#include "errors.h"
 
 static int echecs, total;
 

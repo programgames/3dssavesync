@@ -1,7 +1,7 @@
 /* Textes calculés de l'écran (texte.h). */
 #include <stdio.h>
 #include <string.h>
-#include "texte.h"
+#include "text.h"
 
 const char *pluriel(long n, int anglais, const char *un, const char *plusieurs)
 {

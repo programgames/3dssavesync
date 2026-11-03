@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "titres3ds.h"
+#include "titles3ds.h"
 
 /* Chemin binaire {media, low, high} de ARCHIVE_USER_SAVEDATA (3dbrew, FS:OpenArchive). */
 static Result ouvrir(u64 id, FS_MediaType media, FS_Archive *a)

@@ -1,7 +1,7 @@
 /* Textes des échecs de requête (erreurs.h). Sans curl.h : testé sur l'hôte (test/test_erreurs.c). */
 #include <stdio.h>
 #include <string.h>
-#include "erreurs.h"
+#include "errors.h"
 
 #define T(fr, en) (anglais ? (en) : (fr))
 

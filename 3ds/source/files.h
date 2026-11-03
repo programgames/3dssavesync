@@ -3,7 +3,7 @@
 #define FICHIERS_H
 
 #include <stddef.h>
-#include "cle.h"
+#include "key.h"
 
 /* Fichier entier dans *octets (à libérer). 0 si lu, -1 sinon. */
 int lire_fichier(const char *chemin, unsigned char **octets, size_t *taille);

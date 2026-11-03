@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "fichiers.h"
-#include "reglages.h"
+#include "files.h"
+#include "settings.h"
 
 static const titre_t DEFAUT[] = {
     { 0x0004000000055D00ULL, "Pokemon X" },

@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include "cle.h"
+#include "key.h"
 
 static int alnum_maj(unsigned char c)
 {

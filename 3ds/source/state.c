@@ -1,5 +1,5 @@
 #include <string.h>
-#include "etat.h"
+#include "state.h"
 
 static int egal(const char *a, const char *b)
 {

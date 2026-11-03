@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "fichiers.h"
+#include "files.h"
 
 static int echecs;
 

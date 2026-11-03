@@ -2,7 +2,7 @@
  * Compilé sur PC : gcc -std=c99 -Wall -I source source/texte.c test/test_texte.c -o /tmp/x && /tmp/x */
 #include <stdio.h>
 #include <string.h>
-#include "texte.h"
+#include "text.h"
 
 static int echecs, total;
 

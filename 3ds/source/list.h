@@ -2,7 +2,7 @@
 #ifndef LISTE_H
 #define LISTE_H
 
-#include "cle.h"
+#include "key.h"
 
 /* Un jeu de la liste : {"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...",
  * "client": "pc", "age": 120, "nom": "..."}. Champ absent : "" (texte), -1 (taille, age), 0 (a_nom).

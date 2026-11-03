@@ -2,7 +2,7 @@
  * Compilé sur PC : gcc -I source source/cle.c test/test_cle.c -o test_cle && ./test_cle */
 #include <stdio.h>
 #include <string.h>
-#include "cle.h"
+#include "key.h"
 
 static int echecs;
 

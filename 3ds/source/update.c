@@ -1,7 +1,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#include "maj.h"
+#include "update.h"
 
 /* Texte JSON après "clé": (espaces permis), sans échappement. 0 si lu en entier dans out.
  * ponytail: lecture à la main comme /saves (liste.c) ; tag_name et adresses n'ont jamais d'échappement. */

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "fichiers.h"
+#include "files.h"
 
 int lire_fichier(const char *chemin, unsigned char **octets, size_t *taille)
 {
