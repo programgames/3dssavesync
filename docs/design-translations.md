@@ -113,7 +113,7 @@ static int francais;  /* replaces "anglais" */
 #define T(fr, en) (francais ? (fr) : traduire(en))
 ```
 
-`traduire(en)` returns the catalog value for `en`, or `en` itself. With no catalog loaded it returns `en`, so English users see exactly what they see today. Call sites that pass struct fields (`T(l[i].nom, l[i].nom_en)` in the settings screen) work unchanged: the lookup uses the English text at run time, not at compile time.
+`traduire(en)` returns the catalog value for `en`, or `en` itself. With no catalog loaded it returns `en`, so English users see exactly what they see today. Call sites that pass struct fields (`T(l[i].name, l[i].name_en)` in the settings screen) work unchanged: the lookup uses the English text at run time, not at compile time.
 
 ### New module `3ds/source/langue.c` (no libctru, tested on the host)
 
@@ -155,7 +155,7 @@ ZH=6 → zh-CN              KO=7 → ko    NL=8 → nl    PT=9 → pt    RU=10 �
 
 The override file **replaces** the embedded catalog; it does not merge with it. The behavior is predictable for a translator. After a release ships the translation, the translator deletes the override file.
 
-The `langue=` key lets a translator test a language without changing the console language. `ecrire_config()` writes all keys back, so it must also write `langue=` (one more `%s` in its `fprintf`). Value empty = console language.
+The `langue=` key lets a translator test a language without changing the console language. `write_config()` writes all keys back, so it must also write `langue=` (one more `%s` in its `fprintf`). Value empty = console language.
 
 ### Fonts
 
@@ -163,7 +163,7 @@ The app draws with the system font (`fontEnsureMapped`). The 3DS lets a user pic
 
 ### Screen width
 
-`ecran.c` already shrinks or wraps long text. Translations are often 20–30 % longer than English. The validator warns (does not fail) when a 3DS translation is more than 1.5 times the length of its key, so the translator can check that screen on the console.
+`screen.c` already shrinks or wraps long text. Translations are often 20–30 % longer than English. The validator warns (does not fail) when a 3DS translation is more than 1.5 times the length of its key, so the translator can check that screen on the console.
 
 ## 7. PC side (Go)
 

@@ -1,8 +1,8 @@
-"""Serveur personnel 3dssavesync : Historique des Sauvegardes DS, GB, GBA et 3DS (docs/design.md §2, ADR 0004).
+"""Self-hosted 3dssavesync server: History of the DS, GB, GBA and 3DS Saves (docs/design.md §2, ADR 0004).
 
-Variables d'environnement (préfixe NDSSYNC_ d'avant la v3, gardé pour les installations existantes) : NDSSYNC_TOKEN (obligatoire), NDSSYNC_DATA (défaut /data), NDSSYNC_PORT (défaut 8080).
-Une Version = data/<code>/<seq>-<date>-<client>-<hash>.sav ; la Version courante a le plus grand <seq>.
-Rien n'est jamais supprimé ni réécrit, sauf data/<code>/nom.txt : le nom du jeu donné par un Client, pour l'Historique.
+Environment variables (NDSSYNC_ prefix from before v3, kept for existing installs): NDSSYNC_TOKEN (required), NDSSYNC_DATA (default /data), NDSSYNC_PORT (default 8080).
+A Version = data/<code>/<seq>-<date>-<client>-<hash>.sav; the Current version has the highest <seq>.
+Nothing is ever deleted or rewritten, except data/<code>/nom.txt: the game name sent by a Client, for the History.
 """
 import calendar
 import hashlib
@@ -14,38 +14,38 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# Clé d'un Jeu (ADR 0007) : DS, GBA, GB/GBC, 3DS. Jamais de "/" ni de "." : sûre comme nom de dossier.
-CLE = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})"
-CODE = re.compile(rf"^/saves/{CLE}$")
-HISTORIQUE = re.compile(rf"^/saves/{CLE}/history(/.*)?$")
-NOM = re.compile(rf"^/saves/{CLE}/name$")
+# Key of a Game (ADR 0007): DS, GBA, GB/GBC, 3DS. Never "/" or ".": safe as a folder name.
+KEY = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DS-[0-9A-F]{16})"
+SAVE = re.compile(rf"^/saves/{KEY}$")
+HISTORY = re.compile(rf"^/saves/{KEY}/history(/.*)?$")
+NAME = re.compile(rf"^/saves/{KEY}/name$")
 CLIENT = re.compile(r"^[a-z0-9]{1,16}$")
-TAILLE_MAX = 64 * 1024 * 1024  # plus grande mémoire de sauvegarde DS connue
-VERROU = threading.Lock()  # ponytail: verrou global, suffit pour 2 Clients
+MAX_SIZE = 64 * 1024 * 1024  # largest known DS save memory
+LOCK = threading.Lock()  # ponytail: global lock, enough for 2 Clients
 
 
-def creer(adresse, data, jeton):
+def creer(address, data, token):
     def versions(code):
-        dossier = os.path.join(data, code)
-        if not os.path.isdir(dossier):
+        folder = os.path.join(data, code)
+        if not os.path.isdir(folder):
             return []
-        return sorted(f for f in os.listdir(dossier) if f.endswith(".sav"))
+        return sorted(f for f in os.listdir(folder) if f.endswith(".sav"))
 
-    def courante(code):
+    def current(code):
         v = versions(code)
         return v[-1] if v else None
 
-    def hash_de(version):
+    def hash_of(version):
         return version[:-4].rsplit("-", 1)[1]
 
     def info(code, version):
         _, date, client, h = version[:-4].split("-")
-        taille = os.path.getsize(os.path.join(data, code, version))
-        # age : calculé avec l'horloge du serveur, car celle de la 3DS n'a pas de fuseau horaire
+        size = os.path.getsize(os.path.join(data, code, version))
+        # age: computed with the server clock, because the 3DS clock has no time zone
         age = int(time.time() - calendar.timegm(time.strptime(date, "%Y%m%dT%H%M%SZ")))
-        return {"code": code, "version": version, "hash": h, "taille": taille, "date": date, "client": client, "age": age}
+        return {"code": code, "version": version, "hash": h, "taille": size, "date": date, "client": client, "age": age}
 
-    def avec_nom(code, element):
+    def with_name(code, element):
         try:
             with open(os.path.join(data, code, "nom.txt"), encoding="utf-8") as f:
                 return {**element, "nom": f.read()}
@@ -53,112 +53,112 @@ def creer(adresse, data, jeton):
             return element
 
     class Handler(BaseHTTPRequestHandler):
-        def autorise(self):
-            recu = self.headers.get("Authorization", "")
-            if hmac.compare_digest(recu.encode(), f"Bearer {jeton}".encode()):
+        def authorized(self):
+            received = self.headers.get("Authorization", "")
+            if hmac.compare_digest(received.encode(), f"Bearer {token}".encode()):
                 return True
-            self.repondre(401)
+            self.respond(401)
             return False
 
-        def repondre(self, statut, corps=b"", **entetes):
-            self.send_response(statut)
-            self.send_header("Content-Length", str(len(corps)))
-            for nom, valeur in entetes.items():
-                self.send_header(nom.replace("_", "-"), valeur)
+        def respond(self, status, body=b"", **headers):
+            self.send_response(status)
+            self.send_header("Content-Length", str(len(body)))
+            for name, value in headers.items():
+                self.send_header(name.replace("_", "-"), value)
             self.end_headers()
-            self.wfile.write(corps)
+            self.wfile.write(body)
 
         def do_GET(self):
-            if not self.autorise():
+            if not self.authorized():
                 return
             if self.path == "/saves":
                 codes = sorted(os.listdir(data)) if os.path.isdir(data) else []
-                return self.json([avec_nom(c, info(c, v)) for c in codes if (v := courante(c))])
-            m = HISTORIQUE.match(self.path)
+                return self.json([with_name(c, info(c, v)) for c in codes if (v := current(c))])
+            m = HISTORY.match(self.path)
             if m and not m[2]:
                 return self.json([info(m[1], v) for v in versions(m[1])])
             if m:
                 v = m[2][1:] if m[2][1:] in versions(m[1]) else None
             else:
-                m = CODE.match(self.path)
-                v = m and courante(m[1])
+                m = SAVE.match(self.path)
+                v = m and current(m[1])
             if not v:
-                return self.repondre(404)
+                return self.respond(404)
             with open(os.path.join(data, m[1], v), "rb") as f:
-                self.repondre(200, f.read(), ETag=f'"{hash_de(v)}"')
+                self.respond(200, f.read(), ETag=f'"{hash_of(v)}"')
 
-        def json(self, valeur):
-            self.repondre(200, json.dumps(valeur).encode(), Content_Type="application/json")
+        def json(self, value):
+            self.respond(200, json.dumps(value).encode(), Content_Type="application/json")
 
         def do_PUT(self):
-            longueur = self.headers.get("Content-Length", "")
-            taille = int(longueur) if longueur.isdigit() else 0
-            if not 0 < taille <= TAILLE_MAX:
+            length = self.headers.get("Content-Length", "")
+            size = int(length) if length.isdigit() else 0
+            if not 0 < size <= MAX_SIZE:
                 self.close_connection = True
-                return self.repondre(400)
-            # Lire le corps avant toute réponse : sinon le client reçoit un reset au lieu du statut.
-            corps = self.rfile.read(taille)
-            if len(corps) != taille:  # connexion coupée : jamais de Version tronquée
+                return self.respond(400)
+            # Read the body before any response: otherwise the client gets a reset instead of the status.
+            body = self.rfile.read(size)
+            if len(body) != size:  # connection cut: never a truncated Version
                 self.close_connection = True
-                return self.repondre(400)
-            if not self.autorise():
+                return self.respond(400)
+            if not self.authorized():
                 return
-            m = NOM.match(self.path)
+            m = NAME.match(self.path)
             if m:
-                return self.nommer(m[1], corps)
-            m = CODE.match(self.path)
+                return self.set_name(m[1], body)
+            m = SAVE.match(self.path)
             if not m:
-                return self.repondre(400)
-            si_egal, si_absent = self.headers.get("If-Match"), self.headers.get("If-None-Match")
-            if si_egal is None and si_absent != "*":
-                return self.repondre(428)
-            h = hashlib.sha256(corps).hexdigest()
+                return self.respond(400)
+            if_match, if_none_match = self.headers.get("If-Match"), self.headers.get("If-None-Match")
+            if if_match is None and if_none_match != "*":
+                return self.respond(428)
+            h = hashlib.sha256(body).hexdigest()
             client = self.headers.get("X-Client", "")
             client = client if CLIENT.match(client) else "inconnu"
-            with VERROU:
-                v = courante(m[1])
-                attendu = f'"{hash_de(v)}"' if v else None
-                if (si_egal or None) != attendu or (si_absent == "*" and v):
-                    return self.repondre(412, **({"ETag": attendu} if v else {}))
-                if v and hash_de(v) == h:
-                    return self.repondre(200, ETag=attendu)
-                dossier = os.path.join(data, m[1])
-                nom = f"{int(v[:6]) + 1 if v else 1:06d}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{client}-{h}.sav"
-                tmp = os.path.join(dossier, nom + ".tmp")
+            with LOCK:
+                v = current(m[1])
+                expected = f'"{hash_of(v)}"' if v else None
+                if (if_match or None) != expected or (if_none_match == "*" and v):
+                    return self.respond(412, **({"ETag": expected} if v else {}))
+                if v and hash_of(v) == h:
+                    return self.respond(200, ETag=expected)
+                folder = os.path.join(data, m[1])
+                name = f"{int(v[:6]) + 1 if v else 1:06d}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{client}-{h}.sav"
+                tmp = os.path.join(folder, name + ".tmp")
                 try:
-                    os.makedirs(dossier, exist_ok=True)
+                    os.makedirs(folder, exist_ok=True)
                     with open(tmp, "wb") as f:
-                        f.write(corps)
+                        f.write(body)
                         f.flush()
-                        os.fsync(f.fileno())  # une Version acceptée doit survivre à une coupure
-                    os.replace(tmp, os.path.join(dossier, nom))
-                except OSError:  # disque plein, droits : le Client reçoit une erreur, pas une connexion coupée
-                    return self.repondre(500)
-            self.repondre(200, ETag=f'"{h}"')
+                        os.fsync(f.fileno())  # an accepted Version must survive a power cut
+                    os.replace(tmp, os.path.join(folder, name))
+                except OSError:  # disk full, permissions: the Client gets an error, not a cut connection
+                    return self.respond(500)
+            self.respond(200, ETag=f'"{h}"')
 
-        def nommer(self, code, corps):
-            """Nom du jeu (nom de la ROM ou titre 3DS) : seulement pour un jeu qui a déjà une Version."""
+        def set_name(self, code, body):
+            """Name of the game (ROM name or 3DS title): only for a game that already has a Version."""
             try:
-                nom = corps.decode("utf-8").strip()
+                name = body.decode("utf-8").strip()
             except UnicodeDecodeError:
-                nom = ""
-            if not 0 < len(nom) <= 200 or any(c < " " or c == "\x7f" for c in nom):
-                return self.repondre(400)
-            if not courante(code):
-                return self.repondre(404)
-            with VERROU:
+                name = ""
+            if not 0 < len(name) <= 200 or any(c < " " or c == "\x7f" for c in name):
+                return self.respond(400)
+            if not current(code):
+                return self.respond(404)
+            with LOCK:
                 tmp = os.path.join(data, code, "nom.txt.tmp")
                 try:
                     with open(tmp, "w", encoding="utf-8") as f:
-                        f.write(nom)
+                        f.write(name)
                         f.flush()
                         os.fsync(f.fileno())
                     os.replace(tmp, os.path.join(data, code, "nom.txt"))
                 except OSError:
-                    return self.repondre(500)
-            self.repondre(204)
+                    return self.respond(500)
+            self.respond(204)
 
-    return ThreadingHTTPServer(adresse, Handler)
+    return ThreadingHTTPServer(address, Handler)
 
 
 if __name__ == "__main__":

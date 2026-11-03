@@ -1,5 +1,5 @@
-# HTTPS pour la 3DS : Let's Encrypt seulement (racine ISRG Root X1, la seule connue du homebrew 3DS),
-# clé RSA comme le serveur testé sur la console (TLS 1.2 ECDHE).
+# HTTPS for the 3DS: Let's Encrypt only (ISRG Root X1, the only root the 3DS homebrew knows),
+# RSA key like the server tested on the console (TLS 1.2 ECDHE).
 {
 	acme_ca https://acme-v02.api.letsencrypt.org/directory
 	key_type rsa2048
