@@ -437,26 +437,19 @@ static void update_states(void)
 }
 
 /* After an action: the Game it touched is already read again (read_local), only the server changes. */
-static int reread_server(void)
+static void reread_server(void)
 {
-    int r;
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
-    r = read_server();
+    read_server();
     update_states(); /* server not read: the local games stay listed, with no action */
     loaded = 1;
-    return r;
 }
 
 /* Read everything again: ROMs, Saves, server (Y, settings changed). */
-static int refresh(void)
+static void refresh(void)
 {
-    int r;
     scan();
-    show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
-    r = read_server();
-    update_states();
-    loaded = 1;
-    return r;
+    reread_server();
 }
 
 /* ---------------------------------------------------------------- actions */
@@ -726,6 +719,18 @@ static void draw_game_icon(const game_t *j)
     else if (j->system != SYS_3DS && read_ds_icon(j, icon) == 0) screen_icon(icon, 32, 32, ICON_X, 6, 1.5f); /* 32 x 1.5 = 48 */
 }
 
+/* Counter of the title bar: "%d conflicts"… */
+static const char *counter_format(status_t s, int n)
+{
+    switch (s) {
+    case STATUS_CONFLICT: return plural(n, english, T("%d conflit", "%d conflict"), T("%d conflits", "%d conflicts"));
+    case STATUS_TO_DOWNLOAD: return T("%d à récupérer", "%d to download");
+    case STATUS_TO_UPLOAD: return T("%d à envoyer", "%d to upload");
+    case STATUS_DUPLICATE: return plural(n, english, T("%d doublon", "%d duplicate"), T("%d doublons", "%d duplicates"));
+    default: return T("%d à jour", "%d in sync");
+    }
+}
+
 /* Top screen of the list: title and counters (those that do not fit are dropped, "in sync" first), the games, then
  * the footer: the server, when it was read, the position in the list. */
 static void draw_list_top(void)
@@ -746,16 +751,13 @@ static void draw_list_top(void)
         for (i = 0; i < 5; i++) {
             if (!n[i]) continue;
             e[count] = states[i];
-            snprintf(t[count], sizeof t[count], e[count] == STATUS_CONFLICT ? plural(n[i], english, T("%d conflit", "%d conflict"), T("%d conflits", "%d conflicts"))
-                                          : e[count] == STATUS_TO_DOWNLOAD ? T("%d à récupérer", "%d to download")
-                                          : e[count] == STATUS_TO_UPLOAD ? T("%d à envoyer", "%d to upload")
-                                          : e[count] == STATUS_DUPLICATE ? plural(n[i], english, T("%d doublon", "%d duplicate"), T("%d doublons", "%d duplicates"))
-                                                             : T("%d à jour", "%d in sync"), n[i]);
+            snprintf(t[count], sizeof t[count], counter_format(e[count], n[i]), n[i]);
             l[count] = screen_text_width(0.42f, t[count]);
             count++;
         }
         count = texts_fitting(l, count, 12, TOP_WIDTH - 6 - x);
-        for (x = TOP_WIDTH - 6, i = count - 1; i >= 0; i--) {
+        x = TOP_WIDTH - 6;
+        for (i = count - 1; i >= 0; i--) {
             x -= l[i];
             screen_text(x, 7, 0.42f, e[i] == STATUS_IN_SYNC ? C_GREEN : state_color(e[i]), 0, t[i]);
             x -= 12;
@@ -824,6 +826,43 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
     }
 }
 
+static const char *system_label(const game_t *j)
+{
+    const char *ext = strrchr(j->rom, '.');
+    switch (j->system) {
+    case SYS_DS: return "Nintendo DS";
+    case SYS_GB: return ext && !strcasecmp(ext, ".gbc") ? "Game Boy Color" : "Game Boy";
+    case SYS_GBA: return "Game Boy Advance";
+    default: return "Nintendo 3DS";
+    }
+}
+
+/* GB/GBA: the program that plays the ROM with its Save next to it (the other one is the mGBA forwarder). */
+static const char *rom_program(const game_t *j) { return j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++"; }
+
+/* "Last sync" line: which side the Base matches. */
+static const char *base_label(const char *b, const game_t *j)
+{
+    int local = b && !strcmp(b, j->local_hash), server = b && !strcmp(b, j->server_hash);
+    if (!b) return T("Jamais", "Never");
+    if (local && server) return T("Même version que les deux", "Same as both");
+    if (local) return T("Même version que la 3DS", "Same as the 3DS");
+    if (server) return T("Même version que le serveur", "Same as the server");
+    return T("Version différente des deux", "Differs from both");
+}
+
+/* What A does for the selected game. */
+static const char *action_label(const game_t *j)
+{
+    if (!j) return T("Aucun jeu", "No game");
+    switch (j->status) {
+    case STATUS_TO_UPLOAD: return T("Envoyer au serveur", "Upload to the server");
+    case STATUS_TO_DOWNLOAD: return T("Récupérer du serveur", "Download from the server");
+    case STATUS_CONFLICT: return T("Résoudre le conflit", "Resolve the conflict");
+    default: return T("Rien à faire", "Nothing to do");
+    }
+}
+
 /* Message of the last action, in its band. */
 static void draw_message(float bottom) { draw_band(bottom, message, message_detail, message_color); }
 
@@ -835,16 +874,15 @@ static void draw_bottom(const game_t *j)
     int action = 0, gb = 0;
 
     if (j) {
-        const char *b = base_of(&bases, j->key), *ext = strrchr(j->rom, '.');
+        const char *b = base_of(&bases, j->key);
         u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
         gb = j->system == SYS_GB || j->system == SYS_GBA;
         action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
         draw_game_icon(j);
         y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
         /* System, and for GB/GBA the program whose save is synced (X changes it). */
-        snprintf(t, sizeof t, "%s%s%s", j->system == SYS_DS ? "Nintendo DS" : j->system == SYS_GB ? (ext && !strcasecmp(ext, ".gbc") ? "Game Boy Color" : "Game Boy")
-                                       : j->system == SYS_GBA ? "Game Boy Advance" : "Nintendo 3DS",
-                 gb ? " \xC2\xB7 " : "", !gb ? "" : forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++");
+        if (gb) snprintf(t, sizeof t, "%s \xC2\xB7 %s", system_label(j), forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : rom_program(j));
+        else snprintf(t, sizeof t, "%s", system_label(j));
         screen_text(8, y + 1, 0.4f, GREY_LIGHT, ICON_X - 16, t);
         y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;
         screen_rect(8, y + 2, 3, 13, c);
@@ -856,11 +894,7 @@ static void draw_bottom(const game_t *j)
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
             server_text(j, t, sizeof t);
             y = detail(y, T("Sur le serveur", "On the server"), t);
-            y = detail(y, T("Dernière synchro", "Last sync"),
-                       !b ? T("Jamais", "Never")
-                       : !strcmp(b, j->local_hash) && !strcmp(b, j->server_hash) ? T("Même version que les deux", "Same as both")
-                       : !strcmp(b, j->local_hash) ? T("Même version que la 3DS", "Same as the 3DS")
-                       : !strcmp(b, j->server_hash) ? T("Même version que le serveur", "Same as the server") : T("Version différente des deux", "Differs from both"));
+            detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
         }
     }
     if (message[0]) draw_message(BAR_TOP_2);
@@ -874,14 +908,10 @@ static void draw_bottom(const game_t *j)
     draw_bar_background(2);
     {
         char x[80];
-        button_t game_buttons[2] = { { KEY_A, !j ? T("Aucun jeu", "No game") : j->status == STATUS_TO_UPLOAD ? T("Envoyer au serveur", "Upload to the server")
-                                     : j->status == STATUS_TO_DOWNLOAD ? T("Récupérer du serveur", "Download from the server")
-                                     : j->status == STATUS_CONFLICT ? T("Résoudre le conflit", "Resolve the conflict") : T("Rien à faire", "Nothing to do"), action },
-                            { KEY_X, x, 1 } };
+        button_t game_buttons[2] = { { KEY_A, action_label(j), action }, { KEY_X, x, 1 } };
         const button_t general[4] = { { KEY_Y, T("Rafraîchir", "Refresh"), 1 }, { KEY_START, T("Tout synchro", "Sync all"), 1 },
                                         { KEY_SELECT, T("Réglages", "Settings"), 1 }, { KEY_B, T("Quitter", "Quit"), 1 } };
-        if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), forwarder(j) ? (j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++")
-                                                                                      : T("le forwarder mGBA", "the mGBA forwarder"));
+        if (gb) snprintf(x, sizeof x, T("Jouer avec %s", "Play with %s"), forwarder(j) ? rom_program(j) : T("le forwarder mGBA", "the mGBA forwarder"));
         draw_button_row(game_buttons, gb ? 2 : 1, BAR_ROW_2, 18);
         draw_button_row(general, 4, BAR_ROW_2 + BUTTON_HEIGHT, 0);
     }
@@ -1037,10 +1067,13 @@ static void choose_titles(void)
             if (title_icon(ch->id, ch->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f);
             y += screen_lines(8, y, 0.55f, WHITE, ICON_X - 16, 2, ch->name) + 4;
             y = y < UNDER_ICON ? UNDER_ICON + 4 : y + 4;
-            y += screen_paragraph(8, y, 0.45f, ch->main_only == 1 ? C_GREEN : ch->main_only == 0 ? C_RED : GREY_LIGHT, TEXT_WIDTH,
-                                  ch->main_only == 1 ? T("Ce jeu peut être synchronisé.", "This game can be synced.")
-                                  : ch->main_only == 0 ? T("Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).", "This game can't be synced (several save files).")
-                                                  : T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.", "No save yet: start the game once and save.")) + 6;
+            if (ch->main_only == 1) y += screen_paragraph(8, y, 0.45f, C_GREEN, TEXT_WIDTH, T("Ce jeu peut être synchronisé.", "This game can be synced.")) + 6;
+            else if (ch->main_only == 0)
+                y += screen_paragraph(8, y, 0.45f, C_RED, TEXT_WIDTH, T("Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).",
+                                                                       "This game can't be synced (several save files).")) + 6;
+            else
+                y += screen_paragraph(8, y, 0.45f, GREY_LIGHT, TEXT_WIDTH, T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.",
+                                                                            "No save yet: start the game once and save.")) + 6;
         } else {
             y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, TEXT_WIDTH, T("Aucun jeu trouvé.", "No game found.")) + 6;
         }
@@ -1100,23 +1133,35 @@ static const struct {
 #define SETTING_COUNT ((int)(sizeof SETTINGS / sizeof *SETTINGS))
 static int selected_setting; /* selected settings line: also for the top screen during a progress */
 
-/* State of the installed version, as on the Version line: "Up to date", "3.7.1 available"… */
-static const char *version_state(char *t, size_t n, u32 *color)
+/* State of the installed version, as on the Version line: "Up to date", "3.7.1 available"… in t (t may be NULL with
+ * n = 0: color only). Returns its color. */
+static u32 version_state(char *t, size_t n)
 {
-    if (!strcmp(VERSION, "dev")) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Version de développement", "Development build"));
-    else if (update_is_newer(VERSION, update_info.latest)) *color = C_CYAN, snprintf(t, n, T("%s disponible", "%s available"), update_info.latest);
-    else if (update_failed) *color = C_RED, snprintf(t, n, "%s", T("Vérification impossible", "Check failed"));
-    else if (!update_info.latest[0]) *color = GREY_LIGHT, snprintf(t, n, "%s", T("Non vérifiée", "Not checked"));
-    else *color = C_GREEN, snprintf(t, n, "%s", T("À jour", "Up to date"));
-    return t;
+    if (!strcmp(VERSION, "dev")) {
+        snprintf(t, n, "%s", T("Version de développement", "Development build"));
+        return GREY_LIGHT;
+    }
+    if (update_is_newer(VERSION, update_info.latest)) {
+        snprintf(t, n, T("%s disponible", "%s available"), update_info.latest);
+        return C_CYAN;
+    }
+    if (update_failed) {
+        snprintf(t, n, "%s", T("Vérification impossible", "Check failed"));
+        return C_RED;
+    }
+    if (!update_info.latest[0]) {
+        snprintf(t, n, "%s", T("Non vérifiée", "Not checked"));
+        return GREY_LIGHT;
+    }
+    snprintf(t, n, "%s", T("À jour", "Up to date"));
+    return C_GREEN;
 }
 
 /* "3.7.0 · Up to date" from x: version in white, dot in grey, State in color, cut before end. */
 static void draw_version_value(float x, float y, float size, float end)
 {
     char e[48];
-    u32 c;
-    version_state(e, sizeof e, &c);
+    u32 c = version_state(e, sizeof e);
     x += screen_text(x, y, size, WHITE, end - x, VERSION);
     x += screen_text(x, y, size, GREY_DARK, 0, " \xC2\xB7 ");
     screen_text(x, y, size, c, end - x, e);
@@ -1124,15 +1169,19 @@ static void draw_version_value(float x, float y, float size, float end)
 
 static const char *setting_label(int i)
 {
-    return i < SETTING_COUNT ? T(SETTINGS[i].name, SETTINGS[i].name_en) : i == SETTING_COUNT ? T("Jeux 3DS", "3DS games")
-         : i == SETTING_COUNT + 1 ? T("Connexion", "Connection") : T("Version", "Version");
+    if (i < SETTING_COUNT) return T(SETTINGS[i].name, SETTINGS[i].name_en);
+    if (i == SETTING_COUNT) return T("Jeux 3DS", "3DS games");
+    if (i == SETTING_COUNT + 1) return T("Connexion", "Connection");
+    return T("Version", "Version");
 }
 
 /* What A does on line i, drawn on the right of the selected line. */
 static const char *setting_action(int i)
 {
-    return i < SETTING_COUNT ? T("Modifier", "Change") : i == SETTING_COUNT ? T("Choisir", "Choose") : i == SETTING_COUNT + 1 ? T("Tester", "Test")
-         : update_is_newer(VERSION, update_info.latest) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
+    if (i < SETTING_COUNT) return T("Modifier", "Change");
+    if (i == SETTING_COUNT) return T("Choisir", "Choose");
+    if (i == SETTING_COUNT + 1) return T("Tester", "Test");
+    return update_is_newer(VERSION, update_info.latest) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
 }
 
 /* Top screen of the settings: label on the left, value in a column, "Ⓐ action" on the right of the selected line. */
@@ -1145,23 +1194,29 @@ static void draw_settings_top(void)
     screen_text(6, 4, 0.55f, WHITE, 0, T("Réglages", "Settings"));
     screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
     for (i = 0; i < total; i++) {
-        char v[96]; /* test_short: 80 */
+        char v[24];
         const char *value = v;
         u32 c = WHITE;
         int required = 0;
         float end = TOP_WIDTH - 8;
         if (i < SETTING_COUNT) {
             value = SETTINGS[i].value;
-            if (i <= 1 && (!value[0] || !strcmp(value, "https://"))) value = T("À remplir", "Required"), c = GREY_LIGHT, required = 1;
-            else if (i == 1) value = "\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2"; /* •••••••• */
-            else if (!value[0]) value = T("À côté de la ROM", "Next to the ROM"), c = GREY_LIGHT; /* default value */
+            if (i <= 1 && (!value[0] || !strcmp(value, "https://"))) {
+                value = T("À remplir", "Required");
+                c = GREY_LIGHT;
+                required = 1;
+            } else if (i == 1) {
+                value = "\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2\xE2\x80\xA2"; /* •••••••• */
+            } else if (!value[0]) {
+                value = T("À côté de la ROM", "Next to the ROM"); /* default value */
+                c = GREY_LIGHT;
+            }
         } else if (i == SETTING_COUNT) {
             if (title_count) snprintf(v, sizeof v, plural(title_count, english, T("%d jeu", "%d game"), T("%d jeux", "%d games")), title_count);
             else snprintf(v, sizeof v, "%s", T("Aucun", "None"));
         } else if (i == SETTING_COUNT + 1) {
-            if (test_state > 0) snprintf(v, sizeof v, "%s", T("Réussie", "OK")), c = C_GREEN;
-            else if (test_state < 0) snprintf(v, sizeof v, "%s", test_short), c = C_RED;
-            else snprintf(v, sizeof v, "%s", T("Non testée", "Not tested")), c = GREY_LIGHT;
+            value = test_state > 0 ? T("Réussie", "OK") : test_state < 0 ? test_short : T("Non testée", "Not tested");
+            c = test_state > 0 ? C_GREEN : test_state < 0 ? C_RED : GREY_LIGHT;
         }
         if (i == selected_setting) {
             const char *a = setting_action(i);
@@ -1231,8 +1286,7 @@ static int settings_screen(int first)
         else if (c == count + 2 && update_detail[0]) { /* last check: text, then its technical line (after the last line break) */
             char d[sizeof update_detail];
             char *nl;
-            u32 color;
-            version_state(d, sizeof d, &color);
+            u32 color = version_state(NULL, 0);
             snprintf(d, sizeof d, "%s", update_detail);
             nl = strrchr(d, '\n');
             if (nl) *nl++ = '\0';
@@ -1356,7 +1410,7 @@ static int act(game_t *j)
 static int switch_save_file(game_t *j)
 {
     char fwd[600], backup[700], date[20], q[700], warning_text[200], action[64];
-    const char *other = j->system == SYS_GBA ? "open_agb_firm" : "TWiLight Menu++";
+    const char *other = rom_program(j);
     int to_rom;
     time_t t = time(NULL);
     result_t r;
@@ -1424,13 +1478,9 @@ static void sync_all(void)
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
         if (j->status == STATUS_TO_DOWNLOAD && j->has_local && overwrites++ < 8) {
-            strncat(q, j->short_name, 40);
-            if (j->has_progress) {
-                char t[80];
-                progress_text(&j->progress, t, sizeof t);
-                snprintf(q + strlen(q), sizeof q - strlen(q), " (%s)", t);
-            }
-            strcat(q, "\n");
+            char t[80] = "";
+            if (j->has_progress) progress_text(&j->progress, t, sizeof t);
+            snprintf(q + strlen(q), sizeof q - strlen(q), "%.40s%s%s%s\n", j->short_name, t[0] ? " (" : "", t, t[0] ? ")" : "");
         }
     }
     if (overwrites > 8) snprintf(q + strlen(q), sizeof q - strlen(q), plural(overwrites - 8, english, T("… et %d autre\n", "… and %d more\n"), T("… et %d autres\n", "… and %d more\n")), overwrites - 8);
@@ -1551,7 +1601,8 @@ int main(int argc, char **argv)
             }
             show_alert();
             for (i = 0; i < visible_count && visible[i] != selected; i++);
-            cursor = i < visible_count ? i : cursor < visible_count ? cursor : visible_count ? visible_count - 1 : 0;
+            if (i < visible_count) cursor = i; /* the same game, at its new place */
+            else if (cursor >= visible_count) cursor = visible_count ? visible_count - 1 : 0;
             list_cursor = cursor;
         }
     }

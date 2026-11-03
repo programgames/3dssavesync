@@ -92,7 +92,8 @@ static int gen12(const unsigned char *d, progress_t *p)
         return 0;
     }
     for (k = 0; k < 2; k++) {
-        for (s = 0, i = 0x2009; i <= g2[k].end; i++) s += d[i];
+        s = 0;
+        for (i = 0x2009; i <= g2[k].end; i++) s += d[i];
         if (s && (s & 0xFFFF) == u16le(d + g2[k].checksum)) { /* zero sum: blank file, not a game in progress */
             p->hours = d[g2[k].hours] << 8 | d[g2[k].hours + 1]; /* big-endian */
             p->minutes = d[g2[k].hours + 2];
@@ -154,8 +155,10 @@ static unsigned crc16_ccitt(const unsigned char *d, size_t n)
 {
     unsigned c = 0xFFFF;
     int k;
-    while (n--)
-        for (c ^= (unsigned)*d++ << 8, k = 0; k < 8; k++) c = (c & 0x8000 ? c << 1 ^ 0x1021 : c << 1) & 0xFFFF;
+    while (n--) {
+        c ^= (unsigned)*d++ << 8;
+        for (k = 0; k < 8; k++) c = (c & 0x8000 ? c << 1 ^ 0x1021 : c << 1) & 0xFFFF;
+    }
     return c;
 }
 
