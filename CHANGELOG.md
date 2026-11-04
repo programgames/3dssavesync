@@ -7,6 +7,12 @@ What changed in each release, for people who use 3dssavesync. The format follows
 ### Fixed
 
 - **Android: "Scan the PC's QR code" works again.** In 3.11.0 the scanner said it was not ready on every phone. Install 3.11.1 over 3.11.0.
+- **3DS: no more frozen screen during a transfer.** After A on a game, "Uploading…" or "Downloading…" shows at once with the game name.
+- **3DS: the next DS game starts faster** after 3dssavesync used the network (about 10 s instead of 20 s on a New 3DS XL).
+
+### Changed
+
+- **PC notifications**: each problem is notified once, and a notification stays as long as your system setting says (Windows: "Dismiss notifications after").
 
 ## [3.11.0] - 2026-11-04
 
