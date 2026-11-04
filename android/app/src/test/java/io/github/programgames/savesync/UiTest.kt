@@ -36,6 +36,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertTextContains
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import android.app.Activity
@@ -441,10 +442,13 @@ open class UiTest {
         rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
         for (t in listOf(R.string.sync_all, R.string.tab_games)) fits(s(t))
         rule.onNodeWithText(s(R.string.sync_all)).assertIsEnabled()
+        // each row is one TalkBack stop: its texts, its State as the state description, a click
         for (t in listOf(R.string.s_to_upload, R.string.s_in_sync, R.string.s_to_download, R.string.s_conflict)) {
-            rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(s(t)))
-            fits(s(t))
+            rule.onNode(hasScrollToNodeAction()).performScrollToNode(state(s(t)))
+            rule.onNode(state(s(t)) and hasClickAction()).assertExists()
         }
+        rule.onNode(state(s(R.string.s_to_download))).assertTextContains("Mario Kart DS").assertTextContains("DS")
+        rule.onAllNodesWithText(s(R.string.s_to_download)).assertCountEquals(0) // said once, as the state
         rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
         // the system chips: only those of the emulators (GBA, 3DS), not DS or GB
         chip("GBA")
@@ -546,6 +550,8 @@ open class UiTest {
         waitFor(s(R.string.p_refused))
     }
 
+    private fun state(word: String) = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, word)
+
     private fun open(name: String) {
         rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(name))
         rule.onNodeWithText(name).performClick()
@@ -560,13 +566,14 @@ open class UiTest {
         start(url = url, token = "t", emulators = listOf(emu), entries = games())
 
         open("Pokémon Émeraude")
-        rule.onNodeWithText(s(R.string.s_to_upload)).assertExists()
+        fits(s(R.string.s_to_upload))
         rule.onNodeWithText(s(R.string.why_to_upload)).assertExists()
         rule.onNodeWithText(s(R.string.no_server_version)).assertExists()
         fits(s(R.string.upload))
         back()
 
         open("Zelda")
+        fits(s(R.string.s_in_sync))
         rule.onNodeWithText(s(R.string.why_in_sync)).assertExists()
         rule.onAllNodesWithText(s(R.string.upload)).assertCountEquals(0)
         rule.onAllNodesWithText(s(R.string.download)).assertCountEquals(0)
@@ -574,6 +581,7 @@ open class UiTest {
 
         open("Mario Kart DS")
         fits("Mario Kart DS", 2) // the title: the short name, whole
+        fits(s(R.string.s_to_download))
         rule.onNodeWithText(s(R.string.file_row, "$KART.rom")).assertExists() // the full file name, once
         rule.onNodeWithText(s(R.string.why_to_download)).assertExists()
         rule.onNodeWithText(s(R.string.uploaded_by, "PC")).assertExists()
@@ -585,6 +593,7 @@ open class UiTest {
         back()
 
         open("Pokemon Soleil")
+        fits(s(R.string.s_conflict))
         rule.onNodeWithText(s(R.string.choose_version)).assertExists()
         rule.onNodeWithText(s(R.string.this_phone)).assertExists()
         rule.onNodeWithText(s(R.string.server)).assertExists()
@@ -648,9 +657,9 @@ open class UiTest {
         Bases(File(ctx.filesDir, "bases")).set(emu.id, key, sha256(sun)) // last Sync: this version
         start(url = url, token = "t", emulators = listOf(emu), entries = listOf(game))
         open("Pokemon Soleil")
-        rule.onNodeWithText(s(R.string.history)).performScrollTo()
-        fits(s(R.string.history))
-        rule.onNodeWithText(s(R.string.history)).performClick()
+        rule.onNodeWithText(s(R.string.show_history)).performScrollTo()
+        fits(s(R.string.show_history))
+        rule.onNodeWithText(s(R.string.show_history)).performClick()
 
         val row1 = s(R.string.version_no, 1) + " · " + s(R.string.age_d, 2)
         val row2 = s(R.string.version_no, 2) + " · " + s(R.string.age_h, 1)
@@ -718,7 +727,7 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
         rule.onNodeWithText(s(R.string.reminder_text)).assertExists()
         fits(s(R.string.dont_show_again))
-        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.emulator_closed)) and dialog).performClick()
         rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists() // then the usual confirmation
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
 
@@ -731,8 +740,8 @@ open class UiTest {
 
         App.reminded = false // the app starts again
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
-        rule.onNodeWithText(s(R.string.dont_show_again)).performClick()
-        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
+        rule.onNodeWithText(s(R.string.dont_show_again)).performScrollTo().performClick() // 200 %: below the text
+        rule.onNode(hasText(s(R.string.emulator_closed)) and dialog).performClick()
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
         assertTrue(Settings(ctx).noReminder)
 
@@ -750,7 +759,7 @@ open class UiTest {
     fun romHacks() {
         val sc = start(url = "http://127.0.0.1:1", token = "t", aliases = mapOf("Radical Red (4.10)" to "GBA-0EE3"))
         rule.onNodeWithText(s(R.string.tab_settings)).performClick()
-        rule.onNode(hasText(s(R.string.hacks_title)) and hasClickAction()).performScrollTo().performClick()
+        rule.onNode(hasText(s(R.string.open_hacks)) and hasClickAction()).performScrollTo().performClick()
         rule.onNodeWithText(s(R.string.hacks_same_key)).assertExists()
         rule.onNodeWithText("Radical Red (4.10)").assertExists()
         rule.onNodeWithText(s(R.string.system_gba)).assertExists()
@@ -774,7 +783,9 @@ open class UiTest {
         sc.recreate() // rotation: still on the ROM hacks
         rule.onNodeWithText("Radical Red (4.10)").assertExists()
         rule.onAllNodes(hasText(s(R.string.remove)) and hasClickAction())[1].performClick() // sorted: Hack, then Radical Red
+        rule.onNodeWithText(s(R.string.hack_remove_title)).assertExists()
         rule.onNodeWithText(s(R.string.hack_remove_text, "Radical Red (4.10)")).assertExists()
+        rule.onNodeWithContentDescription(s(R.string.action_on, s(R.string.remove), "Hack")).assertExists() // TalkBack: which one
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
         assertEquals(2, App.settings.aliases.size)
         rule.onAllNodes(hasText(s(R.string.remove)) and hasClickAction())[1].performClick()
@@ -876,7 +887,7 @@ open class UiTest {
         Pending(File(ctx.filesDir, "pending.json")).set(game, marker)
         val cut = Entry(emu, System.GBA, "Emerald", "Emerald.gba", game, status = Status(null, Version(sha256(sram), sram.size.toLong(), key), null, State.CONFLICT, interrupted = marker))
         start(url = url, token = "t", emulators = listOf(emu), entries = listOf(came, cut))
-        rule.onNodeWithText(s(R.string.s_interrupted)).assertExists()
+        rule.onNode(state(s(R.string.s_interrupted))).assertExists()
 
         open("Ruby")
         rule.onNodeWithText(s(R.string.why_came_back)).assertExists()
@@ -913,6 +924,109 @@ open class UiTest {
         assertTrue(key.startsWith("GB-ALIAS-"))
         assertEquals(1, App.settings.aliases.size)
         rule.onAllNodesWithContentDescription(s(R.string.back)).assertCountEquals(0) // back on the list, read again
+    }
+}
+
+// Two entries of one emulator (melonDS on two ROM folders) with the same game: each row and the details say which entry,
+// by its folder; a new name replaces the folder and keeps the Bases (same folders, same formats).
+@RunWith(RobolectricTestRunner::class)
+class TwoEntriesTest {
+    @get:Rule
+    val rule = createEmptyComposeRule()
+    private val ctx: Context get() = ApplicationProvider.getApplicationContext()
+    private fun s(id: Int, vararg a: Any) = ctx.getString(id, *a)
+    private fun tree(path: String) = DocumentsContract.buildTreeDocumentUri(EXTERNAL_STORAGE, "primary:$path").toString()
+
+    @Test
+    fun sameGameInTwoEntries() {
+        val a = Emulator("melonds", "melonds", "melonDS", mapOf(System.DS to Folders(roms = tree("roms/nds"), nextToRom = true)))
+        val b = Emulator("melonds2", "melonds", "melonDS", mapOf(System.DS to Folders(roms = tree("Download/nds"), nextToRom = true)))
+        fun row(e: Emulator) = Entry(e, System.DS, KART, "$KART.nds", Game(System.DS, "AMCE", KART, MemFile("$KART.sav", null), Format(), e.id), status = Status(null, Version("a".repeat(64), 10), null, State.TO_DOWNLOAD))
+        App.init(ctx)
+        App.settings.setupDone = true
+        App.settings.url = "http://127.0.0.1:1"
+        App.settings.token = "t"
+        App.saveEmulators(listOf(a, b))
+        App.entries = listOf(row(a), row(b))
+        App.loaded = true
+        App.busy = null
+        App.serverError = null
+        Bases(File(ctx.filesDir, "bases")).set("melonds2", "AMCE", "h")
+        ActivityScenario.launch(MainActivity::class.java).use {
+            rule.onNodeWithText("melonDS (roms/nds)", substring = true).assertExists()
+            rule.onNodeWithText("melonDS (Download/nds)", substring = true).assertExists()
+
+            rule.onNodeWithText(s(R.string.tab_emulators)).performClick()
+            rule.onNodeWithText("melonDS (Download/nds)").performClick()
+            rule.onNode(hasSetTextAction()).performTextClearance()
+            rule.onNode(hasSetTextAction()).performTextInput("Tablet")
+            rule.onNodeWithContentDescription(s(R.string.back)).performClick()
+            rule.onNodeWithText("Tablet").assertExists()
+            rule.onNodeWithText("melonDS").assertExists() // alone with its name now: no folder
+            rule.waitForIdle()
+            App.waitIo()
+            assertTrue(File(ctx.filesDir, "bases/melonds2.json").exists())
+
+            // the list reads the folders again after a change: the rows as they were, with the new name
+            App.entries = listOf(row(App.emulators[0]), row(App.emulators[1]))
+            App.loaded = true
+            rule.onNodeWithText(s(R.string.tab_games)).performClick()
+            rule.onNodeWithText("Tablet", substring = true).assertExists()
+            rule.onNodeWithText("Tablet", substring = true).performClick()
+            rule.onNodeWithText("Nintendo DS · Tablet").assertExists()
+        }
+    }
+
+    // checks: what the Accessibility Test Framework would check, on the screen as it is (ATF itself does not run under
+    // Robolectric): every control has a name, is at least 48 dp in each direction, and no two controls share a name.
+    private fun checks() {
+        val min = 48 * ctx.resources.displayMetrics.density - 1
+        val names = mutableListOf<String>()
+        for (n in rule.onAllNodes(hasClickAction()).fetchSemanticsNodes()) {
+            val c = n.config
+            val name = (c.getOrElseNullable(SemanticsProperties.ContentDescription) { null } ?: c.getOrElseNullable(SemanticsProperties.Text) { null }?.map { it.text })
+                ?.joinToString(" ").orEmpty()
+            assertTrue("a control without a name at ${n.boundsInRoot}", name.isNotBlank())
+            val t = n.touchBoundsInRoot // clipped by the screen: empty below the fold
+            if (t.isEmpty) continue
+            assertTrue("$name: ${t.width} x ${t.height} px", maxOf(t.width, n.size.width.toFloat()) >= min && maxOf(t.height, n.size.height.toFloat()) >= min)
+            names += name + "|" + c.getOrElseNullable(SemanticsProperties.StateDescription) { null }
+        }
+        assertEquals(names.distinct(), names)
+    }
+
+    // The main screens pass the checks; the titles are headings, for TalkBack's heading navigation.
+    @Test
+    fun accessibilityChecks() {
+        val e = Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(roms = tree("roms/nds"), nextToRom = true)))
+        App.init(ctx)
+        App.settings.setupDone = true
+        App.settings.url = "http://127.0.0.1:1"
+        App.settings.token = "t"
+        App.saveEmulators(listOf(e))
+        App.entries = listOf(Entry(e, System.DS, KART, "$KART.nds", Game(System.DS, "AMCE", KART, MemFile("$KART.sav", null), Format(), e.id), status = Status(null, Version("a".repeat(64), 10), null, State.TO_DOWNLOAD)))
+        App.loaded = true
+        App.busy = null
+        App.serverError = null
+        ActivityScenario.launch(MainActivity::class.java).use {
+            checks() // Games
+            rule.onNode(hasText(s(R.string.tab_games)) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+            rule.onNodeWithText("Mario Kart DS").performClick()
+            checks() // details
+            rule.onNode(hasText("Mario Kart DS") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+            rule.onNodeWithContentDescription(s(R.string.back)).performClick()
+            rule.onNodeWithText(s(R.string.tab_emulators)).performClick()
+            checks()
+            rule.onNodeWithText("melonDS").performClick()
+            checks() // one emulator, its folders: "Choose" says which folder
+            rule.onNodeWithContentDescription(s(R.string.action_on, s(R.string.choose), s(R.string.rom_folder))).assertExists()
+            rule.onNodeWithContentDescription(s(R.string.back)).performClick()
+            rule.onNodeWithText(s(R.string.tab_settings)).performClick()
+            checks()
+            for (h in listOf(R.string.tab_settings, R.string.settings_title, R.string.bg_title, R.string.backups_title, R.string.hacks_title)) {
+                rule.onNode(hasText(s(h)) and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+            }
+        }
     }
 }
 

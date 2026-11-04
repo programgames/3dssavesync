@@ -8,16 +8,18 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 // Every English string has its French one, with the same placeholders (%1$d, %2$s…).
 class StringsTest {
-    private fun read(path: String): Map<String, List<String>> {
+    // read: the placeholders of each string, and of every item of each plurals (one, other, many: the same ones)
+    private fun read(path: String): Map<String, Set<List<String>>> {
         val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File(path))
-        val out = sortedMapOf<String, List<String>>()
+        val out = sortedMapOf<String, Set<List<String>>>()
         for (tag in listOf("string", "plurals")) {
             val nodes = doc.getElementsByTagName(tag)
             for (i in 0 until nodes.length) {
                 val e = nodes.item(i) as Element
                 if (e.getAttribute("translatable") == "false") continue
-                val text = if (tag == "string") e.textContent else (e.getElementsByTagName("item").item(0) as Element).textContent
-                out[e.getAttribute("name")] = Regex("%\\d\\$[0-9]*[a-z]").findAll(text).map { it.value }.sorted().toList()
+                val items = e.getElementsByTagName("item")
+                val texts = if (tag == "string") listOf(e.textContent) else (0 until items.length).map { items.item(it).textContent }
+                out[e.getAttribute("name")] = texts.map { t -> Regex("%\\d\\$[0-9]*[a-z]").findAll(t).map { it.value }.sorted().toList() }.toSet()
             }
         }
         return out

@@ -6,9 +6,10 @@
     <string name="tab_settings">Réglages</string>
     <string name="back">Retour</string>
     <string name="cancel">Annuler</string>
-    <string name="go_on">Continuer</string>
     <string name="close">Fermer</string>
     <string name="replace">Remplacer</string>
+    <string name="emulator_closed">L\'émulateur est fermé</string>
+    <string name="action_on">%1$s&#160;: %2$s</string>
 
     <!-- Settings -->
     <string name="settings_title">Serveur</string>
@@ -35,6 +36,7 @@
 
     <string name="type_address">Saisir l\'adresse</string>
     <string name="setup_again">Lancer la configuration guidée</string>
+    <string name="open_hacks">Ouvrir les ROM hacks</string>
 
     <!-- Guided first run -->
     <string name="welcome_title">Bienvenue</string>
@@ -56,13 +58,15 @@
     <!-- Emulators -->
     <string name="emulators_title">Émulateurs</string>
     <string name="no_emulator">Aucun émulateur pour l\'instant. Ajoutez les émulateurs avec lesquels vous jouez, puis choisissez leurs dossiers.</string>
-    <string name="emulators_help">L\'application n\'ouvre que les dossiers que vous choisissez. Elle ne supprime jamais de fichier.</string>
+    <string name="emulators_help">L\'application n\'ouvre que les dossiers que vous choisissez. Elle ne supprime jamais vos fichiers.</string>
     <string name="add_emulator">Ajouter un émulateur</string>
     <string name="custom_profile">Autre émulateur</string>
     <string name="remove_emulator">Retirer cet émulateur</string>
+    <string name="remove_emulator_title">Retirer %1$s&#160;?</string>
     <string name="remove_emulator_text">L\'application oublie cet émulateur et ses dossiers. Aucun fichier n\'est supprimé&#160;: vos sauvegardes et les copies de sécurité restent en place.</string>
     <string name="remove">Retirer</string>
-    <string name="name">Nom</string>
+    <string name="name">Nom dans les listes</string>
+    <string name="name_help">Renommez-la si vous avez deux entrées du même émulateur&#160;: les listes les distinguent alors.</string>
     <string name="core">Cœur RetroArch</string>
     <string name="extension">Extension des sauvegardes</string>
     <string name="rom_folder">Dossier des ROM</string>
@@ -109,7 +113,6 @@
     <string name="need_emulator">Ajoutez d\'abord un émulateur et choisissez ses dossiers.</string>
     <string name="refresh">Actualiser</string>
     <string name="sync_all">Tout synchroniser</string>
-    <string name="sync">Synchroniser</string>
     <string name="reading">Lecture des dossiers et du serveur…</string>
     <string name="reading_saves">Lecture des sauvegardes&#160;: %1$d sur %2$d</string>
     <string name="syncing">Synchronisation…</string>
@@ -127,18 +130,24 @@
     <string name="filter_all">Tous</string>
     <string name="filter_todo">À faire</string>
     <string name="no_match">Aucun jeu ne correspond à cette recherche ou à ce filtre.</string>
-    <string name="no_game">Aucun jeu trouvé dans les dossiers des ROM.</string>
+    <string name="no_game">Aucun jeu trouvé dans les dossiers des ROM choisis. Vérifiez-les dans Émulateurs.</string>
     <plurals name="hidden_games">
         <item quantity="one">%1$d jeu n\'a encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur&#160;: il n\'est pas affiché.</item>
         <item quantity="other">%1$d jeux n\'ont encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur&#160;: ils ne sont pas affichés.</item>
         <item quantity="many">%1$d jeux n\'ont encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur&#160;: ils ne sont pas affichés.</item>
     </plurals>
     <string name="confirm_replace">La version du serveur va remplacer ces sauvegardes sur ce téléphone. Une copie de sécurité de chacune est faite avant.\n\n%1$s\n\nFermez vos émulateurs avant de continuer.</string>
+    <plurals name="confirm_replace_title">
+        <item quantity="one">Remplacer %1$d sauvegarde sur ce téléphone&#160;?</item>
+        <item quantity="other">Remplacer %1$d sauvegardes sur ce téléphone&#160;?</item>
+        <item quantity="many">Remplacer %1$d sauvegardes sur ce téléphone&#160;?</item>
+    </plurals>
+    <string name="replace_and_sync">Remplacer et synchroniser</string>
     <string name="summary_title">Synchronisation terminée</string>
     <string name="summary_counts">Envoyées&#160;: %1$d\nRécupérées&#160;: %2$d\nDéjà à jour&#160;: %3$d</string>
     <string name="summary_conflicts">Conflits, en attente de votre choix&#160;: %1$s. Ouvrez chaque jeu pour choisir la sauvegarde à garder.</string>
-    <string name="summary_not_replaced">Pas remplacé, car vous n\'avez pas confirmé le remplacement de la sauvegarde de ce téléphone&#160;: %1$s. Ouvrez chaque jeu pour le vérifier.</string>
-    <string name="summary_stopped">La synchronisation s\'est arrêtée&#160;: les jeux suivants n\'ont pas été essayés.</string>
+    <string name="summary_not_replaced">Non remplacés&#160;: %1$s. Vous n\'avez pas confirmé le remplacement de leur sauvegarde sur ce téléphone. Ouvrez chaque jeu pour le vérifier.</string>
+    <string name="summary_stopped">La synchronisation s\'est arrêtée à la première erreur&#160;: les jeux suivants n\'ont pas été essayés. Corrigez le problème ci-dessous, puis touchez de nouveau Tout synchroniser.</string>
 
     <!-- States -->
     <string name="s_to_upload">À envoyer</string>
@@ -149,15 +158,15 @@
     <string name="s_unknown">Inconnu</string>
     <string name="s_none">Pas de sauvegarde</string>
     <string name="s_interrupted">Interrompue</string>
-    <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Envoyer la transmet au serveur.</string>
-    <string name="why_to_download">Le serveur a une version plus récente. Récupérer la télécharge, après une copie de sécurité de la sauvegarde du téléphone.</string>
+    <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Touchez Envoyer pour la transmettre au serveur.</string>
+    <string name="why_to_download">Le serveur a une sauvegarde plus récente. Touchez Récupérer pour l\'obtenir&#160;: l\'application garde d\'abord une copie de sécurité de celle du téléphone.</string>
     <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
     <string name="why_came_back">Cette sauvegarde est revenue à la version qui avait été remplacée : l\'émulateur était sans doute encore ouvert.</string>
     <string name="why_interrupted">La dernière écriture de cette sauvegarde sur ce téléphone ne s\'est pas terminée : l\'application a été arrêtée pendant l\'écriture. Le fichier est peut-être incomplet, alors ne jouez pas encore à ce jeu. Choisissez la sauvegarde du serveur ou la copie de sécurité.</string>
     <string name="why_in_sync">Ce téléphone et le serveur ont la même sauvegarde.</string>
     <string name="why_duplicate">%1$d ROM contiennent ce jeu&#160;: il n\'est pas synchronisé. Si l\'une d\'elles est un ROM hack, donnez-lui sa propre sauvegarde. Sinon, gardez-en une seule dans le dossier des ROM.</string>
     <string name="why_shared_file">%1$d ROM utiliseraient le même fichier de sauvegarde&#160;: elles ne sont pas synchronisées. Renommez-en une.</string>
-    <string name="why_unknown">État inconnu&#160;: le serveur ou cette sauvegarde n\'a pas pu être lu.</string>
+    <string name="why_unknown">L\'application n\'a pas pu lire le serveur ou cette sauvegarde&#160;: l\'état est inconnu. Tirez la liste vers le bas pour la lire de nouveau.</string>
     <string name="why_none">Aucune sauvegarde sur ce téléphone ni sur le serveur. Jouez et sauvegardez dans le jeu, puis actualisez.</string>
 
     <!-- ROM hacks (ADR 0014) -->
@@ -167,10 +176,12 @@
     <string name="no_hack">Aucun ROM hack.</string>
     <string name="hack_choose_rom">Choisir la ROM</string>
     <string name="hack_no_file">Aucune ROM choisie.</string>
-    <string name="hack_add">Ajouter</string>
-    <string name="hack_remove_text">Oublier le ROM hack %1$s&#160;? L\'application le lit de nouveau comme son jeu d\'origine. Aucune sauvegarde n\'est supprimée.</string>
+    <string name="hack_add">Ajouter ce ROM hack</string>
+    <string name="hack_remove_text">L\'application lit alors de nouveau %1$s comme son jeu d\'origine. Aucune sauvegarde n\'est supprimée.</string>
+    <string name="hack_remove_title">Retirer ce ROM hack&#160;?</string>
     <string name="own_save">Donner sa propre sauvegarde à cette ROM</string>
     <string name="alias_invalid">%1$s&#160;: sa clé de ROM hack (%2$s) n\'est pas valable, il n\'est pas synchronisé. Retirez-le dans Réglages, ROM hacks, puis ajoutez de nouveau la ROM.</string>
+    <string name="alias_failed">Cette ROM ne peut pas avoir sa propre sauvegarde.</string>
 
     <!-- Game details -->
     <string name="this_phone">Ce téléphone</string>
@@ -197,6 +208,7 @@
     <string name="upload">Envoyer</string>
     <string name="download">Récupérer</string>
     <string name="confirm_download">La version du serveur va remplacer la sauvegarde de ce téléphone. Une copie de sécurité est faite avant. Fermez l\'émulateur avant de continuer.</string>
+    <string name="confirm_download_title">Remplacer la sauvegarde de ce téléphone&#160;?</string>
     <string name="choose_version">Quelle sauvegarde garder&#160;?</string>
     <string name="keep_phone">Garder celle du téléphone</string>
     <string name="take_server">Prendre celle du serveur</string>
@@ -215,12 +227,12 @@
     <string name="done_failed">Échec de la synchronisation.</string>
 
     <!-- Problems -->
-    <string name="p_token">Le serveur refuse ce jeton. Recopiez le jeton exact du serveur dans les réglages.</string>
+    <string name="p_token">Le serveur refuse ce jeton. Scannez de nouveau le QR code du PC, ou recopiez le jeton exact dans Réglages.</string>
     <string name="p_not_server">Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la dans les réglages.</string>
     <string name="p_too_large">Sauvegarde trop grosse pour le serveur. Augmentez la taille maximale acceptée par le serveur ou par son proxy.</string>
     <string name="p_rejected">Le serveur a refusé cette sauvegarde (vide, trop grosse ou envoi interrompu). Réessayez.</string>
     <string name="p_server_error">Le serveur a rencontré une erreur. Réessayez plus tard. Si le problème continue, consultez le journal du serveur.</string>
-    <string name="p_unexpected">Le serveur a répondu de façon inattendue. Vérifiez son adresse dans les réglages.</string>
+    <string name="p_unexpected">Le serveur a répondu de façon inattendue. Vérifiez son adresse dans Réglages&#160;: elle demande peut-être https://.</string>
     <string name="p_certificate">Le certificat du serveur n\'est pas valide. Vérifiez l\'adresse (https://) et la date du téléphone.</string>
     <string name="p_no_host">Serveur introuvable. Vérifiez la connexion Wi-Fi et l\'adresse du serveur.</string>
     <string name="p_refused">Le serveur refuse la connexion. Vérifiez qu\'il est démarré, et que l\'adresse et le port sont justes.</string>
@@ -238,21 +250,22 @@
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
     <string name="p_no_copy">La copie de sécurité n\'est plus dans le dossier de l\'application. Prenez plutôt celle du serveur.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
-    <string name="p_open">La sauvegarde vient de changer&#160;: l\'émulateur est peut-être encore ouvert. Fermez-le, puis synchronisez de nouveau.</string>
+    <string name="p_open">Cette sauvegarde a changé il y a quelques secondes&#160;: l\'émulateur est peut-être encore ouvert. Balayez-le hors des applications récentes, puis réessayez.</string>
     <string name="reminder_title">Fermez l\'émulateur</string>
-    <string name="reminder_text">Fermez l\'émulateur avant de synchroniser&#160;: s\'il reste ouvert, il écrasera la sauvegarde reçue.</string>
+    <string name="reminder_text">Fermez d\'abord l\'émulateur&#160;: balayez-le hors des applications récentes. Un émulateur resté ouvert réécrit son ancienne sauvegarde par-dessus la nouvelle.</string>
     <string name="dont_show_again">Ne plus afficher</string>
 
     <!-- History and Restore (ADR 0016) -->
     <string name="history">Historique</string>
+    <string name="show_history">Voir l\'historique</string>
     <string name="history_help">Les versions de ce jeu sur le serveur, de la plus récente à la plus ancienne. Touchez-en une pour la voir.</string>
     <string name="reading_history">Lecture de l\'historique…</string>
-    <string name="history_failed">L\'historique n\'a pas pu être lu.</string>
+    <string name="history_failed">L\'application n\'a pas pu lire l\'historique.</string>
     <string name="no_versions">Aucune version de ce jeu sur le serveur.</string>
     <string name="version_no">n° %1$d</string>
     <string name="current">Actuelle</string>
     <string name="client_restore">Restauration</string>
-    <string name="size_kib">%1$d Kio</string>
+    <string name="size_kib">%1$d Ko</string>
     <string name="version_current_help">La version que les appareils récupèrent. Choisissez une version plus ancienne pour la restaurer.</string>
     <string name="version_same">Même contenu que la version actuelle&#160;: rien à restaurer.</string>
     <string name="version_restore_help">Restaurer la remet en version actuelle sur le serveur. Ensuite, l\'application propose de la récupérer sur ce téléphone, après une copie de sécurité.</string>
@@ -272,6 +285,7 @@
     <string name="bg_switch">Envoyer les sauvegardes en arrière-plan</string>
     <string name="bg_help">Toutes les 15 minutes environ, l\'application envoie les sauvegardes jouées sur ce téléphone. Elle ne récupère rien et ne remplace aucune sauvegarde ici&#160;: pour cela, ouvrez l\'application et touchez Tout synchroniser.</string>
     <string name="bg_no_notification">Les notifications sont désactivées&#160;: les problèmes s\'affichent seulement ici.</string>
+    <string name="notifications_on">Activer les notifications</string>
     <string name="bg_never">Aucun passage en arrière-plan pour l\'instant.</string>
     <plurals name="bg_last">
         <item quantity="one">Dernier passage&#160;: %1$s. %2$d sauvegarde envoyée.</item>

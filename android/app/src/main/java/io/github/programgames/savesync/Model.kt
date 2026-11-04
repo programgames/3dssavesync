@@ -362,7 +362,7 @@ object App {
                 try {
                     if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
                 } catch (t: Throwable) {
-                    problems += text(R.string.folder_problem, "${e.title()} ${s.label}") // human words only: no exception text
+                    problems += text(R.string.folder_problem, "${e.listName()} ${s.label}") // human words only: no exception text
                 }
             }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })
@@ -469,7 +469,7 @@ object App {
         val root = rootId(tree)
         val zeros = "0".repeat(32)
         val user = listOf("Nintendo 3DS", zeros, zeros).fold(child(root, "sdmc") ?: root, ::child)
-            ?: return run { problems += text(R.string.azahar_not_set_up, e.title()) }
+            ?: return run { problems += text(R.string.azahar_not_set_up, e.listName()) }
         for ((id, name) in titles3DS) {
             val lo = id.lowercase()
             val path = listOf("title", lo.substring(0, 8), lo.substring(8), "data", "00000001")
