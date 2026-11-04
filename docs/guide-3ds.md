@@ -113,7 +113,7 @@ On the PC, add the same games to `titres_3ds` in `config.json` ([PC guide](guide
 Game Boy and Game Boy Color games bought on the eShop show up by themselves in the **GB** tab, marked **GB VC**. There is nothing to tick. They need Luma3DS: the app reads the game's ROM to know which game it is, so that the save goes to the same place as the cartridge ROM on your PC or in mGBA.
 
 - A Virtual Console game and the mGBA forwarder (or TWiLight Menu++ ROM) of the same game are two separate lines, and both are synced. Play the one you like: after a **Sync all**, the other one gets your progress. If you play both without syncing in between, you get a conflict and choose which one to keep.
-- Start a Virtual Console game once before its first sync: a game that was never started has no save yet, and the app does not create one.
+- A Virtual Console game you never started has no save yet. Press **A** on it to create its save from the server version. **Sync all** leaves these games alone, so it never fills games you don't play.
 - Gold, Silver and Crystal: each copy keeps its own clock, so the time of day in the game can change when you switch.
 - A game with restore points stays **Not synced**: a restore point could bring an older game back over the synced one.
 - The **Key** line under the game shows which game it is. If the ROM can't be read, the game stays **Not synced**, with the step that failed, and nothing is changed.

@@ -63,8 +63,6 @@ typedef struct {
     progress_t server_progress; /* Pokémon: play time of the server version whose hash is progress_hash */
     char progress_hash[65];     /* server version read for server_progress; "" none */
     int has_server_progress;    /* that version is a known Pokémon game */
-    char diag[160];             /* DIAGNOSTIC (v3.10 rc13): VC cartridge type, RAM size, sav.dat size, archive format */
-    unsigned long raw_size;     /* DIAGNOSTIC (v3.10 rc13): size of sav.dat with its footer */
     unsigned char vc_cart, vc_ram; /* Virtual Console: cartridge type (0x147) and RAM size (0x149) of its ROM */
     status_t status;
 } game_t;
@@ -353,7 +351,6 @@ static void read_local(game_t *j)
         }
     }
     if (j->system != SYS_3DS) {
-        j->raw_size = size; /* DIAGNOSTIC (v3.10 rc13) */
         size = sram_size(j->system, size);
         to_server_form(j, &bytes, &size);
         j->blank = is_blank_save(j->system, bytes, size);
@@ -436,11 +433,6 @@ static void scan_vc(void)
         j->mbc2 = read && rom_mbc2(header);
         j->vc_cart = read ? header[0x147] : 0;
         j->vc_ram = read ? header[0x149] : 0;
-        { /* DIAGNOSTIC (v3.10 rc13): cartridge type (0x147), RAM size (0x149), archive format */
-            char f[100];
-            title_format_info(ids[i], f, sizeof f);
-            snprintf(j->diag, sizeof j->diag, "cart:%02X ram:%02X %s", read ? header[0x147] : 0xFF, read ? header[0x149] : 0xFF, f);
-        }
     }
     free(ids);
     free(medias);
@@ -677,7 +669,7 @@ static void make_parent_dir(const char *path)
  *  - file (DS, GB, GBA): received SRAM + local Clock trailer (ADR 0008) in a .tmp, then replace;
  *  - 3DS: rewrite /main with commit and Secure value (ADR 0009);
  *  - Virtual Console: received SRAM + the VC footer of the old sav.dat, rewritten like /main, then read back
- *    (ADR 0025). A VC game never started has no sav.dat, so no footer: nothing is written.
+ *    (ADR 0025). A VC game never started (no archive) gets its first save: create_vc_first_save.
  * On failure, the Local save is intact. */
 /* SRAM size of a Virtual Console game from its ROM header (byte 0x149), 0 if none or not handled (MBC2: 0x05, 0x06). */
 static size_t vc_sram_size(const game_t *j)
@@ -687,7 +679,7 @@ static size_t vc_sram_size(const game_t *j)
     return SIZES[j->vc_ram];
 }
 
-/* TEST (v3.10 rc14): first save of a Virtual Console game never started (no Save archive): the archive is created
+/* First save of a Virtual Console game never started (no Save archive): the archive is created
  * (create_vc_save) with /sav.dat = received SRAM + a zero footer for a clock cartridge (MBC3+TIMER 0x0F, 0x10), then
  * read back. Nothing existed, so there is nothing to copy first. */
 static result_t create_vc_first_save(game_t *j, char *body, size_t size)
@@ -1114,8 +1106,8 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
     switch (j->status) {
     case STATUS_TO_UPLOAD: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
     case STATUS_TO_DOWNLOAD:
-        if (vc(j) && !j->has_local) return T("Ce jeu n'a pas encore de sauvegarde. \xEE\x80\x80 la crée avec la version du serveur (essai).",
-                                             "This game has no save yet. \xEE\x80\x80 creates it from the server version (test).");
+        if (vc(j) && !j->has_local) return T("Ce jeu n'a pas encore de sauvegarde. \xEE\x80\x80 la crée avec la version du serveur .",
+                                             "This game has no save yet. \xEE\x80\x80 creates it from the server version.");
         return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
                                "The server has a newer version. \xEE\x80\x80 downloads it, after a backup.");
     case STATUS_CONFLICT: return T("La sauvegarde a changé sur la 3DS et sur le serveur. \xEE\x80\x80 pour choisir laquelle garder.",
@@ -1220,11 +1212,6 @@ static void draw_bottom(const game_t *j)
         }
         /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
         if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key);
-        if (vc(j)) { /* DIAGNOSTIC (v3.10 rc13) */
-            char d[200];
-            snprintf(d, sizeof d, "%s sav.dat:%lu", j->diag, j->has_local ? j->raw_size : 0);
-            y += screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 2, d);
-        }
         else if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);

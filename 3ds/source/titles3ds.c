@@ -285,7 +285,7 @@ Result create_vc_save(u64 id, const void *bytes, size_t size)
         FSUSER_CloseArchive(a);
         return (Result)0xFFFFFFFE;
     }
-    /* The format of the VC Pokémon archives on a real 3DS (v3.10 rc13, FSUSER_GetFormatInfo): 1 directory, 4 files,
+    /* The format of the VC Pokémon archives read on a real 3DS (FSUSER_GetFormatInfo, Crystal and Red): 1 directory, 4 files,
      * duplicate data; 0x200 blocks and the bucket counts as save-data-copy-tool, which formats the save of a game never
      * started. */
     if (R_FAILED(r = FSUSER_FormatSaveData(ARCHIVE_USER_SAVEDATA, p, 0x200, 1, 4, buckets(1), buckets(4), true))) return r;
@@ -302,16 +302,6 @@ Result create_vc_save(u64 id, const void *bytes, size_t size)
     value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
     FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
     return r;
-}
-
-/* DIAGNOSTIC (v3.10 rc13): format of the Save archive of title id (SD), to create one for a VC game never started. */
-void title_format_info(u64 id, char *out, size_t n)
-{
-    u32 path[3] = { MEDIATYPE_SD, (u32)id, (u32)(id >> 32) }, size = 0, dirs = 0, files = 0;
-    bool dup = false;
-    Result r = FSUSER_GetFormatInfo(&size, &dirs, &files, &dup, ARCHIVE_USER_SAVEDATA, (FS_Path){ PATH_BINARY, sizeof path, path });
-    if (R_FAILED(r)) snprintf(out, n, "format:%08lX", (unsigned long)r);
-    else snprintf(out, n, "format size:%lu dirs:%lu files:%lu dup:%d", (unsigned long)size, (unsigned long)dirs, (unsigned long)files, dup);
 }
 
 /* Product code of the title (AM, "CTR-N-QBXA"): GB/GBC Virtual Console or not (vc_product). The last answer is kept:
