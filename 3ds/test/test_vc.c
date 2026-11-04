@@ -21,6 +21,11 @@ int main(void)
     check(vc_product("CTR-N-RA3P"), 1, "Donkey Kong Land (GB)");
     check(vc_product("CTR-N-QBXA"), 1, "Pokemon Cristal FR (GBC)");
     check(vc_product("CTR-N-QA2P"), 1, "Mega Man Xtreme 2 (GBC)");
+    check(vc_product("CTR-P-RCSA"), 1, "Pokemon Rote Edition (CTR-P-)");
+    check(vc_product("CTR-P-QBKA"), 1, "Pokemon Versione Gialla (CTR-P-)");
+    check(vc_product("CTR-P-BFWP"), 0, "Fire Emblem Fates (card)");
+    check(vc_product("CTR-U-RCQA"), 0, "update code");
+    check(vc_product("KTR-N-RAAA"), 0, "New 3DS title");
     check(vc_product("CTR-N-TD3P"), 0, "Adventures of Lolo (NES)");
     check(vc_product("CTR-N-JF8P"), 0, "3D Fantasy Zone (Master System)");
     check(vc_product("CTR-P-EKJA"), 0, "Pokemon X (3DS card)");
