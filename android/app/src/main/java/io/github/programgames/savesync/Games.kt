@@ -179,18 +179,6 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        val offline = App.entries.count { it.noLocal }
-        App.serverError?.let { ErrorBox(it, note = if (offline > 0) stringResource(R.string.hidden_offline) else null, retry = { App.refresh() }) }
-        App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
-        for (line in App.scanProblems) Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        if (shown.isNotEmpty()) {
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                val chips = listOf("ALL" to stringResource(R.string.filter_all), "TODO" to stringResource(R.string.filter_todo)) +
-                    if (systems.size > 1) systems.map { it.name to it.label } else emptyList()
-                for ((f, label) in chips) FilterChip(filter == f, { filter = f }, { Text(label) })
-            }
-        }
         val refresh = stringResource(R.string.refresh)
         // pull down to read the folders and the server again; TalkBack and keyboards get the same as an action
         PullToRefreshBox(
@@ -198,6 +186,21 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             Modifier.weight(1f).semantics { customActions = listOf(CustomAccessibilityAction(refresh) { App.refresh(); true }) },
         ) {
             LazyColumn(Modifier.fillMaxSize()) {
+                // the banners, search and chips scroll with the games: with a large font they would leave no room
+                item {
+                    val offline = App.entries.count { it.noLocal }
+                    App.serverError?.let { ErrorBox(it, note = if (offline > 0) stringResource(R.string.hidden_offline) else null, retry = { App.refresh() }) }
+                    App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
+                    for (line in App.scanProblems) Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    if (shown.isNotEmpty()) {
+                        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
+                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val chips = listOf("ALL" to stringResource(R.string.filter_all), "TODO" to stringResource(R.string.filter_todo)) +
+                                if (systems.size > 1) systems.map { it.name to it.label } else emptyList()
+                            for ((f, label) in chips) FilterChip(filter == f, { filter = f }, { Text(label) })
+                        }
+                    }
+                }
                 items(visible, key = { it.id }) { e -> GameRow(e, several) { onOpen(e) } }
                 item {
                     val hidden = App.entries.size - shown.size

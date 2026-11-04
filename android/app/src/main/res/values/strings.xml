@@ -19,9 +19,9 @@
     <string name="show">Show</string>
     <string name="hide">Hide</string>
     <string name="scan_qr">Scan the PC\'s QR code</string>
-    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". Or type the address and token below.</string>
-    <string name="scan_cancelled">Scan cancelled. Scan again, or type the address and token below.</string>
-    <string name="scan_unavailable">The QR code scanner isn\'t available on this phone. It needs Google Play services, and the first time it may still be downloading. Try again in a minute, or type the address and token below.</string>
+    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". Or type the address and token.</string>
+    <string name="scan_cancelled">Scan cancelled. Scan again, or type the address and token.</string>
+    <string name="scan_unavailable">The QR code scanner isn\'t ready on this phone (it needs Google Play services). Try again in a minute, or type the address and token.</string>
     <string name="scan_not_ours">This isn\'t the 3dssavesync QR code. Scan the one the PC shows in its settings, under Server.</string>
     <string name="test_connection">Test the connection</string>
     <string name="testing">Testing the connection…</string>
@@ -267,7 +267,7 @@
     <!-- Background upload -->
     <string name="bg_title">Background upload</string>
     <string name="bg_switch">Upload saves in the background</string>
-    <string name="bg_help">About every 15 minutes, with a network and a battery that is not low, the app uploads the saves you played on this phone. It never downloads and never replaces a save on this phone: use Sync all for that. A save changed in the last 30 seconds waits for the next run. Each run uses a little battery and data.</string>
+    <string name="bg_help">About every 15 minutes, the app uploads the saves you played on this phone. It never downloads and never replaces a save here: open the app and tap Sync all for that.</string>
     <string name="bg_no_notification">Notifications are off: the problems show only here.</string>
     <string name="bg_never">No background run yet.</string>
     <plurals name="bg_last">

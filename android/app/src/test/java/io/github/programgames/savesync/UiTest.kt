@@ -68,6 +68,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -177,7 +178,8 @@ open class UiTest {
     }
 
     // fits: every Text with this text is inside the screen width and shows all of it (not cut, at most maxLines lines).
-    private fun fits(text: String, maxLines: Int = 1) {
+    private fun fits(text: String, lines: Int = 1) {
+        val maxLines = if (large) lines * 2 else lines // 200 %: twice the lines, never cut
         val nodes = rule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
         assertTrue("no $text", nodes.isNotEmpty())
         val w = ctx.resources.displayMetrics.widthPixels
@@ -197,6 +199,17 @@ open class UiTest {
     }
 
     private val dialog = hasAnyAncestor(isDialog())
+
+    private val large get() = ctx.resources.configuration.fontScale >= 1.5f
+
+    // onlyNormalFont: a test of the logic, not of the layout; at 200 % its rows would need scrolling at every step.
+    private fun onlyNormalFont() = Assume.assumeFalse(large)
+
+    // seen: the game row exists, once the list has scrolled to it (a lazy list composes only what fits)
+    private fun seen(name: String) {
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(name))
+        rule.onNodeWithText(name).assertExists()
+    }
 
     @Test
     fun firstStartShowsTheSettingsAndAClearConnectionError() {
@@ -370,9 +383,9 @@ open class UiTest {
         assertEquals(null, picked().getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI))
 
         // a GBA-only player unticks DS and GB; GBA, the last one, stays
-        for (sys in listOf("DS", "GB")) rule.onNode(hasText(sys) and isToggleable()).performClick()
+        for (sys in listOf("DS", "GB")) rule.onNode(hasText(sys) and isToggleable()).performScrollTo().performClick()
         assertEquals(setOf(System.GBA), App.emulators.single().systems.keys)
-        rule.onNode(hasText("GBA") and isToggleable()).assertIsNotEnabled()
+        rule.onNode(hasText("GBA") and isToggleable()).performScrollTo().assertIsNotEnabled()
         rule.onAllNodesWithText(s(R.string.system_ds)).assertCountEquals(0)
     }
 
@@ -408,7 +421,11 @@ open class UiTest {
         Entry(emu, System.GB, "Tetris", "Tetris.gb", null, dups = listOf("Tetris.gb", "Tetris (1).gb")),
     )
 
-    private fun chip(label: String) = rule.onNode(hasText(label) and isSelectable()).performScrollTo()
+    private fun chip(label: String): androidx.compose.ui.test.SemanticsNodeInteraction {
+        // the chips of the games list are at the top of the list
+        if (rule.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().isNotEmpty()) rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+        return rule.onNode(hasText(label) and isSelectable()).performScrollTo()
+    }
 
     private val azahar = Emulator("azahar", "azahar", "", mapOf(System.N3DS to Folders()))
 
@@ -434,25 +451,27 @@ open class UiTest {
         for (sys in listOf("DS", "GB")) rule.onAllNodes(hasText(sys) and isSelectable()).assertCountEquals(0)
 
         chip(s(R.string.filter_todo)).performClick()
-        for (n in listOf("Pokémon Émeraude", "Mario Kart DS", "Pokemon Soleil")) rule.onNodeWithText(n).assertExists()
+        for (n in listOf("Pokémon Émeraude", "Mario Kart DS", "Pokemon Soleil")) seen(n)
         for (n in listOf("Zelda", "Wario", "Tetris")) rule.onAllNodesWithText(n).assertCountEquals(0)
         chip("3DS").performClick()
-        rule.onNodeWithText("Pokemon Soleil").assertExists()
+        seen("Pokemon Soleil")
         rule.onAllNodesWithText("Mario Kart DS").assertCountEquals(0)
         chip(s(R.string.filter_all)).performClick()
 
-        val search = rule.onNode(hasSetTextAction())
-        search.performTextInput("pokemon") // accent-insensitive
-        rule.onNodeWithText("Pokémon Émeraude").assertExists()
-        rule.onNodeWithText("Pokemon Soleil").assertExists()
+        fun search(text: String) { // the field is at the top of the list
+            rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+            rule.onNode(hasSetTextAction()).performTextClearance()
+            if (text.isNotEmpty()) rule.onNode(hasSetTextAction()).performTextInput(text)
+        }
+        search("pokemon") // accent-insensitive
+        seen("Pokémon Émeraude")
+        seen("Pokemon Soleil")
         rule.onAllNodesWithText("Zelda").assertCountEquals(0)
-        search.performTextClearance()
-        search.performTextInput("ÉMERAUDE")
-        rule.onNodeWithText("Pokémon Émeraude").assertExists()
-        search.performTextClearance()
-        search.performTextInput("no such game")
-        rule.onNodeWithText(s(R.string.no_match)).assertExists()
-        search.performTextClearance()
+        search("ÉMERAUDE")
+        seen("Pokémon Émeraude")
+        search("no such game")
+        seen(s(R.string.no_match))
+        search("")
 
         // Sync all asks before a download replaces a save of this phone; Cancel leaves everything as it was
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
@@ -505,18 +524,19 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.p_refused)).assertIsDisplayed()
         rule.onNodeWithText(s(R.string.hidden_offline)).assertIsDisplayed()
         rule.onAllNodesWithText(s(R.string.p_refused)).assertCountEquals(1) // said once
-        rule.onNodeWithText("Zelda").assertExists() // its save is on this phone: Unknown
-        rule.onAllNodesWithText("Metroid").assertCountEquals(0)
-        rule.onAllNodesWithText(ctx.resources.getQuantityString(R.plurals.hidden_games, 1, 1)).assertCountEquals(0)
         fits(s(R.string.retry))
         fits(s(R.string.show_details))
+        seen("Zelda") // its save is on this phone: Unknown
+        rule.onAllNodesWithText("Metroid").assertCountEquals(0)
+        rule.onAllNodesWithText(ctx.resources.getQuantityString(R.plurals.hidden_games, 1, 1)).assertCountEquals(0)
         open("Zelda") // the details don't repeat the banner
         rule.onNodeWithText(s(R.string.why_unknown)).assertExists()
         rule.onAllNodesWithText(s(R.string.p_refused)).assertCountEquals(0)
         back()
 
         // Retry reads again: nothing listens on port 1, and no ROM folder is set, so no game, with the way to fix it
-        rule.onNodeWithText(s(R.string.retry)).performClick()
+        rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+        rule.onNodeWithText(s(R.string.retry)).performScrollTo().performClick()
         waitFor(s(R.string.open_emulators))
         // pull to refresh, as an accessibility action
         val refresh = rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)).fetchSemanticsNode().config[SemanticsActions.CustomActions]
@@ -604,6 +624,7 @@ open class UiTest {
     // play times. A 412 reads the list again; a Restore changes only the server, then the game shows To download.
     @Test
     fun historyAndRestore() {
+        onlyNormalFont()
         val key = "3DS-0004000000164800"
         val old = mainSunMoon(3, 4, "Red")
         val v1 = "000001-20261101T080000Z-3ds-${sha256(old)}.sav"
@@ -793,6 +814,7 @@ open class UiTest {
     // name does not. Removing the entry deletes them (ADR 0026).
     @Test
     fun emulatorChangesForgetTheBases() {
+        onlyNormalFont()
         val custom = Emulator("custom", CUSTOM.id, "Mine", mapOf(System.GBA to Folders()))
         val melon = Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(nextToRom = true)))
         val ra = Emulator("retroarch", "retroarch", "", mapOf(System.GBA to Folders()))
@@ -893,6 +915,10 @@ open class UiTest {
         rule.onAllNodesWithContentDescription(s(R.string.back)).assertCountEquals(0) // back on the list, read again
     }
 }
+
+// The largest font size of Android 14+ (200 %), on the same small screen: texts wrap, nothing is cut.
+@Config(qualifiers = "fr-w320dp-h640dp", fontScale = 2f)
+class UiFrLargeFontTest : UiTest()
 
 @Config(qualifiers = "fr-w320dp-h640dp")
 class UiFrSmallTest : UiTest() {

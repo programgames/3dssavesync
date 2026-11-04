@@ -23,6 +23,23 @@ class StringsTest {
         return out
     }
 
+    // French typography: a no-break space (U+00A0, &#160; in the file) before : ; ? ! and inside « », so that a sign
+    // never starts a line. And "vous", never the familiar "tu".
+    @Test
+    fun frenchTypography() {
+        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/values-fr/strings.xml"))
+        val bad = mutableListOf<String>()
+        for (tag in listOf("string", "item")) {
+            val nodes = doc.getElementsByTagName(tag)
+            for (i in 0 until nodes.length) {
+                val t = nodes.item(i).textContent
+                if (Regex("[ \\t][:;?!»]|«[ \\t]|«[^\\u00A0]|[^\\u00A0]»").containsMatchIn(t)) bad += t
+                if (Regex("\\b(tu|toi|ton|ta|tes|te)\\b", RegexOption.IGNORE_CASE).containsMatchIn(t)) bad += t
+            }
+        }
+        assertEquals(emptyList<String>(), bad)
+    }
+
     @Test
     fun frenchHasEveryString() {
         val en = read("src/main/res/values/strings.xml")
