@@ -259,7 +259,7 @@ fun Reminder(then: () -> Unit, close: () -> Unit) {
                 App.remind(never)
                 close()
                 then()
-            }) { Text(stringResource(R.string.ok)) }
+            }) { Text(stringResource(R.string.go_on)) }
         },
         dismissButton = { TextButton(close) { Text(stringResource(R.string.cancel)) } },
     )
@@ -298,7 +298,7 @@ private fun SummaryDialog(s: Summary) {
                 for ((name, t) in s.failures) ErrorBox(t, name)
             }
         },
-        confirmButton = { TextButton({ App.summary = null }) { Text(stringResource(R.string.ok)) } },
+        confirmButton = { TextButton({ App.summary = null }) { Text(stringResource(R.string.close)) } },
     )
 }
 
@@ -437,7 +437,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 TextButton({
                     ask = null
                     App.act(e, Choice(keepPhone = phone, serverHash = server!!.hash))
-                }) { Text(stringResource(R.string.confirm)) }
+                }) { Text(stringResource(if (phone) R.string.upload else R.string.replace)) } // the verb of the outcome
             },
             dismissButton = { TextButton({ ask = null }) { Text(stringResource(R.string.cancel)) } },
         )

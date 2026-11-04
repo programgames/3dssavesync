@@ -490,7 +490,7 @@ open class UiTest {
         rule.onAllNodesWithText("write detail").assertCountEquals(0)
         rule.onNode(hasText(s(R.string.show_details)) and dialog).performScrollTo().performClick()
         rule.onNodeWithText("write detail").assertExists()
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.close)) and dialog).performClick()
         rule.onAllNodesWithText(s(R.string.summary_title)).assertCountEquals(0)
     }
 
@@ -718,7 +718,7 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
         rule.onNodeWithText(s(R.string.reminder_text)).assertExists()
         fits(s(R.string.dont_show_again))
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
         rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists() // then the usual confirmation
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
 
@@ -732,7 +732,7 @@ open class UiTest {
         App.reminded = false // the app starts again
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
         rule.onNodeWithText(s(R.string.dont_show_again)).performClick()
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
         assertTrue(Settings(ctx).noReminder)
 

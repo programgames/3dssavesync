@@ -8,8 +8,9 @@
     <string name="tab_settings">Settings</string>
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
-    <string name="ok">OK</string>
-    <string name="confirm">Confirm</string>
+    <string name="go_on">Continue</string>
+    <string name="close">Close</string>
+    <string name="replace">Replace</string>
 
     <!-- Settings -->
     <string name="settings_title">Server</string>
@@ -103,7 +104,7 @@
     <string name="folder_unreadable">This folder can\'t be read. If it\'s on an SD card, insert the card. If the emulator keeps its saves in Android/data, set it to save in another folder: Android 11 and later close Android/data to other apps.</string>
 
     <!-- Games -->
-    <string name="need_server">Set the server address and the token first.</string>
+    <string name="need_server">Connect the app to your 3dssavesync server first.</string>
     <string name="open_settings">Open the settings</string>
     <string name="need_emulator">Add an emulator and choose its folders first.</string>
     <string name="refresh">Refresh</string>

@@ -6,8 +6,9 @@
     <string name="tab_settings">Réglages</string>
     <string name="back">Retour</string>
     <string name="cancel">Annuler</string>
-    <string name="ok">OK</string>
-    <string name="confirm">Confirmer</string>
+    <string name="go_on">Continuer</string>
+    <string name="close">Fermer</string>
+    <string name="replace">Remplacer</string>
 
     <!-- Settings -->
     <string name="settings_title">Serveur</string>
@@ -103,7 +104,7 @@
     <string name="folder_unreadable">Ce dossier ne peut pas être lu. S\'il est sur une carte SD, insérez la carte. Si l\'émulateur range ses sauvegardes dans Android/data, réglez-le pour qu\'il sauvegarde ailleurs&#160;: depuis Android 11, Android/data est fermé aux autres applications.</string>
 
     <!-- Games -->
-    <string name="need_server">Indiquez d\'abord l\'adresse du serveur et le jeton.</string>
+    <string name="need_server">Connectez d\'abord l\'application à votre serveur 3dssavesync.</string>
     <string name="open_settings">Ouvrir les réglages</string>
     <string name="need_emulator">Ajoutez d\'abord un émulateur et choisissez ses dossiers.</string>
     <string name="refresh">Actualiser</string>
