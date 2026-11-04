@@ -10,9 +10,10 @@
  * -1 if the game has no archive or no such file (never started, missing): nothing to sync. */
 int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char **bytes, size_t *size);
 
-/* Rewrites /main (same size required), commit, then removal of the secure value. 0 if OK.
- * Without the commit, the archive keeps its old content: a failure never leaves a half-written save. */
-int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size);
+/* Rewrites file ("/main", or "/sav.dat" of a Virtual Console game; same size required), commit, then removal of the
+ * secure value. 0 if OK. Without the commit, the archive keeps its old content: a failure never leaves a half-written
+ * save. */
+int write_title_save(u64 id, FS_MediaType media, const char *file, const void *bytes, size_t size);
 
 /* 1 if the archive holds only the /main file (the only case the sync can copy without loss),
  * 0 if it holds something else, -1 if the game has no archive (never started). */

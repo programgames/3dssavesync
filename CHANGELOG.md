@@ -2,6 +2,12 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.10.0] - Unreleased
+
+### Added
+
+- **Virtual Console on the 3DS.** Game Boy and Game Boy Color games bought on the eShop are synced like your ROMs (Luma3DS needed). A Virtual Console game and the mGBA forwarder of the same game are both synced: play either one, and **Sync all** brings your progress to the other.
+
 ## [3.9.0] - Unreleased
 
 ### Added
@@ -140,7 +146,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.8.0...HEAD
+[3.10.0]: https://github.com/programgames/3dssavesync/compare/v3.9.0...HEAD
+[3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.8.0...v3.9.0
 [3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.7.0...v3.8.0
 [3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.7.0
 [3.6.1]: https://github.com/programgames/3dssavesync/compare/v3.6.0...v3.6.1

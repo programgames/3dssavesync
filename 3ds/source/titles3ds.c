@@ -43,7 +43,7 @@ int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char
     return -1;
 }
 
-int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size)
+int write_title_save(u64 id, FS_MediaType media, const char *file, const void *bytes, size_t size)
 {
     FS_Archive a;
     Handle f;
@@ -53,7 +53,7 @@ int write_title_save(u64 id, FS_MediaType media, const void *bytes, size_t size)
     Result r;
 
     if (R_FAILED(open_save_archive(id, media, &a))) return -1;
-    r = FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, "/main"), FS_OPEN_WRITE, 0);
+    r = FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, file), FS_OPEN_WRITE, 0);
     if (R_SUCCEEDED(r)) {
         r = FSFILE_GetSize(f, &t);
         if (R_SUCCEEDED(r) && t != size) r = -2; /* never a size change: the game does not expect one */
