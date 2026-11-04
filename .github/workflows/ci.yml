@@ -46,9 +46,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS : peu de machines pour un compte gratuit, longue attente. Pas sur les PR ; après la fusion (main) et
-        # avant chaque release (tag). Les PR vérifient quand même que le code compile pour macOS (go vet croisé).
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["windows-latest", "ubuntu-latest"]') || fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') }}
+        # macOS : peu de machines pour un compte gratuit, longue attente (v3.11.0 : deux tentatives annulées faute de
+        # machine). Seulement après la fusion (main), jamais avant une release : un tag n'attend pas macOS. Les PR et
+        # les tags vérifient quand même que le code compile pour macOS (go vet croisé), et la release le compile.
+        os: ${{ github.ref == 'refs/heads/main' && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["windows-latest", "ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
