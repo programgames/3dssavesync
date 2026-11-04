@@ -214,4 +214,18 @@
     <string name="p_version_gone">Cette version n\'est plus sur le serveur. Choisissez-en une autre.</string>
     <string name="p_version_damaged">La version reçue du serveur est abîmée. Réessayez.</string>
     <string name="p_server_changed">La sauvegarde vient de changer sur le serveur : un appareil l\'a envoyée entre-temps. La liste est de nouveau à jour : choisissez de nouveau.</string>
+
+    <!-- Background upload -->
+    <string name="bg_title">Envoi en arrière-plan</string>
+    <string name="bg_switch">Envoyer les sauvegardes en arrière-plan</string>
+    <string name="bg_help">Environ toutes les 15 minutes, avec un réseau et une batterie qui n\'est pas faible, l\'app envoie les sauvegardes jouées sur ce téléphone. Elle ne récupère jamais rien et ne remplace jamais une sauvegarde de ce téléphone : utilisez Tout synchroniser pour cela. Une sauvegarde modifiée dans les 30 dernières secondes attend le passage suivant. Chaque passage consomme un peu de batterie et de données.</string>
+    <string name="bg_no_notification">Les notifications sont désactivées : les problèmes s\'affichent seulement ici.</string>
+    <string name="bg_never">Aucun passage en arrière-plan pour l\'instant.</string>
+    <plurals name="bg_last">
+        <item quantity="one">Dernier passage : %1$s. %2$d sauvegarde envoyée.</item>
+        <item quantity="other">Dernier passage : %1$s. %2$d sauvegardes envoyées.</item>
+        <item quantity="many">Dernier passage : %1$s. %2$d sauvegardes envoyées.</item>
+    </plurals>
+    <string name="bg_problems_title">Envoi en arrière-plan : problèmes</string>
+    <string name="bg_conflict">%1$s : conflit. Ouvrez le jeu pour choisir la sauvegarde à garder.</string>
 </resources>

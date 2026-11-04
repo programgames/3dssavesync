@@ -2,8 +2,15 @@
 
 package io.github.programgames.savesync
 
+import android.Manifest
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.core.app.NotificationManagerCompat
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -204,6 +211,8 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
         App.busy?.let { Text(it) }
         result?.fold({ Text(pluralStringResource(R.plurals.connected, it, it)) }, { ErrorText(it) })
         HorizontalDivider()
+        BackgroundSection()
+        HorizontalDivider()
         Text(stringResource(R.string.backups_title), style = MaterialTheme.typography.titleMedium)
         Text(stringResource(R.string.backups_where))
         Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
@@ -214,6 +223,34 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
         HorizontalDivider()
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
     }
+}
+
+// BackgroundSection: the background upload switch (off by default) and the last run. Turning it on asks for the
+// notifications (Android 13+); refused, the upload still runs and its problems show here only.
+@Composable
+private fun BackgroundSection() {
+    val ctx = LocalContext.current
+    fun notificationsOn() = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    var on by remember { mutableStateOf(App.settings.background) }
+    var notifications by remember { mutableStateOf(notificationsOn()) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifications = notificationsOn() }
+    Text(stringResource(R.string.bg_title), style = MaterialTheme.typography.titleMedium)
+    Row(
+        Modifier.fillMaxWidth().toggleable(on, role = Role.Switch) { v ->
+            on = v
+            App.setBackground(v)
+            if (v && Build.VERSION.SDK_INT >= 33 && !notificationsOn()) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.bg_switch), Modifier.weight(1f).padding(end = 8.dp))
+        Switch(on, null)
+    }
+    Text(stringResource(R.string.bg_help), style = MaterialTheme.typography.bodySmall)
+    if (on && !notifications) Text(stringResource(R.string.bg_no_notification), style = MaterialTheme.typography.bodySmall)
+    val last = App.lastRun
+    Text(if (last == null) stringResource(R.string.bg_never) else pluralStringResource(R.plurals.bg_last, last.uploaded, dateText(last.time), last.uploaded))
+    if (last != null && last.problems.isNotEmpty()) Text(last.problems, color = MaterialTheme.colorScheme.error)
 }
 
 // HacksScreen lists the ROM hacks that have their own save (ADR 0014): add one by its ROM file, or forget one (the

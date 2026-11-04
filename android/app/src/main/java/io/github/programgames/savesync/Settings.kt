@@ -50,6 +50,23 @@ class Settings(context: Context) {
         get() = p.getBoolean("noReminder", false)
         set(v) = p.edit { putBoolean("noReminder", v) }
 
+    // background: the user turned on the background upload (Background.kt). Off by default.
+    var background: Boolean
+        get() = p.getBoolean("background", false)
+        set(v) = p.edit { putBoolean("background", v) }
+
+    // lastRun: the last background pass. notified: the problems of the last notification, so the same ones are not
+    // notified again.
+    var lastRun: LastRun?
+        get() = if (p.contains("lastRunTime")) LastRun(p.getLong("lastRunTime", 0), p.getInt("lastRunUploaded", 0), p.getString("lastRunProblems", "") ?: "") else null
+        set(v) = p.edit {
+            if (v == null) remove("lastRunTime") else putLong("lastRunTime", v.time).putInt("lastRunUploaded", v.uploaded).putString("lastRunProblems", v.problems)
+        }
+
+    var notified: String
+        get() = p.getString("notified", "") ?: ""
+        set(v) = p.edit { putString("notified", v) }
+
     // aliases: ROM name without extension -> Key of its own save (ADR 0014), as "alias" in the PC config.json.
     var aliases: Map<String, String>
         get() = JSONObject(p.getString("aliases", "{}") ?: "{}").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }

@@ -142,6 +142,9 @@ data class Summary(
     val stopped: Boolean,
 )
 
+// Uploads: result of a background pass (Syncer.uploadAll).
+data class Uploads(val uploaded: Int, val recent: List<String>, val conflicts: List<String>, val failures: List<Pair<String, Throwable>>)
+
 // writeProblems: a write on this phone failed, so the storage may be at fault for the next games too.
 private val writeProblems = setOf(Problem.BACKUP, Problem.WRITE, Problem.RESTORE, Problem.NOT_WRITTEN, Problem.PARTIAL)
 
@@ -253,6 +256,54 @@ class Syncer(
             }
         }
         return Summary(up, down, same, conflicts, notReplaced, failures, false)
+    }
+
+    // uploadOnly is the background pass of one Game: the same State as sync, but only an Upload is done. Never a
+    // Download, never a Conflict choice, never a write on this phone except the Base after the server took the Upload.
+    // To download: NOT_REPLACED. A save changed less than OPEN_MS ago is not uploaded (OPEN): the emulator may still be
+    // writing it, so the content read may be cut. The date is read after the content, so a write during the read shows.
+    fun uploadOnly(g: Game): Outcome {
+        repeat(3) { attempt ->
+            if (attempt > 0) refresh()
+            val srv = serverVersion(g.key)
+            if (srv != null && srv.name.isEmpty()) nameOnServer(g)
+            val l = readLocal(g, srv)
+            val seen = seen(l, srv)
+            if (seen == null && srv == null) return Outcome.NOTHING
+            when (state(seen, srv, bases.of(g.emulator)[g.key])) {
+                State.IN_SYNC -> return Outcome.IN_SYNC
+                State.TO_DOWNLOAD -> return Outcome.NOT_REPLACED
+                State.CONFLICT -> return Outcome.CONFLICT
+                State.TO_UPLOAD -> {
+                    checkClosed(g.file, clock(), reminded = true) // an unknown date is fine: an Upload only reads
+                    if (upload(g, l!!, srv)) return Outcome.UPLOADED
+                }
+            }
+        }
+        throw SyncException(Problem.BUSY, "PUT /saves/${g.key}: 412 three times")
+    }
+
+    // uploadAll runs the background pass: uploadOnly on every Game. recent: saves changed less than OPEN_MS ago, tried
+    // again on the next pass. It stops when the server or the network fails.
+    fun uploadAll(games: List<Game>): Uploads {
+        var up = 0
+        val recent = mutableListOf<String>()
+        val conflicts = mutableListOf<String>()
+        val failures = mutableListOf<Pair<String, Throwable>>()
+        for (g in games) {
+            try {
+                when (uploadOnly(g)) {
+                    Outcome.UPLOADED -> up++
+                    Outcome.CONFLICT -> conflicts += g.name
+                    else -> {}
+                }
+            } catch (t: Throwable) {
+                val p = problem(t)
+                if (p == Problem.OPEN) recent += g.name else failures += g.name to t
+                if (isGlobal(p)) break
+            }
+        }
+        return Uploads(up, recent, conflicts, failures)
     }
 
     // nameOnServer gives the game name to the server once per pass (ADR 0018); a failure never blocks the Sync.

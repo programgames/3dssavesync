@@ -129,9 +129,24 @@ Connect the phone to a computer over USB to see them (the Android Files app may 
 
 Removing an emulator from the app, or uninstalling the app, deletes nothing in your save folders. Uninstalling the app deletes its backup copies: copy them first if you want to keep them.
 
+## Background upload
+
+In **Settings**, turn on **Upload saves in the background** (it is off by default). Then, about every 15 minutes (the shortest interval Android allows), when the phone has a network and its battery is not low, the app reads your folders and uploads the saves you played on this phone: the games in the state **To upload**.
+
+What it never does:
+
+- It never downloads. A background download could write under an emulator that is still open, and Android gives no way to see if one runs. Open the app and use **Sync all** to get the saves of your other devices.
+- It never resolves a conflict: it only reports it.
+- It never writes a save or a backup copy on this phone. The only thing it changes on the phone is its record of the last sync, after the server has accepted an upload.
+- It never uploads a save that changed in the last 30 seconds: the emulator may still be writing it. That save waits for the next run.
+
+On Android 13 and later, the app asks for the permission to show notifications when you turn the setting on. A conflict or a failure then shows as one notification, which is not shown again while the same problems stay. If you refuse the permission, the background upload still works: the problems show only in **Settings**. **Settings** always shows the last run: its time, the number of saves uploaded and the problems.
+
+Battery and data: each run reads the save folders and the server list, and uploads only the saves that changed. Android may run it later than every 15 minutes, for example in battery saver mode or when the app is rarely used. Turn the setting off to stop it.
+
 ## Not in this version
 
-- No background sync: open the app and tap **Sync all** before and after you play.
+- No background download: open the app and tap **Sync all** before you play, to get the saves of your other devices.
 - The app does not start games.
 
 ## Build it yourself

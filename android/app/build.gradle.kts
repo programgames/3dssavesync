@@ -45,6 +45,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.0") // the background upload (Background.kt)
 
     testImplementation("junit:junit:4.13.2")
     // org.json is part of Android, but the JVM unit tests only see stubs of it.
@@ -52,5 +53,6 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation(platform("androidx.compose:compose-bom:2025.05.00"))
     testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.work:work-testing:2.10.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest") // the empty activity of createAndroidComposeRule
 }

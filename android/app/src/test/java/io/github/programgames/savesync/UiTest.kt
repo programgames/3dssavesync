@@ -9,6 +9,13 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.work.Configuration
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.testing.SynchronousExecutor
+import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -552,6 +559,31 @@ open class UiTest {
         rule.onAllNodesWithText("Radical Red (4.10)").assertCountEquals(0)
         back()
         rule.onNodeWithText(s(R.string.settings_title)).assertExists()
+    }
+
+    // Background upload: off by default; on, the periodic work is enqueued; off again, cancelled. The last run shows.
+    @Test
+    fun backgroundUploadSetting() {
+        WorkManagerTestInitHelper.initializeTestWorkManager(ctx, Configuration.Builder().setExecutor(SynchronousExecutor()).build())
+        start()
+        val work = { WorkManager.getInstance(ctx).getWorkInfosForUniqueWork(UPLOAD_WORK).get() }
+        rule.onNodeWithText(s(R.string.bg_never)).performScrollTo().assertIsDisplayed()
+        fits(s(R.string.bg_title))
+        fits(s(R.string.bg_switch), 2)
+        val row = rule.onNodeWithText(s(R.string.bg_switch))
+        row.performScrollTo().assertIsOff().performClick().assertIsOn()
+        assertTrue(App.settings.background)
+        assertEquals(WorkInfo.State.ENQUEUED, work().single().state)
+        row.performClick().assertIsOff()
+        assertFalse(App.settings.background)
+        assertEquals(WorkInfo.State.CANCELLED, work().single().state)
+
+        val problem = s(R.string.bg_conflict, "Pokemon Emeraude")
+        App.lastRun = LastRun(1_800_000_000_000L, 2, problem)
+        val line = ctx.resources.getQuantityString(R.plurals.bg_last, 2, dateText(1_800_000_000_000L), 2)
+        waitFor(line)
+        fits(line, 2)
+        fits(problem, 3)
     }
 
     // A Duplicate (same Key): each ROM can get its own save, the Key of the PC for this ROM name; the list is read

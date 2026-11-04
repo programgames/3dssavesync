@@ -1,10 +1,18 @@
 package io.github.programgames.savesync
 
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import io.github.programgames.savesync.core.Uploads
+import io.github.programgames.savesync.core.problem
 import androidx.compose.runtime.getValue
 import androidx.core.net.toUri
 import androidx.compose.runtime.mutableStateOf
@@ -93,6 +101,7 @@ object App {
     var message by mutableStateOf<Pair<String, Throwable?>?>(null) // result of the last action on one game
     var loaded by mutableStateOf(false)
     var reminded = false // the reminder to close the emulator was shown since the app started
+    var lastRun by mutableStateOf<LastRun?>(null) // the last background pass
 
     fun init(c: Context) {
         if (::context.isInitialized && context === c.applicationContext) return // a new Application: the UI tests
@@ -101,6 +110,58 @@ object App {
         settings = Settings(context)
         emulators = settings.emulators
         aliases = settings.aliases
+        lastRun = settings.lastRun
+    }
+
+    fun setBackground(on: Boolean) {
+        settings.background = on
+        scheduleUploads(context, on)
+    }
+
+    // backgroundPass is the background upload (UploadWorker): the folders are read again, then only the Uploads are
+    // done (Syncer.uploadAll). It runs on the io thread, so never at the same time as an action of the screens.
+    suspend fun backgroundPass() {
+        if (!settings.background || !configured()) return
+        val (u, scanned) = withContext(io) {
+            val (found, problems) = scanAll()
+            val s = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), { false })
+            s.uploadAll(found.mapNotNull { it.game }) to problems
+        }
+        record(u, scanned)
+    }
+
+    // record keeps the result of a background pass for the settings screen, and notifies its problems once: the same
+    // problems are not notified again while they stay. ponytail: the text is the dedupe key, so a new language notifies again.
+    internal fun record(u: Uploads, scanned: List<String>, now: Long = java.lang.System.currentTimeMillis()) {
+        val problems = (
+            u.conflicts.map { text(R.string.bg_conflict, it) } +
+                u.failures.map { (name, t) -> "$name: " + text(problemText(problem(t))) } + scanned
+            ).joinToString("\n")
+        val run = LastRun(now, u.uploaded, problems)
+        settings.lastRun = run
+        lastRun = run
+        if (problems == settings.notified) return
+        settings.notified = problems
+        if (problems.isNotEmpty()) notifyProblems(problems)
+    }
+
+    // notifyProblems shows one notification; without the permission (Android 13+), the settings screen only.
+    private fun notifyProblems(problems: String) {
+        val nm = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) {
+            nm.createNotificationChannel(NotificationChannel(UPLOAD_WORK, text(R.string.bg_title), NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return
+        val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val n = NotificationCompat.Builder(context, UPLOAD_WORK)
+            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setContentTitle(text(R.string.bg_problems_title))
+            .setContentText(problems.substringBefore('\n'))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(problems))
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        nm.notify(1, n)
     }
 
     val resolver: ContentResolver get() = context.contentResolver

@@ -482,6 +482,48 @@ class PythonServerTest {
         assertEquals(after.map { it.file }, remote.history("GBA-BPEF").map { it.file }) // no new Version
     }
 
+    // Background upload: only the Uploads. A To download game and a Conflict game stay as they are, with their Bases;
+    // a save changed less than 30 s ago waits for the next pass.
+    @Test
+    fun backgroundUploadsOnly() {
+        val a = syncer("a")
+        val now = 1_800_000_000_000L
+        val b = syncer("b", { true }, { now })
+        fun g(key: String, emulator: String, f: MemoryFile) = Game(System.GBA, key, key, f, Format(), emulator)
+        val fa1 = MemoryFile("1.sav", random(32 shl 10, 1))
+        val fa2 = MemoryFile("2.sav", random(32 shl 10, 2))
+        assertEquals(Outcome.UPLOADED, a.sync(g("GBA-BPEF", "mgba", fa1)))
+        assertEquals(Outcome.UPLOADED, a.sync(g("GBA-AXVE", "mgba", fa2)))
+        val down = MemoryFile("1.sav")
+        val conflict = MemoryFile("2.sav")
+        val gDown = g("GBA-BPEF", "pizzaboy", down)
+        val gConflict = g("GBA-AXVE", "pizzaboy", conflict)
+        assertEquals(2, b.syncAll(listOf(gDown, gConflict), emptySet()).downloaded)
+        fa1.content = random(32 shl 10, 3)
+        fa2.content = random(32 shl 10, 4)
+        assertEquals(Outcome.UPLOADED, a.sync(g("GBA-BPEF", "mgba", fa1)))
+        assertEquals(Outcome.UPLOADED, a.sync(g("GBA-AXVE", "mgba", fa2)))
+        conflict.content = random(32 shl 10, 5) // played on both sides
+        val up = g("GBA-BPRE", "pizzaboy", MemoryFile("3.sav", random(32 shl 10, 6)))
+        val recent = g("GBA-AXPE", "pizzaboy", MemoryFile("4.sav", random(32 shl 10, 7), date = now - 1_000))
+        val bases = Bases(File(tmp.root, "bases-b"))
+        val before = bases.of("pizzaboy")
+        b.refresh()
+
+        val r = b.uploadAll(listOf(gDown, gConflict, up, recent))
+        assertEquals(1, r.uploaded)
+        assertEquals(listOf("GBA-AXVE"), r.conflicts)
+        assertEquals(listOf("GBA-AXPE"), r.recent)
+        assertTrue(r.failures.isEmpty())
+        assertArrayEquals(random(32 shl 10, 1), down.content) // no Download
+        assertArrayEquals(random(32 shl 10, 5), conflict.content)
+        assertEquals(before + ("GBA-BPRE" to sha256(random(32 shl 10, 6))), bases.of("pizzaboy")) // only the Upload's Base
+        assertEquals(sha256(random(32 shl 10, 3)), b.serverVersion("GBA-BPEF")!!.hash)
+        assertEquals(sha256(random(32 shl 10, 4)), b.serverVersion("GBA-AXVE")!!.hash)
+        assertNull(b.serverVersion("GBA-AXPE"))
+        assertFalse(File(tmp.root, "copies-b").exists()) // no Backup copy: nothing was replaced
+    }
+
     @Test
     fun wrongToken() {
         val e = runCatching { Remote(url, "bad").list() }.exceptionOrNull()!!

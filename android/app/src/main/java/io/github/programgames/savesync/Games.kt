@@ -253,7 +253,7 @@ private fun SummaryDialog(s: Summary) {
 
 private val serverDate = SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
-private fun dateText(ms: Long) = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(ms))
+fun dateText(ms: Long) = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(ms))
 
 @Composable
 fun ageText(age: Long?): String = when {

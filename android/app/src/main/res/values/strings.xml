@@ -213,4 +213,17 @@
     <string name="p_version_gone">This version is no longer on the server. Choose another one.</string>
     <string name="p_version_damaged">The version from the server arrived damaged. Try again.</string>
     <string name="p_server_changed">The save just changed on the server: a device uploaded it meanwhile. The list is up to date again: choose again.</string>
+
+    <!-- Background upload -->
+    <string name="bg_title">Background upload</string>
+    <string name="bg_switch">Upload saves in the background</string>
+    <string name="bg_help">About every 15 minutes, with a network and a battery that is not low, the app uploads the saves you played on this phone. It never downloads and never replaces a save on this phone: use Sync all for that. A save changed in the last 30 seconds waits for the next run. Each run uses a little battery and data.</string>
+    <string name="bg_no_notification">Notifications are off: the problems show only here.</string>
+    <string name="bg_never">No background run yet.</string>
+    <plurals name="bg_last">
+        <item quantity="one">Last run: %1$s. %2$d save uploaded.</item>
+        <item quantity="other">Last run: %1$s. %2$d saves uploaded.</item>
+    </plurals>
+    <string name="bg_problems_title">Background upload: problems</string>
+    <string name="bg_conflict">%1$s: conflict. Open the game to choose which save to keep.</string>
 </resources>
