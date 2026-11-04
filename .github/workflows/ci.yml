@@ -95,6 +95,10 @@ jobs:
 
   android:
     runs-on: ubuntu-latest
+    env:
+      # The release APK needs the signing key (repository secrets). Without it, the step is skipped and the release
+      # goes on without the APK. Never a key made by the CI: each APK must install over the previous one (ADR 0026).
+      ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'yes' || 'no' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -113,6 +117,31 @@ jobs:
         with:
           name: android-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      # Tag v3.10.0 -> versionName 3.10.0, versionCode 31000 (major*10000 + minor*100 + patch: grows with each release
+      # while minor and patch stay below 100). R8 shrinks it; the unit tests above ran on the same code.
+      - name: Signed release APK
+        if: startsWith(github.ref, 'refs/tags/v') && env.ANDROID_SIGNING == 'yes'
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$ANDROID_KEYSTORE_FILE"
+          version="${GITHUB_REF_NAME#v}"
+          IFS=. read -r major minor patch <<< "${version%%-*}"
+          export ANDROID_VERSION_NAME="$version"
+          export ANDROID_VERSION_CODE=$((major * 10000 + minor * 100 + patch))
+          ./gradlew --no-daemon assembleRelease
+          rm -f "$ANDROID_KEYSTORE_FILE"
+          mkdir -p ../apk && cp app/build/outputs/apk/release/app-release.apk ../apk/3dssavesync-android.apk
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v') && env.ANDROID_SIGNING == 'yes'
+        with:
+          name: android-release-apk
+          path: apk/3dssavesync-android.apk
 
   homebrew-3ds:
     runs-on: ubuntu-latest
@@ -151,7 +180,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [serveur, tests-c, client-go, lint-go, homebrew-3ds]
+    needs: [serveur, tests-c, client-go, lint-go, homebrew-3ds, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -161,6 +190,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: homebrew-3ds
+          path: dist
+      # Absent when the signing key is not set (android job): the release goes on without it.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: android-release-apk
           path: dist
       - uses: actions/setup-go@v5
         with:

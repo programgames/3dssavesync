@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Release APK (CI on a v* tag, docs/adr/0026-client-android.md): one fixed key, so that each new APK installs over the
+// old one (an uninstall deletes the backup copies), and a versionCode that only grows. Without these variables, the
+// release APK is built unsigned and the version is "dev".
+val env: Map<String, String> = System.getenv()
+
 android {
     namespace = "io.github.programgames.savesync"
     compileSdk = 35
@@ -13,8 +18,26 @@ android {
         applicationId = "io.github.programgames.savesync"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = env["ANDROID_VERSION_CODE"]?.toIntOrNull() ?: 1
+        versionName = env["ANDROID_VERSION_NAME"]?.takeIf { it.isNotBlank() } ?: "dev"
+    }
+
+    signingConfigs {
+        env["ANDROID_KEYSTORE_FILE"]?.takeIf { it.isNotBlank() }?.let { keystore ->
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = env["ANDROID_KEYSTORE_PASSWORD"]
+                keyAlias = env["ANDROID_KEY_ALIAS"]
+                keyPassword = env["ANDROID_KEY_PASSWORD"]
+            }
+        }
+    }
+    buildTypes {
+        release {
+            isMinifyEnabled = true // R8; the libraries bring their own keep rules (WorkManager workers, ML Kit)
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
 
     buildFeatures {
