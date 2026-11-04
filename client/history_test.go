@@ -170,8 +170,15 @@ func TestWebSetupHistory(t *testing.T) {
 		Games []HistoryGame `json:"Jeux"`
 	}
 	request("jeux", "{}", &games)
-	if len(games.Games) != 1 || games.Games[0] != (HistoryGame{"CPUF", "Pokemon Platine"}) {
+	if len(games.Games) != 1 || games.Games[0].Key != "CPUF" || games.Games[0].Name != "Pokemon Platine" ||
+		games.Games[0].Client != "3ds" || games.Games[0].Age < 0 || games.Games[0].Age > 60 {
 		t.Errorf("jeux : %+v", games)
+	}
+	uploadFromOther(t, s, "3DS-0004000000164800", mainSunMoon(12, 34, "Sacha"), nil)
+	var plays struct{ Parties map[string]string }
+	request("parties", "{}", &plays)
+	if p := plays.Parties["3DS-0004000000164800"]; !strings.Contains(p, "12") || !strings.Contains(p, "Sacha") || len(plays.Parties) != 1 {
+		t.Errorf("parties : %+v", plays)
 	}
 	var v struct{ Versions []HistoryLine }
 	request("versions", `{"Cle":"CPUF"}`, &v)

@@ -81,7 +81,7 @@ The `portable.txt` file next to the program is what makes it portable: settings,
 - **PC**: start your games from your frontend or the shortcuts, as before. Your save is uploaded when you close the emulator.
 - **3DS**: open 3dssavesync before and after you play. Press **START** to sync everything, or **A** on one game.
 - **Conflict** (you played on both sides): you choose which save to keep. Nothing is lost: the other one stays in the server history or in a backup.
-- **Get back an old version**: open the **3dssavesync settings** shortcut, go to **History**, pick the game and the version, and click **Restore this version** (or run `3dssavesync restore`). Each device gets it at its next sync, after a backup.
+- **Get back an old version**: open the **3dssavesync settings** shortcut, go to **Games**, pick the game and the version, and click **Restore this version** (or run `3dssavesync restore`). Each device gets it at its next sync, after a backup.
 - **No network after a game on the PC**: the save stays on the PC and is uploaded the next time you start any game.
 - **Icon near the clock** (Windows, Linux KDE): right-click it to open the settings, upload pending saves now or see the local server address. More in the [PC guide](docs/guide-pc.md#the-icon-near-the-clock).
 - **Updates**: the settings page and the icon near the clock tell you when a new version is out. Click **Update** on the settings page and the program updates and restarts itself. For the 3DS app, update it from its settings (**SELECT** > **Update**), or prepare the SD card again. More in the [PC guide](docs/guide-pc.md#updates).

@@ -76,7 +76,7 @@ button.danger { color: var(--erreur); border-color: var(--erreur); }
 button.danger:hover { background: var(--erreur-fond); }
 button:disabled { opacity: .5; cursor: default; }
 
-input[type=text], input[type=password], input[type=number], select { width: 100%; min-height: 32px; padding: 5px var(--e2); border: 1px solid var(--bord-champ); border-radius: var(--rayon); background: var(--champ); color: var(--texte); font: inherit; }
+input[type=text], input[type=search], input[type=password], input[type=number], select { width: 100%; min-height: 32px; padding: 5px var(--e2); border: 1px solid var(--bord-champ); border-radius: var(--rayon); background: var(--champ); color: var(--texte); font: inherit; }
 input.court { width: 12ch; }
 label.titre, .titre { display: block; font-weight: 600; margin-bottom: var(--e1); }
 .champ + .champ { margin-top: var(--e4); }
@@ -101,6 +101,7 @@ input.interrupteur:checked::before { left: 23px; background: var(--accent-texte)
 .message.info { background: var(--accent-doux); border-color: var(--accent); }
 .message.alerte { background: var(--alerte-fond); border-color: var(--alerte); }
 .message.erreur { background: var(--erreur-fond); border-color: var(--erreur); }
+.entete .actions { display: flex; flex-wrap: wrap; gap: var(--e2) var(--e3); align-items: center; margin-top: var(--e3); }
 .message.compact { display: block; margin: var(--e2) 0 0; padding: var(--e2) var(--e3); overflow-wrap: anywhere; }
 .detail { display: block; margin-top: var(--e1); font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; font-weight: 400; }
 .resultat { padding: var(--e4); }
@@ -170,6 +171,11 @@ details.repli > summary { padding: var(--e3) var(--e4); color: var(--lien); font
 .jeux button:hover { background: var(--survol); }
 .jeux button[aria-current] { background: var(--accent-doux); box-shadow: inset 3px 0 0 var(--accent); }
 .jeux .sys { justify-self: start; align-self: start; margin-top: 1px; }
+.filtres { display: flex; flex-wrap: wrap; gap: var(--e1); margin-bottom: var(--e3); }
+.filtres button { font-weight: 400; min-height: 32px; padding: 2px var(--e2); }
+.filtres button[aria-pressed="true"] { background: var(--accent-doux); border-color: var(--accent); font-weight: 600; }
+.histo .tri { display: flex; gap: var(--e2); align-items: center; margin-top: var(--e2); white-space: nowrap; color: var(--doux); }
+.histo .tri select { width: auto; flex: 1; }
 .jeux .cle { display: block; font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; }
 #versions { padding: var(--e4); min-width: 0; }
 #versions h3 { font-size: var(--t-sous-titre); line-height: 28px; }
@@ -289,7 +295,7 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
   <button type="button" data-page="serveur"><span>{{t "Serveur" "Server"}}</span></button>
   <button type="button" data-page="carte"><span>{{t "Carte SD 3DS" "3DS SD card"}}</span></button>
   <button type="button" data-page="frontends"><span>{{t "Frontends et installation" "Frontends and install"}}</span></button>
-  <button type="button" data-page="historique"><span>{{t "Historique" "History"}}</span></button>
+  <button type="button" data-page="historique"><span>{{t "Jeux" "Games"}}</span></button>
   <button type="button" data-page="hacks"><span>{{t "ROM hacks" "ROM hacks"}}</span></button>
   <button type="button" data-page="verifs"><span>{{t "Vérifications" "Checks"}}</span></button>
   <div class="pied"><button type="button" id="terminer">{{t "Fermer les réglages" "Close settings"}}</button></div>
@@ -444,13 +450,18 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
   </section>
 
   <section id="sectionHistorique" class="masque" data-page="historique">
-    <div class="entete"><h1>{{t "Historique" "History"}}</h1>
+    <div class="entete"><h1>{{t "Jeux" "Games"}}</h1>
       <p>{{t "Le serveur garde toutes les versions de vos sauvegardes. Restaurer une version change seulement le serveur : chaque appareil la recevra à sa prochaine synchronisation, après une copie de sécurité." "The server keeps every version of your saves. Restoring one only changes the server: each device gets it at its next sync, after a backup."}}</p>
-      <p id="histoEtat" class="statut" role="status"></p></div>
+      <p id="histoEtat" class="statut" role="status"></p>
+      <div class="actions"><button type="button" id="toutSynchro">{{t "Tout synchroniser" "Sync all"}}</button>
+        <span class="legende">{{t "Synchronise les jeux de tous vos émulateurs fermés, sans en lancer un." "Syncs the games of all your closed emulators, without starting one."}}</span></div>
+      <div id="synchroResultat"></div></div>
     <div class="groupe histo">
       <div class="liste">
+        <div id="filtresConsole" class="filtres" role="group" aria-label="{{t "Console" "Console"}}"></div>
         <label class="titre" for="chercheJeu">{{t "Chercher un jeu" "Search for a game"}}</label>
-        <input type="text" id="chercheJeu" autocomplete="off" placeholder="Pokemon">
+        <input type="search" id="chercheJeu" autocomplete="off" placeholder="Pokémon">
+        <label class="tri">{{t "Trier par" "Sort by"}} <select id="triJeux"><option value="nom">{{t "Nom" "Name"}}</option><option value="date">{{t "Dernière sauvegarde" "Last save"}}</option></select></label>
         <ul id="listeJeux" class="jeux"></ul>
       </div>
       <div id="versions"></div>
@@ -530,6 +541,10 @@ const T = {
   aucunChoisiAide: {{t "Activez ceux à synchroniser dans « Autres émulateurs trouvés sur ce PC »." "Turn on the ones to sync in \"Other emulators found on this PC\"."}},
   choisirJeu: {{t "Choisissez un jeu" "Choose a game"}},
   nomInconnu: {{t "Nom inconnu" "Unknown name"}},
+  tous: {{t "Tous" "All"}},
+  aucunResultat: {{t "Aucun jeu ne correspond." "No game matches."}},
+  instant: {{t "à l'instant" "just now"}},
+  synchroEnCours: {{t "Synchronisation en cours… Cela peut prendre une minute avec beaucoup de jeux." "Syncing… This can take a minute with many games."}},
   aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
   colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
   sur3DS: {{t "Entrez-les sur la 3DS (3dssavesync, touche SELECT), ou écrivez-les sur sa carte SD plus bas" "Enter these on the 3DS (3dssavesync, SELECT button), or write them to its SD card below"}},
@@ -731,7 +746,7 @@ async function ouvrir(nom) {
 
 // Serveur et nombre de jeux : une lecture de la liste du serveur (api/jeux), gardée pour l'historique.
 async function bandeauServeur() {
-  listeJeux = null;
+  listeJeux = parties = null;
   $("etatJeux").textContent = "…";
   if (!etat.Existe) {
     $("etatServeur").textContent = T.pasEnregistre; $("etatServeur").className = "pastille neutre"; $("etatJeux").textContent = "—";
@@ -1011,9 +1026,18 @@ async function cartes() {
 
 function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = "statut " + (classe || ""); }
 
-// Historique : les jeux du serveur (lus une fois avec le bandeau), filtrés par la recherche, puis les versions du jeu choisi.
+// Jeux : les jeux du serveur (lus une fois avec le bandeau), filtrés par console et par la recherche, triés, puis les
+// versions du jeu choisi.
 const consoleDe = cle => /^GBA-/.test(cle) ? "GBA" : /^GB-/.test(cle) ? "GB" : /^3DS-/.test(cle) ? "3DS" : "DS";
-let listeJeux = null, jeuChoisi = "";
+const sansAccents = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const ilYA = new Intl.RelativeTimeFormat(document.documentElement.lang, {style: "short", numeric: "auto"});
+function age(s) { // secondes depuis le dernier envoi -> « il y a 3 j »
+  if (s < 0) return "";
+  for (const [u, n] of [["year", 31536000], ["month", 2592000], ["day", 86400], ["hour", 3600], ["minute", 60]])
+    if (s >= n) return ilYA.format(-Math.floor(s / n), u);
+  return T.instant;
+}
+let listeJeux = null, parties = null, jeuChoisi = "", consoleChoisie = "";
 async function jeux() {
   if (!listeJeux) {
     statut(T.attente);
@@ -1024,16 +1048,33 @@ async function jeux() {
   if (!listeJeux.length) return statut(T.aucunJeu);
   if ($("histoEtat").textContent === T.attente) statut("");
   filtrer();
+  if (!parties) { // Pokémon play times: one read per game, after the list is shown
+    parties = {};
+    api("parties").then(r => { if (r.Parties) { parties = r.Parties; filtrer(); } }).catch(() => {});
+  }
   if (!jeuChoisi) $("versions").replaceChildren(texte("p", T.choisirJeu, "doux"));
 }
 function filtrer() {
-  const q = $("chercheJeu").value.trim().toLowerCase();
-  $("listeJeux").replaceChildren(...(listeJeux || []).filter(j => (j.Nom + " " + j.Cle).toLowerCase().includes(q)).map(j => {
+  const tous = listeJeux || [], n = {};
+  tous.forEach(j => n[consoleDe(j.Cle)] = (n[consoleDe(j.Cle)] || 0) + 1);
+  if (!n[consoleChoisie]) consoleChoisie = "";
+  $("filtresConsole").replaceChildren(...["", "DS", "GB", "GBA", "3DS"].filter(c => !c || n[c]).map(c => {
+    const b = texte("button", (c || T.tous) + " " + (c ? n[c] : tous.length));
+    b.type = "button";
+    b.setAttribute("aria-pressed", c === consoleChoisie);
+    b.onclick = () => { consoleChoisie = c; filtrer(); };
+    return b;
+  }));
+  const mots = sansAccents($("chercheJeu").value).split(/\s+/).filter(Boolean), parDate = $("triJeux").value === "date";
+  const l = tous.filter(j => (!consoleChoisie || consoleDe(j.Cle) === consoleChoisie) && mots.every(m => sansAccents(j.Nom + " " + j.Cle).includes(m)));
+  if (parDate) l.sort((a, b) => (a.Age < 0) - (b.Age < 0) || a.Age - b.Age); // stable : à date égale, l'ordre par nom reste
+  if (tous.length && !l.length) return $("listeJeux").replaceChildren(texte("li", T.aucunResultat, "doux"));
+  $("listeJeux").replaceChildren(...l.map(j => {
     const b = document.createElement("button");
     b.type = "button";
     if (j.Cle === jeuChoisi) b.setAttribute("aria-current", "true");
     const nom = texte("span", j.Nom || j.Cle); // la Clé seulement si aucun nom n'est connu
-    nom.append(texte("span", j.Nom ? j.Cle : T.nomInconnu, "cle"));
+    nom.append(texte("span", [j.Nom ? j.Cle : T.nomInconnu, parties && parties[j.Cle], age(j.Age), APPAREILS[j.Client] || j.Client].filter(Boolean).join(" · "), "cle"));
     b.append(SYS(consoleDe(j.Cle)), nom);
     b.onclick = () => { jeuChoisi = j.Cle; filtrer(); versions(j.Cle).catch(e => statut(T.erreur + e.message, "erreur")); };
     const li = document.createElement("li");
@@ -1041,9 +1082,19 @@ function filtrer() {
     return li;
   }));
 }
-$("chercheJeu").oninput = filtrer;
+$("chercheJeu").oninput = $("triJeux").onchange = filtrer;
+$("toutSynchro").onclick = async () => {
+  $("toutSynchro").disabled = true;
+  $("synchroResultat").replaceChildren(message("info", T.synchroEnCours));
+  try {
+    const r = await api("synchro");
+    $("synchroResultat").replaceChildren(message(/^(Envoyées|Uploaded)/.test(r.Texte) ? "info" : "alerte", r.Texte));
+    bandeauServeur(); // the list and the server badge read again
+  } catch (e) { $("synchroResultat").replaceChildren(message("erreur", T.erreur + e.message)); }
+  $("toutSynchro").disabled = false;
+};
 
-const APPAREILS = {"3ds": "3DS", "pc": "PC"};
+const APPAREILS = {"3ds": "3DS", "pc": "PC", "restauration": {{t "restauration" "restore"}}};
 async function versions(cle, message, classe) {
   if (!cle) return statut("");
   statut(T.attente);

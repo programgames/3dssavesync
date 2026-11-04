@@ -23,7 +23,8 @@ int title_name(u64 id, FS_MediaType media, int language, char *name, size_t n);
 /* Large icon of the game (SMDH): 48×48 RGB565 pixels, row by row. 0 if read. */
 int title_icon(u64 id, FS_MediaType media, u16 *pixels);
 
-/* Installed applications (SD card) and inserted game card. Returns the number of titles (max at most). */
-int installed_titles(u64 *ids, FS_MediaType *medias, int max);
+/* Installed applications (SD card) and inserted game card, all of them, in *ids and *medias (allocated with room for
+ * extra more: free them). Returns the number of titles, -1 if out of memory (nothing allocated). */
+int installed_titles(u64 **ids, FS_MediaType **medias, int extra);
 
 #endif

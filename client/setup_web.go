@@ -35,6 +35,8 @@ type WebSetup struct {
 	end                  chan struct{}
 	names                map[string]string // Key -> ROM name, read once (history.go)
 	namesRead            sync.Once
+	plays                map[string]string // Hash -> Pokémon play time and trainer, read once (history.go)
+	playsLock            sync.Mutex
 }
 
 // WebEmu is an emulator as the page shows it and sends it back.
@@ -252,7 +254,7 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewDecoder(r.Body).Decode(&x)
 		response = a.aliasWeb(x.Name, x.System, x.Remove)
-	case "api/jeux", "api/versions", "api/restaurer", "api/verifications", "api/mettreajour":
+	case "api/jeux", "api/versions", "api/restaurer", "api/verifications", "api/mettreajour", "api/synchro", "api/parties":
 		var x struct {
 			Key     string `json:"Cle"`
 			File    string `json:"Fichier"`
@@ -272,6 +274,10 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				response = map[string]any{"Liste": l, "Maj": update}
 			case "api/mettreajour":
 				response = a.selfUpdateWeb()
+			case "api/parties":
+				response = a.playsWeb()
+			case "api/synchro":
+				response = map[string]string{"Texte": syncAll(a.config)}
 			default:
 				response = a.restoreWeb(x.Key, x.File, x.Current)
 			}

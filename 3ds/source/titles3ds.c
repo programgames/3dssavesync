@@ -153,21 +153,32 @@ int title_icon(u64 id, FS_MediaType media, u16 *pixels)
     return ok ? 0 : -1;
 }
 
-int installed_titles(u64 *ids, FS_MediaType *medias, int max)
+int installed_titles(u64 **ids, FS_MediaType **medias, int extra)
 {
     static const FS_MediaType media_types[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
+    u32 totals[2] = { 0, 0 };
     int i, n = 0;
-    for (i = 0; i < 2; i++) {
-        u32 total = 0, count_read = 0, k;
+    for (i = 0; i < 2; i++)
+        if (R_FAILED(AM_GetTitleCount(media_types[i], &totals[i]))) totals[i] = 0;
+    *ids = malloc((totals[0] + totals[1] + extra + 1) * sizeof **ids);
+    *medias = malloc((totals[0] + totals[1] + extra + 1) * sizeof **medias);
+    for (i = 0; i < 2 && *ids && *medias; i++) {
+        u32 count_read = 0, k;
         u64 *all;
-        if (R_FAILED(AM_GetTitleCount(media_types[i], &total)) || !total || !(all = malloc(total * sizeof *all))) continue;
-        if (R_SUCCEEDED(AM_GetTitleList(&count_read, media_types[i], total, all)))
-            for (k = 0; k < count_read && n < max; k++)
+        if (!totals[i]) continue;
+        if (!(all = malloc(totals[i] * sizeof *all))) break;
+        if (R_SUCCEEDED(AM_GetTitleList(&count_read, media_types[i], totals[i], all)))
+            for (k = 0; k < count_read; k++)
                 if ((all[k] >> 32) == 0x00040000) { /* applications only (no demos, updates or DLC) */
-                    ids[n] = all[k];
-                    medias[n++] = media_types[i];
+                    (*ids)[n] = all[k];
+                    (*medias)[n++] = media_types[i];
                 }
         free(all);
     }
-    return n;
+    if (i == 2) return n;
+    free(*ids);
+    free(*medias);
+    *ids = NULL;
+    *medias = NULL;
+    return -1;
 }

@@ -665,7 +665,7 @@ Each machine keeps its own game clock. The game progress is the same.
 The server keeps every version.
 
 1. Open the **3dssavesync settings** shortcut.
-2. In the **History** part, choose the game.
+2. In the **Games** part, choose the game.
 3. Click **Restore this version** on the version you want, then confirm.
 
 Or in a terminal: `3dssavesync restore` lists the games, `3dssavesync restore <key>` lists the last 30 versions, `3dssavesync restore <key> <number>` restores one.

@@ -138,6 +138,13 @@ type Client struct {
 	name       string            // config.json entry; X-Client on the server (clientName)
 	romOf      map[string]string // Key -> ROM of this launch, kept with the Base (ADR 0014)
 	downloaded bool              // a Version arrived from the server for this Client
+	batch      *syncCount        // Sync all: outcomes counted, and a Conflict is skipped (no window)
+}
+
+// syncCount counts the outcomes of a Sync all. conflicts: names of the games left in Conflict.
+type syncCount struct {
+	uploaded, downloaded, inSync int
+	conflicts                    []string
 }
 
 func (s *Session) client(name string) *Client { return &Client{Session: s, name: name} }
@@ -560,6 +567,10 @@ func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 			return false, err
 		}
 		st := state(seen, srv, b[j.Key])
+		if st == conflict && c.batch != nil { // nobody waits in front of a game: the next start of the game asks
+			c.batch.conflicts = append(c.batch.conflicts, j.Name)
+			return false, nil
+		}
 		if st == conflict {
 			var remote []byte // Pokémon: read the server Version to compare the play times
 			if _, ok := pokemonPlayInfo(l.SRAM); ok {
@@ -580,14 +591,23 @@ func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		}
 		switch st {
 		case inSync:
+			if c.batch != nil {
+				c.batch.inSync++
+			}
 			return false, c.setBase(j.Key, l.Hash)
 		case toUpload:
 			if ok, err := c.upload(j, l, srv); ok || err != nil {
+				if err == nil && c.batch != nil {
+					c.batch.uploaded++
+				}
 				return false, err
 			}
 		case toDownload:
 			// Content other than the list: a Version arrived after the list was read (long pass), so read again.
 			if err := c.download(j, l, srv); !errors.As(err, new(damagedError)) || attempt == 2 {
+				if err == nil && c.batch != nil {
+					c.batch.downloaded++
+				}
 				return false, err
 			}
 		}

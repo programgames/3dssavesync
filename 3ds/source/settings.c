@@ -37,6 +37,8 @@ int read_ini(const char *path, void (*entry)(void *ctx, const char *key, const c
     return 0;
 }
 
+static const char *const ORDERS[] = { "etat", "nom", "date" }; /* values of "tri", in the order of order_t */
+
 static void config_entry(void *ctx, const char *k, const char *v)
 {
     static const char *const KEYS[] = { "url", "jeton", "roms", "saves", "roms_gb", "saves_gb", "roms_gba", "saves_gba" };
@@ -45,6 +47,8 @@ static void config_entry(void *ctx, const char *k, const char *v)
     size_t i;
     for (i = 0; i < sizeof KEYS / sizeof *KEYS; i++)
         if (!strcmp(k, KEYS[i])) snprintf(fields[i], sizeof c->url, "%s", v); /* all fields have the size of url */
+    for (i = 0; !strcmp(k, "tri") && i < sizeof ORDERS / sizeof *ORDERS; i++)
+        if (!strcmp(v, ORDERS[i])) c->order = (int)i; /* unknown value: default */
 }
 
 void read_config(const char *path, config_t *c)
@@ -60,25 +64,42 @@ void read_config(const char *path, config_t *c)
 int write_config(const char *path, const config_t *c)
 {
     char t[sizeof *c + 100];
-    int n = snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\n", c->url, c->token,
-                     c->roms, c->saves, c->roms_gb, c->saves_gb, c->roms_gba, c->saves_gba);
+    int n = snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\ntri=%s\n", c->url,
+                     c->token, c->roms, c->saves, c->roms_gb, c->saves_gb, c->roms_gba, c->saves_gba,
+                     ORDERS[c->order > 0 && c->order < 3 ? c->order : 0]);
     return replace_file(path, t, (size_t)n) ? -1 : 0;
+}
+
+/* Room for one more Base (capacity doubled). 0 if there is room. */
+static int grow_bases(bases_t *b)
+{
+    int cap = b->cap ? b->cap * 2 : 64;
+    struct base_entry *e;
+    if (b->n < b->cap) return 0;
+    if (!(e = realloc(b->e, cap * sizeof *e))) return -1;
+    b->e = e;
+    b->cap = cap;
+    return 0;
 }
 
 static void base_entry(void *ctx, const char *k, const char *v)
 {
     bases_t *b = ctx;
-    if (b->n < MAX_BASES && strlen(k) >= 4 && strlen(k) < KEY_MAX && strlen(v) == 64) {
-        snprintf(b->e[b->n].key, KEY_MAX, "%s", k);
-        snprintf(b->e[b->n].hash, 65, "%s", v);
-        b->n++;
+    if (strlen(k) < 4 || strlen(k) >= KEY_MAX || strlen(v) != 64) return;
+    if (grow_bases(b)) {
+        b->incomplete = 1;
+        return;
     }
+    snprintf(b->e[b->n].key, KEY_MAX, "%s", k);
+    snprintf(b->e[b->n].hash, 65, "%s", v);
+    b->n++;
 }
 
-void read_bases(const char *path, bases_t *b)
+int read_bases(const char *path, bases_t *b)
 {
-    b->n = 0;
+    b->n = b->incomplete = 0;
     read_ini(path, base_entry, b);
+    return b->incomplete ? -1 : 0;
 }
 
 const char *base_of(const bases_t *b, const char *key)
@@ -91,17 +112,21 @@ const char *base_of(const bases_t *b, const char *key)
 
 int set_base(const char *path, bases_t *b, const char *key, const char *hash)
 {
-    static char t[MAX_BASES * (KEY_MAX + 66)];
+    const size_t line = KEY_MAX + 66; /* "KEY=" + hash + "\n" at most */
+    char *t;
     size_t n = 0;
-    int i;
+    int i, failed;
     for (i = 0; i < b->n && strcmp(b->e[i].key, key); i++);
     if (i == b->n) {
-        if (b->n == MAX_BASES) return 0;
+        if (grow_bases(b)) return -1;
         snprintf(b->e[b->n++].key, KEY_MAX, "%s", key);
     }
     snprintf(b->e[i].hash, 65, "%s", hash);
-    for (i = 0; i < b->n; i++) n += snprintf(t + n, sizeof t - n, "%s=%s\n", b->e[i].key, b->e[i].hash);
-    return replace_file(path, t, n) ? -1 : 0;
+    if (b->incomplete || !(t = malloc(b->n * line))) return -1;
+    for (i = 0; i < b->n; i++) n += snprintf(t + n, b->n * line - n, "%s=%s\n", b->e[i].key, b->e[i].hash);
+    failed = replace_file(path, t, n);
+    free(t);
+    return failed ? -1 : 0;
 }
 
 static void alias_entry(void *ctx, const char *k, const char *v)
@@ -185,7 +210,7 @@ int read_titles(const char *path, title_t *t, int max)
 
 int write_titles(const char *path, const title_t *t, int n)
 {
-    char text[MAX_TITLES * 66]; /* "0004000000055D00=" + name (47 at most) + "\n" per game */
+    static char text[MAX_TITLES * 66]; /* "0004000000055D00=" + name (47 at most) + "\n" per game; static: 17 KiB */
     size_t l = 0;
     int i;
     if (n > MAX_TITLES) return -1;

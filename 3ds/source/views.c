@@ -19,6 +19,7 @@ const char *glyph(u32 button)
     case KEY_X: return "\xEE\x80\x82";
     case KEY_Y: return "\xEE\x80\x83";
     case KEY_START: return "START";
+    case KEY_TOUCH: return ""; /* touch only (Search): no button */
     default: return "SELECT";
     }
 }
@@ -71,6 +72,8 @@ void draw_button_row(const button_t *t, int n, float y, float gap)
         if (t[i].button & (KEY_START | KEY_SELECT)) { /* read as a button, not as text */
             screen_rect(x, y + 4, g, 12, GREY_DARK);
             screen_text(x + 3, y + 4, 0.34f, WHITE, 0, glyph(t[i].button));
+        } else if (t[i].button == KEY_TOUCH) {
+            screen_rect(x, y + 1, l[i] + 4, 18, CARD); /* touch only: the word in a box, read as a button */
         } else screen_text(x, y + 2, 0.55f, t[i].active ? glyph_color(t[i].button) : GREY_DARK, 0, glyph(t[i].button));
         screen_text(x + g + 4, y + 3, size, t[i].active ? WHITE : GREY_DARK, 0, t[i].text);
         touch_area(x - gap / 2, y - 2, l[i] + gap, BUTTON_HEIGHT, t[i].button); /* the button and half of the gap on each side */

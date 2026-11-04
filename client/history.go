@@ -39,9 +39,13 @@ type HistoryLine struct {
 	Current  bool   `json:"Courante"`
 }
 
+// HistoryGame is one game of the page's list. Age: seconds since its last Upload, by the server clock (-1: unknown,
+// older server); Client: the device of that Upload.
 type HistoryGame struct {
-	Key  string `json:"Cle"`
-	Name string `json:"Nom"`
+	Key    string `json:"Cle"`
+	Name   string `json:"Nom"`
+	Age    int64
+	Client string
 }
 
 const (
@@ -74,7 +78,11 @@ func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 		if name == "" {
 			name = v.Name
 		}
-		games = append(games, HistoryGame{v.Code, name})
+		age := int64(-1)
+		if v.Age != nil {
+			age = *v.Age
+		}
+		games = append(games, HistoryGame{v.Code, name, age, v.Client})
 	}
 	sort.SliceStable(games, func(a, b int) bool { return games[a].Name+games[a].Key < games[b].Name+games[b].Key })
 	return games, nil
@@ -126,7 +134,7 @@ func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 	for i, v := range l {
 		n, _ := strconv.Atoi(strings.SplitN(v.File, "-", 2)[0])
 		x := HistoryLine{n, v.File, v.Hash, localDate(v.Date), v.Client, formatSize(v.Size), "", i == 0}
-		if _, g67 := pokemonFormats[int(v.Size)]; g67 || v.Size == 0x8000 || v.Size == 0x20000 || v.Size == 0x80000 {
+		if mayBePokemon(v.Size) {
 			if st, o, err := s.request(restoreClient, "GET", "/saves/"+key+"/history/"+v.File, nil, nil); err == nil && st == 200 {
 				x.PlayInfo, _ = pokemonPlayInfo(o)
 			}
@@ -316,6 +324,64 @@ func (a *WebSetup) webGames() map[string]any {
 		return map[string]any{"Erreur": errorText(err)}
 	}
 	return map[string]any{"Jeux": games}
+}
+
+// mayBePokemon: a save size of a Pokémon game whose play time pokemonPlayInfo reads.
+func mayBePokemon(size int64) bool {
+	_, g67 := pokemonFormats[int(size)]
+	return g67 || size == 0x8000 || size == 0x20000 || size == 0x80000
+}
+
+// playInfos returns Key -> play time and trainer of the Pokémon games on the server (Games page). Each Current
+// version is read once: cache holds Hash -> text ("": not a Pokémon save).
+func (s *Session) playInfos(cache map[string]string) (map[string]string, error) {
+	st, o, err := s.request(restoreClient, "GET", "/saves", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if st != 200 {
+		return nil, &httpError{"GET /saves", st}
+	}
+	var l []Version
+	if err := json.Unmarshal(o, &l); err != nil {
+		return nil, err
+	}
+	m := map[string]string{}
+	for _, v := range l {
+		if !mayBePokemon(v.Size) {
+			continue
+		}
+		info, ok := cache[v.Hash]
+		if !ok {
+			st, o, err := s.request(restoreClient, "GET", "/saves/"+v.Code, nil, nil)
+			if err != nil || st != 200 || sha256Hex(o) != v.Hash {
+				continue // a new Version since the list: read at the next opening
+			}
+			info, _ = pokemonPlayInfo(o)
+			cache[v.Hash] = info
+		}
+		if info != "" {
+			m[v.Code] = info
+		}
+	}
+	return m, nil
+}
+
+// playsWeb: play times of the Games page, without the page lock (up to one read per Pokémon game).
+func (a *WebSetup) playsWeb() map[string]any {
+	a.playsLock.Lock()
+	defer a.playsLock.Unlock()
+	if a.plays == nil {
+		a.plays = map[string]string{}
+	}
+	s, err := newSession(a.config)
+	if err == nil {
+		var m map[string]string
+		if m, err = s.playInfos(a.plays); err == nil {
+			return map[string]any{"Parties": m}
+		}
+	}
+	return map[string]any{"Erreur": errorText(err)}
 }
 
 // versionsWeb, restoreWeb: without the page lock (up to 30 network reads); ServeHTTP releases it before.

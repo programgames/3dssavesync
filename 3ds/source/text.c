@@ -19,14 +19,3 @@ void format_age(long s, int english, int capitalize, char *out, size_t n)
     if (out[0] >= 'a' && out[0] <= 'z') out[0] -= 'a' - 'A';
     else if (!strncmp(out, "à", 2)) out[1] = (char)0x80; /* à -> À in UTF-8 */
 }
-
-int texts_fitting(const float *l, int n, float gap, float room)
-{
-    float total = 0;
-    int i;
-    for (i = 0; i < n; i++) {
-        total += l[i] * WIDTH_MARGIN + (i ? gap : 0);
-        if (total > room) break;
-    }
-    return i;
-}
