@@ -392,6 +392,13 @@ static void scan_vc(void)
         char key[KEY_MAX] = "", name[256], why[160];
         game_t *j = NULL;
         int read, by_rom;
+        if (medias[i] == MEDIATYPE_SD && !title_vc(ids[i]) && (ids[i] & 0xFFFFFFFF) >= 0x00170C00 && (ids[i] & 0xFFFFFFFF) <= 0x00173600) {
+            /* DIAGNOSTIC (v3.10 rc8): a Pokémon VC title ID not found by its product code */
+            char code[16], t[120];
+            Result r = title_product_code(ids[i], code);
+            snprintf(t, sizeof t, "DIAG %016llX AM:%08lX code:\"%s\"", ids[i], (unsigned long)r, code);
+            add_alert(t);
+        }
         if (medias[i] != MEDIATYPE_SD || !title_vc(ids[i])) continue;
         if (title_name(ids[i], MEDIATYPE_SD, language, name, sizeof name)) snprintf(name, sizeof name, "%016llX", ids[i]);
         show_progress(0, 0, T("Lecture des jeux Virtual Console\n%s", "Reading Virtual Console games\n%s"), name);
