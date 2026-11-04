@@ -137,7 +137,11 @@ fun stateWord(s: Shown) = stringResource(
 )
 
 // fold: lowercase without accents, for the search ("pokemon" finds "Pokémon").
-fun fold(s: String) = Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase(Locale.ROOT)
+fun fold(s: String) = Normalizer.normalize(s, Normalizer.Form.NFD).replace(marks, "").lowercase(Locale.ROOT)
+
+private val marks = Regex("\\p{Mn}+") // compiled once: the search folds every name at each keystroke
+
+private val todo = setOf(Shown.TO_UPLOAD, Shown.TO_DOWNLOAD, Shown.CONFLICT, Shown.INTERRUPTED) // the "To do" chip
 
 @Composable
 fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Unit, goEmulators: () -> Unit) {
@@ -150,14 +154,18 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf<List<Entry>?>(null) }
     var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
-    val shown = App.entries.filter { it.shown != Shown.NONE }
-    val q = fold(query.trim())
-    val visible = shown.filter {
-        when (filter) {
-            "ALL" -> true
-            "TODO" -> it.shown in listOf(Shown.TO_UPLOAD, Shown.TO_DOWNLOAD, Shown.CONFLICT, Shown.INTERRUPTED)
-            else -> it.system.name == filter
-        } && (fold(it.short).contains(q) || fold(it.name).contains(q))
+    // filtered again only when the list, the chip or the search changes: not at each progress line of a sync
+    val entries = App.entries
+    val shown = remember(entries) { entries.filter { it.shown != Shown.NONE } }
+    val visible = remember(shown, filter, query) {
+        val q = fold(query.trim())
+        shown.filter {
+            when (filter) {
+                "ALL" -> true
+                "TODO" -> it.shown in todo
+                else -> it.system.name == filter
+            } && (fold(it.short).contains(q) || fold(it.name).contains(q))
+        }
     }
     val several = App.emulators.size > 1
     val systems = App.emulators.flatMap { it.systems.keys }.distinct().sorted() // a chip only for a system some emulator has
@@ -225,22 +233,9 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
         }
     }
     confirm?.let { list ->
-        AlertDialog(
-            onDismissRequest = { confirm = null },
-            title = { Text(pluralStringResource(R.plurals.confirm_replace_title, list.size, list.size)) },
-            text = {
-                Text(
-                    stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.short + if (several) " · " + it.emulator.listName() else "" }),
-                    Modifier.verticalScroll(rememberScrollState()),
-                )
-            },
-            confirmButton = {
-                TextButton({
-                    confirm = null
-                    App.syncAll(list)
-                }) { Text(stringResource(R.string.replace_and_sync)) }
-            },
-            dismissButton = { TextButton({ confirm = null }) { Text(stringResource(R.string.cancel)) } },
+        Confirm(
+            pluralStringResource(R.plurals.confirm_replace_title, list.size, list.size), stringResource(R.string.replace_and_sync), { App.syncAll(list) }, { confirm = null },
+            stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.short + if (several) " · " + it.emulator.listName() else "" }),
         )
     }
     reminder?.let { Reminder(it) { reminder = null } }
@@ -254,27 +249,16 @@ fun beforeWrite(show: (() -> Unit) -> Unit, action: () -> Unit) = if (App.mustRe
 @Composable
 fun Reminder(then: () -> Unit, close: () -> Unit) {
     var never by remember { mutableStateOf(false) }
-    AlertDialog(
-        onDismissRequest = close,
-        title = { Text(stringResource(R.string.reminder_title)) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.reminder_text))
-                Row(Modifier.toggleable(never, role = Role.Checkbox) { never = it }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(never, null)
-                    Text(stringResource(R.string.dont_show_again))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton({
-                App.remind(never)
-                close()
-                then()
-            }) { Text(stringResource(R.string.emulator_closed)) }
-        },
-        dismissButton = { TextButton(close) { Text(stringResource(R.string.cancel)) } },
-    )
+    Confirm(stringResource(R.string.reminder_title), stringResource(R.string.emulator_closed), {
+        App.remind(never)
+        then()
+    }, close) {
+        Text(stringResource(R.string.reminder_text))
+        Row(Modifier.toggleable(never, role = Role.Checkbox) { never = it }.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(never, null)
+            Text(stringResource(R.string.dont_show_again))
+        }
+    }
 }
 
 // GameRow: the short name on the full width, then the State, the system and the emulator. One focus stop for
@@ -448,46 +432,17 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     }
     reminder?.let { Reminder(it) { reminder = null } }
     ask?.let { phone ->
-        AlertDialog(
-            onDismissRequest = { ask = null },
-            title = { Text(stringResource(if (phone) R.string.keep_phone else R.string.take_server)) },
-            text = { Text(stringResource(if (phone) R.string.confirm_keep_phone else R.string.confirm_take_server)) },
-            confirmButton = {
-                TextButton({
-                    ask = null
-                    App.act(e, Choice(keepPhone = phone, serverHash = server!!.hash))
-                }) { Text(stringResource(if (phone) R.string.upload else R.string.replace)) } // the verb of the outcome
-            },
-            dismissButton = { TextButton({ ask = null }) { Text(stringResource(R.string.cancel)) } },
+        Confirm(
+            stringResource(if (phone) R.string.keep_phone else R.string.take_server), stringResource(if (phone) R.string.upload else R.string.replace), // the verb of the outcome
+            { App.act(e, Choice(keepPhone = phone, serverHash = server!!.hash)) }, { ask = null },
+            stringResource(if (phone) R.string.confirm_keep_phone else R.string.confirm_take_server),
         )
     }
     if (restoreCopy) {
-        AlertDialog(
-            onDismissRequest = { restoreCopy = false },
-            title = { Text(stringResource(R.string.restore_copy)) },
-            text = { Text(stringResource(R.string.confirm_restore_copy)) },
-            confirmButton = {
-                TextButton({
-                    restoreCopy = false
-                    App.restoreCopy(e)
-                }) { Text(stringResource(R.string.restore_copy)) }
-            },
-            dismissButton = { TextButton({ restoreCopy = false }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.restore_copy), stringResource(R.string.restore_copy), { App.restoreCopy(e) }, { restoreCopy = false }, stringResource(R.string.confirm_restore_copy))
     }
     if (download) {
-        AlertDialog(
-            onDismissRequest = { download = false },
-            title = { Text(stringResource(R.string.confirm_download_title)) },
-            text = { Text(stringResource(R.string.confirm_download)) },
-            confirmButton = {
-                TextButton({
-                    download = false
-                    App.act(e, mayReplace = true)
-                }) { Text(stringResource(R.string.replace)) }
-            },
-            dismissButton = { TextButton({ download = false }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.confirm_download_title), stringResource(R.string.replace), { App.act(e, mayReplace = true) }, { download = false }, stringResource(R.string.confirm_download))
     }
 }
 
@@ -589,35 +544,24 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
         }
     }
     if (ask && v != null && current != null) {
-        AlertDialog(
-            onDismissRequest = { ask = false },
-            title = { Text(stringResource(R.string.restore_title)) },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(R.string.this_version), style = MaterialTheme.typography.titleSmall)
-                    Text(versionLine(v) + " · " + clientLabel(v.client))
-                    play?.let { Text(playText(it)) }
-                    Text(stringResource(R.string.this_phone), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
-                    for (l in phoneLines(e)) Text(l)
-                    Text(stringResource(R.string.restore_explain), Modifier.padding(top = 8.dp))
-                }
-            },
-            confirmButton = {
-                TextButton({
-                    ask = false
-                    App.restore(e, v, current) { t ->
-                        when {
-                            t == null -> onBack() // the details show the new State: To download, with the usual Download
-                            problem(t) == Problem.SERVER_CHANGED -> { // the list again: choose again
-                                selected = null
-                                load++
-                            }
-                        }
+        Confirm(stringResource(R.string.restore_title), stringResource(R.string.restore), {
+            App.restore(e, v, current) { t ->
+                when {
+                    t == null -> onBack() // the details show the new State: To download, with the usual Download
+                    problem(t) == Problem.SERVER_CHANGED -> { // the list again: choose again
+                        selected = null
+                        load++
                     }
-                }) { Text(stringResource(R.string.restore)) }
-            },
-            dismissButton = { TextButton({ ask = false }) { Text(stringResource(R.string.cancel)) } },
-        )
+                }
+            }
+        }, { ask = false }) {
+            Text(stringResource(R.string.this_version), style = MaterialTheme.typography.titleSmall)
+            Text(versionLine(v) + " · " + clientLabel(v.client))
+            play?.let { Text(playText(it)) }
+            Text(stringResource(R.string.this_phone), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+            for (l in phoneLines(e)) Text(l)
+            Text(stringResource(R.string.restore_explain), Modifier.padding(top = 8.dp))
+        }
     }
 }
 

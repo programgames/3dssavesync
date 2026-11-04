@@ -23,6 +23,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -237,6 +238,24 @@ fun ErrorBox(t: Throwable, lead: String? = null, note: String? = null, retry: ((
             }
         }
     }
+}
+
+// Confirm asks before an action: yes is the verb of its outcome ("Replace"), never "OK". The text scrolls (large fonts).
+// onNo closes the dialog, also before onYes runs.
+@Composable
+fun Confirm(title: String, yes: String, onYes: () -> Unit, onNo: () -> Unit, text: String = "", content: @Composable ColumnScope.() -> Unit = { Text(text) }) {
+    AlertDialog(
+        onDismissRequest = onNo,
+        title = { Text(title) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp), content = content) },
+        confirmButton = {
+            TextButton({
+                onNo()
+                onYes()
+            }) { Text(yes) }
+        },
+        dismissButton = { TextButton(onNo) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable
@@ -529,18 +548,7 @@ fun HacksScreen(onBack: () -> Unit) {
         }
     }
     removing?.let { name ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            title = { Text(stringResource(R.string.hack_remove_title)) },
-            text = { Text(stringResource(R.string.hack_remove_text, name)) },
-            confirmButton = {
-                TextButton({
-                    removing = null
-                    App.removeAlias(name)
-                }) { Text(stringResource(R.string.remove)) }
-            },
-            dismissButton = { TextButton({ removing = null }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.hack_remove_title), stringResource(R.string.remove), { App.removeAlias(name) }, { removing = null }, stringResource(R.string.hack_remove_text, name))
     }
 }
 
@@ -693,19 +701,10 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
         }
     }
     if (removing) {
-        AlertDialog(
-            onDismissRequest = { removing = false },
-            title = { Text(stringResource(R.string.remove_emulator_title, e.listName())) },
-            text = { Text(stringResource(R.string.remove_emulator_text)) },
-            confirmButton = {
-                TextButton({
-                    removing = false
-                    onBack()
-                    App.removeEmulator(id)
-                }) { Text(stringResource(R.string.remove)) }
-            },
-            dismissButton = { TextButton({ removing = false }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.remove_emulator_title, e.listName()), stringResource(R.string.remove), {
+            onBack()
+            App.removeEmulator(id)
+        }, { removing = false }, stringResource(R.string.remove_emulator_text))
     }
 }
 
