@@ -23,7 +23,7 @@ int title_main_only(u64 id);
 int title_root(u64 id, char *names, size_t n);
 
 /* First 0x200 bytes (n) of the GB ROM of a Virtual Console title installed on the SD card: the file of rom/ in its
- * RomFS, tried with the methods of titles3ds.c in turn. In why, each method tried and its result ("1:D9004676 2:OK").
+ * RomFS, read through FSPXI (Luma3DS only). In why, each archive path tried and its result ("p0:D9004676 p1:OK").
  * 0 if read, -1 otherwise. */
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn);
 

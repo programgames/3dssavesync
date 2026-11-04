@@ -1,5 +1,4 @@
 /* Same order of operations as Checkpoint (io.cpp: write, commit, secure value), code written here (ADR 0009). */
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -121,67 +120,103 @@ int title_main_only(u64 id)
     return title_root(id, names, sizeof names) < 0 ? -1 : !strcmp(names, "main");
 }
 
-/* Opens the RomFS of title id (SD) with method m. ARCHIVE_SAVEDATA_AND_CONTENT, file path (3dbrew "Filesystem
- * services", Title Access Archive Path Data Format): title access 0, content index 0, NCCH access 0 = RomFS, then the
- * u64 of allowed content types (1 << type). libctru's romfsMountFromTitle sends all zeros (m = 1); on a real 3DS FS
- * answers 0xD9004676, "command not allowed" (3dbrew Error codes, 630), for an SD application (libctru issue #516).
- * DIAGNOSTIC (v3.10 rc2): 2 = only "Unspecified" allowed, 3 = all six types, 4 = OpenArchive + OpenFile. */
-static Result open_romfs(u64 id, int m, Handle *f, FS_Archive *a)
+/* fs:USER never gives the RomFS of an SD application: 0xD9004676 on every path (v3.10 rc2 on a real 3DS; libctru issue
+ * #516; the gate is in fs itself, Luma already grants every FS access bit). FSPXI, the fs <-> Process9 interface, has no
+ * such gate, and Process9 decrypts the content. Luma3DS lets a process use it: svcControlService (0xB0, Luma's csvc.h)
+ * with SERVICEOP_STEAL_CLIENT_SESSION (0) gives a session to PxiFS0, as Checkpoint does for raw saves (archive.cpp). */
+static Result __attribute__((naked)) svc_control_service(u32 op, Handle *out, const char *name)
 {
-    u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, 0 };
-    u32 file[5] = { 0, 0, 0, m == 2 ? 1 : m == 3 ? 0x3F : 0, 0 };
-    FS_Path ap = { PATH_BINARY, sizeof archive, archive }, fp = { PATH_BINARY, sizeof file, file };
-    Result r;
-    *a = 0;
-    if (m != 4) return FSUSER_OpenFileDirectly(f, ARCHIVE_SAVEDATA_AND_CONTENT, ap, fp, FS_OPEN_READ, 0);
-    if (R_SUCCEEDED(r = FSUSER_OpenArchive(a, ARCHIVE_SAVEDATA_AND_CONTENT, ap)) &&
-        R_FAILED(r = FSUSER_OpenFile(f, *a, fp, FS_OPEN_READ, 0))) {
-        FSUSER_CloseArchive(*a);
-        *a = 0;
+    (void)op; (void)out; (void)name;
+    __asm__ volatile("svc 0xB0\n\tbx lr");
+}
+
+static int luma(void)
+{
+    s64 version;
+    return R_SUCCEEDED(svcGetSystemInfo(&version, 0x10000, 0)); /* Luma3DS's own SystemInfo type; error on stock */
+}
+
+static Result pxi_read(Handle h, FSPXI_File f, u64 offset, void *buffer, u32 size)
+{
+    u32 got = 0;
+    Result r = FSPXI_ReadFile(h, f, &got, offset, buffer, size);
+    return R_SUCCEEDED(r) && got != size ? (Result)-1 : r;
+}
+
+static u32 le32(const unsigned char *p)
+{
+    return p[0] | p[1] << 8 | p[2] << 16 | (u32)p[3] << 24;
+}
+
+/* First n bytes of the first file of rom/ in a RomFS read by FSPXI. FSPXI gives the whole RomFS section from its IVFC
+ * header; level 3 follows the master hash, aligned on its block size (3dbrew "RomFS"). Level 3: header of 10 u32
+ * (directory and file metadata tables, file data); a directory entry = parent, sibling, first child directory, first
+ * file, hash sibling, name length, UTF-16 name at 0x18; a file entry = parent, sibling, u64 data offset at 0x08, u64 size
+ * at 0x10, hash sibling, name length. 0xFFFFFFFF: none. Returns a step name on failure, NULL if read. */
+static const char *rom_from_romfs(Handle h, FSPXI_File f, unsigned char *header, size_t n)
+{
+    unsigned char b[0x60];
+    u64 level3 = 0;
+    u32 dir_meta, file_meta, file_data, d;
+    if (R_FAILED(pxi_read(h, f, 0, b, 0x60))) return "ivfc";
+    if (!memcmp(b, "IVFC", 4)) {
+        u64 block = 1ULL << (le32(b + 0x4C) & 31);
+        level3 = (0x60 + le32(b + 0x08) + block - 1) / block * block;
     }
-    return r;
+    if (R_FAILED(pxi_read(h, f, level3, b, 0x28))) return "level3";
+    dir_meta = le32(b + 0x0C), file_meta = le32(b + 0x1C), file_data = le32(b + 0x24);
+    if (R_FAILED(pxi_read(h, f, level3 + dir_meta, b, 0x18))) return "root";
+    for (d = le32(b + 0x08); d != 0xFFFFFFFF; d = le32(b + 0x04)) { /* root's child directories */
+        if (R_FAILED(pxi_read(h, f, level3 + dir_meta + d, b, 0x20))) return "dir";
+        if (le32(b + 0x14) == 6 && !memcmp(b + 0x18, "r\0o\0m\0", 6)) break;
+    }
+    if (d == 0xFFFFFFFF) return "no rom/";
+    if ((d = le32(b + 0x0C)) == 0xFFFFFFFF) return "no ROM";
+    if (R_FAILED(pxi_read(h, f, level3 + file_meta + d, b, 0x20))) return "file";
+    if (!le32(b + 0x14) && le32(b + 0x10) < n) return "small ROM";
+    if (R_FAILED(pxi_read(h, f, level3 + file_data + (le32(b + 0x08) | (u64)le32(b + 0x0C) << 32), header, n))) return "data";
+    return NULL;
 }
 
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    int m;
+    /* DIAGNOSTIC (v3.10 rc3): archive path {low, high, media, x}, x = 0 (3dbrew) then 1 (Checkpoint's raw save);
+     * file path: title access 0, content 0, NCCH section 0 = RomFS. */
+    static const u32 file[5] = { 0, 0, 0, 0, 0 };
+    Handle h;
+    Result r;
+    int x;
     why[0] = '\0';
-    for (m = 1; m <= 4; m++) {
-        Handle f;
-        FS_Archive a;
-        DIR *d = NULL;
-        struct dirent *e;
-        size_t got = 0, l = strlen(why);
-        char magic[4] = "";
-        u32 bytes_read;
-        Result r = open_romfs(id, m, &f, &a);
-        if (R_SUCCEEDED(r)) {
-            /* FS gives the level-3 image (3dbrew "Filesystem services", RomFS); a whole RomFS starts with its IVFC
-             * header, its level 3 then at 0x1000 (3dbrew "RomFS"). */
-            FSFILE_Read(f, &bytes_read, 0, magic, sizeof magic);
-            r = romfsMountFromFile(f, memcmp(magic, "IVFC", 4) ? 0 : 0x1000, "vc"); /* closes f on failure */
-        }
-        if (R_SUCCEEDED(r)) {
-            /* RomFS of a VC title: the ROM is the file of rom/ (3dbrew, 3DS Virtual Console), its name does not matter. */
-            if ((d = opendir("vc:/rom/"))) {
-                while (got < n && (e = readdir(d))) {
-                    char path[300];
-                    FILE *g;
-                    if (snprintf(path, sizeof path, "vc:/rom/%s", e->d_name) >= (int)sizeof path || !(g = fopen(path, "rb"))) continue;
-                    got = fread(header, 1, n, g);
-                    fclose(g);
-                }
-                closedir(d);
-            }
-            romfsUnmount("vc");
-        }
-        if (a) FSUSER_CloseArchive(a);
-        if (R_FAILED(r)) snprintf(why + l, wn - l, "%s%d:%08lX", l ? " " : "", m, (unsigned long)r);
-        else if (got == n) {
-            snprintf(why + l, wn - l, "%s%d:OK", l ? " " : "", m);
-            return 0;
-        } else snprintf(why + l, wn - l, "%s%d:%s", l ? " " : "", m, d ? "no ROM" : "no rom/");
+    if (!luma()) {
+        snprintf(why, wn, "no Luma3DS");
+        return -1;
     }
+    if (R_FAILED(r = svc_control_service(0, &h, "PxiFS0"))) {
+        snprintf(why, wn, "PxiFS0:%08lX", (unsigned long)r);
+        return -1;
+    }
+    for (x = 0; x <= 1; x++) {
+        u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, x };
+        FSPXI_Archive a;
+        FSPXI_File f;
+        const char *step = "open";
+        size_t l = strlen(why);
+        if (R_SUCCEEDED(r = FSPXI_OpenArchive(h, &a, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive }))) {
+            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizeof file, file }, FS_OPEN_READ, 0))) {
+                step = rom_from_romfs(h, f, header, n);
+                FSPXI_CloseFile(h, f);
+            }
+            FSPXI_CloseArchive(h, a);
+        }
+        if (R_FAILED(r)) snprintf(why + l, wn - l, "%sp%d:%08lX", l ? " " : "", x, (unsigned long)r);
+        else if (step) snprintf(why + l, wn - l, "%sp%d:%s", l ? " " : "", x, step);
+        else {
+            snprintf(why + l, wn - l, "%sp%d:OK", l ? " " : "", x);
+            svcCloseHandle(h);
+            return 0;
+        }
+    }
+    svcCloseHandle(h);
     return -1;
 }
 

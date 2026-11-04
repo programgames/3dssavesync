@@ -1093,7 +1093,7 @@ static void draw_bottom(const game_t *j)
             y = detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
         }
         if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key); /* to compare with the Key the PC shows under the game name */
-        /* DIAGNOSTIC (v3.10 rc2): how the ROM was read, for every VC game. After it: only for a Not synced one. */
+        /* DIAGNOSTIC (v3.10 rc3): how the ROM was read, for every VC game. After it: only for a Not synced one. */
         if (vc(j)) screen_text(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);
