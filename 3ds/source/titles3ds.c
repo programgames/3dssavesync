@@ -180,9 +180,12 @@ static const char *rom_from_romfs(Handle h, FSPXI_File f, unsigned char *header,
 
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    /* DIAGNOSTIC (v3.10 rc3): archive path {low, high, media, x}, x = 0 (3dbrew) then 1 (Checkpoint's raw save);
-     * file path: title access 0, content 0, NCCH section 0 = RomFS. */
-    static const u32 file[5] = { 0, 0, 0, 0, 0 };
+    /* DIAGNOSTIC (v3.10 rc4): archive path {low, high, media, 0}. File path = 3dbrew Title Access path: title access 0,
+     * content 0, NCCH section 0 = RomFS, u64 mask of allowed content types, then a 16-byte seed (zero). fs itself sends
+     * 0x24 bytes with a mask computed from the title's contents (decompiled fs, handler 0x10e798); rc3's zero mask
+     * allowed nothing. Tries: 1 = 0x24 bytes, all six types; 2 = 0x24, "unspecified" only; 3 = 0x14 bytes, all six. */
+    static const u32 files[3][9] = { { 0, 0, 0, 0x3F }, { 0, 0, 0, 1 }, { 0, 0, 0, 0x3F } };
+    static const u32 sizes[3] = { 0x24, 0x24, 0x14 };
     Handle h;
     Result r;
     int x;
@@ -195,23 +198,24 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
         snprintf(why, wn, "PxiFS0:%08lX", (unsigned long)r);
         return -1;
     }
-    for (x = 0; x <= 1; x++) {
-        u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, x };
+    for (x = 0; x < 3; x++) {
+        u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, 0 };
         FSPXI_Archive a;
         FSPXI_File f;
-        const char *step = "open";
+        const char *step = NULL, *call = "a"; /* a: OpenArchive failed, f: OpenFile failed */
         size_t l = strlen(why);
         if (R_SUCCEEDED(r = FSPXI_OpenArchive(h, &a, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive }))) {
-            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizeof file, file }, FS_OPEN_READ, 0))) {
+            call = "f";
+            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizes[x], files[x] }, FS_OPEN_READ, 0))) {
                 step = rom_from_romfs(h, f, header, n);
                 FSPXI_CloseFile(h, f);
             }
             FSPXI_CloseArchive(h, a);
         }
-        if (R_FAILED(r)) snprintf(why + l, wn - l, "%sp%d:%08lX", l ? " " : "", x, (unsigned long)r);
-        else if (step) snprintf(why + l, wn - l, "%sp%d:%s", l ? " " : "", x, step);
+        if (R_FAILED(r)) snprintf(why + l, wn - l, "%s%d%s:%08lX", l ? " " : "", x + 1, call, (unsigned long)r);
+        else if (step) snprintf(why + l, wn - l, "%s%d:%s", l ? " " : "", x + 1, step);
         else {
-            snprintf(why + l, wn - l, "%sp%d:OK", l ? " " : "", x);
+            snprintf(why + l, wn - l, "%s%d:OK", l ? " " : "", x + 1);
             svcCloseHandle(h);
             return 0;
         }
