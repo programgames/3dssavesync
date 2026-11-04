@@ -50,7 +50,7 @@
     <string name="next_to_rom">Sauvegardes à côté des ROM</string>
     <string name="choose">Choisir</string>
     <string name="folder_ready">Prêt</string>
-    <string name="folder_missing">Dossier introuvable : choisissez-le de nouveau</string>
+    <string name="folder_missing">Dossier introuvable. S\'il est sur une carte SD, insérez la carte ; sinon, choisissez de nouveau le dossier.</string>
     <string name="folder_no_permission">Accès perdu : choisissez de nouveau le dossier</string>
     <string name="folder_not_set">Dossier pas encore choisi</string>
     <string name="folder_checking">Vérification…</string>
@@ -58,11 +58,29 @@
     <string name="system_gb">Game Boy et Game Boy Color</string>
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
-    <string name="hint_retroarch">RetroArch range ses sauvegardes dans RetroArch/saves, un dossier par cœur (mGBA, Gambatte…). Choisissez ce dossier du cœur comme dossier des sauvegardes. Version du Play Store : dans le sélecteur de dossier, ouvrez le menu, choisissez RetroArch, puis saves. Fermez RetroArch avant de synchroniser : il écrit la sauvegarde toutes les quelques secondes.</string>
-    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés. Pour un jeu jamais lancé dans Azahar, l\'application crée son dossier avec la sauvegarde du serveur. Fermez Azahar avant de synchroniser.</string>
-    <string name="hint_melonds">melonDS écrit la sauvegarde à côté de la ROM par défaut (réglage « Save next to ROM »). Si vous avez choisi un autre dossier de sauvegardes dans melonDS, décochez « Sauvegardes à côté des ROM » et choisissez le même dossier ici.</string>
-    <string name="hint_noods">NooDS écrit la sauvegarde à côté de la ROM par défaut. Son autre réglage (dossier saves) les range là où aucune autre application ne peut les lire : gardez le réglage par défaut.</string>
-    <string name="hint_custom">Pour DraStic, Pizza Boy, My Boy!, Linkboy et les autres : choisissez le dossier où l\'émulateur écrit ses sauvegardes et tapez leur extension (.sav, .dsv). Ces émulateurs ne sont pas encore vérifiés : essayez d\'abord avec une copie d\'une sauvegarde. Certains rangent leurs sauvegardes dans Android/data, qu\'aucune autre application ne peut ouvrir.</string>
+    <string name="hint_retroarch">Choisissez le dossier des ROM de chaque système. Si RetroArch range ses sauvegardes dans RetroArch/saves (par défaut), choisissez aussi ce dossier une fois : l\'application y trouve le dossier de chaque cœur. Version du Play Store : dans le sélecteur de dossier, ouvrez le menu et choisissez RetroArch. Fermez RetroArch avant de synchroniser.</string>
+    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés. Fermez Azahar avant de synchroniser.</string>
+    <string name="hint_melonds">melonDS sauvegarde à côté de la ROM par défaut : choisissez le dossier des ROM. Si vous avez réglé un autre dossier de sauvegardes dans melonDS, décochez « Sauvegardes à côté des ROM » et choisissez ce dossier.</string>
+    <string name="hint_drastic">DraStic range ses sauvegardes dans DraStic/backup (fichiers .dsv). Choisissez le dossier des ROM, puis ce dossier backup. Fermez DraStic avant de synchroniser.</string>
+    <string name="hint_noods">NooDS sauvegarde à côté de la ROM par défaut : choisissez le dossier des ROM. Gardez ce réglage : son autre dossier de sauvegardes est fermé aux autres applications.</string>
+    <string name="hint_pizzaboy">Pizza Boy range ses sauvegardes dans son dossier privé (Android/data/it.dbtecno.pizzaboy…), et depuis Android 11, ce dossier est fermé aux autres applications. Si votre version de Pizza Boy permet de choisir son dossier de sauvegardes, choisissez-y un dossier hors d\'Android/data, puis choisissez le même dossier ici.</string>
+    <string name="hint_custom">Choisissez le dossier où l\'émulateur écrit ses sauvegardes, et saisissez leur extension (.sav, .dsv). Cet émulateur n\'est pas vérifié : avant la première synchronisation, copiez son dossier de sauvegardes ailleurs avec un gestionnaire de fichiers.</string>
+    <string name="installed_emulators">Installés sur ce téléphone</string>
+    <string name="other_emulators">Autres émulateurs</string>
+    <string name="systems_used">Systèmes auxquels vous jouez avec cet émulateur</string>
+    <string name="retroarch_saves">Dossier des sauvegardes de RetroArch (facultatif)</string>
+    <string name="sd_card">Carte SD</string>
+    <string name="no_picker">Ce téléphone n\'a pas de sélecteur de dossier : l\'application ne peut ouvrir aucun dossier.</string>
+    <plurals name="folder_found">
+        <item quantity="one">%1$d jeu sur %2$d a une sauvegarde ici.</item>
+        <item quantity="other">%1$d jeux sur %2$d ont une sauvegarde ici.</item>
+        <item quantity="many">%1$d jeux sur %2$d ont une sauvegarde ici.</item>
+    </plurals>
+    <string name="folder_no_game">Aucun jeu trouvé dans ce dossier. Est-ce le bon ?</string>
+    <string name="folder_no_save">Aucune sauvegarde trouvée dans ce dossier. Est-ce le bon ?</string>
+    <string name="folder_no_save_retroarch">Aucune sauvegarde à côté de ces ROM. Si RetroArch les range dans RetroArch/saves, choisissez ce dossier plus haut.</string>
+    <string name="folder_android_data">Ce dossier est dans Android/data. Depuis Android 11, ces dossiers privés sont fermés aux autres applications. Réglez l\'émulateur pour qu\'il sauvegarde dans un autre dossier, puis choisissez ce dossier ici.</string>
+    <string name="folder_unreadable">Ce dossier ne peut pas être lu. S\'il est sur une carte SD, insérez la carte. Si l\'émulateur range ses sauvegardes dans Android/data, réglez-le pour qu\'il sauvegarde ailleurs : depuis Android 11, Android/data est fermé aux autres applications.</string>
 
     <!-- Games -->
     <string name="need_server">Indiquez d\'abord l\'adresse du serveur et le jeton.</string>

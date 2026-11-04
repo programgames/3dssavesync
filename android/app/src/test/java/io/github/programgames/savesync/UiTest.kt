@@ -40,7 +40,10 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
 import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
@@ -266,7 +269,7 @@ open class UiTest {
             rule.onNodeWithText(s(pr.hint)).assertExists()
             waitFor(s(R.string.folder_not_set))
             for (v in pr.systems.values.flatten().filter { it.label.isNotEmpty() }) fits(v.label) // the core chips
-            if (pr == CUSTOM) for (sys in pr.systems.keys) fits(sys.label)
+            if (pr.systems.size > 1) for (sys in pr.systems.keys) fits(sys.label) // the system boxes
             for (sys in pr.systems.keys) rule.onNodeWithText(systemNameText(sys)).assertExists()
             sc.recreate() // rotation: still on this emulator
             rule.onNodeWithText(s(pr.hint)).assertExists()
@@ -275,6 +278,42 @@ open class UiTest {
         rule.onNode(hasText(s(R.string.emulators_title)) and !hasClickAction()).assertIsDisplayed() // the title, not the tab
         assertEquals(profiles.size, App.emulators.size)
         rule.waitUntil(15_000) { rule.onAllNodesWithText(s(R.string.folder_not_set)).fetchSemanticsNodes().size == profiles.size }
+    }
+
+    // The emulators installed on this phone come first. The folder picker opens where the emulator keeps its saves
+    // (RetroArch/saves) when that folder exists, else where the picker wants; the systems not played can be unticked,
+    // never the last one.
+    @Test
+    fun installedFirstAndPickerStartsAtTheUsualFolder() {
+        shadowOf(ctx.packageManager).installPackage(PackageInfo().apply { packageName = "com.retroarch.aarch64" })
+        File(Environment.getExternalStorageDirectory(), "RetroArch/saves").mkdirs()
+        val sc = start(url = "http://127.0.0.1:1", token = "t")
+        rule.onNodeWithText(s(R.string.tab_emulators)).performClick()
+        rule.onNodeWithText(s(R.string.add_emulator)).performClick()
+        val installed = rule.onNode(hasText(s(R.string.installed_emulators)) and dialog).fetchSemanticsNode().positionInRoot.y
+        val others = rule.onNode(hasText(s(R.string.other_emulators)) and dialog).fetchSemanticsNode().positionInRoot.y
+        val retroarch = rule.onNode(hasText("RetroArch") and hasClickAction() and dialog).fetchSemanticsNode().positionInRoot.y
+        val melon = rule.onNode(hasText("melonDS") and hasClickAction() and dialog).fetchSemanticsNode().positionInRoot.y
+        assertTrue(installed < retroarch && retroarch < others && others < melon)
+        rule.onNode(hasText("RetroArch") and hasClickAction() and dialog).performClick()
+
+        fun picked(): Intent = sc.run {
+            var i: Intent? = null
+            onActivity { i = shadowOf(it).nextStartedActivityForResult.intent }
+            i!!
+        }
+        rule.onAllNodes(hasText(s(R.string.choose)) and hasClickAction())[0].performScrollTo().performClick() // the saves folder
+        val saves = picked()
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE, saves.action)
+        assertEquals(DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE, "primary:RetroArch/saves"), saves.getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI))
+        rule.onAllNodes(hasText(s(R.string.choose)) and hasClickAction())[1].performScrollTo().performClick() // no roms folder
+        assertEquals(null, picked().getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI))
+
+        // a GBA-only player unticks DS and GB; GBA, the last one, stays
+        for (sys in listOf("DS", "GB")) rule.onNode(hasText(sys) and isToggleable()).performClick()
+        assertEquals(setOf(System.GBA), App.emulators.single().systems.keys)
+        rule.onNode(hasText("GBA") and isToggleable()).assertIsNotEnabled()
+        rule.onAllNodesWithText(s(R.string.system_ds)).assertCountEquals(0)
     }
 
     private fun systemNameText(sys: System) = s(

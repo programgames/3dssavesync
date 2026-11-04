@@ -51,7 +51,7 @@
     <string name="next_to_rom">Saves next to the ROMs</string>
     <string name="choose">Choose</string>
     <string name="folder_ready">Ready</string>
-    <string name="folder_missing">Folder missing: choose it again</string>
+    <string name="folder_missing">Folder not found. If it\'s on an SD card, insert the card; else choose the folder again.</string>
     <string name="folder_no_permission">No permission: choose the folder again</string>
     <string name="folder_not_set">Folder not chosen yet</string>
     <string name="folder_checking">Checking…</string>
@@ -59,11 +59,28 @@
     <string name="system_gb">Game Boy and Game Boy Color</string>
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
-    <string name="hint_retroarch">RetroArch keeps its saves in RetroArch/saves, in one folder per core (mGBA, Gambatte…). Choose that core folder as the save folder. Play Store version: in the folder picker, open the menu, choose RetroArch, then saves. Close RetroArch before you sync: it writes the save every few seconds.</string>
-    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. For a game never started in Azahar, the app creates its folder with the save of the server. Close Azahar before you sync.</string>
-    <string name="hint_melonds">melonDS writes the save next to the ROM by default (setting \"Save next to ROM\"). If you chose another save folder in melonDS, untick \"Saves next to the ROMs\" and choose the same folder here.</string>
-    <string name="hint_noods">NooDS writes the save next to the ROM by default. Its other setting (saves folder) puts them where no other app can read them: keep the default.</string>
-    <string name="hint_custom">For DraStic, Pizza Boy, My Boy!, Linkboy and others: choose the folder where the emulator writes its saves and type their extension (.sav, .dsv). These emulators are not checked yet: try with a copy of one save first. Some keep their saves in Android/data, which no other app can open.</string>
+    <string name="hint_retroarch">Choose the ROM folder of each system. If RetroArch keeps its saves in RetroArch/saves (the default), also choose that folder once: the app finds the folder of each core in it. Play Store version: in the folder picker, open the menu and choose RetroArch. Close RetroArch before you sync.</string>
+    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. Close Azahar before you sync.</string>
+    <string name="hint_melonds">melonDS saves next to the ROM by default: choose the ROM folder. If you set another save folder in melonDS, untick \"Saves next to the ROMs\" and choose that folder.</string>
+    <string name="hint_drastic">DraStic keeps its saves in DraStic/backup (.dsv files). Choose the ROM folder, then that backup folder. Close DraStic before you sync.</string>
+    <string name="hint_noods">NooDS saves next to the ROM by default: choose the ROM folder. Keep that setting: its other save folder is closed to other apps.</string>
+    <string name="hint_pizzaboy">Pizza Boy keeps its saves in its private folder (Android/data/it.dbtecno.pizzaboy…), and Android 11 and later close that folder to other apps. If your version of Pizza Boy lets you choose its save folder, choose a folder outside Android/data there, then choose the same folder here.</string>
+    <string name="hint_custom">Choose the folder where the emulator writes its saves, and type their extension (.sav, .dsv). This emulator is not checked: before your first sync, copy its save folder to another place with a file manager.</string>
+    <string name="installed_emulators">Installed on this phone</string>
+    <string name="other_emulators">Other emulators</string>
+    <string name="systems_used">Systems you play with this emulator</string>
+    <string name="retroarch_saves">RetroArch saves folder (optional)</string>
+    <string name="sd_card">SD card</string>
+    <string name="no_picker">This phone has no folder picker, so the app can\'t open a folder.</string>
+    <plurals name="folder_found">
+        <item quantity="one">%1$d of %2$d games has a save here.</item>
+        <item quantity="other">%1$d of %2$d games have a save here.</item>
+    </plurals>
+    <string name="folder_no_game">No game found in this folder. Is it the right one?</string>
+    <string name="folder_no_save">No save found in this folder. Is it the right one?</string>
+    <string name="folder_no_save_retroarch">No save found next to these ROMs. If RetroArch keeps them in RetroArch/saves, choose that folder above.</string>
+    <string name="folder_android_data">This folder is in Android/data. Android 11 and later close these private folders to other apps. Set the emulator to save in another folder, then choose that folder here.</string>
+    <string name="folder_unreadable">This folder can\'t be read. If it\'s on an SD card, insert the card. If the emulator keeps its saves in Android/data, set it to save in another folder: Android 11 and later close Android/data to other apps.</string>
 
     <!-- Games -->
     <string name="need_server">Set the server address and the token first.</string>

@@ -247,6 +247,62 @@ class SafTest {
         assertFalse(ops.any { it.startsWith("write") || it.startsWith("create") || it.startsWith("delete") }) // a scan only reads
     }
 
+    // RetroArch: one saves folder for the entry. Each save is found in the folder of the chosen core, at the root of the
+    // saves folder, or next to its ROM; the newest when several; a new save goes to the core folder. Never the save
+    // of another core. No saves folder: next to the ROMs.
+    @Test
+    fun scanRetroArch() {
+        put("roms/gba/Emeraude.gba", gba("BPEF"))
+        put("roms/gba/Rubis.gba", gba("AXVF"))
+        put("roms/gba/Saphir.gba", gba("AXPF"))
+        put("roms/gba/Feu.gba", gba("BPRF"))
+        put("roms/gba/Vert.gba", gba("BPGF"))
+        put("RetroArch/saves/mGBA/Emeraude.srm", save(1))
+        put("RetroArch/saves/gpSP/Rubis.srm", save(2)) // another core: not this one
+        put("RetroArch/saves/Rubis.srm", save(3)) // "sort by core" off
+        put("roms/gba/Saphir.srm", save(4)) // "saves in content directory"
+        put("RetroArch/saves/mGBA/Vert.srm", save(5)).setLastModified(1_600_000_000_000L)
+        put("roms/gba/Vert.srm", save(6)).setLastModified(1_700_000_000_000L) // newer: the one RetroArch writes now
+        val folders = Folders(roms = tree("roms/gba").toString(), saves = tree("RetroArch/saves").toString())
+        App.aliases = emptyMap()
+        App.saveEmulators(listOf(Emulator("retroarch", RETROARCH, "", mapOf(System.GBA to folders)))) // core: mGBA
+        val (entries, problems) = App.scanAll()
+        assertEquals(emptyList<String>(), problems)
+        val at = entries.associate { it.name to it.game!!.file.location }
+        assertEquals("RetroArch/saves/mGBA/Emeraude.srm", at["Emeraude"])
+        assertEquals("RetroArch/saves/Rubis.srm", at["Rubis"])
+        assertEquals("roms/gba/Saphir.srm", at["Saphir"])
+        assertEquals("roms/gba/Vert.srm", at["Vert"])
+        assertEquals("RetroArch/saves/mGBA/Feu.srm", at["Feu"]) // none yet: the core folder
+        assertArrayEquals(save(3), entries.first { it.name == "Rubis" }.game!!.file.read())
+        assertEquals(ctx.resources.getQuantityString(R.plurals.folder_found, 4, 4, 5), App.folderResult(App.emulators[0], System.GBA))
+
+        App.saveEmulators(listOf(Emulator("retroarch", RETROARCH, "", mapOf(System.GBA to folders.copy(saves = null)))))
+        val alone = App.scanAll().first.associate { it.name to it.game!!.file.location }
+        assertEquals("roms/gba/Saphir.srm", alone["Saphir"])
+        assertEquals("roms/gba/Emeraude.srm", alone["Emeraude"]) // not found: next to the ROM
+    }
+
+    // The line after a pick: games with a save, or why none (no game, no save, Android/data).
+    @Test
+    fun folderResult() {
+        put("roms/nds/Platine.nds", nds("CPUF"))
+        put("roms/nds/Perle.nds", nds("APAF"))
+        put("DraStic/backup/Platine.dsv", save(1))
+        put("empty/readme.txt")
+        put("Android/data/it.dbtecno.pizzaboygba/files/x.sav")
+        App.aliases = emptyMap()
+        fun result(roms: String?, saves: String?, profile: String = "drastic") =
+            App.folderResult(Emulator("e", profile, "", mapOf(System.DS to Folders(roms = roms?.let { tree(it).toString() }, saves = saves?.let { tree(it).toString() }))), System.DS)
+        val res = ctx.resources
+        assertEquals(res.getQuantityString(R.plurals.folder_found, 1, 1, 2), result("roms/nds", "DraStic/backup"))
+        assertEquals(App.text(R.string.folder_no_save), result("roms/nds", "empty"))
+        assertEquals(App.text(R.string.folder_no_game), result("empty", "DraStic/backup"))
+        assertNull(result(null, "DraStic/backup")) // the ROM folder is still to choose
+        assertEquals(App.text(R.string.folder_android_data), result("roms/nds", "Android/data/it.dbtecno.pizzaboygba"))
+        assertEquals(App.text(R.string.folder_unreadable), result("roms/nds", "gone"))
+    }
+
     // replace: a verified Backup copy in the folder of the app, the file replaced, read back. The new save is shorter:
     // "wt" truncates (else the end of the old save would remain and the read-back would not match).
     @Test

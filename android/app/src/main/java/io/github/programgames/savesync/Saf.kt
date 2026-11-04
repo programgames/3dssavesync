@@ -2,7 +2,10 @@ package io.github.programgames.savesync
 
 import android.content.ContentResolver
 import android.net.Uri
+import android.os.Environment
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
+import java.io.File
 import android.provider.DocumentsContract.Document
 import io.github.programgames.savesync.core.NewArchive
 import io.github.programgames.savesync.core.SaveFile
@@ -43,6 +46,16 @@ fun make(r: ContentResolver, tree: Uri, parent: String, mime: String, name: Stri
 
 // rootId is the document id of the folder the user chose.
 fun rootId(tree: Uri): String = DocumentsContract.getTreeDocumentId(tree)
+
+// startAt is where the folder picker opens (Android 8+, EXTRA_INITIAL_URI): the folder chosen before, else the first
+// usual folder (path from the root of the internal storage) that exists. null: where the picker wants.
+fun startAt(current: String?, usual: List<String>): Uri? {
+    if (current != null) return runCatching { current.toUri().let { DocumentsContract.buildDocumentUriUsingTree(it, rootId(it)) } }.getOrNull()
+    val root = Environment.getExternalStorageDirectory()
+    return usual.firstOrNull { File(root, it).isDirectory }?.let { DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE, "primary:$it") }
+}
+
+const val EXTERNAL_STORAGE = "com.android.externalstorage.documents" // the provider of the phone storage
 
 // folderLabel shows a chosen folder: "RetroArch/saves" for "primary:RetroArch/saves".
 fun folderLabel(tree: Uri): String = rootId(tree).substringAfter(':').ifEmpty { "/" }

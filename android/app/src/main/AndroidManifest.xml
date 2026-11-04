@@ -5,6 +5,24 @@
     <!-- the problems of the background upload, asked when the user turns it on (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- the emulators the app knows (Profiles.kt, packages): installed ones are offered first. Android 11+ hides the
+         other apps without this list. -->
+    <queries>
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.retroarch.ra32" />
+        <package android:name="me.magnum.melonds" />
+        <package android:name="me.magnum.melondualds" />
+        <package android:name="com.dsemu.drastic" />
+        <package android:name="com.hydra.noods" />
+        <package android:name="it.dbtecno.pizzaboy" />
+        <package android:name="it.dbtecno.pizzaboypro" />
+        <package android:name="it.dbtecno.pizzaboygba" />
+        <package android:name="it.dbtecno.pizzaboygbapro" />
+        <package android:name="org.azahar_emu.azahar" />
+        <package android:name="io.github.lime3ds.android" />
+    </queries>
+
     <!-- allowBackup off: the token stays on this phone. -->
     <application
         android:allowBackup="false"

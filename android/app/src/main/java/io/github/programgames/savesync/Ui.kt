@@ -79,7 +79,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.aliasExamples
@@ -393,9 +397,14 @@ private fun check(uri: String?): FolderState {
     return if (runCatching { children(App.resolver, u, rootId(u)) }.isSuccess) FolderState.READY else FolderState.MISSING
 }
 
-// emulatorState: the worst state of its folders.
+// emulatorState: the worst state of its folders. The saves folder of RetroArch is optional (saves next to the ROMs).
 private fun emulatorState(e: Emulator): FolderState {
-    val all = e.systems.flatMap { (s, f) -> listOf(if (s == System.N3DS) FolderState.READY else check(f.roms), if (f.nextToRom) FolderState.READY else check(f.saves)) }
+    val all = e.systems.flatMap { (s, f) ->
+        listOf(
+            if (s == System.N3DS) FolderState.READY else check(f.roms),
+            if (f.nextToRom || e.profile == RETROARCH && f.saves == null) FolderState.READY else check(f.saves),
+        )
+    }
     return when {
         all.isEmpty() -> FolderState.NOT_SET
         FolderState.NO_PERMISSION in all -> FolderState.NO_PERMISSION
@@ -416,9 +425,17 @@ private fun stateLabel(s: FolderState) = stringResource(
     },
 )
 
+// StateLine: Ready in green, not chosen yet in grey (a step to do, not an error), the problems in red.
 @Composable
 private fun StateLine(s: FolderState) {
-    Text(stateLabel(s), color = if (s == FolderState.READY || s == FolderState.CHECKING) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+    Text(
+        stateLabel(s),
+        color = when (s) {
+            FolderState.READY -> stateColor(Shown.IN_SYNC)
+            FolderState.NOT_SET, FolderState.CHECKING -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.error
+        },
+    )
 }
 
 fun Emulator.title() = label.ifBlank { profile().name.ifBlank { App.text(R.string.custom_profile) } }
@@ -448,13 +465,9 @@ fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
             title = { Text(stringResource(R.string.add_emulator)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    for (pr in profiles) {
-                        TextButton({
-                            adding = false
-                            val e = Emulator(App.newId(pr.id), pr.id, if (pr == CUSTOM) App.text(R.string.custom_profile) else pr.name, pr.systems.keys.associateWith { Folders(nextToRom = pr.nextToRom) })
-                            App.saveEmulators(App.emulators + e)
-                            onEdit(e.id)
-                        }, Modifier.fillMaxWidth()) { Text(if (pr == CUSTOM) stringResource(R.string.custom_profile) else pr.name, Modifier.fillMaxWidth()) }
+                    ProfileList {
+                        adding = false
+                        onEdit(addEmulator(it))
                     }
                 }
             },
@@ -464,23 +477,35 @@ fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
     }
 }
 
+// addEmulator adds an entry of this Profile, with every System of it; returns its id.
+fun addEmulator(pr: Profile): String {
+    val e = Emulator(App.newId(pr.id), pr.id, if (pr == CUSTOM) App.text(R.string.custom_profile) else pr.name, pr.systems.keys.associateWith { Folders(nextToRom = pr.nextToRom) })
+    App.saveEmulators(App.emulators + e)
+    return e.id
+}
+
+// ProfileList: the emulators installed on this phone first, then the others.
+@Composable
+fun ProfileList(onPick: (Profile) -> Unit) {
+    val pm = LocalContext.current.packageManager
+    val (installed, others) = remember { profiles.partition { it.installed(pm) } }
+    @Composable
+    fun group(title: Int?, list: List<Profile>) {
+        if (list.isEmpty()) return
+        if (title != null) Text(stringResource(title), Modifier.padding(top = 8.dp).semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+        for (pr in list) {
+            TextButton({ onPick(pr) }, Modifier.fillMaxWidth()) {
+                Text(if (pr == CUSTOM) stringResource(R.string.custom_profile) else pr.name, Modifier.fillMaxWidth())
+            }
+        }
+    }
+    group(R.string.installed_emulators, installed)
+    group(if (installed.isEmpty()) null else R.string.other_emulators, others)
+}
+
 @Composable
 fun EmulatorScreen(id: String, onBack: () -> Unit) {
     val e = App.emulators.firstOrNull { it.id == id } ?: return
-    val pr = e.profile()
-    val custom = pr == CUSTOM
-    fun update(f: (Emulator) -> Emulator) = App.changeEmulator(id, f = f) // forgets the Bases of this entry (ADR 0026)
-    fun updateSystem(s: System, f: (Folders) -> Folders) = update { it.copy(systems = it.systems + (s to f(it.systems[s] ?: Folders()))) }
-    // "DS|saves": which folder the picker is for (kept if the activity restarts meanwhile)
-    var target by rememberSaveable { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        val t = target?.split('|')
-        target = null
-        if (uri != null && t != null) {
-            App.takeFolder(uri)
-            updateSystem(System.valueOf(t[0])) { if (t[1] == "saves") it.copy(saves = uri.toString()) else it.copy(roms = uri.toString()) }
-        }
-    }
     var removing by remember { mutableStateOf(false) }
     Scaffold(topBar = {
         TopAppBar(title = { Text(e.title()) }, navigationIcon = {
@@ -488,48 +513,12 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
         })
     }) { p ->
         Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(pr.hint))
-            if (custom) {
-                OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } },Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    for (s in CUSTOM.systems.keys) {
-                        Checkbox(s in e.systems, { on -> update { it.copy(systems = if (on) it.systems + (s to Folders()) else it.systems - s) } })
-                        Text(s.label)
-                    }
-                }
-            }
-            for ((s, f) in e.systems.toSortedMap()) {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(systemName(s), style = MaterialTheme.typography.titleMedium)
-                val variants = pr.systems[s].orEmpty()
-                if (variants.size > 1) {
-                    Text(stringResource(R.string.core))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { // 4 GB cores: wider than a small phone
-                        variants.forEachIndexed { i, v -> FilterChip(f.variant == i, { updateSystem(s) { it.copy(variant = i) } }, { Text(v.label) }) }
-                    }
-                }
-                if (custom) {
-                    OutlinedTextField(f.ext, { v -> updateSystem(s) { it.copy(ext = v) } }, label = { Text(stringResource(R.string.extension)) }, singleLine = true)
-                }
-                if (s != System.N3DS) {
-                    FolderRow(stringResource(R.string.rom_folder), f.roms) {
-                        target = "${s.name}|roms"
-                        picker.launch(null)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(f.nextToRom, { on -> updateSystem(s) { it.copy(nextToRom = on) } })
-                        Text(stringResource(R.string.next_to_rom))
-                    }
-                }
-                if (!f.nextToRom) {
-                    FolderRow(stringResource(if (s == System.N3DS) R.string.azahar_folder else R.string.save_folder), f.saves) {
-                        target = "${s.name}|saves"
-                        picker.launch(null)
-                    }
-                }
-            }
+            EmulatorBody(id)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            OutlinedButton({ removing = true }) { Text(stringResource(R.string.remove_emulator)) }
+            // at the bottom, in red, with a confirmation: never at the level of the main actions
+            TextButton({ removing = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Text(stringResource(R.string.remove_emulator))
+            }
         }
     }
     if (removing) {
@@ -549,13 +538,119 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
     }
 }
 
+// EmulatorBody: the systems and folders of one emulator entry (Emulators screen, guided setup). The folder picker opens
+// where this emulator usually keeps them; after a pick, one line says what the folder holds (App.folderResult).
+@Composable
+fun EmulatorBody(id: String) {
+    val e = App.emulators.firstOrNull { it.id == id } ?: return
+    val pr = e.profile()
+    val custom = pr == CUSTOM
+    val retro = pr.id == RETROARCH
+    fun update(f: (Emulator) -> Emulator) = App.changeEmulator(id, f = f) // forgets the Bases of this entry (ADR 0026)
+    fun updateSystem(s: System, f: (Folders) -> Folders) = update { it.copy(systems = it.systems + (s to f(it.systems[s] ?: Folders()))) }
+    val scope = rememberCoroutineScope()
+    var results by remember(id) { mutableStateOf(mapOf<System, String>()) }
+    fun check(systems: Collection<System>) = scope.launch {
+        val now = App.emulators.firstOrNull { it.id == id } ?: return@launch
+        for (s in systems) {
+            val r = withContext(Dispatchers.IO) { runCatching { App.folderResult(now, s) }.getOrNull() }
+            results = if (r == null) results - s else results + (s to r)
+        }
+    }
+    // "DS|roms": which folder the picker is for, kept if the activity restarts meanwhile; "*|saves": the one saves folder
+    // of RetroArch, for every system
+    var target by rememberSaveable { mutableStateOf<String?>(null) }
+    var noPicker by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val t = target?.split('|')
+        target = null
+        if (uri != null && t != null) {
+            App.takeFolder(uri)
+            val now = App.emulators.firstOrNull { it.id == id }?.systems?.keys.orEmpty()
+            val systems = if (t[0] == "*") now else now.filter { it.name == t[0] }
+            update { x -> x.copy(systems = x.systems.mapValues { (s, f) -> if (s !in systems) f else if (t[1] == "saves") f.copy(saves = uri.toString()) else f.copy(roms = uri.toString()) }) }
+            check(systems)
+        }
+    }
+    fun pick(t: String, current: String?, usual: List<String>) {
+        target = t
+        noPicker = runCatching { picker.launch(startAt(current, usual)) }.isFailure // no folder picker on this phone
+    }
+    Text(stringResource(pr.hint))
+    if (custom) {
+        OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
+    }
+    if (pr.systems.size > 1) { // untick a system you don't play: it then asks for nothing
+        Text(stringResource(R.string.systems_used), style = MaterialTheme.typography.titleSmall)
+        FlowRow {
+            for (s in pr.systems.keys) {
+                val on = s in e.systems
+                val can = !on || e.systems.size > 1 // at least one system
+                Row(
+                    Modifier.heightIn(min = 48.dp).toggleable(on, enabled = can, role = Role.Checkbox) { v ->
+                        update {
+                            val shared = if (retro) it.systems.values.firstNotNullOfOrNull { f -> f.saves } else null
+                            it.copy(systems = if (v) it.systems + (s to Folders(saves = shared, nextToRom = pr.nextToRom)) else it.systems - s)
+                        }
+                    }.padding(end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(on, null, enabled = can)
+                    Text(s.label)
+                }
+            }
+        }
+    }
+    if (noPicker) Text(stringResource(R.string.no_picker), color = MaterialTheme.colorScheme.error)
+    if (retro) {
+        val saves = e.systems.values.firstNotNullOfOrNull { it.saves }
+        FolderRow(stringResource(R.string.retroarch_saves), saves) { pick("*|saves", saves, listOfNotNull(pr.savesAt)) }
+    }
+    for ((s, f) in e.systems.toSortedMap()) {
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text(systemName(s), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        val variants = pr.systems[s].orEmpty()
+        if (variants.size > 1) {
+            Text(stringResource(R.string.core))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { // 4 GB cores: wider than a small phone
+                variants.forEachIndexed { i, v -> FilterChip(f.variant == i, { updateSystem(s) { it.copy(variant = i) } }, { Text(v.label) }) }
+            }
+        }
+        if (custom) {
+            OutlinedTextField(f.ext, { v -> updateSystem(s) { it.copy(ext = v) } }, label = { Text(stringResource(R.string.extension)) }, singleLine = true)
+        }
+        if (s != System.N3DS) {
+            FolderRow(stringResource(R.string.rom_folder), f.roms) { pick("${s.name}|roms", f.roms, romsAt(s)) }
+            if (!retro) { // RetroArch: the scan looks next to the ROMs too
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(f.nextToRom, role = Role.Checkbox) { on -> updateSystem(s) { it.copy(nextToRom = on) } },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(f.nextToRom, null)
+                    Text(stringResource(R.string.next_to_rom))
+                }
+            }
+        }
+        if (!f.nextToRom && !retro) {
+            FolderRow(stringResource(if (s == System.N3DS) R.string.azahar_folder else R.string.save_folder), f.saves) {
+                pick("${s.name}|saves", f.saves, listOfNotNull(pr.savesAt))
+            }
+        }
+        results[s]?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, fontWeight = FontWeight.Medium) }
+    }
+}
+
 @Composable
 private fun FolderRow(label: String, uri: String?, pick: () -> Unit) {
     val st = produceState(FolderState.CHECKING, uri) { value = withContext(Dispatchers.IO) { check(uri) } }.value
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
             Text(label)
-            if (uri != null) Text(folderLabel(uri.toUri()), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            if (uri != null) {
+                val u = uri.toUri()
+                val sd = !rootId(u).startsWith("primary:") // a removable card: the same folder names as the phone
+                Text((if (sd) stringResource(R.string.sd_card) + " · " else "") + folderLabel(u), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
             StateLine(st)
         }
         OutlinedButton(pick) { Text(stringResource(R.string.choose)) }
