@@ -30,6 +30,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performCustomAccessibilityActionWithLabel
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
@@ -39,11 +40,15 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageInfo
 import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
 import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Local
+import io.github.programgames.savesync.core.NetworkException
 import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PendingWrite
 import io.github.programgames.savesync.core.Problem
@@ -63,6 +68,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,6 +82,8 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.URLEncoder
 import kotlin.concurrent.thread
+
+const val KART = "Mario Kart DS (Europe) (En,Fr,De,Es,It)" // a No-Intro name: the list shows "Mario Kart DS"
 
 // MemFile is a Save file in memory: the tests check that nothing was written without a confirmation.
 class MemFile(override val name: String, var content: ByteArray?) : SaveFile {
@@ -118,8 +126,10 @@ open class UiTest {
         entries: List<Entry>? = null,
         noReminder: Boolean = true,
         aliases: Map<String, String> = emptyMap(),
+        setup: Boolean = false, // the guided first run shows (no server, never finished)
     ): ActivityScenario<MainActivity> {
         App.init(ctx)
+        App.settings.setupDone = !setup
         App.settings.aliases = aliases
         App.aliases = aliases
         App.settings.noReminder = noReminder
@@ -161,11 +171,15 @@ open class UiTest {
         return "http://127.0.0.1:${ss.localPort}"
     }
 
-    private fun waitFor(text: String, substring: Boolean = false) =
+    private fun waitFor(text: String, substring: Boolean = false) = try {
         rule.waitUntil(15_000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }
+    } catch (e: Throwable) {
+        throw AssertionError("no \"$text\" in:\n" + rule.onAllNodes(SemanticsMatcher("all") { true }).fetchSemanticsNodes().mapNotNull { n -> n.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString() }.joinToString("\n"), e)
+    }
 
     // fits: every Text with this text is inside the screen width and shows all of it (not cut, at most maxLines lines).
-    private fun fits(text: String, maxLines: Int = 1) {
+    private fun fits(text: String, lines: Int = 1) {
+        val maxLines = if (large) lines * 2 else lines // 200 %: twice the lines, never cut
         val nodes = rule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
         assertTrue("no $text", nodes.isNotEmpty())
         val w = ctx.resources.displayMetrics.widthPixels
@@ -186,17 +200,30 @@ open class UiTest {
 
     private val dialog = hasAnyAncestor(isDialog())
 
+    private val large get() = ctx.resources.configuration.fontScale >= 1.5f
+
+    // onlyNormalFont: a test of the logic, not of the layout; at 200 % its rows would need scrolling at every step.
+    private fun onlyNormalFont() = Assume.assumeFalse(large)
+
+    // seen: the game row exists, once the list has scrolled to it (a lazy list composes only what fits)
+    private fun seen(name: String) {
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(name))
+        rule.onNodeWithText(name).assertExists()
+    }
+
     @Test
     fun firstStartShowsTheSettingsAndAClearConnectionError() {
-        val sc = start()
+        val sc = start(setup = true)
+        rule.onNodeWithText(s(R.string.welcome_title)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.later)).performClick() // put off: the list says what is missing
+        assertTrue(App.settings.setupDone)
+        rule.onNodeWithText(s(R.string.need_server)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.open_settings)).performClick()
         rule.onNodeWithText(s(R.string.settings_title)).assertIsDisplayed()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsNotEnabled()
         val fields = rule.onAllNodes(hasSetTextAction())
         fields.assertCountEquals(2)
-        fields[0].performTextInput("127.0.0.1:1")
-        rule.onNodeWithText(s(R.string.address_scheme)).assertIsDisplayed()
-        fields[0].performTextClearance()
-        fields[0].performTextInput("http://127.0.0.1:1") // nothing listens on port 1: refused at once
+        fields[0].performTextInput("127.0.0.1:1") // no scheme: http:// is added; nothing listens on port 1, refused at once
         fields[1].performTextInput("secret-token")
         // the token is masked until Show
         rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password)).assertExists()
@@ -204,13 +231,69 @@ open class UiTest {
         assertFalse(shown().contains("secret"))
         rule.onNodeWithText(s(R.string.show)).performClick()
         assertEquals("secret-token", shown())
-        rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled().performClick()
+        rule.onNodeWithText(s(R.string.test_connection)).performScrollTo().assertIsEnabled().performClick()
         waitFor(s(R.string.p_refused))
-        rule.onNodeWithText("ConnectException", substring = true).assertExists() // the technical line
+        rule.onAllNodesWithText("ConnectException", substring = true).assertCountEquals(0) // the technical line: on demand
+        rule.onNodeWithText(s(R.string.show_details)).performScrollTo().performClick()
+        rule.onNodeWithText("ConnectException", substring = true).assertExists()
+        rule.onNodeWithText(s(R.string.retry)).assertExists()
 
         sc.recreate() // rotation: the settings stay
-        rule.onNodeWithText("http://127.0.0.1:1").assertExists()
+        rule.onNodeWithText("127.0.0.1:1").assertExists()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled()
+    }
+
+    // The guided first run: welcome, server by QR code, the installed emulator first, its folders, done. Back from the
+    // folders forgets an entry without folders; every step can be skipped; Settings starts it again.
+    @Test
+    fun guidedFirstRun() {
+        val real = scanQr
+        try {
+            val url = fakeServer(ByteArray(0))
+            scanQr = { _, done -> done(Result.success("3dssavesync://serveur?adresse=" + URLEncoder.encode(url, "UTF-8") + "&jeton=fake-token")) }
+            shadowOf(ctx.packageManager).installPackage(PackageInfo().apply { packageName = "me.magnum.melonds" })
+            val sc = start(setup = true)
+            fits(s(R.string.welcome_title))
+            fits(s(R.string.setup_start))
+            rule.onNodeWithText(s(R.string.setup_start)).performClick()
+
+            rule.onNodeWithText(s(R.string.setup_step, 1, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.next)).assertIsNotEnabled()
+            rule.onAllNodes(hasSetTextAction()).assertCountEquals(0) // typing is the other way, behind a button
+            fits(s(R.string.type_address))
+            rule.onNodeWithText(s(R.string.scan_qr)).performClick()
+            waitFor(ctx.resources.getQuantityString(R.plurals.connected, 0, 0))
+            rule.onNodeWithText(s(R.string.next)).performScrollTo().assertIsEnabled().performClick()
+
+            rule.onNodeWithText(s(R.string.setup_step, 2, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.installed_emulators)).assertExists()
+            rule.onNode(hasText("melonDS") and hasClickAction()).performClick()
+            rule.onNodeWithText(s(R.string.setup_step, 3, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.hint_melonds)).assertExists()
+            assertEquals(listOf("melonds"), App.emulators.map { it.id })
+            sc.recreate() // rotation: still this step
+            rule.onNodeWithText(s(R.string.hint_melonds)).assertExists()
+            sc.onActivity { it.onBackPressedDispatcher.onBackPressed() } // a wrong tap: back to the choice, the entry without folders is gone
+            rule.onNodeWithText(s(R.string.setup_step, 2, 3)).assertExists()
+            assertEquals(emptyList<Emulator>(), App.emulators)
+            rule.onNode(hasText("melonDS") and hasClickAction()).performClick()
+            rule.onNodeWithText(s(R.string.later)).performScrollTo().performClick() // no folder yet: later
+            rule.onNodeWithText(s(R.string.setup_done_title)).assertExists()
+            rule.onNodeWithText(s(R.string.setup_done_text)).assertExists()
+            rule.onNodeWithText(s(R.string.show_games)).performClick()
+            assertTrue(App.settings.setupDone)
+            rule.onNode(hasText(s(R.string.tab_games)) and !hasClickAction()).assertIsDisplayed()
+
+            rule.onNodeWithText(s(R.string.tab_settings)).performClick()
+            rule.onNodeWithText(s(R.string.setup_again)).performScrollTo().performClick()
+            rule.onNodeWithText(s(R.string.welcome_title)).assertIsDisplayed()
+            rule.onNodeWithText(s(R.string.setup_start)).performClick()
+            rule.onNodeWithText(s(R.string.skip)).performClick()
+            rule.onNodeWithText(s(R.string.skip)).performScrollTo().performClick()
+            rule.onNodeWithText(s(R.string.setup_done_title)).assertExists()
+        } finally {
+            scanQr = real
+        }
     }
 
     // "Scan the PC's QR code": the scanner can't run here, scanQr is replaced. A good code fills, saves and tests; a
@@ -259,7 +342,7 @@ open class UiTest {
             rule.onNodeWithText(s(pr.hint)).assertExists()
             waitFor(s(R.string.folder_not_set))
             for (v in pr.systems.values.flatten().filter { it.label.isNotEmpty() }) fits(v.label) // the core chips
-            if (pr == CUSTOM) for (sys in pr.systems.keys) fits(sys.label)
+            if (pr.systems.size > 1) for (sys in pr.systems.keys) fits(sys.label) // the system boxes
             for (sys in pr.systems.keys) rule.onNodeWithText(systemNameText(sys)).assertExists()
             sc.recreate() // rotation: still on this emulator
             rule.onNodeWithText(s(pr.hint)).assertExists()
@@ -268,6 +351,42 @@ open class UiTest {
         rule.onNode(hasText(s(R.string.emulators_title)) and !hasClickAction()).assertIsDisplayed() // the title, not the tab
         assertEquals(profiles.size, App.emulators.size)
         rule.waitUntil(15_000) { rule.onAllNodesWithText(s(R.string.folder_not_set)).fetchSemanticsNodes().size == profiles.size }
+    }
+
+    // The emulators installed on this phone come first. The folder picker opens where the emulator keeps its saves
+    // (RetroArch/saves) when that folder exists, else where the picker wants; the systems not played can be unticked,
+    // never the last one.
+    @Test
+    fun installedFirstAndPickerStartsAtTheUsualFolder() {
+        shadowOf(ctx.packageManager).installPackage(PackageInfo().apply { packageName = "com.retroarch.aarch64" })
+        File(Environment.getExternalStorageDirectory(), "RetroArch/saves").mkdirs()
+        val sc = start(url = "http://127.0.0.1:1", token = "t")
+        rule.onNodeWithText(s(R.string.tab_emulators)).performClick()
+        rule.onNodeWithText(s(R.string.add_emulator)).performClick()
+        val installed = rule.onNode(hasText(s(R.string.installed_emulators)) and dialog).fetchSemanticsNode().positionInRoot.y
+        val others = rule.onNode(hasText(s(R.string.other_emulators)) and dialog).fetchSemanticsNode().positionInRoot.y
+        val retroarch = rule.onNode(hasText("RetroArch") and hasClickAction() and dialog).fetchSemanticsNode().positionInRoot.y
+        val melon = rule.onNode(hasText("melonDS") and hasClickAction() and dialog).fetchSemanticsNode().positionInRoot.y
+        assertTrue(installed < retroarch && retroarch < others && others < melon)
+        rule.onNode(hasText("RetroArch") and hasClickAction() and dialog).performClick()
+
+        fun picked(): Intent = sc.run {
+            var i: Intent? = null
+            onActivity { i = shadowOf(it).nextStartedActivityForResult.intent }
+            i!!
+        }
+        rule.onAllNodes(hasText(s(R.string.choose)) and hasClickAction())[0].performScrollTo().performClick() // the saves folder
+        val saves = picked()
+        assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE, saves.action)
+        assertEquals(DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE, "primary:RetroArch/saves"), saves.getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI))
+        rule.onAllNodes(hasText(s(R.string.choose)) and hasClickAction())[1].performScrollTo().performClick() // no roms folder
+        assertEquals(null, picked().getParcelableExtra<Uri>(DocumentsContract.EXTRA_INITIAL_URI))
+
+        // a GBA-only player unticks DS and GB; GBA, the last one, stays
+        for (sys in listOf("DS", "GB")) rule.onNode(hasText(sys) and isToggleable()).performScrollTo().performClick()
+        assertEquals(setOf(System.GBA), App.emulators.single().systems.keys)
+        rule.onNode(hasText("GBA") and isToggleable()).performScrollTo().assertIsNotEnabled()
+        rule.onAllNodesWithText(s(R.string.system_ds)).assertCountEquals(0)
     }
 
     private fun systemNameText(sys: System) = s(
@@ -295,46 +414,64 @@ open class UiTest {
     private fun games() = listOf(
         entry("Pokémon Émeraude", System.GBA, "GBA-BPEF", local(sram), null, null, State.TO_UPLOAD),
         entry("Zelda", System.GB, "GB-ZELDA-1234", local(sram), Version(sha256(sram), 0x8000), sha256(sram), State.IN_SYNC),
-        entry("Mario Kart DS", System.DS, "AMCE", local(sram), other, sha256(sram), State.TO_DOWNLOAD),
+        entry(KART, System.DS, "AMCE", local(sram), other, sha256(sram), State.TO_DOWNLOAD), // the list shows "Mario Kart DS"
         entry("Pokemon Soleil", System.N3DS, "3DS-0004000000164800", local(sun), other.copy(size = sun.size.toLong()), "c".repeat(64), State.CONFLICT),
         entry("Metroid", System.GBA, "GBA-AMTE", null, null, null, null),
         entry("Wario", System.GBA, "GBA-RWZE", null, null, null, null, error = IOException("read error")),
         Entry(emu, System.GB, "Tetris", "Tetris.gb", null, dups = listOf("Tetris.gb", "Tetris (1).gb")),
     )
 
-    private fun chip(label: String) = rule.onNode(hasText(label) and isSelectable()).performScrollTo()
+    private fun chip(label: String): androidx.compose.ui.test.SemanticsNodeInteraction {
+        // the chips of the games list are at the top of the list
+        if (rule.onAllNodes(hasScrollToNodeAction()).fetchSemanticsNodes().isNotEmpty()) rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+        return rule.onNode(hasText(label) and isSelectable()).performScrollTo()
+    }
+
+    private val azahar = Emulator("azahar", "azahar", "", mapOf(System.N3DS to Folders()))
 
     @Test
     fun gamesListFiltersSearchAndSummary() {
-        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu), entries = games())
+        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu, azahar), entries = games())
         for (n in listOf("Pokémon Émeraude", "Zelda", "Mario Kart DS", "Pokemon Soleil", "Wario", "Tetris")) {
             rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(n)) // the list composes only what fits
         }
+        rule.onAllNodesWithText(KART).assertCountEquals(0) // the short name only, as on the 3DS
         rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(ctx.resources.getQuantityString(R.plurals.hidden_games, 1, 1)))
         rule.onAllNodesWithText("Metroid").assertCountEquals(0)
         rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
-        for (t in listOf(R.string.sync_all, R.string.refresh, R.string.tab_games, R.string.s_to_upload, R.string.s_in_sync, R.string.s_to_download, R.string.s_conflict)) fits(s(t))
+        for (t in listOf(R.string.sync_all, R.string.tab_games)) fits(s(t))
+        rule.onNodeWithText(s(R.string.sync_all)).assertIsEnabled()
+        for (t in listOf(R.string.s_to_upload, R.string.s_in_sync, R.string.s_to_download, R.string.s_conflict)) {
+            rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(s(t)))
+            fits(s(t))
+        }
+        rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+        // the system chips: only those of the emulators (GBA, 3DS), not DS or GB
+        chip("GBA")
+        for (sys in listOf("DS", "GB")) rule.onAllNodes(hasText(sys) and isSelectable()).assertCountEquals(0)
 
         chip(s(R.string.filter_todo)).performClick()
-        for (n in listOf("Pokémon Émeraude", "Mario Kart DS", "Pokemon Soleil")) rule.onNodeWithText(n).assertExists()
+        for (n in listOf("Pokémon Émeraude", "Mario Kart DS", "Pokemon Soleil")) seen(n)
         for (n in listOf("Zelda", "Wario", "Tetris")) rule.onAllNodesWithText(n).assertCountEquals(0)
         chip("3DS").performClick()
-        rule.onNodeWithText("Pokemon Soleil").assertExists()
+        seen("Pokemon Soleil")
         rule.onAllNodesWithText("Mario Kart DS").assertCountEquals(0)
         chip(s(R.string.filter_all)).performClick()
 
-        val search = rule.onNode(hasSetTextAction())
-        search.performTextInput("pokemon") // accent-insensitive
-        rule.onNodeWithText("Pokémon Émeraude").assertExists()
-        rule.onNodeWithText("Pokemon Soleil").assertExists()
+        fun search(text: String) { // the field is at the top of the list
+            rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+            rule.onNode(hasSetTextAction()).performTextClearance()
+            if (text.isNotEmpty()) rule.onNode(hasSetTextAction()).performTextInput(text)
+        }
+        search("pokemon") // accent-insensitive
+        seen("Pokémon Émeraude")
+        seen("Pokemon Soleil")
         rule.onAllNodesWithText("Zelda").assertCountEquals(0)
-        search.performTextClearance()
-        search.performTextInput("ÉMERAUDE")
-        rule.onNodeWithText("Pokémon Émeraude").assertExists()
-        search.performTextClearance()
-        search.performTextInput("no such game")
-        rule.onNodeWithText(s(R.string.no_match)).assertExists()
-        search.performTextClearance()
+        search("ÉMERAUDE")
+        seen("Pokémon Émeraude")
+        search("no such game")
+        seen(s(R.string.no_match))
+        search("")
 
         // Sync all asks before a download replaces a save of this phone; Cancel leaves everything as it was
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
@@ -350,8 +487,10 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.summary_not_replaced, "Mario Kart DS")).assertExists()
         rule.onNodeWithText(s(R.string.summary_stopped)).assertExists()
         rule.onNodeWithText(s(R.string.p_write)).assertExists()
+        rule.onAllNodesWithText("write detail").assertCountEquals(0)
+        rule.onNode(hasText(s(R.string.show_details)) and dialog).performScrollTo().performClick()
         rule.onNodeWithText("write detail").assertExists()
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.close)) and dialog).performClick()
         rule.onAllNodesWithText(s(R.string.summary_title)).assertCountEquals(0)
     }
 
@@ -359,9 +498,52 @@ open class UiTest {
     fun gamesEmptyStates() {
         start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu), entries = emptyList())
         rule.onNodeWithText(s(R.string.no_game)).assertExists()
+        fits(s(R.string.open_emulators))
+        rule.onNodeWithText(s(R.string.open_emulators)).performClick()
+        rule.onNode(hasText(s(R.string.emulators_title)) and !hasClickAction()).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.tab_games)).performClick()
         App.settings.token = ""
         scenario!!.recreate()
         rule.onNodeWithText(s(R.string.need_server)).assertExists() // the tab stays Games: the notice shows
+    }
+
+    // Sync all says why it can't run. A server not read: one banner with Retry, the games without a save on this
+    // phone hidden (a server not read can't say they have none); Retry, or the refresh action of the list, reads again.
+    @OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
+    @Test
+    fun syncAllReasonsAndServerNotRead() {
+        val zelda = games()[1]
+        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu), entries = listOf(zelda))
+        rule.onNodeWithText(s(R.string.sync_off_nothing)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.sync_all)).assertIsNotEnabled()
+
+        val metroid = games()[4].copy(noLocal = true)
+        App.entries = listOf(zelda.copy(status = null), metroid)
+        App.serverError = NetworkException(java.net.ConnectException("Connection refused"))
+        rule.onNodeWithText(s(R.string.sync_off_server)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.p_refused)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.hidden_offline)).assertIsDisplayed()
+        rule.onAllNodesWithText(s(R.string.p_refused)).assertCountEquals(1) // said once
+        fits(s(R.string.retry))
+        fits(s(R.string.show_details))
+        seen("Zelda") // its save is on this phone: Unknown
+        rule.onAllNodesWithText("Metroid").assertCountEquals(0)
+        rule.onAllNodesWithText(ctx.resources.getQuantityString(R.plurals.hidden_games, 1, 1)).assertCountEquals(0)
+        open("Zelda") // the details don't repeat the banner
+        rule.onNodeWithText(s(R.string.why_unknown)).assertExists()
+        rule.onAllNodesWithText(s(R.string.p_refused)).assertCountEquals(0)
+        back()
+
+        // Retry reads again: nothing listens on port 1, and no ROM folder is set, so no game, with the way to fix it
+        rule.onNode(hasScrollToNodeAction()).performScrollToIndex(0)
+        rule.onNodeWithText(s(R.string.retry)).performScrollTo().performClick()
+        waitFor(s(R.string.open_emulators))
+        // pull to refresh, as an accessibility action
+        val refresh = rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)).fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        assertEquals(listOf(s(R.string.refresh)), refresh.map { it.label })
+        App.serverError = null
+        rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)).performCustomAccessibilityActionWithLabel(s(R.string.refresh))
+        waitFor(s(R.string.p_refused))
     }
 
     private fun open(name: String) {
@@ -386,12 +568,13 @@ open class UiTest {
 
         open("Zelda")
         rule.onNodeWithText(s(R.string.why_in_sync)).assertExists()
-        rule.onNodeWithText(s(R.string.last_sync) + " " + s(R.string.base_both)).assertExists()
         rule.onAllNodesWithText(s(R.string.upload)).assertCountEquals(0)
         rule.onAllNodesWithText(s(R.string.download)).assertCountEquals(0)
         back()
 
         open("Mario Kart DS")
+        fits("Mario Kart DS", 2) // the title: the short name, whole
+        rule.onNodeWithText(s(R.string.file_row, "$KART.rom")).assertExists() // the full file name, once
         rule.onNodeWithText(s(R.string.why_to_download)).assertExists()
         rule.onNodeWithText(s(R.string.uploaded_by, "PC")).assertExists()
         rule.onNodeWithText(s(R.string.download)).performScrollTo()
@@ -427,6 +610,7 @@ open class UiTest {
 
         open("Wario")
         rule.onNodeWithText(s(R.string.why_unknown)).assertExists()
+        rule.onNodeWithText(s(R.string.show_details)).performScrollTo().performClick()
         rule.onNodeWithText("read error", substring = true).assertExists()
         back()
 
@@ -440,6 +624,7 @@ open class UiTest {
     // play times. A 412 reads the list again; a Restore changes only the server, then the game shows To download.
     @Test
     fun historyAndRestore() {
+        onlyNormalFont()
         val key = "3DS-0004000000164800"
         val old = mainSunMoon(3, 4, "Red")
         val v1 = "000001-20261101T080000Z-3ds-${sha256(old)}.sav"
@@ -505,6 +690,7 @@ open class UiTest {
         rule.onNode(hasText(s(R.string.restore)) and dialog).performClick()
         waitFor(s(R.string.p_server_changed))
         rule.onNodeWithText(s(R.string.restore_failed)).assertExists()
+        rule.onNodeWithText(s(R.string.show_details)).performClick()
         rule.onNodeWithText("HTTP 412", substring = true).assertExists()
         rule.waitUntil(15_000) { lists() == read + 1 }
         waitFor(row1)
@@ -532,7 +718,7 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
         rule.onNodeWithText(s(R.string.reminder_text)).assertExists()
         fits(s(R.string.dont_show_again))
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
         rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists() // then the usual confirmation
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
 
@@ -546,7 +732,7 @@ open class UiTest {
         App.reminded = false // the app starts again
         rule.onNodeWithText(s(R.string.sync_all)).performClick()
         rule.onNodeWithText(s(R.string.dont_show_again)).performClick()
-        rule.onNode(hasText(s(R.string.ok)) and dialog).performClick()
+        rule.onNode(hasText(s(R.string.go_on)) and dialog).performClick()
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
         assertTrue(Settings(ctx).noReminder)
 
@@ -628,6 +814,7 @@ open class UiTest {
     // name does not. Removing the entry deletes them (ADR 0026).
     @Test
     fun emulatorChangesForgetTheBases() {
+        onlyNormalFont()
         val custom = Emulator("custom", CUSTOM.id, "Mine", mapOf(System.GBA to Folders()))
         val melon = Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(nextToRom = true)))
         val ra = Emulator("retroarch", "retroarch", "", mapOf(System.GBA to Folders()))
@@ -728,6 +915,10 @@ open class UiTest {
         rule.onAllNodesWithContentDescription(s(R.string.back)).assertCountEquals(0) // back on the list, read again
     }
 }
+
+// The largest font size of Android 14+ (200 %), on the same small screen: texts wrap, nothing is cut.
+@Config(qualifiers = "fr-w320dp-h640dp", fontScale = 2f)
+class UiFrLargeFontTest : UiTest()
 
 @Config(qualifiers = "fr-w320dp-h640dp")
 class UiFrSmallTest : UiTest() {

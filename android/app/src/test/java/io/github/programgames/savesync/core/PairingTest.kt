@@ -36,4 +36,14 @@ class PairingTest {
         }
         assertNull(parsePairing("3dssavesync://serveur?jeton=t"))
     }
+
+    // A typed address without a scheme gets http:// (a home server); one with a scheme stays as it is.
+    @Test
+    fun scheme() {
+        assertEquals("http://192.168.1.20:8080", withScheme(" 192.168.1.20:8080 "))
+        assertEquals("http://nas.local:8080/", withScheme("nas.local:8080/"))
+        assertEquals("https://saves.example.com", withScheme("https://saves.example.com"))
+        assertEquals("HTTP://192.168.1.20", withScheme("HTTP://192.168.1.20"))
+        assertEquals("", withScheme("  "))
+    }
 }

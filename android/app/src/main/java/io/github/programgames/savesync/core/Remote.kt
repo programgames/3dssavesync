@@ -12,9 +12,10 @@ import javax.net.ssl.SSLException
 class HttpException(val request: String, val code: Int) : IOException("$request: HTTP $code")
 
 // Remote is the server, same protocol as the PC (client/remote.go): Bearer token, X-Client, GET /saves, conditional
-// PUT. url: "http://…" or "https://…", never a fixed scheme.
+// PUT. url: "http://…" or "https://…", never a fixed scheme; without one, http:// (withScheme). The connection gives
+// up after 5 s (a home server away from home answers nothing); timeoutMs is the read timeout, long for big saves.
 class Remote(url: String, private val token: String, private val client: String = "android", private val timeoutMs: Int = 30_000) {
-    private val base = url.trim().trimEnd('/')
+    private val base = withScheme(url).trimEnd('/')
 
     // request returns the status and the body. 401 is an exception: no request can go on without the token.
     fun request(method: String, path: String, body: ByteArray? = null, headers: Map<String, String> = emptyMap()): Pair<Int, ByteArray> {
@@ -25,7 +26,7 @@ class Remote(url: String, private val token: String, private val client: String 
         }
         try {
             c.requestMethod = method
-            c.connectTimeout = timeoutMs
+            c.connectTimeout = minOf(timeoutMs, CONNECT_MS)
             c.readTimeout = timeoutMs
             c.instanceFollowRedirects = false
             c.setRequestProperty("Authorization", "Bearer $token")
@@ -101,7 +102,9 @@ class Remote(url: String, private val token: String, private val client: String 
     fun setName(key: String, name: String): Boolean = request("PUT", "/saves/$key/name", name.toByteArray(Charsets.UTF_8)).first == 204
 }
 
-private val versionName = Regex("^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\\.sav$") // client/history.go
+const val CONNECT_MS = 5_000
+
+private val versionName =Regex("^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\\.sav$") // client/history.go
 
 // RESTORE_CLIENT: X-Client of a Restore, so the History shows who put the Version back (client/history.go).
 const val RESTORE_CLIENT = "restauration"

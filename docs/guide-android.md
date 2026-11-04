@@ -27,13 +27,16 @@ With `adb`: `adb pull /sdcard/Android/data/io.github.programgames.savesync/files
 
 ## First start
 
-1. **Settings**: on the PC, open the settings page, **Server**, and click **Show the QR code**. On the phone, tap **Scan the PC's QR code** and point the phone at it. The app fills in the address and token, saves them and tests the connection. The scanner comes from Google Play services: no camera permission, nothing leaves the phone.
-   No QR code (no Google Play services, or no PC settings page at hand)? Type the server address with its scheme and port, for example `http://<PC address>:8080`, and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`.
-2. After a manual entry, tap **Test the connection**. "Connected. The server has N games." means it works. Otherwise the message says what to fix, with the technical detail under it.
-3. **Emulators** > **Add an emulator**, choose yours, then choose its folders (see below).
-4. **Games**: the list shows each game with its state. Tap **Sync all**, or a game for its details.
+The first start opens a guided setup: a welcome screen, then three steps. Each step has **Skip** or **Later**; **Settings** > **Start the guided setup** opens it again.
 
-Plain `http://` is allowed for a server on your home network. An `https://` address works the same way.
+1. **Connect to your server**: on the PC, open the settings page, **Server**, and click **Show the QR code**. On the phone, tap **Scan the PC's QR code** and point the phone at it. The app fills in the address and token, saves them and tests the connection. The scanner comes from Google Play services: no camera permission, nothing leaves the phone.
+   No QR code (no Google Play services, or no PC settings page at hand)? Tap **Type the address** and type the server address with its port, for example `192.168.1.20:8080` (the app adds `http://`; type `https://` yourself if your server uses it), and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`. Then tap **Test the connection**.
+2. **Choose your emulator**: the emulators installed on the phone come first, under **Installed on this phone**.
+3. **Choose its folders**: the same screen as in **Emulators** (see below).
+
+Then **Show my games** opens the list. To add another emulator later: **Emulators** > **Add an emulator**.
+
+Plain `http://` is allowed for a server on your home network. An `https://` address works the same way. The app gives up on a connection after 5 seconds, so a home server that can't be reached (away from home) fails fast.
 
 ## Emulators
 
@@ -41,15 +44,29 @@ The app can only read the folders that you choose with the Android folder picker
 
 | Emulator | Systems | What to choose |
 |---|---|---|
-| **RetroArch** | DS, GB/GBC, GBA | The core you use for each system (the save format depends on it), the ROM folder, and the save folder of that core: `RetroArch/saves/<core name>` (for example `RetroArch/saves/mGBA`) when "Sort saves by core" is on, the default. Play Store version: its saves are in its own storage; in the folder picker, open the side menu, choose **RetroArch**, then `saves`. |
-| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Only the 8 Pokémon games. No ROM folder. If the folder has no `Nintendo 3DS` folder, Azahar was never set up there: the list says so. |
+| **RetroArch** | DS, GB/GBC, GBA | For each system, the core you use (the save format depends on it) and the ROM folder. Then, once, the RetroArch saves folder (`RetroArch/saves`), unless RetroArch writes the saves next to the ROMs. Play Store version: its saves are in its own storage; in the folder picker, open the side menu and choose **RetroArch**. |
 | **melonDS** | DS | The ROM folder. melonDS writes the save next to the ROM by default; if you chose a save folder in melonDS, untick **Saves next to the ROMs** and choose the same folder. |
+| **DraStic** | DS | The ROM folder, then the save folder `DraStic/backup` (`.dsv` files). |
 | **NooDS** | DS, GBA | The ROM folder: NooDS writes the save next to the ROM by default. Its "saves folder" setting puts saves where no other app can read them: keep the default. |
-| **Other emulator** | DS, GB/GBC, GBA | The save folder and the extension of the save files (`.sav`, `.dsv`…). For DraStic, Pizza Boy, My Boy!, My OldBoy!, Linkboy. **Not checked yet**: their folder and format are not documented. Test with a copy of one save first. |
+| **Pizza Boy** | GB/GBC, GBA | Pizza Boy keeps its saves in `Android/data/it.dbtecno.pizzaboy…`, which no other app can open since Android 11 (see below). If your version of Pizza Boy lets you choose its save folder, choose a folder outside `Android/data` there, then choose the same folder in the app, with the ROM folder. **Not checked yet** (save names `<ROM name>.sav` assumed): test with a copy of one save first. |
+| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Only the 8 Pokémon games. No ROM folder. If the folder has no `Nintendo 3DS` folder, Azahar was never set up there: the list says so. |
+| **Other emulator** | DS, GB/GBC, GBA | The save folder and the extension of the save files (`.sav`, `.dsv`…). For My Boy!, My OldBoy!, Linkboy and others. **Not checked**: test with a copy of one save first. |
+
+An emulator that handles several systems has a box per system: untick the ones you don't play, so that the app asks for nothing more. The last system can't be unticked.
+
+The folder picker opens where the emulator usually keeps its folders when that folder exists (`RetroArch/saves`, `DraStic/backup`, `roms/nds`, `roms`…), or at the folder you chose before (Android 8 and later). After each choice, one line says what the app found there:
+
+- "4 of 5 games have a save here.": the folder is right.
+- "No game found in this folder" or "No save found in this folder": check that it is the right one. The most frequent mistake is a parent or a sibling folder.
+- "This folder is in Android/data": since Android 11, Android closes these private folders to other apps. Set the emulator to save in another folder, then choose that one.
+
+A folder on an SD card shows **SD card** before its path. If the card is out, the folder shows as not found: insert the card.
 
 RetroArch supports these cores, with the same formats as on the PC: melonDS DS and DeSmuME (DS); Gambatte, SameBoy, mGBA, VBA-M (GB); mGBA, gpSP, Beetle GBA, VBA-M (GBA). gpSP and Beetle GBA write a fixed-size file: a game must first be on the server, uploaded from another emulator, before they can sync it ([ADR 0011](adr/0011-srm-gpsp-beetle-taille-du-serveur.md)).
 
-**Not supported:** Lemuroid and SkyEmu. They keep their saves in `Android/data`, and since Android 11 no other app can open that folder, with or without "All files access". The same may apply to some versions of Pizza Boy and My Boy!: use their export feature to a normal folder, or a setting that moves the saves.
+**RetroArch saves.** The app looks for the save of each game in three places: the folder of the chosen core in the saves folder (`RetroArch/saves/mGBA`, "Sort saves into folders by core", the default), the saves folder itself (that option off), and next to the ROM ("Write saves to content directory"). It never takes the save of another core. If two places have a save, it takes the newest one: the one RetroArch writes now. A game with no save yet gets its first one in the core folder if it exists, else in the saves folder, else next to the ROM. Not supported: "Sort saves into folders by content directory".
+
+**Not supported:** Lemuroid and SkyEmu. They keep their saves in `Android/data`, and since Android 11 no other app can open that folder, with or without "All files access". The same applies to Pizza Boy and My Boy! unless they can save elsewhere.
 
 The folder picker cannot choose the root of the internal storage or the `Download` folder itself: choose a folder inside it.
 
@@ -57,7 +74,7 @@ When you change a folder, a core, an extension, the systems or **Saves next to t
 
 ## Games
 
-Each line shows the state, the system and the game. The states are the same words as on the 3DS:
+Each line shows the short name of the game, as on the 3DS ("Mario Kart DS", without "(Europe) (En,Fr,De,Es,It)"), then its state and its system. The full file name is in the game details. Pull the list down to read the folders and the server again (TalkBack: the **Refresh** action of the list). The states are the same words as on the 3DS:
 
 | State | Meaning | Action |
 |---|---|---|
@@ -69,9 +86,11 @@ Each line shows the state, the system and the game. The states are the same word
 | **Duplicate** (grey) | Two ROMs hold the same game, or would use the same save file. | Same game: keep one ROM. A ROM hack: give it its own save (see [ROM hacks](#rom-hacks)). Same save file: rename one ROM. |
 | **Unknown** (grey) | The server or the save could not be read. | The message says why. |
 
-Games with no save anywhere are hidden; a line at the end of the list counts them. Use the chips (**All**, **To do**, **DS**, **GB**, **GBA**, **3DS**) and the search field (accents ignored) to find a game.
+Games with no save anywhere are hidden; a line at the end of the list counts them. Use the chips (**All**, **To do**, and one per system when your emulators have several) and the search field (accents ignored) to find a game.
 
-**Sync all** syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
+When the server can't be read, one banner says why, with **Retry**. The games that have no save on this phone are hidden until the server answers: the app can't tell if the server has one. Every error shows the same way: what happened and what to do, **Retry** when it helps, and the technical detail (exception, address, HTTP code) behind **Show details**, to report a problem.
+
+**Sync all** is greyed out with its reason next to it: **Nothing to sync** (no game to upload or download) or **Server unreachable**. It syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
 
 **Close the emulator before you sync.** Android gives no way to see if an emulator is running. An open emulator keeps the save in memory and writes it back later: RetroArch does it every few seconds while a game runs. It would write the old progress back over a downloaded save. So the app protects the saves it writes (Download, **Use the server save**, the downloads of Sync all):
 
@@ -185,4 +204,4 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-The APK is in `android/app/build/outputs/apk/debug/`. `./gradlew assembleRelease` builds a shrunk (R8) release APK; it is unsigned unless `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` are set. `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME` set its version (default 1 and `dev`). The CI signs the release APK of each tag with the project key. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). The UI tests run every screen on the computer with Robolectric, in English and in French, on a small screen. The storage tests run the real folder code (scan, replace with its backup copy, 3DS folder creation) against a test document provider over a temporary folder: no emulator or phone needed (the first run downloads Robolectric and its Android library). Design choices: [ADR 0026](adr/0026-client-android.md).
+The APK is in `android/app/build/outputs/apk/debug/`. `./gradlew assembleRelease` builds a shrunk (R8) release APK; it is unsigned unless `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` are set. `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME` set its version (default 1 and `dev`). The CI signs the release APK of each tag with the project key. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). The UI tests run every screen on the computer with Robolectric, in English, then in French on a small screen (320 dp), at the normal and at the largest font size (200 %). The storage tests run the real folder code (scan, replace with its backup copy, 3DS folder creation) against a test document provider over a temporary folder: no emulator or phone needed (the first run downloads Robolectric and its Android library). Design choices: [ADR 0026](adr/0026-client-android.md).

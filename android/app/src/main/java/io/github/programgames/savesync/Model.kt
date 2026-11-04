@@ -40,6 +40,7 @@ import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
+import io.github.programgames.savesync.core.shortName
 import io.github.programgames.savesync.core.splitDuplicates
 import io.github.programgames.savesync.core.titles3DS
 import kotlinx.coroutines.CoroutineScope
@@ -66,12 +67,16 @@ data class Entry(
     val sharedFile: Boolean = false, // Duplicate because the ROMs would use one Save file (else: same Key)
     val status: Status? = null,
     val error: Throwable? = null,
+    val noLocal: Boolean = false, // server not read and no save on this phone: hidden until the server answers
 ) {
     val id get() = emulator.id + "|" + system + "|" + rom // one line of the list
+
+    val short get() = shortName(name) // the name the list shows, as on the 3DS
 
     val shown: Shown
         get() = when {
             game == null -> Shown.DUPLICATE
+            noLocal && status == null -> Shown.NONE
             error != null || status == null -> Shown.UNKNOWN
             status.interrupted != null -> Shown.INTERRUPTED
             else -> when (status.state) {
@@ -270,7 +275,8 @@ object App {
 
     private fun statuses(list: List<Entry>, s: Syncer): List<Entry> = list.mapIndexed { i, e ->
         busy = text(R.string.reading_saves, i + 1, list.size)
-        if (e.game == null || serverError != null) e.copy(status = null, error = null)
+        if (e.game == null) e.copy(status = null, error = null)
+        else if (serverError != null) e.copy(status = null, error = null, noLocal = !runCatching { e.game.file.exists() }.getOrDefault(true))
         else runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) })
     }
 
@@ -356,7 +362,7 @@ object App {
                 try {
                     if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
                 } catch (t: Throwable) {
-                    problems += text(R.string.folder_problem, "${e.label} ${s.name}: $t")
+                    problems += text(R.string.folder_problem, "${e.title()} ${s.label}") // human words only: no exception text
                 }
             }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })
@@ -371,13 +377,50 @@ object App {
         return all.sortedBy { it.name.lowercase() } to problems
     }
 
+    // folderResult is the line under the folders of one System after a pick: how many games have a save there, or why
+    // there is none. null: a folder is still to choose. Reads the folders like a refresh (call it off the main thread).
+    internal fun folderResult(e: Emulator, s: System): String? {
+        val f = e.systems[s] ?: return null
+        val trees = listOfNotNull(f.roms.takeIf { s != System.N3DS }, f.saves.takeIf { !f.nextToRom }).map { it.toUri() }
+        if (trees.any { rootId(it).contains("Android/data", ignoreCase = true) }) return text(R.string.folder_android_data)
+        if (if (s == System.N3DS) f.saves == null else f.roms == null) return null
+        val found = mutableListOf<Pair<Entry, String>>()
+        val problems = mutableListOf<String>()
+        try {
+            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
+        } catch (_: Exception) {
+            return text(R.string.folder_unreadable)
+        }
+        problems.firstOrNull()?.let { return it }
+        val saves = found.count { it.first.game!!.file.exists() }
+        return when {
+            found.isEmpty() -> text(R.string.folder_no_game)
+            saves > 0 -> context.resources.getQuantityString(R.plurals.folder_found, saves, saves, found.size)
+            e.profile == RETROARCH && f.saves == null -> text(R.string.folder_no_save_retroarch)
+            else -> text(R.string.folder_no_save)
+        }
+    }
+
     // scan walks the ROM folder of one System (subfolders too, hidden ones skipped) and pairs each ROM with its Save.
+    // RetroArch: its saves folder is optional; the Save is in the folder of the core there ("Sort saves into folders by
+    // core"), at its root, or next to the ROM ("Write saves to content directory"). Several of them: the newest, the one
+    // RetroArch writes now. None: a new Save goes to the first of these places that exists.
     private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
         val aliases = aliases
         val romTree = (f.roms ?: return).toUri()
-        val saveTree = if (f.nextToRom) romTree else (f.saves ?: return).toUri()
+        val retro = e.profile == RETROARCH
+        val saveTree = when {
+            retro -> f.saves?.toUri()
+            f.nextToRom -> romTree
+            else -> (f.saves ?: return).toUri()
+        }
+        val core = if (retro && saveTree != null) {
+            val label = e.variant(s).label
+            children(resolver, saveTree, rootId(saveTree)).find { it.folder && it.name.equals(label, ignoreCase = true) }?.id
+        } else null
         val format = e.format(s)
-        val saves = mutableMapOf<String, List<Doc>>()
+        val lists = mutableMapOf<String, List<Doc>>() // "tree|folder" -> its files
+        fun files(tree: Uri, folder: String) = lists.getOrPut("$tree|$folder") { children(resolver, tree, folder).filter { !it.folder } }
         fun walk(parent: String, depth: Int) {
             for (d in children(resolver, romTree, parent)) {
                 if (d.name.startsWith(".")) continue
@@ -398,11 +441,19 @@ object App {
                     continue
                 }
                 val file = name + format.ext
-                val folder = if (f.nextToRom) parent else rootId(saveTree)
-                val doc = saves.getOrPut(folder) { children(resolver, saveTree, folder).filter { !it.folder } }
-                    .let { l -> l.find { it.name == file } ?: l.find { it.name.equals(file, ignoreCase = true) } }
-                val g = Game(s, key, name, SafFile(resolver, saveTree, folder, file, doc?.id, doc?.modified), format, e.id)
-                out += Entry(e, s, name, d.name, g) to "$saveTree|$folder|$file"
+                val places = when {
+                    retro -> listOfNotNull(core?.let { saveTree!! to it }, saveTree?.let { it to rootId(it) }, romTree to parent)
+                    f.nextToRom -> listOf(romTree to parent)
+                    else -> listOf(saveTree!! to rootId(saveTree))
+                }
+                val found = places.mapNotNull { (t, folder) ->
+                    files(t, folder).let { l -> l.find { it.name == file } ?: l.find { it.name.equals(file, ignoreCase = true) } }?.let { Triple(t, folder, it) }
+                }
+                // ponytail: the newest date decides between two copies; a copy made by a file manager gets a new date.
+                // Ask (a Conflict "two files") if real phones show such copies.
+                val (tree, folder, doc) = found.maxByOrNull { it.third.modified ?: 0L } ?: places.first().let { Triple(it.first, it.second, null) }
+                val g = Game(s, key, name, SafFile(resolver, tree, folder, file, doc?.id, doc?.modified), format, e.id)
+                out += Entry(e, s, name, d.name, g) to "$tree|$folder|$file"
             }
         }
         walk(rootId(romTree), 0)

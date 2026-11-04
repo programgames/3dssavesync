@@ -28,8 +28,13 @@ data class Emulator(val id: String, val profile: String, val label: String, val 
             val ext = f.ext.trim().let { if (it.startsWith(".")) it else ".$it" }
             return Format(ext, dsvFooter = ext.equals(".dsv", ignoreCase = true)) // a new .dsv gets the DeSmuME footer
         }
+        return variant(s).format
+    }
+
+    // variant: the core chosen for a System (the first one if the Profile has fewer now).
+    fun variant(s: System): Variant {
         val v = profile().systems.getValue(s)
-        return v[f.variant.coerceIn(v.indices)].format
+        return v[systems.getValue(s).variant.coerceIn(v.indices)]
     }
 }
 
@@ -49,6 +54,11 @@ class Settings(context: Context) {
     var noReminder: Boolean
         get() = p.getBoolean("noReminder", false)
         set(v) = p.edit { putBoolean("noReminder", v) }
+
+    // setupDone: the guided first run was finished or put off; it then shows only from Settings.
+    var setupDone: Boolean
+        get() = p.getBoolean("setupDone", false)
+        set(v) = p.edit { putBoolean("setupDone", v) }
 
     // background: the user turned on the background upload (Background.kt). Off by default.
     var background: Boolean

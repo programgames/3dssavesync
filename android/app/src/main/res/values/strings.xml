@@ -8,21 +8,21 @@
     <string name="tab_settings">Settings</string>
     <string name="back">Back</string>
     <string name="cancel">Cancel</string>
-    <string name="ok">OK</string>
-    <string name="confirm">Confirm</string>
+    <string name="go_on">Continue</string>
+    <string name="close">Close</string>
+    <string name="replace">Replace</string>
 
     <!-- Settings -->
     <string name="settings_title">Server</string>
     <string name="server_address">Server address</string>
-    <string name="server_address_help">The address of your 3dssavesync server, with http:// or https:// and the port.</string>
-    <string name="address_scheme">Start the address with http:// or https://.</string>
+    <string name="server_address_help">Your 3dssavesync server and its port, for example 192.168.1.20:8080. Add https:// if it uses it.</string>
     <string name="token">Token</string>
     <string name="show">Show</string>
     <string name="hide">Hide</string>
     <string name="scan_qr">Scan the PC\'s QR code</string>
-    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". Or type the address and token below.</string>
-    <string name="scan_cancelled">Scan cancelled. Scan again, or type the address and token below.</string>
-    <string name="scan_unavailable">The QR code scanner isn\'t available on this phone. It needs Google Play services, and the first time it may still be downloading. Try again in a minute, or type the address and token below.</string>
+    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". Or type the address and token.</string>
+    <string name="scan_cancelled">Scan cancelled. Scan again, or type the address and token.</string>
+    <string name="scan_unavailable">The QR code scanner isn\'t ready on this phone (it needs Google Play services). Try again in a minute, or type the address and token.</string>
     <string name="scan_not_ours">This isn\'t the 3dssavesync QR code. Scan the one the PC shows in its settings, under Server.</string>
     <string name="test_connection">Test the connection</string>
     <string name="testing">Testing the connection…</string>
@@ -33,6 +33,26 @@
     <string name="backups_title">Backup copies</string>
     <string name="backups_where">Before it replaces a save, the app keeps a copy of it here, one folder per emulator. Connect the phone to a computer over USB to see them (Android/data folder). Uninstalling the app deletes these copies: to update the app, install the new APK over the old one.</string>
     <string name="version">3dssavesync for Android %1$s</string>
+
+    <string name="type_address">Type the address</string>
+    <string name="setup_again">Start the guided setup</string>
+
+    <!-- Guided first run -->
+    <string name="welcome_title">Welcome</string>
+    <string name="welcome_text">3dssavesync keeps your game saves the same on this phone, your 3DS and your PC. Three short steps set it up: your server, your emulator, its folders.</string>
+    <string name="setup_start">Start</string>
+    <string name="later">Later</string>
+    <string name="next">Next</string>
+    <string name="skip">Skip</string>
+    <string name="setup_step">Step %1$d of %2$d</string>
+    <string name="setup_server">Connect to your server</string>
+    <string name="setup_emulator">Choose your emulator</string>
+    <string name="setup_emulator_help">Which emulator do you play with? You can add others later in Emulators.</string>
+    <string name="setup_folders">Choose its folders</string>
+    <string name="setup_done_title">All set</string>
+    <string name="setup_done_text">Your games are in the Games tab. Pull the list down to read it again.</string>
+    <string name="setup_done_no_server">Connect to your server in Settings when you want: the games then show their state.</string>
+    <string name="show_games">Show my games</string>
 
     <!-- Emulators -->
     <string name="emulators_title">Emulators</string>
@@ -52,7 +72,7 @@
     <string name="next_to_rom">Saves next to the ROMs</string>
     <string name="choose">Choose</string>
     <string name="folder_ready">Ready</string>
-    <string name="folder_missing">Folder missing: choose it again</string>
+    <string name="folder_missing">Folder not found. If it\'s on an SD card, insert the card; else choose the folder again.</string>
     <string name="folder_no_permission">No permission: choose the folder again</string>
     <string name="folder_not_set">Folder not chosen yet</string>
     <string name="folder_checking">Checking…</string>
@@ -60,14 +80,31 @@
     <string name="system_gb">Game Boy and Game Boy Color</string>
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
-    <string name="hint_retroarch">RetroArch keeps its saves in RetroArch/saves, in one folder per core (mGBA, Gambatte…). Choose that core folder as the save folder. Play Store version: in the folder picker, open the menu, choose RetroArch, then saves. Close RetroArch before you sync: it writes the save every few seconds.</string>
-    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. For a game never started in Azahar, the app creates its folder with the save of the server. Close Azahar before you sync.</string>
-    <string name="hint_melonds">melonDS writes the save next to the ROM by default (setting \"Save next to ROM\"). If you chose another save folder in melonDS, untick \"Saves next to the ROMs\" and choose the same folder here.</string>
-    <string name="hint_noods">NooDS writes the save next to the ROM by default. Its other setting (saves folder) puts them where no other app can read them: keep the default.</string>
-    <string name="hint_custom">For DraStic, Pizza Boy, My Boy!, Linkboy and others: choose the folder where the emulator writes its saves and type their extension (.sav, .dsv). These emulators are not checked yet: try with a copy of one save first. Some keep their saves in Android/data, which no other app can open.</string>
+    <string name="hint_retroarch">Choose the ROM folder of each system. If RetroArch keeps its saves in RetroArch/saves (the default), also choose that folder once: the app finds the folder of each core in it. Play Store version: in the folder picker, open the menu and choose RetroArch. Close RetroArch before you sync.</string>
+    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. Close Azahar before you sync.</string>
+    <string name="hint_melonds">melonDS saves next to the ROM by default: choose the ROM folder. If you set another save folder in melonDS, untick \"Saves next to the ROMs\" and choose that folder.</string>
+    <string name="hint_drastic">DraStic keeps its saves in DraStic/backup (.dsv files). Choose the ROM folder, then that backup folder. Close DraStic before you sync.</string>
+    <string name="hint_noods">NooDS saves next to the ROM by default: choose the ROM folder. Keep that setting: its other save folder is closed to other apps.</string>
+    <string name="hint_pizzaboy">Pizza Boy keeps its saves in its private folder (Android/data/it.dbtecno.pizzaboy…), and Android 11 and later close that folder to other apps. If your version of Pizza Boy lets you choose its save folder, choose a folder outside Android/data there, then choose the same folder here.</string>
+    <string name="hint_custom">Choose the folder where the emulator writes its saves, and type their extension (.sav, .dsv). This emulator is not checked: before your first sync, copy its save folder to another place with a file manager.</string>
+    <string name="installed_emulators">Installed on this phone</string>
+    <string name="other_emulators">Other emulators</string>
+    <string name="systems_used">Systems you play with this emulator</string>
+    <string name="retroarch_saves">RetroArch saves folder (optional)</string>
+    <string name="sd_card">SD card</string>
+    <string name="no_picker">This phone has no folder picker, so the app can\'t open a folder.</string>
+    <plurals name="folder_found">
+        <item quantity="one">%1$d of %2$d games has a save here.</item>
+        <item quantity="other">%1$d of %2$d games have a save here.</item>
+    </plurals>
+    <string name="folder_no_game">No game found in this folder. Is it the right one?</string>
+    <string name="folder_no_save">No save found in this folder. Is it the right one?</string>
+    <string name="folder_no_save_retroarch">No save found next to these ROMs. If RetroArch keeps them in RetroArch/saves, choose that folder above.</string>
+    <string name="folder_android_data">This folder is in Android/data. Android 11 and later close these private folders to other apps. Set the emulator to save in another folder, then choose that folder here.</string>
+    <string name="folder_unreadable">This folder can\'t be read. If it\'s on an SD card, insert the card. If the emulator keeps its saves in Android/data, set it to save in another folder: Android 11 and later close Android/data to other apps.</string>
 
     <!-- Games -->
-    <string name="need_server">Set the server address and the token first.</string>
+    <string name="need_server">Connect the app to your 3dssavesync server first.</string>
     <string name="open_settings">Open the settings</string>
     <string name="need_emulator">Add an emulator and choose its folders first.</string>
     <string name="refresh">Refresh</string>
@@ -77,14 +114,20 @@
     <string name="reading_saves">Reading the saves: %1$d of %2$d</string>
     <string name="syncing">Syncing…</string>
     <string name="syncing_game">Syncing %1$d of %2$d: %3$s</string>
-    <string name="server_not_read">The server wasn\'t read, so the states are unknown.</string>
-    <string name="folder_problem">Folder not read: %1$s. Choose it again in Emulators.</string>
+    <string name="sync_off_server">Server unreachable</string>
+    <string name="sync_off_nothing">Nothing to sync</string>
+    <string name="hidden_offline">Games without a save on this phone are hidden until the server answers.</string>
+    <string name="retry">Retry</string>
+    <string name="show_details">Show details</string>
+    <string name="hide_details">Hide details</string>
+    <string name="open_emulators">Open the emulators</string>
+    <string name="folder_problem">%1$s: this folder can\'t be read. Choose it again in Emulators.</string>
     <string name="azahar_not_set_up">%1$s: no Nintendo 3DS folder in the chosen folder, so Azahar was never set up there. Start Azahar once, or choose its user folder again in Emulators.</string>
     <string name="search">Search a game</string>
     <string name="filter_all">All</string>
     <string name="filter_todo">To do</string>
     <string name="no_match">No game matches this search or filter.</string>
-    <string name="no_game">No game found. Check the ROM folders in Emulators.</string>
+    <string name="no_game">No game found in the ROM folders.</string>
     <plurals name="hidden_games">
         <item quantity="one">%1$d game has no save yet, on this phone or on the server: it is not shown.</item>
         <item quantity="other">%1$d games have no save yet, on this phone or on the server: they are not shown.</item>
@@ -148,12 +191,7 @@
     <string name="age_min">%1$d min ago</string>
     <string name="age_h">%1$d h ago</string>
     <string name="age_d">%1$d d ago</string>
-    <string name="last_sync">Last sync:</string>
-    <string name="base_never">never</string>
-    <string name="base_both">same version as both</string>
-    <string name="base_phone">same version as this phone</string>
-    <string name="base_server">same version as the server</string>
-    <string name="base_differs">differs from both</string>
+    <string name="file_row">File: %1$s</string>
     <string name="upload">Upload</string>
     <string name="download">Download</string>
     <string name="confirm_download">The server version will replace the save on this phone. A backup copy is made first. Close the emulator before you continue.</string>
@@ -174,7 +212,7 @@
     <string name="done_copy_restored">The backup copy is back in place.</string>
     <string name="done_failed">Sync failed.</string>
 
-    <!-- Problems: what happened and what to do; the technical detail follows on its own line -->
+    <!-- Problems: what happened and what to do; the technical detail is behind "Show details" -->
     <string name="p_token">The server rejected this token. Copy the exact token from the server into the settings.</string>
     <string name="p_not_server">This address isn\'t a 3dssavesync server. Check it in the settings.</string>
     <string name="p_too_large">Save too large for the server. Raise the size limit on the server or its proxy.</string>
@@ -183,7 +221,7 @@
     <string name="p_unexpected">The server sent an unexpected response. Check its address in the settings.</string>
     <string name="p_certificate">The server\'s certificate isn\'t valid. Check the address (https://) and the date of the phone.</string>
     <string name="p_no_host">Can\'t find the server. Check the Wi-Fi connection and the server address.</string>
-    <string name="p_refused">The server refused the connection. It may be stopped, or the port is wrong. Start the server or check the address.</string>
+    <string name="p_refused">The server refused the connection. Check that it\'s running and that the address and port are right.</string>
     <string name="p_no_response">The server isn\'t responding. Check the Wi-Fi connection and the server address.</string>
     <string name="p_damaged">The save from the server arrived incomplete, so yours wasn\'t replaced. Try again.</string>
     <string name="p_busy">Another device is uploading this save at the same time. Try again in a moment.</string>
@@ -230,7 +268,7 @@
     <!-- Background upload -->
     <string name="bg_title">Background upload</string>
     <string name="bg_switch">Upload saves in the background</string>
-    <string name="bg_help">About every 15 minutes, with a network and a battery that is not low, the app uploads the saves you played on this phone. It never downloads and never replaces a save on this phone: use Sync all for that. A save changed in the last 30 seconds waits for the next run. Each run uses a little battery and data.</string>
+    <string name="bg_help">About every 15 minutes, the app uploads the saves you played on this phone. It never downloads and never replaces a save here: open the app and tap Sync all for that.</string>
     <string name="bg_no_notification">Notifications are off: the problems show only here.</string>
     <string name="bg_never">No background run yet.</string>
     <plurals name="bg_last">

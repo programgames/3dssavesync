@@ -73,6 +73,18 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableIntStateOf
+import kotlinx.coroutines.launch
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.aliasExamples
@@ -94,9 +106,16 @@ fun Root() {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var hacks by rememberSaveable { mutableStateOf(false) }
+    // the guided first run: at the first start without a server, or from Settings
+    var setup by rememberSaveable { mutableStateOf(!App.configured() && !App.settings.setupDone) }
     val o = App.entries.find { it.id == open }
     val ed = editing
     when {
+        setup -> SetupScreen {
+            App.settings.setupDone = true
+            setup = false
+            tab = Tab.GAMES
+        }
         o != null -> {
             val close = {
                 open = null
@@ -129,7 +148,7 @@ fun Root() {
             when (tab) {
                 Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
                 Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
-                Tab.SETTINGS -> SettingsScreen(p) { hacks = true }
+                Tab.SETTINGS -> SettingsScreen(p, { setup = true }) { hacks = true }
             }
         }
     }
@@ -166,13 +185,29 @@ fun problemText(p: Problem) = when (p) {
     Problem.OTHER -> R.string.p_other
 }
 
-// ErrorText: the text for the user, then the technical detail on its own line (to report it).
+// ErrorBox: what happened and what to do in plain words, Retry when the action can run again, and the technical detail
+// (exception, address, HTTP code) only behind "Show details", to report it. lead: which action failed; note: one more
+// line about the screen (hidden games).
 @Composable
-fun ErrorText(t: Throwable, lead: String? = null) {
-    Column(Modifier.padding(vertical = 4.dp)) {
-        if (lead != null) Text(lead, color = MaterialTheme.colorScheme.error)
-        Text(stringResource(problemText(problem(t))), color = MaterialTheme.colorScheme.error)
-        Text(t.message ?: t.toString(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+fun ErrorBox(t: Throwable, lead: String? = null, note: String? = null, retry: (() -> Unit)? = null) {
+    var details by rememberSaveable { mutableStateOf(false) }
+    val c = MaterialTheme.colorScheme.onErrorContainer
+    Surface(Modifier.fillMaxWidth().padding(vertical = 4.dp), MaterialTheme.shapes.medium, MaterialTheme.colorScheme.errorContainer) {
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (lead != null) Text(lead, Modifier.padding(end = 8.dp), color = c, fontWeight = FontWeight.Bold)
+            Text(stringResource(problemText(problem(t))), Modifier.padding(end = 8.dp), color = c)
+            note?.let { Text(it, Modifier.padding(top = 4.dp, end = 8.dp), color = c, style = MaterialTheme.typography.bodySmall) }
+            FlowRow {
+                val colors = ButtonDefaults.textButtonColors(contentColor = c)
+                retry?.let { TextButton(it, colors = colors) { Text(stringResource(R.string.retry)) } }
+                TextButton({ details = !details }, colors = colors) { Text(stringResource(if (details) R.string.hide_details else R.string.show_details)) }
+            }
+            if (details) {
+                SelectionContainer {
+                    Text(t.message ?: t.toString(), Modifier.padding(end = 8.dp, bottom = 8.dp), color = c, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
     }
 }
 
@@ -192,15 +227,39 @@ var scanQr: (Context, (Result<String?>) -> Unit) -> Unit = { ctx, done ->
 }
 
 @Composable
-fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
+fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
+    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Title(stringResource(R.string.tab_settings))
+        Text(stringResource(R.string.settings_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        ServerFields(manual = true)
+        HorizontalDivider()
+        BackgroundSection()
+        HorizontalDivider()
+        Text(stringResource(R.string.backups_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.backups_where))
+        Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+        HorizontalDivider()
+        Text(stringResource(R.string.hacks_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.hacks_text))
+        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
+        HorizontalDivider()
+        OutlinedButton(onSetup) { Text(stringResource(R.string.setup_again)) }
+        Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// ServerFields: "Scan the PC's QR code" first, the address and token typed by hand as the other way (shown at once
+// when manual, else behind "Type the address"), and the connection test.
+@Composable
+fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
     val ctx = LocalContext.current
     var url by rememberSaveable { mutableStateOf(App.settings.url) }
     var token by rememberSaveable { mutableStateOf(App.settings.token) }
     var show by remember { mutableStateOf(false) }
+    var typing by rememberSaveable { mutableStateOf(manual) }
     var result by remember { mutableStateOf<Result<Int>?>(null) }
     var scanned by remember { mutableStateOf<Int?>(null) } // why the last scan filled nothing
-    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Title(stringResource(R.string.settings_title))
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Button({
             scanned = null
             scanQr(ctx) { r ->
@@ -216,7 +275,7 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
                     token = pairing.token
                     App.settings.url = pairing.url
                     App.settings.token = pairing.token
-                    App.serverChanged()
+                    App.serverChanged().also { changed() }
                     result = null
                     App.testConnection { result = it }
                 }
@@ -224,22 +283,23 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
         }, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
         Text(stringResource(scanned ?: R.string.scan_help), style = MaterialTheme.typography.bodySmall,
             color = if (scanned == null) Color.Unspecified else MaterialTheme.colorScheme.error)
-        OutlinedTextField(
+        if (!typing) OutlinedButton({ typing = true }) { Text(stringResource(R.string.type_address)) }
+        if (typing) OutlinedTextField(
             url, {
                 url = it
                 App.settings.url = it
-                App.serverChanged()
+                App.serverChanged().also { changed() }
                 result = null
             },
             Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.server_address)) },
-            placeholder = { Text("http://…:8080") }, supportingText = { Text(stringResource(R.string.server_address_help)) },
+            placeholder = { Text("192.168.1.20:8080") }, supportingText = { Text(stringResource(R.string.server_address_help)) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         )
-        OutlinedTextField(
+        if (typing) OutlinedTextField(
             token, {
                 token = it
                 App.settings.token = it
-                App.serverChanged()
+                App.serverChanged().also { changed() }
                 result = null
             },
             Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.token)) }, singleLine = true,
@@ -247,25 +307,77 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = { TextButton({ show = !show }) { Text(stringResource(if (show) R.string.hide else R.string.show)) } },
         )
-        val valid = url.trim().startsWith("http://") || url.trim().startsWith("https://")
-        if (url.isNotBlank() && !valid) Text(stringResource(R.string.address_scheme), color = MaterialTheme.colorScheme.error)
-        Button({ App.testConnection { result = it } }, enabled = App.busy == null && valid && token.isNotBlank()) {
-            Text(stringResource(R.string.test_connection))
+        if (typing) {
+            Button({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
+                Text(stringResource(R.string.test_connection))
+            }
         }
         App.busy?.let { Text(it) }
-        result?.fold({ Text(pluralStringResource(R.plurals.connected, it, it)) }, { ErrorText(it) })
-        HorizontalDivider()
-        BackgroundSection()
-        HorizontalDivider()
-        Text(stringResource(R.string.backups_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.backups_where))
-        Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        HorizontalDivider()
-        Text(stringResource(R.string.hacks_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.hacks_text))
-        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
-        HorizontalDivider()
-        Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+        result?.fold(
+            { Text(pluralStringResource(R.plurals.connected, it, it), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = stateColor(Shown.IN_SYNC)) },
+            { ErrorBox(it, retry = { App.testConnection { r -> result = r } }) },
+        )
+    }
+}
+
+// SetupScreen: the guided first run. A welcome, then three steps (server, emulator, its folders); each one can be
+// skipped, and Settings starts it again. done: finished or put off.
+@Composable
+fun SetupScreen(done: () -> Unit) {
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var emulator by rememberSaveable { mutableStateOf<String?>(null) } // the entry added at step 2
+    BackHandler(step > 0) {
+        if (step == 3) emulator?.let { id -> // back to the choice: an entry without any folder was a wrong tap
+            if (App.emulators.find { it.id == id }?.systems?.values?.all { it.roms == null && it.saves == null } == true) App.removeEmulator(id)
+            emulator = null
+        }
+        step = if (step == 4 && emulator == null) 2 else step - 1
+    }
+    Scaffold { p ->
+        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            @Composable
+            fun header(n: Int, title: Int) {
+                Text(stringResource(R.string.setup_step, n, 3), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+            }
+            when (step) {
+                0 -> {
+                    Text(stringResource(R.string.welcome_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(R.string.welcome_text))
+                    Button({ step = 1 }) { Text(stringResource(R.string.setup_start)) }
+                    TextButton(done) { Text(stringResource(R.string.later)) }
+                }
+                1 -> {
+                    header(1, R.string.setup_server)
+                    var configured by remember { mutableStateOf(App.configured()) } // the settings are not Compose state
+                    ServerFields(manual = false) { configured = App.configured() }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button({ step = 2 }, enabled = configured) { Text(stringResource(R.string.next)) }
+                        TextButton({ step = 2 }) { Text(stringResource(R.string.skip)) }
+                    }
+                }
+                2 -> {
+                    header(2, R.string.setup_emulator)
+                    Text(stringResource(R.string.setup_emulator_help))
+                    ProfileList {
+                        emulator = addEmulator(it)
+                        step = 3
+                    }
+                    TextButton({ step = 4 }) { Text(stringResource(R.string.skip)) }
+                }
+                3 -> {
+                    header(3, R.string.setup_folders)
+                    emulator?.let { EmulatorBody(it) }
+                    val chosen = App.emulators.find { it.id == emulator }?.systems?.values?.any { it.roms != null || it.saves != null } == true
+                    if (chosen) Button({ step = 4 }) { Text(stringResource(R.string.next)) } else TextButton({ step = 4 }) { Text(stringResource(R.string.later)) }
+                }
+                else -> {
+                    Text(stringResource(R.string.setup_done_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(if (App.configured()) R.string.setup_done_text else R.string.setup_done_no_server))
+                    Button(done) { Text(stringResource(R.string.show_games)) }
+                }
+            }
+        }
     }
 }
 
@@ -372,9 +484,14 @@ private fun check(uri: String?): FolderState {
     return if (runCatching { children(App.resolver, u, rootId(u)) }.isSuccess) FolderState.READY else FolderState.MISSING
 }
 
-// emulatorState: the worst state of its folders.
+// emulatorState: the worst state of its folders. The saves folder of RetroArch is optional (saves next to the ROMs).
 private fun emulatorState(e: Emulator): FolderState {
-    val all = e.systems.flatMap { (s, f) -> listOf(if (s == System.N3DS) FolderState.READY else check(f.roms), if (f.nextToRom) FolderState.READY else check(f.saves)) }
+    val all = e.systems.flatMap { (s, f) ->
+        listOf(
+            if (s == System.N3DS) FolderState.READY else check(f.roms),
+            if (f.nextToRom || e.profile == RETROARCH && f.saves == null) FolderState.READY else check(f.saves),
+        )
+    }
     return when {
         all.isEmpty() -> FolderState.NOT_SET
         FolderState.NO_PERMISSION in all -> FolderState.NO_PERMISSION
@@ -395,9 +512,17 @@ private fun stateLabel(s: FolderState) = stringResource(
     },
 )
 
+// StateLine: Ready in green, not chosen yet in grey (a step to do, not an error), the problems in red.
 @Composable
 private fun StateLine(s: FolderState) {
-    Text(stateLabel(s), color = if (s == FolderState.READY || s == FolderState.CHECKING) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+    Text(
+        stateLabel(s),
+        color = when (s) {
+            FolderState.READY -> stateColor(Shown.IN_SYNC)
+            FolderState.NOT_SET, FolderState.CHECKING -> MaterialTheme.colorScheme.onSurfaceVariant
+            else -> MaterialTheme.colorScheme.error
+        },
+    )
 }
 
 fun Emulator.title() = label.ifBlank { profile().name.ifBlank { App.text(R.string.custom_profile) } }
@@ -427,13 +552,9 @@ fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
             title = { Text(stringResource(R.string.add_emulator)) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
-                    for (pr in profiles) {
-                        TextButton({
-                            adding = false
-                            val e = Emulator(App.newId(pr.id), pr.id, if (pr == CUSTOM) App.text(R.string.custom_profile) else pr.name, pr.systems.keys.associateWith { Folders(nextToRom = pr.nextToRom) })
-                            App.saveEmulators(App.emulators + e)
-                            onEdit(e.id)
-                        }, Modifier.fillMaxWidth()) { Text(if (pr == CUSTOM) stringResource(R.string.custom_profile) else pr.name, Modifier.fillMaxWidth()) }
+                    ProfileList {
+                        adding = false
+                        onEdit(addEmulator(it))
                     }
                 }
             },
@@ -443,23 +564,35 @@ fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
     }
 }
 
+// addEmulator adds an entry of this Profile, with every System of it; returns its id.
+fun addEmulator(pr: Profile): String {
+    val e = Emulator(App.newId(pr.id), pr.id, if (pr == CUSTOM) App.text(R.string.custom_profile) else pr.name, pr.systems.keys.associateWith { Folders(nextToRom = pr.nextToRom) })
+    App.saveEmulators(App.emulators + e)
+    return e.id
+}
+
+// ProfileList: the emulators installed on this phone first, then the others.
+@Composable
+fun ProfileList(onPick: (Profile) -> Unit) {
+    val pm = LocalContext.current.packageManager
+    val (installed, others) = remember { profiles.partition { it.installed(pm) } }
+    @Composable
+    fun group(title: Int?, list: List<Profile>) {
+        if (list.isEmpty()) return
+        if (title != null) Text(stringResource(title), Modifier.padding(top = 8.dp).semantics { heading() }, style = MaterialTheme.typography.titleSmall)
+        for (pr in list) {
+            TextButton({ onPick(pr) }, Modifier.fillMaxWidth()) {
+                Text(if (pr == CUSTOM) stringResource(R.string.custom_profile) else pr.name, Modifier.fillMaxWidth())
+            }
+        }
+    }
+    group(R.string.installed_emulators, installed)
+    group(if (installed.isEmpty()) null else R.string.other_emulators, others)
+}
+
 @Composable
 fun EmulatorScreen(id: String, onBack: () -> Unit) {
     val e = App.emulators.firstOrNull { it.id == id } ?: return
-    val pr = e.profile()
-    val custom = pr == CUSTOM
-    fun update(f: (Emulator) -> Emulator) = App.changeEmulator(id, f = f) // forgets the Bases of this entry (ADR 0026)
-    fun updateSystem(s: System, f: (Folders) -> Folders) = update { it.copy(systems = it.systems + (s to f(it.systems[s] ?: Folders()))) }
-    // "DS|saves": which folder the picker is for (kept if the activity restarts meanwhile)
-    var target by rememberSaveable { mutableStateOf<String?>(null) }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        val t = target?.split('|')
-        target = null
-        if (uri != null && t != null) {
-            App.takeFolder(uri)
-            updateSystem(System.valueOf(t[0])) { if (t[1] == "saves") it.copy(saves = uri.toString()) else it.copy(roms = uri.toString()) }
-        }
-    }
     var removing by remember { mutableStateOf(false) }
     Scaffold(topBar = {
         TopAppBar(title = { Text(e.title()) }, navigationIcon = {
@@ -467,48 +600,12 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
         })
     }) { p ->
         Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(pr.hint))
-            if (custom) {
-                OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } },Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    for (s in CUSTOM.systems.keys) {
-                        Checkbox(s in e.systems, { on -> update { it.copy(systems = if (on) it.systems + (s to Folders()) else it.systems - s) } })
-                        Text(s.label)
-                    }
-                }
-            }
-            for ((s, f) in e.systems.toSortedMap()) {
-                HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                Text(systemName(s), style = MaterialTheme.typography.titleMedium)
-                val variants = pr.systems[s].orEmpty()
-                if (variants.size > 1) {
-                    Text(stringResource(R.string.core))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { // 4 GB cores: wider than a small phone
-                        variants.forEachIndexed { i, v -> FilterChip(f.variant == i, { updateSystem(s) { it.copy(variant = i) } }, { Text(v.label) }) }
-                    }
-                }
-                if (custom) {
-                    OutlinedTextField(f.ext, { v -> updateSystem(s) { it.copy(ext = v) } }, label = { Text(stringResource(R.string.extension)) }, singleLine = true)
-                }
-                if (s != System.N3DS) {
-                    FolderRow(stringResource(R.string.rom_folder), f.roms) {
-                        target = "${s.name}|roms"
-                        picker.launch(null)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(f.nextToRom, { on -> updateSystem(s) { it.copy(nextToRom = on) } })
-                        Text(stringResource(R.string.next_to_rom))
-                    }
-                }
-                if (!f.nextToRom) {
-                    FolderRow(stringResource(if (s == System.N3DS) R.string.azahar_folder else R.string.save_folder), f.saves) {
-                        target = "${s.name}|saves"
-                        picker.launch(null)
-                    }
-                }
-            }
+            EmulatorBody(id)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            OutlinedButton({ removing = true }) { Text(stringResource(R.string.remove_emulator)) }
+            // at the bottom, in red, with a confirmation: never at the level of the main actions
+            TextButton({ removing = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                Text(stringResource(R.string.remove_emulator))
+            }
         }
     }
     if (removing) {
@@ -528,13 +625,119 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
     }
 }
 
+// EmulatorBody: the systems and folders of one emulator entry (Emulators screen, guided setup). The folder picker opens
+// where this emulator usually keeps them; after a pick, one line says what the folder holds (App.folderResult).
+@Composable
+fun EmulatorBody(id: String) {
+    val e = App.emulators.firstOrNull { it.id == id } ?: return
+    val pr = e.profile()
+    val custom = pr == CUSTOM
+    val retro = pr.id == RETROARCH
+    fun update(f: (Emulator) -> Emulator) = App.changeEmulator(id, f = f) // forgets the Bases of this entry (ADR 0026)
+    fun updateSystem(s: System, f: (Folders) -> Folders) = update { it.copy(systems = it.systems + (s to f(it.systems[s] ?: Folders()))) }
+    val scope = rememberCoroutineScope()
+    var results by remember(id) { mutableStateOf(mapOf<System, String>()) }
+    fun check(systems: Collection<System>) = scope.launch {
+        val now = App.emulators.firstOrNull { it.id == id } ?: return@launch
+        for (s in systems) {
+            val r = withContext(Dispatchers.IO) { runCatching { App.folderResult(now, s) }.getOrNull() }
+            results = if (r == null) results - s else results + (s to r)
+        }
+    }
+    // "DS|roms": which folder the picker is for, kept if the activity restarts meanwhile; "*|saves": the one saves folder
+    // of RetroArch, for every system
+    var target by rememberSaveable { mutableStateOf<String?>(null) }
+    var noPicker by remember { mutableStateOf(false) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val t = target?.split('|')
+        target = null
+        if (uri != null && t != null) {
+            App.takeFolder(uri)
+            val now = App.emulators.firstOrNull { it.id == id }?.systems?.keys.orEmpty()
+            val systems = if (t[0] == "*") now else now.filter { it.name == t[0] }
+            update { x -> x.copy(systems = x.systems.mapValues { (s, f) -> if (s !in systems) f else if (t[1] == "saves") f.copy(saves = uri.toString()) else f.copy(roms = uri.toString()) }) }
+            check(systems)
+        }
+    }
+    fun pick(t: String, current: String?, usual: List<String>) {
+        target = t
+        noPicker = runCatching { picker.launch(startAt(current, usual)) }.isFailure // no folder picker on this phone
+    }
+    Text(stringResource(pr.hint))
+    if (custom) {
+        OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
+    }
+    if (pr.systems.size > 1) { // untick a system you don't play: it then asks for nothing
+        Text(stringResource(R.string.systems_used), style = MaterialTheme.typography.titleSmall)
+        FlowRow {
+            for (s in pr.systems.keys) {
+                val on = s in e.systems
+                val can = !on || e.systems.size > 1 // at least one system
+                Row(
+                    Modifier.heightIn(min = 48.dp).toggleable(on, enabled = can, role = Role.Checkbox) { v ->
+                        update {
+                            val shared = if (retro) it.systems.values.firstNotNullOfOrNull { f -> f.saves } else null
+                            it.copy(systems = if (v) it.systems + (s to Folders(saves = shared, nextToRom = pr.nextToRom)) else it.systems - s)
+                        }
+                    }.padding(end = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(on, null, enabled = can)
+                    Text(s.label)
+                }
+            }
+        }
+    }
+    if (noPicker) Text(stringResource(R.string.no_picker), color = MaterialTheme.colorScheme.error)
+    if (retro) {
+        val saves = e.systems.values.firstNotNullOfOrNull { it.saves }
+        FolderRow(stringResource(R.string.retroarch_saves), saves) { pick("*|saves", saves, listOfNotNull(pr.savesAt)) }
+    }
+    for ((s, f) in e.systems.toSortedMap()) {
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text(systemName(s), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        val variants = pr.systems[s].orEmpty()
+        if (variants.size > 1) {
+            Text(stringResource(R.string.core))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { // 4 GB cores: wider than a small phone
+                variants.forEachIndexed { i, v -> FilterChip(f.variant == i, { updateSystem(s) { it.copy(variant = i) } }, { Text(v.label) }) }
+            }
+        }
+        if (custom) {
+            OutlinedTextField(f.ext, { v -> updateSystem(s) { it.copy(ext = v) } }, label = { Text(stringResource(R.string.extension)) }, singleLine = true)
+        }
+        if (s != System.N3DS) {
+            FolderRow(stringResource(R.string.rom_folder), f.roms) { pick("${s.name}|roms", f.roms, romsAt(s)) }
+            if (!retro) { // RetroArch: the scan looks next to the ROMs too
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(f.nextToRom, role = Role.Checkbox) { on -> updateSystem(s) { it.copy(nextToRom = on) } },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(f.nextToRom, null)
+                    Text(stringResource(R.string.next_to_rom))
+                }
+            }
+        }
+        if (!f.nextToRom && !retro) {
+            FolderRow(stringResource(if (s == System.N3DS) R.string.azahar_folder else R.string.save_folder), f.saves) {
+                pick("${s.name}|saves", f.saves, listOfNotNull(pr.savesAt))
+            }
+        }
+        results[s]?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, fontWeight = FontWeight.Medium) }
+    }
+}
+
 @Composable
 private fun FolderRow(label: String, uri: String?, pick: () -> Unit) {
     val st = produceState(FolderState.CHECKING, uri) { value = withContext(Dispatchers.IO) { check(uri) } }.value
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(end = 8.dp)) {
             Text(label)
-            if (uri != null) Text(folderLabel(uri.toUri()), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            if (uri != null) {
+                val u = uri.toUri()
+                val sd = !rootId(u).startsWith("primary:") // a removable card: the same folder names as the phone
+                Text((if (sd) stringResource(R.string.sd_card) + " · " else "") + folderLabel(u), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
             StateLine(st)
         }
         OutlinedButton(pick) { Text(stringResource(R.string.choose)) }

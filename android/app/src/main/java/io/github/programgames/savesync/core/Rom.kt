@@ -28,6 +28,11 @@ fun extension(file: String): String = file.substringAfterLast('.', "").let { if 
 
 fun withoutExtension(file: String): String = if (file.contains('.')) file.substringBeforeLast('.') else file
 
+// shortName is the name the lists show, as the 3DS app (main.c make_short_name): "Pokemon - Version Diamant (France)
+// (Rev 5)" -> "Pokemon Diamant". The full ROM name stays in the details.
+fun shortName(name: String): String =
+    name.replaceFirst(" - Version ", " ").substringBefore(" (").trim().ifEmpty { name }
+
 // Rom is what a ROM tells. key null = out of scope (homebrew, invalid header).
 // name: the ROM or the zip; internal: the file inside the zip ("" outside a zip).
 data class Rom(val system: System, val key: String?, val name: String, val internal: String = "")
