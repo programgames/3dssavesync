@@ -177,4 +177,28 @@
     <string name="reminder_title">Close the emulator</string>
     <string name="reminder_text">Close the emulator before syncing: an open emulator would overwrite the save it receives.</string>
     <string name="dont_show_again">Don\'t show again</string>
+
+    <!-- History and Restore (ADR 0016): only the server changes, this phone gets the version through Download -->
+    <string name="history">History</string>
+    <string name="history_help">The versions of this game on the server, newest first. Tap one to see it.</string>
+    <string name="reading_history">Reading the history…</string>
+    <string name="history_failed">The history couldn\'t be read.</string>
+    <string name="no_versions">No version of this game on the server.</string>
+    <string name="version_no">#%1$d</string>
+    <string name="current">Current</string>
+    <string name="client_restore">Restore</string>
+    <string name="size_kib">%1$d KiB</string>
+    <string name="version_current_help">The version the devices download. Choose an older one to restore it.</string>
+    <string name="version_same">Same content as the current version: nothing to restore.</string>
+    <string name="version_restore_help">Restore makes it the current version on the server again. Then the app offers to download it to this phone, after a backup copy.</string>
+    <string name="restore">Restore</string>
+    <string name="restore_title">Restore this version?</string>
+    <string name="this_version">This version</string>
+    <string name="restore_explain">It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. Then the app offers to download it to this phone, after a backup copy of its save. Sync your other devices first: a game not uploaded yet could replace this version or cause a conflict.</string>
+    <string name="restoring">Restoring…</string>
+    <string name="restored">Version restored on the server: #%1$d.</string>
+    <string name="restore_failed">Restore failed. Nothing changed.</string>
+    <string name="p_version_gone">This version is no longer on the server. Choose another one.</string>
+    <string name="p_version_damaged">The version from the server arrived damaged. Try again.</string>
+    <string name="p_server_changed">The save just changed on the server: a device uploaded it meanwhile. The list is up to date again: choose again.</string>
 </resources>

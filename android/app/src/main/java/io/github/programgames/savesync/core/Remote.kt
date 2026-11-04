@@ -77,14 +77,50 @@ class Remote(url: String, private val token: String, private val client: String 
         return o
     }
 
+    // history returns the Versions of a Game on the server, newest first (the Current version first). A name the PC
+    // would not accept is left out: it goes into the address of the next request.
+    fun history(key: String): List<Version> {
+        val (st, o) = request("GET", "/saves/$key/history")
+        if (st != 200) throw HttpException("GET /saves/$key/history", st)
+        return try {
+            parseList(String(o, Charsets.UTF_8)).filter { versionName.matches(it.file) }.reversed()
+        } catch (e: org.json.JSONException) {
+            throw HttpException("GET /saves/$key/history (not a list: ${e.message})", st)
+        }
+    }
+
+    // version reads one Version of the History.
+    fun version(key: String, file: String): ByteArray {
+        val (st, o) = request("GET", "/saves/$key/history/$file")
+        if (st == 404) throw SyncException(Problem.VERSION_GONE, "GET /saves/$key/history/$file: HTTP 404")
+        if (st != 200) throw HttpException("GET /saves/$key/history/$file", st)
+        return o
+    }
+
     // setName gives the game name to the server, for the History (ADR 0018). true if accepted.
     fun setName(key: String, name: String): Boolean = request("PUT", "/saves/$key/name", name.toByteArray(Charsets.UTF_8)).first == 204
+}
+
+private val versionName = Regex("^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\\.sav$") // client/history.go
+
+// RESTORE_CLIENT: X-Client of a Restore, so the History shows who put the Version back (client/history.go).
+const val RESTORE_CLIENT = "restauration"
+
+// restoreVersion makes an old Version the Current version again (ADR 0016): it reads it, checks its Hash, then uploads
+// it with If-Match = the Current version the user saw, so an Upload that came meanwhile is never overwritten. Only the
+// server changes: no file of this phone and no Base. remote: X-Client RESTORE_CLIENT.
+fun restoreVersion(remote: Remote, key: String, v: Version, current: Version) {
+    val o = remote.version(key, v.file)
+    val h = sha256(o)
+    if (h != v.hash) throw SyncException(Problem.VERSION_DAMAGED, "GET /saves/$key/history/${v.file}: SHA-256 ${h.take(12)}… instead of ${v.hash.take(12)}…")
+    if (!remote.put(key, o, current)) throw SyncException(Problem.SERVER_CHANGED, "PUT /saves/$key: HTTP 412, the current version is no longer ${current.hash.take(12)}…")
 }
 
 // Problem is why an action failed, for the message to the user (the UI has one text per Problem).
 enum class Problem {
     TOKEN, NOT_SERVER, TOO_LARGE, REJECTED, SERVER_ERROR, UNEXPECTED, // HTTP status
     CERTIFICATE, NO_HOST, REFUSED, NO_RESPONSE, // network
+    VERSION_GONE, VERSION_DAMAGED, SERVER_CHANGED, // History and Restore
     DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, PARTIAL, NOT_STARTED, CHANGED, OPEN, FORMAT, PERMISSION, OTHER, // this phone
 }
 

@@ -15,17 +15,20 @@ import io.github.programgames.savesync.core.Choice
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Outcome
 import io.github.programgames.savesync.core.PlayInfo
+import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Remote
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
 import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.Syncer
+import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
 import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.readRom
+import io.github.programgames.savesync.core.restoreVersion
 import io.github.programgames.savesync.core.splitDuplicates
 import io.github.programgames.savesync.core.titles3DS
 import kotlinx.coroutines.CoroutineScope
@@ -191,9 +194,31 @@ object App {
                 },
             ) to null
         }, { text(R.string.done_failed) to it })
+        reread(e, s)
+    }
+
+    // reread reads the State of one Game again, after an action changed the server or this phone.
+    private suspend fun reread(e: Entry, s: Syncer) {
         s.refresh()
         val again = withContext(io) { runCatching { s.status(e.game!!) } }
         entries = entries.map { if (it.game?.key == e.game?.key && it.emulator.id == e.emulator.id) it.copy(status = again.getOrNull(), error = again.exceptionOrNull()) else it }
+    }
+
+    // history reads the server Versions of a Game, newest first (ADR 0016).
+    suspend fun history(e: Entry): List<Version> = withContext(io) { Remote(settings.url, settings.token).history(e.game!!.key) }
+
+    // versionPlayInfo reads one Version of the History for its Pokémon play time; null if not a Pokémon save or not read.
+    suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = withContext(io) {
+        runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).version(e.game!!.key, v.file)) }.getOrNull()
+    }
+
+    // restore makes an old Version the Current version on the server, then reads the State of the game again: this phone
+    // gets it only through the usual Download, with its Backup copy and its checks (ADR 0016). done: the error, or null.
+    fun restore(e: Entry, v: Version, current: Version, done: (Throwable?) -> Unit) = run(text(R.string.restoring)) {
+        val r = withContext(io) { runCatching { restoreVersion(Remote(settings.url, settings.token, RESTORE_CLIENT), e.game!!.key, v, current) } }
+        message = r.fold({ text(R.string.restored, v.number) to null }, { text(R.string.restore_failed) to it })
+        if (r.isSuccess) reread(e, syncer ?: newSyncer())
+        done(r.exceptionOrNull())
     }
 
     // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details).

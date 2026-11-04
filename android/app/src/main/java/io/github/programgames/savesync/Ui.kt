@@ -123,6 +123,9 @@ fun problemText(p: Problem) = when (p) {
     Problem.NO_HOST -> R.string.p_no_host
     Problem.REFUSED -> R.string.p_refused
     Problem.NO_RESPONSE -> R.string.p_no_response
+    Problem.VERSION_GONE -> R.string.p_version_gone
+    Problem.VERSION_DAMAGED -> R.string.p_version_damaged
+    Problem.SERVER_CHANGED -> R.string.p_server_changed
     Problem.DAMAGED -> R.string.p_damaged
     Problem.BUSY -> R.string.p_busy
     Problem.BACKUP -> R.string.p_backup

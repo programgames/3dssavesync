@@ -28,10 +28,12 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Local
 import io.github.programgames.savesync.core.Problem
+import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.SaveFile
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
@@ -51,6 +53,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -113,19 +116,23 @@ open class UiTest {
         return ActivityScenario.launch(MainActivity::class.java).also { scenario = it }
     }
 
-    // fakeServer runs on this computer only: GET /saves is empty, GET /saves/<key> returns save; PUTs are recorded.
-    private fun fakeServer(save: ByteArray): String {
+    // fakeServer runs on this computer only: by default GET /saves is empty and any other GET returns save. Every
+    // request is recorded: its first line, then its headers.
+    private fun fakeServer(save: ByteArray, respond: (String) -> Pair<Int, ByteArray> = { if (it.split(" ")[1] == "/saves") 200 to "[]".toByteArray() else 200 to save }): String {
         val ss = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
         thread(isDaemon = true) {
             while (true) {
                 val c = runCatching { ss.accept() }.getOrNull() ?: break
                 c.use {
-                    val r = it.getInputStream().bufferedReader()
+                    val r = it.getInputStream().bufferedReader(Charsets.ISO_8859_1) // one char per byte: the body is skipped exactly
                     val line = r.readLine() ?: return@use
-                    while (!r.readLine().isNullOrEmpty()) Unit // headers
-                    synchronized(requests) { requests += line }
-                    val body = if (line.split(" ")[1] == "/saves") "[]".toByteArray() else save
-                    it.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray() + body)
+                    val headers = generateSequence { r.readLine()?.takeIf { h -> h.isNotEmpty() } }.toList()
+                    val length = headers.find { h -> h.startsWith("Content-Length:", ignoreCase = true) }?.substringAfter(':')?.trim()?.toInt() ?: 0
+                    var left = length.toLong() // the PUT body, read before the response
+                    while (left > 0) left -= r.skip(left).takeIf { n -> n > 0 } ?: break
+                    synchronized(requests) { requests += (listOf(line) + headers).joinToString("\n") }
+                    val (st, body) = respond(line)
+                    it.getOutputStream().write("HTTP/1.1 $st X\r\nContent-Length: ${body.size}\r\nConnection: close\r\n\r\n".toByteArray() + body)
                 }
             }
         }
@@ -332,7 +339,7 @@ open class UiTest {
 
         open("Mario Kart DS")
         rule.onNodeWithText(s(R.string.why_to_download)).assertExists()
-        rule.onNodeWithText(s(R.string.uploaded_by, "pc")).assertExists()
+        rule.onNodeWithText(s(R.string.uploaded_by, "PC")).assertExists()
         rule.onNodeWithText(s(R.string.download)).performScrollTo()
         fits(s(R.string.download))
         rule.onNodeWithText(s(R.string.download)).performClick()
@@ -373,6 +380,94 @@ open class UiTest {
         assertEquals(null, App.busy)
         assertTrue(files.values.all { it.writes == 0 })
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } })
+    }
+
+    // History and Restore (ADR 0016): newest first, the play time of the selected Version only, a confirmation with both
+    // play times. A 412 reads the list again; a Restore changes only the server, then the game shows To download.
+    @Test
+    fun historyAndRestore() {
+        val key = "3DS-0004000000164800"
+        val old = mainSunMoon(3, 4, "Red")
+        val v1 = "000001-20261101T080000Z-3ds-${sha256(old)}.sav"
+        val v2 = "000002-20261103T101500Z-android-${sha256(sun)}.sav"
+        var current = sha256(sun)
+        var puts = 0
+        fun json(file: String, client: String, age: Int) =
+            """{"code":"$key","version":"$file","hash":"${file.takeLast(68).take(64)}","taille":${sun.size},"date":"${file.substring(7, 23)}","client":"$client","age":$age}"""
+        val url = fakeServer(sun) { line ->
+            val path = line.split(" ")[1]
+            when {
+                line.startsWith("PUT") -> if (++puts == 1) 412 to ByteArray(0) else 200 to ByteArray(0).also { current = sha256(old) }
+                path == "/saves" -> 200 to "[${json(if (current == sha256(old)) v1 else v2, "android", 60)}]".toByteArray()
+                path == "/saves/$key/history" -> 200 to "[${json(v1, "3ds", 2 * 86400)},${json(v2, "android", 3600)}]".toByteArray()
+                path == "/saves/$key/history/$v1" -> 200 to old
+                path == "/saves/$key/history/$v2" -> 200 to sun
+                else -> 404 to ByteArray(0)
+            }
+        }
+        val game = entry("Pokemon Soleil", System.N3DS, key, local(sun), Version(sha256(sun), sun.size.toLong(), client = "android"), sha256(sun), State.IN_SYNC)
+        Bases(File(ctx.filesDir, "bases")).set(emu.id, key, sha256(sun)) // last Sync: this version
+        start(url = url, token = "t", emulators = listOf(emu), entries = listOf(game))
+        open("Pokemon Soleil")
+        rule.onNodeWithText(s(R.string.history)).performScrollTo()
+        fits(s(R.string.history))
+        rule.onNodeWithText(s(R.string.history)).performClick()
+
+        val row1 = s(R.string.version_no, 1) + " · " + s(R.string.age_d, 2)
+        val row2 = s(R.string.version_no, 2) + " · " + s(R.string.age_h, 1)
+        waitFor(row2)
+        val kib = s(R.string.size_kib, (sun.size + 512) / 1024)
+        rule.onNodeWithText("Android · $kib", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("3DS · $kib", useUnmergedTree = true).assertExists()
+        fits(s(R.string.current))
+        assertTrue(rule.onNodeWithText(row2).fetchSemanticsNode().positionInRoot.y < rule.onNodeWithText(row1).fetchSemanticsNode().positionInRoot.y)
+        assertTrue(synchronized(requests) { requests.none { "/history/" in it } }) // no version read before a tap
+
+        rule.onNodeWithText(row2).performClick()
+        rule.onNodeWithText(s(R.string.version_current_help)).assertExists()
+        rule.onAllNodesWithText(s(R.string.restore)).assertCountEquals(0)
+        rule.onNodeWithText(row1).performClick()
+        waitFor(s(R.string.play_info, 3, 4, "Red")) // read for the selected version only
+        rule.onNodeWithText(s(R.string.version_restore_help)).assertExists()
+        scenario!!.recreate() // rotation: still the History, same version selected
+        waitFor(s(R.string.play_info, 3, 4, "Red"))
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(s(R.string.restore)))
+        fits(s(R.string.restore))
+
+        // the confirmation: this version and the phone save, with both play times; Cancel changes nothing
+        rule.onNodeWithText(s(R.string.restore)).performClick()
+        rule.onNodeWithText(s(R.string.restore_title)).assertExists()
+        rule.onNode(hasText("$row1 · 3DS") and dialog).assertExists()
+        rule.onNode(hasText(s(R.string.play_info, 3, 4, "Red")) and dialog).assertExists()
+        rule.onNode(hasText(s(R.string.play_info, 12, 5, "Ash")) and dialog).assertExists()
+        rule.onNode(hasText(s(R.string.restore_explain)) and dialog).performScrollTo().assertExists()
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+        assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } })
+
+        // 412: a device uploaded meanwhile; nothing restored, the list is read again
+        fun lists() = synchronized(requests) { requests.count { it.startsWith("GET /saves/$key/history ") } }
+        val read = lists()
+        rule.onNodeWithText(s(R.string.restore)).performClick()
+        rule.onNode(hasText(s(R.string.restore)) and dialog).performClick()
+        waitFor(s(R.string.p_server_changed))
+        rule.onNodeWithText(s(R.string.restore_failed)).assertExists()
+        rule.onNodeWithText("HTTP 412", substring = true).assertExists()
+        rule.waitUntil(15_000) { lists() == read + 1 }
+        waitFor(row1)
+        rule.onAllNodesWithText(s(R.string.version_restore_help)).assertCountEquals(0)
+
+        // Restore: only the server changes; the details show To download, with the usual Download
+        rule.onNodeWithText(row1).performClick()
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(s(R.string.restore)))
+        rule.onNodeWithText(s(R.string.restore)).performClick()
+        rule.onNode(hasText(s(R.string.restore)) and dialog).performClick()
+        waitFor(s(R.string.restored, 1))
+        rule.onNodeWithText(s(R.string.s_to_download)).assertExists()
+        rule.onNodeWithText(s(R.string.download)).performScrollTo().assertExists()
+        val put = synchronized(requests) { requests.filter { it.startsWith("PUT /saves/$key ") } }
+        assertEquals(2, put.size)
+        assertTrue(put.joinToString(), put.all { "X-Client: $RESTORE_CLIENT" in it && "If-Match: \"${sha256(sun)}\"" in it })
+        assertTrue(files.values.all { it.writes == 0 })
     }
 
     // The reminder to close the emulator comes once per session, before the first action that may write a save on

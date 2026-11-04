@@ -72,6 +72,25 @@ The game details show two cards, **This phone** and **Server**, with the date, t
 
 If the server changed while you were choosing, nothing is done and the screen shows the new version.
 
+## History and Restore
+
+The server keeps the older versions of every save. To get one back, open the game, then tap **History** (it shows when the server has a version of this game).
+
+1. The list shows the versions on the server, newest first: number, age, device (3DS, PC, Android, or Restore for a version put back), size. **Current** marks the version that the devices download.
+2. Tap a version. For a Pokémon game, the app downloads this version only and shows its play time and trainer name.
+3. Tap **Restore**. The confirmation shows this version and the save on this phone, with both play times for a Pokémon game.
+4. Confirm. The version becomes the current version on the server again. Nothing is deleted: the previous current version stays in the history.
+5. The app goes back to the game, which now shows **To download**. Tap **Download** to get the version on this phone: it is the usual Download, with its backup copy, its confirmation and the protection against an open emulator.
+
+A Restore changes only the server. It never writes a file on this phone and never changes the last sync. Each other device also gets the version at its next sync, after a backup copy of its save. Sync your other devices first: a game not uploaded yet could replace the restored version or cause a conflict. This is the same Restore as on the 3DS and the PC ([ADR 0016](adr/0016-restauration-depuis-le-pc-sans-ecriture-locale.md)).
+
+If the Restore fails, nothing changes on the server, and the message says why, with the technical detail under it:
+
+- **The save just changed on the server**: a device uploaded it while you were choosing. The app reads the list again: choose again.
+- **This version is no longer on the server**: choose another one.
+- **The version arrived damaged** (its content does not match the hash listed by the server): try again.
+- The server cannot be reached: the usual network messages.
+
 ## 3DS games never started in Azahar
 
 The app knows the 8 Pokémon games of the 3DS even if you never started them in Azahar. Such a game shows in the list when the server has a save for it, as **To download**; its details say **Never started in Azahar**. **Download** (or **Sync all**) creates its save folder in Azahar, like the PC program does:
@@ -90,7 +109,7 @@ Before any save is replaced, the app writes a copy, reads it back and compares i
 
 `Android/data/io.github.programgames.savesync/files/copies/<emulator>/<game>-<date>.<ext>`
 
-Connect the phone to a computer over USB to see them (the Android Files app may hide `Android/data`). To restore one, copy it into the emulator's save folder with the name of the save file (for example `Pokemon Emerald.srm`), then open the game in the app: it shows **To upload** or **Conflict**. Older versions of every save are also on the server: see [Restore an old version](guide-pc.md) on the PC.
+Connect the phone to a computer over USB to see them (the Android Files app may hide `Android/data`). To restore one, copy it into the emulator's save folder with the name of the save file (for example `Pokemon Emerald.srm`), then open the game in the app: it shows **To upload** or **Conflict**. Older versions of every save are also on the server: see [History and Restore](#history-and-restore).
 
 Removing an emulator from the app, or uninstalling the app, deletes nothing in your save folders. Uninstalling the app deletes its backup copies: copy them first if you want to keep them.
 

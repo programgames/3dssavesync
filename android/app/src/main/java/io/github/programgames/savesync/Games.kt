@@ -2,6 +2,7 @@
 
 package io.github.programgames.savesync
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +49,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -62,10 +65,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.programgames.savesync.core.Choice
 import io.github.programgames.savesync.core.PlayInfo
+import io.github.programgames.savesync.core.Problem
+import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.pokemonPlayInfo
+import io.github.programgames.savesync.core.problem
 import java.text.DateFormat
 import java.text.Normalizer
 import java.text.SimpleDateFormat
@@ -263,7 +269,7 @@ fun playText(p: PlayInfo) =
 @Composable
 private fun serverLines(v: Version, play: PlayInfo?): List<String> = listOfNotNull(
     runCatching { serverDate.parse(v.date)!!.time }.getOrNull()?.let { stringResource(R.string.uploaded_on, dateText(it), ageText(v.age)) },
-    stringResource(R.string.uploaded_by, v.client),
+    stringResource(R.string.uploaded_by, clientLabel(v.client)),
     pluralStringResource(R.plurals.size, v.size.toInt(), v.size),
     play?.let { playText(it) },
 )
@@ -277,6 +283,11 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     var ask by remember { mutableStateOf<Boolean?>(null) } // Conflict choice to confirm: true = keep the phone save
     var download by remember { mutableStateOf(false) }
     var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
+    var history by rememberSaveable { mutableStateOf(false) }
+    if (history && e.game != null) {
+        BackHandler { history = false }
+        return HistoryScreen(e) { history = false }
+    }
     Scaffold(topBar = {
         TopAppBar(title = { Text(e.name, maxLines = 1) }, navigationIcon = {
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
@@ -303,13 +314,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             App.busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (e.game == null || st == null) return@Column // Duplicate, or nothing read: no cards
 
-            val none = if (e.game.archive != null) R.string.never_started_azahar else R.string.no_local_save
-            val phoneLines = if (local == null) listOf(stringResource(none)) else listOfNotNull(
-                e.game.file.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },
-                pluralStringResource(R.plurals.size, local.version.size.toInt(), local.version.size),
-                if (local.blank) stringResource(R.string.blank_save) else null,
-                pokemonPlayInfo(local.sram)?.let { playText(it) },
-            ) + e.game.file.location
+            val phoneLines = phoneLines(e) + listOfNotNull(e.game.file.location.takeIf { local != null })
             val serverText = if (server == null) listOf(stringResource(R.string.no_server_version)) else serverLines(server, play)
 
             if (e.shown == Shown.CONFLICT && server != null) {
@@ -344,6 +349,12 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     else -> {}
                 }
             }
+            if (server != null) {
+                OutlinedButton({
+                    App.message = null
+                    history = true
+                }, enabled = App.busy == null) { Text(stringResource(R.string.history)) }
+            }
         }
     }
     reminder?.let { Reminder(it) { reminder = null } }
@@ -373,6 +384,136 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 }) { Text(stringResource(R.string.download)) }
             },
             dismissButton = { TextButton({ download = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+}
+
+// phoneLines: the save on this phone, as the details and the Restore confirmation show it.
+@Composable
+private fun phoneLines(e: Entry): List<String> {
+    val local = e.status?.local ?: return listOf(stringResource(if (e.game?.archive != null) R.string.never_started_azahar else R.string.no_local_save))
+    return listOfNotNull(
+        e.game?.file?.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },
+        pluralStringResource(R.plurals.size, local.version.size.toInt(), local.version.size),
+        if (local.blank) stringResource(R.string.blank_save) else null,
+        pokemonPlayInfo(local.sram)?.let { playText(it) },
+    )
+}
+
+// clientLabel: the device that uploaded a Version (X-Client), as the user names it.
+@Composable
+fun clientLabel(c: String) = when (c) {
+    "3ds" -> "3DS"
+    "pc" -> "PC"
+    "android" -> "Android"
+    RESTORE_CLIENT -> stringResource(R.string.client_restore)
+    "" -> "?"
+    else -> c
+}
+
+@Composable
+private fun sizeText(n: Long) = if (n >= 1024) stringResource(R.string.size_kib, (n + 512) / 1024) else pluralStringResource(R.plurals.size, n.toInt(), n)
+
+@Composable
+private fun versionLine(v: Version) = stringResource(R.string.version_no, v.number) + " · " + ageText(v.age)
+
+// HistoryScreen: the server Versions of a Game, newest first. Restore makes an old one the Current version again, on the
+// server only: this phone then gets it through the usual Download, with its Backup copy and its checks (ADR 0016).
+@Composable
+fun HistoryScreen(e: Entry, onBack: () -> Unit) {
+    var load by remember { mutableIntStateOf(0) } // the list is read again after a 412
+    val list = produceState<Result<List<Version>>?>(null, load) {
+        value = null
+        value = runCatching { App.history(e) }
+    }.value
+    var selected by rememberSaveable { mutableStateOf<String?>(null) } // server name of the selected Version
+    var ask by remember { mutableStateOf(false) }
+    val versions = list?.getOrNull().orEmpty()
+    val current = versions.firstOrNull()
+    val v = versions.find { it.file == selected }
+    // the play time of the selected Version only: one download, on demand
+    val play = produceState<PlayInfo?>(null, v?.file) {
+        value = null
+        value = v?.let { App.versionPlayInfo(e, it) }
+    }.value
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(stringResource(R.string.history)) }, navigationIcon = {
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+        })
+    }) { p ->
+        LazyColumn(Modifier.padding(p).padding(horizontal = 16.dp)) {
+            item {
+                Text(e.name, style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.history_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+                if (list == null) Text(stringResource(R.string.reading_history), style = MaterialTheme.typography.bodySmall)
+                if (list == null || App.busy != null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                App.busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                list?.exceptionOrNull()?.let { ErrorText(it, stringResource(R.string.history_failed)) }
+                App.message?.let { (text, t) -> if (t != null) ErrorText(t, text) }
+                if (list?.isSuccess == true && versions.isEmpty()) Text(stringResource(R.string.no_versions), Modifier.padding(vertical = 8.dp))
+            }
+            items(versions, key = { it.file }) { x ->
+                val sel = x.file == selected
+                Row(
+                    Modifier.fillMaxWidth().background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                        .selectable(sel) {
+                            selected = x.file
+                            App.message = null
+                        }.padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(versionLine(x))
+                        Text(clientLabel(x.client) + " · " + sizeText(x.size), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (x == current) Text(stringResource(R.string.current), color = stateColor(Shown.IN_SYNC), style = MaterialTheme.typography.labelMedium)
+                }
+                if (sel) {
+                    Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        play?.let { Text(playText(it), style = MaterialTheme.typography.bodySmall) }
+                        when {
+                            x == current -> Text(stringResource(R.string.version_current_help), style = MaterialTheme.typography.bodySmall)
+                            x.hash == current?.hash -> Text(stringResource(R.string.version_same), style = MaterialTheme.typography.bodySmall)
+                            else -> {
+                                Text(stringResource(R.string.version_restore_help), style = MaterialTheme.typography.bodySmall)
+                                Button({ ask = true }, enabled = App.busy == null) { Text(stringResource(R.string.restore)) }
+                            }
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+        }
+    }
+    if (ask && v != null && current != null) {
+        AlertDialog(
+            onDismissRequest = { ask = false },
+            title = { Text(stringResource(R.string.restore_title)) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(stringResource(R.string.this_version), style = MaterialTheme.typography.titleSmall)
+                    Text(versionLine(v) + " · " + clientLabel(v.client))
+                    play?.let { Text(playText(it)) }
+                    Text(stringResource(R.string.this_phone), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+                    for (l in phoneLines(e)) Text(l)
+                    Text(stringResource(R.string.restore_explain), Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                TextButton({
+                    ask = false
+                    App.restore(e, v, current) { t ->
+                        when {
+                            t == null -> onBack() // the details show the new State: To download, with the usual Download
+                            problem(t) == Problem.SERVER_CHANGED -> { // the list again: choose again
+                                selected = null
+                                load++
+                            }
+                        }
+                    }
+                }) { Text(stringResource(R.string.restore)) }
+            },
+            dismissButton = { TextButton({ ask = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 }

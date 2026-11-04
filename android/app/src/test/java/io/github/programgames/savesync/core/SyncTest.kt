@@ -444,6 +444,44 @@ class PythonServerTest {
         assertArrayEquals(random(415232, 1), File(tmp.root, "copies-b/azahar").listFiles()!!.single().readBytes())
     }
 
+    // History and Restore (ADR 0016): newest first; a Restore is a new Version by "restauration" over the Current version
+    // the user saw, only on the server; the phone gets it through the usual Download. Every failure changes nothing.
+    @Test
+    fun historyAndRestore() {
+        val a = syncer("a")
+        val f = MemoryFile("e.sav", random(32 shl 10, 1))
+        val g = gba("mgba", f)
+        assertEquals(Outcome.UPLOADED, a.sync(g))
+        f.content = random(32 shl 10, 2)
+        assertEquals(Outcome.UPLOADED, a.sync(g))
+        val remote = Remote(url, "test-token", RESTORE_CLIENT)
+        val h = remote.history("GBA-BPEF")
+        assertEquals(listOf(2, 1), h.map { it.number })
+        assertEquals(listOf(sha256(random(32 shl 10, 2)), sha256(random(32 shl 10, 1))), h.map { it.hash })
+        assertEquals(listOf("android", "android"), h.map { it.client })
+        assertEquals(32L shl 10, h[1].size)
+        assertTrue(remote.history("GBA-AXVE").isEmpty())
+
+        restoreVersion(remote, "GBA-BPEF", h[1], h[0])
+        val after = remote.history("GBA-BPEF")
+        assertEquals(listOf(3, 2, 1), after.map { it.number }) // nothing deleted
+        assertEquals(RESTORE_CLIENT, after[0].client)
+        assertEquals(h[1].hash, after[0].hash)
+        assertArrayEquals(random(32 shl 10, 2), f.content) // the phone save is not touched
+        a.refresh()
+        assertEquals(State.TO_DOWNLOAD, a.status(g).state)
+        assertEquals(Outcome.DOWNLOADED, a.sync(g, mayReplace = true)) // the usual Download, with its Backup copy
+        assertArrayEquals(random(32 shl 10, 1), f.content)
+        assertArrayEquals(random(32 shl 10, 2), File(tmp.root, "copies-a/mgba").listFiles()!!.single().readBytes())
+
+        fun fails(v: Version, current: Version, r: Remote = remote) = problem(runCatching { restoreVersion(r, "GBA-BPEF", v, current) }.exceptionOrNull()!!)
+        assertEquals(Problem.SERVER_CHANGED, fails(after[1], h[0])) // 412: the current version seen is no longer current
+        assertEquals(Problem.VERSION_GONE, fails(after[1].copy(file = "000099" + after[1].file.drop(6)), after[0]))
+        assertEquals(Problem.VERSION_DAMAGED, fails(after[1].copy(hash = "0".repeat(64)), after[0]))
+        assertEquals(Problem.REFUSED, fails(after[1], after[0], Remote("http://127.0.0.1:1", "x", RESTORE_CLIENT, 2000)))
+        assertEquals(after.map { it.file }, remote.history("GBA-BPEF").map { it.file }) // no new Version
+    }
+
     @Test
     fun wrongToken() {
         val e = runCatching { Remote(url, "bad").list() }.exceptionOrNull()!!

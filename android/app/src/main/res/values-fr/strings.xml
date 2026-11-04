@@ -178,4 +178,28 @@
     <string name="reminder_title">Fermez l\'émulateur</string>
     <string name="reminder_text">Fermez l\'émulateur avant de synchroniser : s\'il reste ouvert, il écrasera la sauvegarde reçue.</string>
     <string name="dont_show_again">Ne plus afficher</string>
+
+    <!-- History and Restore (ADR 0016) -->
+    <string name="history">Historique</string>
+    <string name="history_help">Les versions de ce jeu sur le serveur, de la plus récente à la plus ancienne. Touchez-en une pour la voir.</string>
+    <string name="reading_history">Lecture de l\'historique…</string>
+    <string name="history_failed">L\'historique n\'a pas pu être lu.</string>
+    <string name="no_versions">Aucune version de ce jeu sur le serveur.</string>
+    <string name="version_no">n° %1$d</string>
+    <string name="current">Actuelle</string>
+    <string name="client_restore">Restauration</string>
+    <string name="size_kib">%1$d Kio</string>
+    <string name="version_current_help">La version que les appareils récupèrent. Choisissez une version plus ancienne pour la restaurer.</string>
+    <string name="version_same">Même contenu que la version actuelle : rien à restaurer.</string>
+    <string name="version_restore_help">Restaurer la remet en version actuelle sur le serveur. Ensuite, l\'app propose de la récupérer sur ce téléphone, après une copie de sécurité.</string>
+    <string name="restore">Restaurer</string>
+    <string name="restore_title">Restaurer cette version ?</string>
+    <string name="this_version">Cette version</string>
+    <string name="restore_explain">Elle redevient la version actuelle du serveur. Rien n\'est effacé : l\'actuelle reste dans l\'historique. Ensuite, l\'app propose de la récupérer sur ce téléphone, après une copie de sécurité de sa sauvegarde. Synchronisez d\'abord vos autres appareils : une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit.</string>
+    <string name="restoring">Restauration…</string>
+    <string name="restored">Version restaurée sur le serveur : n° %1$d.</string>
+    <string name="restore_failed">Restauration impossible. Rien n\'a changé.</string>
+    <string name="p_version_gone">Cette version n\'est plus sur le serveur. Choisissez-en une autre.</string>
+    <string name="p_version_damaged">La version reçue du serveur est abîmée. Réessayez.</string>
+    <string name="p_server_changed">La sauvegarde vient de changer sur le serveur : un appareil l\'a envoyée entre-temps. La liste est de nouveau à jour : choisissez de nouveau.</string>
 </resources>

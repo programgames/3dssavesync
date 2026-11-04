@@ -19,7 +19,10 @@ data class Version(
     val date: String = "",
     val age: Long? = null,
     val name: String = "", // game name given by a Client (ADR 0018); empty on an older server
-)
+    val file: String = "", // the server's name of this Version: <seq>-<date>-<client>-<hash>.sav
+) {
+    val number get() = file.substringBefore('-').toIntOrNull() ?: 0 // <seq>, never renumbered by the server
+}
 
 // state compares Local save, Current version and Base. null = absent; null or empty base = never synced.
 // Same rules, same order as client/sync.go state() and 3ds/source/state.c.
@@ -46,6 +49,7 @@ fun parseList(json: String): List<Version> {
             date = o.optString("date"),
             age = if (o.has("age")) o.getLong("age") else null,
             name = o.optString("nom"),
+            file = o.optString("version"),
         )
     }
 }
