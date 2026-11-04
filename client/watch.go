@@ -22,7 +22,7 @@ const (
 func watchSaves(config string, syncing *sync.Mutex, end <-chan struct{}) {
 	running := map[string]bool{}        // emulator -> its program ran at the last check
 	next := time.Now().Add(time.Minute) // first full pass soon after the session starts
-	notified := ""                      // problems of the last notification: not repeated every 15 minutes
+	notified := map[string]bool{}       // problem lines already notified: not repeated every 15 minutes nor at each close
 	for {
 		select {
 		case <-end:
@@ -43,12 +43,28 @@ func watchSaves(config string, syncing *sync.Mutex, end <-chan struct{}) {
 		}
 		r := syncEmulators(config, closed)
 		syncing.Unlock()
-		problems := strings.Join(r.problems, "\n")
-		if text := autoSyncText(r); text != "" && (r.uploaded+r.downloaded > 0 || problems != notified) {
+		fresh := newProblem(notified, r.problems, full)
+		if text := autoSyncText(r); text != "" && (r.uploaded+r.downloaded > 0 || fresh) {
 			notify(text)
 		}
-		notified = problems
 	}
+}
+
+// newProblem reports a problem line not notified yet, and records the lines of this pass. A full pass forgets the
+// lines that are gone (a problem that comes back is notified again); the pass of a closed emulator only adds: its
+// problems are a part of those of the last full pass (an unknown games folder).
+func newProblem(notified map[string]bool, problems []string, full bool) bool {
+	fresh := false
+	for _, p := range problems {
+		fresh = fresh || !notified[p]
+	}
+	if full {
+		clear(notified)
+	}
+	for _, p := range problems {
+		notified[p] = true
+	}
+	return fresh
 }
 
 // closedEmulators returns the emulators whose program ran at the last check and no longer runs; running is updated.

@@ -1747,6 +1747,13 @@ static int settings_screen(int first)
     return changed;
 }
 
+/* An Upload or Download of one game: the screen says it at once (the network, the copy and the read back take seconds). */
+static result_t transfer(game_t *j, int upload)
+{
+    show_progress(0, 0, "%s\n%s", upload ? T("Envoi…", "Uploading…") : T("Récupération…", "Downloading…"), j->short_name);
+    return upload ? upload_save(j) : download_save(j);
+}
+
 /* A on a Game: its action, with a confirmation before any overwrite. 1 if an action was tried. */
 static int act(game_t *j)
 {
@@ -1756,7 +1763,7 @@ static int act(game_t *j)
     result_t r = make_result(RESULT_NONE, NULL);
     switch (j->status) {
     case STATUS_TO_UPLOAD:
-        r = upload_save(j);
+        r = transfer(j, 1);
         done = 1;
         break;
     case STATUS_TO_DOWNLOAD: {
@@ -1769,7 +1776,7 @@ static int act(game_t *j)
         if ((done = confirm(T("Récupérer la version du serveur ?", "Download the server version?"), j->short_name, q,
                               j->has_local ? T("La sauvegarde de la 3DS sera remplacée, après une copie de sécurité.", "The 3DS save will be replaced, after a backup.") : NULL,
                               T("Récupérer", "Download"))))
-            r = download_save(j);
+            r = transfer(j, 0);
         break;
     }
     case STATUS_CONFLICT: {
@@ -1805,8 +1812,8 @@ static int act(game_t *j)
             k = modal_end(&b, 1, 0);
         } while (!(k & (KEY_A | KEY_X | KEY_B)));
         done = (k & (KEY_A | KEY_X)) != 0;
-        if (k & KEY_A) r = upload_save(j);
-        else if (k & KEY_X) r = download_save(j);
+        if (k & KEY_A) r = transfer(j, 1);
+        else if (k & KEY_X) r = transfer(j, 0);
         else r = make_result(RESULT_CONFLICT_LEFT, NULL);
         break;
     }

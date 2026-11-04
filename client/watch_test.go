@@ -34,6 +34,29 @@ func TestClosedEmulators(t *testing.T) {
 	}
 }
 
+// A problem is notified once: not again at the next full pass, nor at the close of an emulator (a part of the
+// same problems); again only after a full pass without it.
+func TestNewProblem(t *testing.T) {
+	melonds, mgba := "melonds : dossier de jeux DS inconnu.", "mgba : dossier de jeux GB inconnu."
+	n := map[string]bool{}
+	for i, c := range []struct {
+		problems []string
+		full     bool
+		want     bool
+	}{
+		{[]string{melonds, mgba}, true, true},
+		{[]string{melonds, mgba}, true, false},
+		{[]string{melonds}, false, false}, // melonDS closed: its part only
+		{[]string{mgba}, true, false},     // melonDS fixed
+		{[]string{melonds}, false, true},  // and back
+		{nil, false, false},
+	} {
+		if got := newProblem(n, c.problems, c.full); got != c.want {
+			t.Errorf("passe %d : %v, attendu %v", i+1, got, c.want)
+		}
+	}
+}
+
 // A pass where nothing moved and nothing went wrong stays silent; a problem comes before the counts.
 func TestAutoSyncText(t *testing.T) {
 	if s := autoSyncText(syncReport{syncCount: syncCount{inSync: 40}, open: []string{"mGBA"}}); s != "" {

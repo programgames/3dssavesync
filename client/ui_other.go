@@ -112,7 +112,7 @@ func systemNotify(text string) {
 	if runtime.GOOS == "darwin" {
 		exec.Command("osascript", "-e", "on run argv", "-e", `display notification (item 1 of argv) with title "3dssavesync"`, "-e", "end run", text).Run()
 	} else if p, err := exec.LookPath("notify-send"); err == nil {
-		exec.Command(p, "3dssavesync", text).Run()
+		exec.Command(p, "-t", "15000", "3dssavesync", text).Run() // 15 s if the desktop allows it (GNOME keeps its own)
 	}
 }
 
