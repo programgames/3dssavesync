@@ -47,12 +47,15 @@ The old program stays next to the new one: delete it when you want, or rename it
 A 3dssavesync icon sits near the clock (Windows notification area, Linux system tray). It starts with your session. Right-click it:
 
 - **Open settings**: opens the settings page. On Windows, a double-click on the icon does the same; on Linux, a left click.
+- **Sync all**: syncs the games of every closed emulator now, then a notification gives the result.
 - **Upload now (N pending)**: only when uploads are pending (see [Pending uploads](#pending-uploads)). It uploads them now, then a notification gives the result.
 - **Update to version X**: only when a newer version is out. It opens the settings page, with its **Update** button (see [Updates](#updates)).
 - **Local server: running (http://…)**: with the local server, the address to enter on the 3DS, or the error when the server stopped. The icon program runs the local server itself: one program stays in memory, not two.
 - **3dssavesync X.Y.Z**: the version of the program.
 
 - **Quit**: removes the icon until the next session. The local server stops with it.
+
+The icon also syncs the games you start **without** 3dssavesync, for example by opening mGBA directly. When you close an emulator, it uploads the saves that changed. Every 15 minutes, it also gets the new versions from the server (from the 3DS, say) for the closed emulators, but only over a save that did not change since the last sync, and after a backup copy. On a conflict, a notification names the game and nothing is replaced: start the game through your frontend or shortcut to choose. To turn this off, turn off **Also sync games started without 3dssavesync** in **Frontends and install**, then click **Save**. See [ADR 0024](adr/0024-synchro-sans-le-lanceur.md).
 
 To remove the icon, turn off **Show the icon near the clock** in the part **Frontends and install**, then click **Save**. The local server then starts alone with the session (`3dssavesync serve`), as before version 3.7. Each **Save** restarts the icon with the new settings. The uninstall stops it first, so that the program can go to the Recycle Bin.
 

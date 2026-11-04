@@ -436,6 +436,10 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
         <div class="texte"><b>{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}</b><span class="legende" id="iconeAide">{{t "Un clic droit sur l'icône permet d'ouvrir les réglages, d'envoyer les sauvegardes en attente et de voir l'état du serveur local. Elle démarre avec votre session." "Right-click the icon to open the settings, upload pending saves or see the local server status. It starts when you sign in."}}</span></div>
         <input type="checkbox" class="interrupteur" id="icone" aria-label="{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}">
       </div>
+      <div class="reglage masque" id="synchroAutoLigne">
+        <div class="texte"><b>{{t "Synchroniser aussi les jeux lancés sans 3dssavesync" "Also sync games started without 3dssavesync"}}</b><span class="legende">{{t "L'icône près de l'horloge envoie la sauvegarde quand vous fermez l'émulateur, et récupère les nouvelles versions du serveur quand l'émulateur est fermé, après une copie de sécurité. En cas de conflit, elle vous prévient sans rien remplacer." "The icon near the clock uploads the save when you close the emulator, and gets new versions from the server while the emulator is closed, after a backup. On a conflict, it tells you and replaces nothing."}}</span></div>
+        <input type="checkbox" class="interrupteur" id="synchroAuto" aria-label="{{t "Synchroniser aussi les jeux lancés sans 3dssavesync" "Also sync games started without 3dssavesync"}}">
+      </div>
       <div class="reglage">
         <div class="texte"><b>{{t "Rechercher chaque jour les mises à jour sur GitHub" "Check GitHub for updates once a day"}}</b></div>
         <input type="checkbox" class="interrupteur" id="majAuto" aria-label="{{t "Rechercher les mises à jour" "Check for updates"}}">
@@ -846,7 +850,7 @@ function choix() {
     Installer: $("installer").checked,
     Emulateurs: cartesEmus(),
     LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
-    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked, Maj: $("majAuto").checked
+    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked, Maj: $("majAuto").checked, SynchroAuto: $("synchroAuto").checked
   };
 }
 
@@ -898,6 +902,8 @@ async function charger() {
   $("raccourcis").checked = !etat.Existe;
   $("icone").checked = etat.Icone;
   $("iconeLigne").classList.toggle("masque", !etat.IconeDisponible);
+  $("synchroAuto").checked = etat.SynchroAuto;
+  $("synchroAutoLigne").classList.toggle("masque", !etat.IconeDisponible);
   $("ouvert").replaceChildren();
   basculer();
   $("sectionHistorique").classList.toggle("masque", !etat.Existe);

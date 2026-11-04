@@ -279,6 +279,7 @@ func cmdTray(config string) (int, error) {
 		}()
 	}
 	var upload sync.Mutex
+	go watchSaves(config, &upload, end) // reads synchro_auto at each check: the settings page turns it on or off
 	choose := func(action string) {
 		switch action {
 		case "reglages":

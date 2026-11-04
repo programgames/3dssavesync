@@ -29,3 +29,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0021](0021-mise-a-jour-du-homebrew-depuis-github.md) | The 3DS app updates itself from GitHub releases, only when asked, after a checksum check. |
 | [0022](0022-icone-pres-de-l-horloge.md) | One resident program shows the icon near the clock and runs the local server. |
 | [0023](0023-cia-inclus-et-mise-a-jour-du-pc.md) | The PC program carries the 3DS app and updates itself. |
+| [0024](0024-synchro-sans-le-lanceur.md) | The icon near the clock syncs the games of an emulator when it closes, without the Launcher. |

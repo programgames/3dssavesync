@@ -2,6 +2,12 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.9.0] - Unreleased
+
+### Added
+
+- **Sync without the Launcher.** The icon near the clock uploads your save when you close an emulator you opened yourself, and every 15 minutes gets new versions from the server for closed emulators, only over a save that did not change, after a backup copy. A conflict gives a notification and replaces nothing. You can turn it off in **Frontends and install**.
+
 ## [3.8.0] - Unreleased
 
 ### Added
@@ -134,7 +140,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.7.0...HEAD
+[3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.7.0...v3.8.0
 [3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.7.0
 [3.6.1]: https://github.com/programgames/3dssavesync/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/programgames/3dssavesync/compare/v3.5.0...v3.6.0

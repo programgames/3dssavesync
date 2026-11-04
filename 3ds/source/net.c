@@ -67,11 +67,11 @@ static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_to
     return 0;
 }
 
-/* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). */
-static long request(const char *url, const char *token, const char *condition,
+/* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). client: X-Client of the Server. */
+static long request(const char *url, const char *token, const char *client, const char *condition,
                     const void *upload, size_t upload_size, buffer_t *received)
 {
-    char auth[320];
+    char auth[320], x_client[40];
     struct curl_slist *headers = NULL;
     static char github_cas[sizeof ISRG_ROOT_X1 + sizeof GITHUB_ROOTS]; /* built on the first call */
     struct curl_blob ca = { (void *)ISRG_ROOT_X1, sizeof ISRG_ROOT_X1 - 1, CURL_BLOB_NOCOPY };
@@ -82,7 +82,8 @@ static long request(const char *url, const char *token, const char *condition,
     if (token) { /* Server: ISRG only (ADR 0003) */
         snprintf(auth, sizeof auth, "Authorization: Bearer %s", token);
         headers = curl_slist_append(NULL, auth);
-        headers = curl_slist_append(headers, "X-Client: 3ds");
+        snprintf(x_client, sizeof x_client, "X-Client: %s", client);
+        headers = curl_slist_append(headers, x_client);
     } else { /* GitHub: no token, ISRG + Sectigo (ADR 0021) */
         if (!github_cas[0]) snprintf(github_cas, sizeof github_cas, "%s%s", ISRG_ROOT_X1, GITHUB_ROOTS);
         ca.data = github_cas;
@@ -123,7 +124,7 @@ static long request(const char *url, const char *token, const char *condition,
 long net_get(const char *url, const char *token, char **body, size_t *size)
 {
     buffer_t b = { NULL, 0 };
-    long status = request(url, token, NULL, NULL, 0, &b);
+    long status = request(url, token, "3ds", NULL, NULL, 0, &b);
 
     if (status <= 0) {
         free(b.bytes);
@@ -146,10 +147,10 @@ long net_github(const char *url, void (*file_progress)(size_t, size_t), char **b
     return status;
 }
 
-long net_put(const char *url, const char *token, const char *condition, const void *bytes, size_t size)
+long net_put(const char *url, const char *token, const char *client, const char *condition, const void *bytes, size_t size)
 {
     buffer_t b = { NULL, 0 };
-    long status = request(url, token, condition, bytes, size, &b);
+    long status = request(url, token, client, condition, bytes, size, &b);
     free(b.bytes);
     return status;
 }

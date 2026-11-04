@@ -49,6 +49,7 @@ type Config struct {
 	LocalServer  *LocalServer `json:"serveur_local,omitempty"`
 	TrayIcon     *bool        `json:"icone_horloge,omitempty"` // missing: tray icon on (tray.go)
 	CheckUpdates *bool        `json:"verifier_maj,omitempty"`  // missing: update check on (selfupdate.go)
+	AutoSync     *bool        `json:"synchro_auto,omitempty"`  // missing: Sync without the Launcher on (watch.go)
 	// Date of the last successful preparation of the 3DS SD card (the "all ready" list), never guessed.
 	PreparedCard string `json:"carte_preparee,omitempty"`
 }
@@ -393,37 +394,68 @@ func cmdLaunch(config, name string) (int, error) {
 	return c.play(games, e.command(p, "", "", dir), hint(e, p))
 }
 
-// syncAll runs a Sync of every game of the configured emulators (Sync all: settings page, tray menu). An open
-// emulator is skipped, since its game may still write its save. A Conflict is not resolved here: the next start of
-// the game asks. Returns the text for the user, problems first (a notification is cut at 255 characters).
+// syncAll runs a Sync of every game of the configured emulators (Sync all: settings page, tray menu). Returns the
+// text for the user, problems first (a notification is cut at 255 characters).
 func syncAll(config string) string {
+	r := syncEmulators(config, nil)
+	text := r.problems
+	if len(r.open) > 0 {
+		text = append(text, fmt.Sprintf(tr("Jeux laissés de côté, car l'émulateur est ouvert : %s. Fermez-le, puis recommencez.",
+			"Games skipped because the emulator is open: %s. Close it, then try again."), strings.Join(r.open, ", ")))
+	}
+	if len(text) == 0 && r.uploaded+r.downloaded+r.inSync == 0 {
+		text = append(text, tr("Aucun jeu trouvé. Vérifiez les dossiers de jeux dans la partie Émulateurs.",
+			"No game found. Check the games folders in the Emulators part."))
+	}
+	return strings.Join(append(text, r.counts()), "\n")
+}
+
+// syncReport is the outcome of syncEmulators. problems: for the user, most important first; open: the programs of the
+// emulators skipped because they run (or a Launcher of theirs is in progress).
+type syncReport struct {
+	syncCount
+	problems, open []string
+}
+
+func (r *syncReport) counts() string {
+	return fmt.Sprintf(tr("Envoyées : %d · Récupérées : %d · Déjà à jour : %d", "Uploaded: %d · Downloaded: %d · Already up to date: %d"),
+		r.uploaded, r.downloaded, r.inSync)
+}
+
+// syncEmulators runs a Sync of every game of the emulators named in only (nil: all), after the pending Uploads. An
+// open emulator is skipped, since its game may still write its save; so is one whose Launcher is in progress. A
+// Conflict is not resolved here: the next start of the game asks.
+func syncEmulators(config string, only []string) syncReport {
+	var r syncReport
 	s, err := newSession(config)
 	if err != nil {
-		return tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err)
+		r.problems = []string{tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err)}
+		return r
 	}
-	s.log("tout synchroniser")
 	if err := s.resume(); err != nil && end(err) {
-		return tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()
+		r.problems = []string{tr("Synchronisation impossible. ", "Sync failed. ") + errorText(err) + "\n" + tr("Détail : ", "Detail: ") + err.Error()}
+		return r
 	}
-	n := &syncCount{}
-	var open, refused, failures []string
-	names := slices.Sorted(maps.Keys(s.cfg.Emulators))
+	var refused, failures []string
 emulators:
-	for _, name := range names {
+	for _, name := range slices.Sorted(maps.Keys(s.cfg.Emulators)) {
+		if only != nil && !slices.Contains(only, name) {
+			continue
+		}
 		e := s.cfg.Emulators[name]
 		p, err := e.profile(name)
 		if err != nil {
 			failures = append(failures, name+" : "+errorText(err))
 			continue
 		}
-		if instances(e.process()) > 0 {
-			if !slices.Contains(open, e.process()) {
-				open = append(open, e.process())
+		if instances(e.process()) > 0 || len(s.locks(e.process())) > 0 {
+			if !slices.Contains(r.open, e.process()) {
+				r.open = append(r.open, e.process())
 			}
 			continue
 		}
 		c := s.client(name)
-		c.batch = n
+		c.batch = &r.syncCount
 		games, refusal, noRoms := c.gamesOf(e, p)
 		refused = append(refused, refusal...)
 		if len(noRoms) > 0 {
@@ -432,35 +464,24 @@ emulators:
 		}
 		for _, j := range games {
 			if _, err := c.syncGame(j, true); err != nil {
-				c.log(j.Key + " tout synchroniser : " + err.Error())
+				c.log(j.Key + " synchro groupée : " + err.Error())
 				if failures = addFailure(failures, j, err); end(err) {
 					break emulators
 				}
 			}
 		}
 	}
-	var text []string
-	if len(n.conflicts) > 0 {
-		text = append(text, fmt.Sprintf(tr("Conflit sur %s : lancez ce jeu pour choisir la version à garder.",
-			"Conflict on %s: start this game to choose which version to keep."), strings.Join(n.conflicts, ", ")))
+	if len(r.conflicts) > 0 {
+		r.problems = append(r.problems, fmt.Sprintf(tr("Conflit sur %s : lancez ce jeu pour choisir la version à garder.",
+			"Conflict on %s: start this game to choose which version to keep."), strings.Join(r.conflicts, ", ")))
 	}
 	if len(failures) > 0 {
-		text = append(text, tr("Non synchronisé :", "Not synced:"))
-		text = append(text, failures...)
+		r.problems = append(r.problems, tr("Non synchronisé :", "Not synced:"))
+		r.problems = append(r.problems, failures...)
 	}
-	if len(open) > 0 {
-		text = append(text, fmt.Sprintf(tr("Jeux laissés de côté, car l'émulateur est ouvert : %s. Fermez-le, puis recommencez.",
-			"Games skipped because the emulator is open: %s. Close it, then try again."), strings.Join(open, ", ")))
-	}
-	text = append(text, refused...)
-	if len(text) == 0 && n.uploaded+n.downloaded+n.inSync == 0 {
-		text = append(text, tr("Aucun jeu trouvé. Vérifiez les dossiers de jeux dans la partie Émulateurs.",
-			"No game found. Check the games folders in the Emulators part."))
-	}
-	text = append(text, fmt.Sprintf(tr("Envoyées : %d · Récupérées : %d · Déjà à jour : %d", "Uploaded: %d · Downloaded: %d · Already up to date: %d"),
-		n.uploaded, n.downloaded, n.inSync))
-	s.log(strings.Join(text, " | "))
-	return strings.Join(text, "\n")
+	r.problems = append(r.problems, refused...)
+	s.log("synchro groupée " + strings.Join(only, ",") + " : " + strings.Join(append(r.problems, r.counts()), " | "))
+	return r
 }
 
 // refusal: the emulator already runs. Refuse if its game is unknown (instance opened outside 3dssavesync, or
