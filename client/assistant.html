@@ -368,6 +368,18 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
         <p class="message alerte compact">{{t "N'ouvrez jamais ce port sur Internet depuis votre box : la connexion n'est pas chiffrée." "Never open this port to the Internet on your router: the connection isn't encrypted."}}</p>
       </div>
     </div>
+    <div class="groupe masque" id="sectionTelephone">
+      <h2>{{t "Configurer le téléphone" "Set up the phone"}}</h2>
+      <div class="reglage">
+        <div class="texte"><b>{{t "Application Android" "Android app"}}</b><span class="legende">{{t "Scannez ce QR code depuis l'écran Réglages de l'application. Elle reçoit l'adresse et le jeton, sans rien à taper." "Scan this QR code from the app's Settings screen. The app gets the address and token, with nothing to type."}}</span></div>
+        <button type="button" id="qrBouton">{{t "Afficher le QR code" "Show the QR code"}}</button>
+      </div>
+      <p id="qrEtat" role="status"></p>
+      <div id="qrZone" class="masque">
+        <img id="qrImage" alt="{{t "QR code de l'adresse et du jeton" "QR code with the address and token"}}" style="display:block;width:260px;max-width:100%;image-rendering:pixelated;margin:var(--e3) auto">
+        <p class="message alerte compact">{{t "Ce QR code contient votre jeton. Gardez-le pour vous, ne le prenez pas en photo et ne le partagez pas." "This QR code holds your token. Keep it private: don't take a photo of it or share it."}}</p>
+      </div>
+    </div>
   </section>
 
   <section id="sectionCarte" class="masque" data-page="carte">
@@ -591,6 +603,8 @@ const T = {
   majDispo: {{t "Version %s disponible (vous avez la %s)" "Version %s available (you have %s)"}},
   confirmerMaj: {{t "Mettre à jour vers la version %s ? Les réglages redémarreront ensuite." "Update to version %s? The settings page restarts afterwards."}},
   version: {{t "Réglages, version %s" "Settings, version %s"}},
+  montrerQR: {{t "Afficher le QR code" "Show the QR code"}},
+  masquerQR: {{t "Masquer" "Hide"}},
   explication: {{t "Cette version deviendra la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) la recevra à sa prochaine synchronisation, après une copie de sécurité de sa sauvegarde. Synchronisez d'abord vos autres appareils. Sinon, une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit." "This version will become the current version on the server. No version is deleted: the current one stays in the history.\n\nEach device (3DS, PC) gets it at its next sync, after backing up its save. Sync your other devices first. Otherwise a game not uploaded yet could replace this version or cause a conflict."}}
 };
 const racine = location.pathname;
@@ -914,6 +928,8 @@ async function charger() {
   $("carteImpossible").classList.toggle("masque", sd || !etat.Existe);
   $("sectionVerifs").classList.toggle("masque", !etat.Existe);
   $("adresseCarte").textContent = etat.Adresse3DS || "";
+  $("sectionTelephone").classList.toggle("masque", !sd);
+  masquerQR(); // server saved again: a new QR code on the next click
   $("carteChemin").placeholder = etat.Windows ? "E:\\" : "/media/…";
   menu();
   montrer(page && !document.querySelector(`#menu button[data-page="${page}"]`).classList.contains("masque") ? page : (etat.Existe ? "emulateurs" : "serveur"));
@@ -1154,6 +1170,22 @@ $("tester").onclick = async () => {
     const r = await api("tester", choix());
     t(r.Ok ? "pastille ok" : "message erreur compact", r.Message);
   } catch (e) { t("message erreur compact", T.erreur + e.message); }
+};
+// QR code pour l'application Android : caché par défaut, demandé à chaque clic, effacé quand il est masqué.
+function masquerQR() {
+  $("qrZone").classList.add("masque");
+  $("qrImage").removeAttribute("src");
+  $("qrEtat").textContent = "";
+  $("qrBouton").textContent = T.montrerQR;
+}
+$("qrBouton").onclick = async () => {
+  if (!$("qrZone").classList.contains("masque")) { masquerQR(); return; }
+  const r = await api("qr").catch(e => ({Erreur: e.message}));
+  if (r.Erreur) { $("qrEtat").replaceChildren(message("erreur", T.erreur + r.Erreur)); return; }
+  $("qrEtat").textContent = "";
+  $("qrImage").src = r.Image;
+  $("qrZone").classList.remove("masque");
+  $("qrBouton").textContent = T.masquerQR;
 };
 $("chercher").onclick = () => cartes().catch(e => $("carteEtat").replaceChildren(texte("li", T.erreur + e.message, "erreur")));
 $("preparer").onclick = async () => {

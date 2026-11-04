@@ -31,3 +31,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0023](0023-cia-inclus-et-mise-a-jour-du-pc.md) | The PC program carries the 3DS app and updates itself. |
 | [0024](0024-synchro-sans-le-lanceur.md) | The icon near the clock syncs the games of an emulator when it closes, without the Launcher. |
 | [0025](0025-virtual-console-gb-gbc.md) | GB/GBC Virtual Console games: Key read in the ROM through PxiFS0, synced as one more Local save. |
+| [0026](0026-client-android.md) | The Android client lives in this repository, ports the sync to Kotlin with the shared test files, and uses only the system folder picker. |

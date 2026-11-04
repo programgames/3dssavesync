@@ -10,8 +10,9 @@ Found a bug? Check [troubleshooting](docs/troubleshooting.md) first, then open a
 |---|---|---|
 | `client/` | The PC program: sync, settings page, local server, icon near the clock | Go |
 | `3ds/` | The 3DS app (homebrew) | C, libctru, citro2d |
+| `android/` | The Android app ([ADR 0026](docs/adr/0026-client-android.md)) | Kotlin, Jetpack Compose |
 | `server/` | The server for your own machine (Docker) | Python, standard library only |
-| `tests/cas_etat.csv` | The sync rule's case table, read by the C and Go tests | CSV |
+| `tests/cas_etat.csv`, `tests/saves.json` | The sync rule's case table and a server list, read by the C, Go and Kotlin tests | CSV, JSON |
 | `pc/forwarder3ds.py` | Builds HOME menu forwarders for GB and GBA games | Python |
 | `docs/` | User guides, design, [ADRs](docs/adr/README.md), [glossary](docs/GLOSSARY.md) | Markdown |
 
@@ -49,6 +50,17 @@ make cia            # also needs makerom and bannertool in PATH
 `make VERSION=3.7.0` sets the version shown in the app. A `dev` build never offers an update.
 
 The parts of the app that don't depend on libctru (sync rule, game status, keys, file helpers, settings files, Pokémon data, error messages, action results, texts, update check) have tests that run on your PC with plain `gcc`. The exact commands are in the `tests-c` job of `.github/workflows/ci.yml`. They build with `-Wall -Wextra -Werror`. On Windows, use the `gcc` of devkitPro's MSYS2 shell: Git Bash's `gcc` has no C headers.
+
+### Android app (`android/`)
+
+You need JDK 17, the Android SDK (platform 35, build-tools 35.0.0; set `ANDROID_HOME` or write `sdk.dir` in `android/local.properties`) and Python 3 on your `PATH`: a JVM test syncs against `server/server.py`.
+
+```bash
+cd android
+./gradlew testDebugUnitTest lintDebug assembleDebug
+```
+
+The sync logic in `app/src/main/java/.../core/` uses no Android API (only `org.json`, a test dependency on the JVM); its tests read the shared files in `tests/` in place.
 
 ### Server (`server/`)
 
