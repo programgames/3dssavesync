@@ -12,8 +12,7 @@
     <!-- Settings -->
     <string name="settings_title">Serveur</string>
     <string name="server_address">Adresse du serveur</string>
-    <string name="server_address_help">L\'adresse de votre serveur 3dssavesync, avec http:// ou https:// et le port.</string>
-    <string name="address_scheme">Commencez l\'adresse par http:// ou https://.</string>
+    <string name="server_address_help">Votre serveur 3dssavesync et son port, par exemple 192.168.1.20:8080. Ajoutez https:// s\'il l\'utilise.</string>
     <string name="token">Jeton</string>
     <string name="show">Afficher</string>
     <string name="hide">Masquer</string>

@@ -161,8 +161,11 @@ open class UiTest {
         return "http://127.0.0.1:${ss.localPort}"
     }
 
-    private fun waitFor(text: String, substring: Boolean = false) =
+    private fun waitFor(text: String, substring: Boolean = false) = try {
         rule.waitUntil(15_000) { rule.onAllNodesWithText(text, substring).fetchSemanticsNodes().isNotEmpty() }
+    } catch (e: Throwable) {
+        throw AssertionError("no \"$text\" in:\n" + rule.onAllNodes(SemanticsMatcher("all") { true }).fetchSemanticsNodes().mapNotNull { n -> n.config.getOrElseNullable(SemanticsProperties.Text) { null }?.joinToString() }.joinToString("\n"), e)
+    }
 
     // fits: every Text with this text is inside the screen width and shows all of it (not cut, at most maxLines lines).
     private fun fits(text: String, maxLines: Int = 1) {
@@ -193,10 +196,7 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.test_connection)).assertIsNotEnabled()
         val fields = rule.onAllNodes(hasSetTextAction())
         fields.assertCountEquals(2)
-        fields[0].performTextInput("127.0.0.1:1")
-        rule.onNodeWithText(s(R.string.address_scheme)).assertIsDisplayed()
-        fields[0].performTextClearance()
-        fields[0].performTextInput("http://127.0.0.1:1") // nothing listens on port 1: refused at once
+        fields[0].performTextInput("127.0.0.1:1") // no scheme: http:// is added; nothing listens on port 1, refused at once
         fields[1].performTextInput("secret-token")
         // the token is masked until Show
         rule.onNode(SemanticsMatcher.keyIsDefined(SemanticsProperties.Password)).assertExists()
@@ -204,12 +204,12 @@ open class UiTest {
         assertFalse(shown().contains("secret"))
         rule.onNodeWithText(s(R.string.show)).performClick()
         assertEquals("secret-token", shown())
-        rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled().performClick()
+        rule.onNodeWithText(s(R.string.test_connection)).performScrollTo().assertIsEnabled().performClick()
         waitFor(s(R.string.p_refused))
         rule.onNodeWithText("ConnectException", substring = true).assertExists() // the technical line
 
         sc.recreate() // rotation: the settings stay
-        rule.onNodeWithText("http://127.0.0.1:1").assertExists()
+        rule.onNodeWithText("127.0.0.1:1").assertExists()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled()
     }
 

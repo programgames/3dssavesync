@@ -232,7 +232,7 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
                 result = null
             },
             Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.server_address)) },
-            placeholder = { Text("http://…:8080") }, supportingText = { Text(stringResource(R.string.server_address_help)) },
+            placeholder = { Text("192.168.1.20:8080") }, supportingText = { Text(stringResource(R.string.server_address_help)) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         )
         OutlinedTextField(
@@ -247,9 +247,7 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = { TextButton({ show = !show }) { Text(stringResource(if (show) R.string.hide else R.string.show)) } },
         )
-        val valid = url.trim().startsWith("http://") || url.trim().startsWith("https://")
-        if (url.isNotBlank() && !valid) Text(stringResource(R.string.address_scheme), color = MaterialTheme.colorScheme.error)
-        Button({ App.testConnection { result = it } }, enabled = App.busy == null && valid && token.isNotBlank()) {
+        Button({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
             Text(stringResource(R.string.test_connection))
         }
         App.busy?.let { Text(it) }

@@ -3,6 +3,12 @@ package io.github.programgames.savesync.core
 import java.net.URI
 import java.net.URLDecoder
 
+// withScheme adds http:// to an address typed without a scheme ("192.168.1.20:8080"): a home server, the usual case.
+fun withScheme(url: String): String {
+    val u = url.trim()
+    return if (u.isEmpty() || Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(u)) u else "http://$u"
+}
+
 // Pairing is the server read from the QR code of the PC settings page (client/setup_web.go, phonePayload).
 data class Pairing(val url: String, val token: String)
 
