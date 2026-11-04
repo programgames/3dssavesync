@@ -74,6 +74,7 @@ import io.github.programgames.savesync.core.withoutExtension
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.problem
+import java.io.File
 import java.text.DateFormat
 import java.text.Normalizer
 import java.text.SimpleDateFormat
@@ -88,7 +89,7 @@ fun stateColor(s: Shown): Color {
     return when (s) {
         Shown.TO_UPLOAD -> if (dark) Color(0xFFFFC94D) else Color(0xFF9A6700)
         Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00838F)
-        Shown.CONFLICT -> if (dark) Color(0xFFEF7070) else Color(0xFFC62828)
+        Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFC62828)
         Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
         else -> Color.Gray
     }
@@ -101,6 +102,7 @@ fun stateWord(s: Shown) = stringResource(
         Shown.TO_UPLOAD -> R.string.s_to_upload
         Shown.TO_DOWNLOAD -> R.string.s_to_download
         Shown.CONFLICT -> R.string.s_conflict
+        Shown.INTERRUPTED -> R.string.s_interrupted
         Shown.IN_SYNC -> R.string.s_in_sync
         Shown.DUPLICATE -> R.string.s_duplicate
         Shown.UNKNOWN -> R.string.s_unknown
@@ -126,7 +128,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     val visible = shown.filter {
         when (filter) {
             "ALL" -> true
-            "TODO" -> it.shown in listOf(Shown.TO_UPLOAD, Shown.TO_DOWNLOAD, Shown.CONFLICT)
+            "TODO" -> it.shown in listOf(Shown.TO_UPLOAD, Shown.TO_DOWNLOAD, Shown.CONFLICT, Shown.INTERRUPTED)
             else -> it.system.name == filter
         } && fold(it.name).contains(fold(query.trim()))
     }
@@ -284,6 +286,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     val play = produceState<PlayInfo?>(null, server?.hash) { value = if (server != null && e.game != null) App.serverPlayInfo(e) else null }.value
     var ask by remember { mutableStateOf<Boolean?>(null) } // Conflict choice to confirm: true = keep the phone save
     var download by remember { mutableStateOf(false) }
+    var restoreCopy by remember { mutableStateOf(false) } // interrupted write: put the Backup copy back, to confirm
     var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
     var history by rememberSaveable { mutableStateOf(false) }
     val hackable = e.game == null && !e.sharedFile && e.system in aliasExamples
@@ -303,7 +306,8 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 when (e.shown) {
                     Shown.TO_UPLOAD -> stringResource(R.string.why_to_upload)
                     Shown.TO_DOWNLOAD -> stringResource(R.string.why_to_download)
-                    Shown.CONFLICT -> stringResource(R.string.why_conflict)
+                    Shown.CONFLICT -> stringResource(if (st?.cameBack == true) R.string.why_came_back else R.string.why_conflict)
+                    Shown.INTERRUPTED -> stringResource(R.string.why_interrupted)
                     Shown.IN_SYNC -> stringResource(R.string.why_in_sync)
                     Shown.DUPLICATE -> stringResource(if (e.sharedFile) R.string.why_shared_file else R.string.why_duplicate, e.dups.size) +
                         if (hackable) "" else "\n" + e.dups.joinToString("\n") { "• $it" }
@@ -330,7 +334,20 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             val phoneLines = phoneLines(e) + listOfNotNull(e.game.file.location.takeIf { local != null })
             val serverText = if (server == null) listOf(stringResource(R.string.no_server_version)) else serverLines(server, play)
 
-            if (e.shown == Shown.CONFLICT && server != null) {
+            if (e.shown == Shown.INTERRUPTED) {
+                // only the server save or the Backup copy: the file on this phone may be cut (ADR 0026)
+                InfoCard(stringResource(R.string.this_phone), if (local != null) phoneLines else listOf(e.game.file.location))
+                if (server != null) {
+                    ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.fillMaxWidth()) {
+                        beforeWrite({ reminder = it }) { ask = false }
+                    }
+                }
+                st.interrupted?.backup?.let { copy ->
+                    ChoiceCard(stringResource(R.string.backup_copy), listOf(File(copy).name), stringResource(R.string.restore_copy), Modifier.fillMaxWidth()) {
+                        beforeWrite({ reminder = it }) { restoreCopy = true }
+                    }
+                }
+            } else if (e.shown == Shown.CONFLICT && server != null) {
                 Text(stringResource(R.string.choose_version), style = MaterialTheme.typography.titleMedium)
                 // one card above the other: side by side, the buttons were cut on a phone 320 dp wide
                 ChoiceCard(stringResource(R.string.this_phone), phoneLines, stringResource(R.string.keep_phone), Modifier.fillMaxWidth()) { ask = true }
@@ -383,6 +400,20 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 }) { Text(stringResource(R.string.confirm)) }
             },
             dismissButton = { TextButton({ ask = null }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
+    if (restoreCopy) {
+        AlertDialog(
+            onDismissRequest = { restoreCopy = false },
+            title = { Text(stringResource(R.string.restore_copy)) },
+            text = { Text(stringResource(R.string.confirm_restore_copy)) },
+            confirmButton = {
+                TextButton({
+                    restoreCopy = false
+                    App.restoreCopy(e)
+                }) { Text(stringResource(R.string.restore_copy)) }
+            },
+            dismissButton = { TextButton({ restoreCopy = false }) { Text(stringResource(R.string.cancel)) } },
         )
     }
     if (download) {

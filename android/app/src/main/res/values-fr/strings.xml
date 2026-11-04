@@ -30,7 +30,7 @@
         <item quantity="many">Connexion réussie. Le serveur a %1$d jeux.</item>
     </plurals>
     <string name="backups_title">Copies de sécurité</string>
-    <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie ici, un dossier par émulateur. Branchez le téléphone à un ordinateur en USB pour les voir (dossier Android/data).</string>
+    <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie ici, un dossier par émulateur. Branchez le téléphone à un ordinateur en USB pour les voir (dossier Android/data). Désinstaller l\'application supprime ces copies : pour la mettre à jour, installez le nouvel APK par-dessus l\'ancien.</string>
     <string name="version">3dssavesync pour Android %1$s</string>
 
     <!-- Emulators -->
@@ -104,9 +104,12 @@
     <string name="s_duplicate">Doublon</string>
     <string name="s_unknown">Inconnu</string>
     <string name="s_none">Pas de sauvegarde</string>
+    <string name="s_interrupted">Interrompue</string>
     <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Envoyer la transmet au serveur.</string>
     <string name="why_to_download">Le serveur a une version plus récente. Récupérer la télécharge, après une copie de sécurité de la sauvegarde du téléphone.</string>
     <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
+    <string name="why_came_back">Cette sauvegarde est revenue à la version qui avait été remplacée : l\'émulateur était sans doute encore ouvert.</string>
+    <string name="why_interrupted">La dernière écriture de cette sauvegarde sur ce téléphone ne s\'est pas terminée : l\'application a été arrêtée pendant l\'écriture. Le fichier est peut-être incomplet, alors ne jouez pas encore à ce jeu. Choisissez la sauvegarde du serveur ou la copie de sécurité.</string>
     <string name="why_in_sync">Ce téléphone et le serveur ont la même sauvegarde.</string>
     <string name="why_duplicate">%1$d ROM contiennent ce jeu : il n\'est pas synchronisé. Si l\'une d\'elles est un ROM hack, donnez-lui sa propre sauvegarde. Sinon, gardez-en une seule dans le dossier des ROM.</string>
     <string name="why_shared_file">%1$d ROM utiliseraient le même fichier de sauvegarde : elles ne sont pas synchronisées. Renommez-en une.</string>
@@ -166,6 +169,10 @@
     <string name="done_conflict">Le serveur a changé entre-temps : comparez de nouveau les deux sauvegardes, puis choisissez.</string>
     <string name="done_not_replaced">Rien n\'a été remplacé : l\'état a changé entre-temps. Vérifiez-le, puis réessayez.</string>
     <string name="done_in_sync">Déjà à jour.</string>
+    <string name="backup_copy">Copie de sécurité</string>
+    <string name="restore_copy">Remettre la copie de sécurité</string>
+    <string name="confirm_restore_copy">La copie de sécurité faite avant l\'écriture interrompue va remplacer le fichier de ce téléphone. Une copie de sécurité du fichier actuel est faite avant. Fermez l\'émulateur avant de continuer.</string>
+    <string name="done_copy_restored">La copie de sécurité est de nouveau en place.</string>
     <string name="done_failed">Échec de la synchronisation.</string>
 
     <!-- Problems -->
@@ -190,6 +197,7 @@
     <string name="p_changed">La sauvegarde de ce téléphone a changé pendant la synchronisation : elle n\'a pas été remplacée. Fermez l\'émulateur, puis réessayez.</string>
     <string name="p_format">Ce fichier de sauvegarde a un format inattendu : il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
+    <string name="p_no_copy">La copie de sécurité n\'est plus dans le dossier de l\'application. Prenez plutôt celle du serveur.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
     <string name="p_open">La sauvegarde vient de changer : l\'émulateur est peut-être encore ouvert. Fermez-le, puis synchronisez de nouveau.</string>
     <string name="reminder_title">Fermez l\'émulateur</string>

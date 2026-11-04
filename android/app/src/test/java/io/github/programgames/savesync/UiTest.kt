@@ -22,6 +22,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -43,6 +44,8 @@ import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Local
+import io.github.programgames.savesync.core.Pending
+import io.github.programgames.savesync.core.PendingWrite
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.SaveFile
@@ -56,6 +59,7 @@ import io.github.programgames.savesync.core.mainSunMoon
 import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.sha256
 import org.junit.After
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -618,6 +622,93 @@ open class UiTest {
         waitFor(line)
         fits(line, 2)
         fits(problem, 3)
+    }
+
+    // A change of extension, core or "next to the ROMs" forgets the Bases of the entry, with its replaced Hashes; a new
+    // name does not. Removing the entry deletes them (ADR 0026).
+    @Test
+    fun emulatorChangesForgetTheBases() {
+        val custom = Emulator("custom", CUSTOM.id, "Mine", mapOf(System.GBA to Folders()))
+        val melon = Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(nextToRom = true)))
+        val ra = Emulator("retroarch", "retroarch", "", mapOf(System.GBA to Folders()))
+        val bases = Bases(File(ctx.filesDir, "bases"))
+        for (id in listOf("custom", "melonds", "retroarch")) {
+            bases.set(id, "GBA-BPEF", "h")
+            bases.setReplaced(id, "GBA-BPEF", "o")
+        }
+        fun kept(id: String): Boolean {
+            rule.waitForIdle()
+            App.waitIo()
+            rule.waitForIdle()
+            return File(ctx.filesDir, "bases/$id.json").exists()
+        }
+        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(custom, melon, ra))
+        rule.onNodeWithText(s(R.string.tab_emulators)).performClick()
+
+        rule.onNodeWithText("Mine").performClick()
+        rule.onAllNodes(hasSetTextAction())[0].performTextInput("s") // its name
+        assertTrue(kept("custom"))
+        rule.onAllNodes(hasSetTextAction())[1].performTextInput("x") // its extension
+        assertFalse(kept("custom"))
+        assertTrue(bases.replaced("custom").isEmpty())
+        back()
+
+        rule.onNodeWithText("melonDS").performClick()
+        rule.onNode(isToggleable()).performClick() // saves next to the ROMs
+        assertFalse(kept("melonds"))
+        back()
+
+        rule.onNodeWithText("RetroArch").performClick()
+        chip("gpSP").performClick()
+        assertFalse(kept("retroarch"))
+        bases.set("retroarch", "GBA-BPEF", "h")
+        rule.onNodeWithText(s(R.string.remove_emulator)).performScrollTo().performClick()
+        rule.onNode(hasText(s(R.string.remove)) and dialog).performClick()
+        assertFalse(kept("retroarch"))
+        assertEquals(listOf("custom", "melonds"), App.emulators.map { it.id })
+    }
+
+    // The save-safety cases of the details (ADR 0026): a save that came back after a Download is a Conflict with its
+    // reason; an interrupted write offers only the server save and the backup copy, which goes back after a confirmation.
+    @Test
+    fun interruptedWriteAndCameBack() {
+        val key = "GBA-BPEF"
+        val url = fakeServer(sram) { line ->
+            if (line.split(" ")[1] == "/saves") 200 to """[{"code":"$key","hash":"${sha256(sram)}","taille":${sram.size},"client":"pc","nom":"Emerald"}]""".toByteArray()
+            else 200 to sram
+        }
+        val old = ByteArray(0x8000) { 3 }
+        val came = Entry(
+            emu, System.GBA, "Ruby", "Ruby.gba", Game(System.GBA, "GBA-AXVE", "Ruby", MemFile("Ruby.sav", old), Format(), emu.id),
+            status = Status(local(old), other, other.hash, State.CONFLICT, cameBack = true),
+        )
+        val copy = File(ctx.filesDir, "copy.sav").apply { writeBytes(old) }
+        val f = MemFile("Emerald.sav", old.copyOf(100)) // cut by the kill
+        val game = Game(System.GBA, key, "Emerald", f, Format(), emu.id)
+        val marker = PendingWrite(copy.path, "x")
+        Pending(File(ctx.filesDir, "pending.json")).set(game, marker)
+        val cut = Entry(emu, System.GBA, "Emerald", "Emerald.gba", game, status = Status(null, Version(sha256(sram), sram.size.toLong(), key), null, State.CONFLICT, interrupted = marker))
+        start(url = url, token = "t", emulators = listOf(emu), entries = listOf(came, cut))
+        rule.onNodeWithText(s(R.string.s_interrupted)).assertExists()
+
+        open("Ruby")
+        rule.onNodeWithText(s(R.string.why_came_back)).assertExists()
+        rule.onNodeWithText(s(R.string.keep_phone)).performScrollTo().assertExists()
+        back()
+
+        open("Emerald")
+        rule.onNodeWithText(s(R.string.why_interrupted)).assertExists()
+        rule.onAllNodesWithText(s(R.string.keep_phone)).assertCountEquals(0)
+        rule.onNodeWithText(s(R.string.take_server)).performScrollTo().assertExists()
+        rule.onNodeWithText(s(R.string.restore_copy)).performScrollTo()
+        fits(s(R.string.restore_copy), 2)
+        rule.onNodeWithText(s(R.string.restore_copy)).performClick()
+        rule.onNodeWithText(s(R.string.confirm_restore_copy)).assertExists()
+        rule.onNode(hasText(s(R.string.restore_copy)) and dialog and hasClickAction()).performClick()
+        waitFor(s(R.string.done_copy_restored))
+        assertArrayEquals(old, f.content)
+        rule.onNodeWithText(s(R.string.keep_phone)).performScrollTo().assertExists() // a plain Conflict now: no Base
+        assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } })
     }
 
     // A Duplicate (same Key): each ROM can get its own save, the Key of the PC for this ROM name; the list is read

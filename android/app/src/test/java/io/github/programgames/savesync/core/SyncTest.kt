@@ -17,7 +17,7 @@ import java.net.URL
 
 // MemoryFile is a fake Save file. bad: number of next writes that keep only half of the content (provider failure).
 // fail: number of next writes that throw before they touch the file (permission lost, folder gone). date: last change.
-class MemoryFile(
+open class MemoryFile(
     override val name: String,
     var content: ByteArray? = null,
     var bad: Int = 0,
@@ -140,6 +140,59 @@ class ReplaceTest {
         val e = runCatching { replace(game(f), null, random(1024, 2), Backups(tmp.root)) }.exceptionOrNull() as SyncException
         assertEquals(Problem.NOT_WRITTEN, e.problem)
         assertEquals(0, f.content!!.size)
+    }
+
+    // The marker of a write (ADR 0026): there during the write, with the Backup copy and the hash of the new content,
+    // gone once the file is verified (new content, or old one put back); it stays when the old one can't be put back.
+    @Test
+    fun pendingMarker() {
+        val pending = Pending(File(tmp.root, "pending.json"))
+        var during: PendingWrite? = null
+        lateinit var g: Game
+        val f = object : MemoryFile("a.sav", random(1024, 1)) {
+            override fun write(content: ByteArray) {
+                during = pending.get(g)
+                super.write(content)
+            }
+        }
+        g = game(f)
+        val copy = replace(g, f.content, random(1024, 2), Backups(tmp.root), pending)!!
+        assertEquals(PendingWrite(copy.path, sha256(random(1024, 2))), during)
+        assertNull(pending.get(g))
+
+        f.bad = 1 // written back: verified, no marker
+        assertEquals(Problem.WRITE, (runCatching { replace(g, f.content, random(1024, 3), Backups(tmp.root), pending) }.exceptionOrNull() as SyncException).problem)
+        assertNull(pending.get(g))
+
+        f.bad = 2 // not written back: the marker stays, with its Backup copy
+        assertEquals(Problem.RESTORE, (runCatching { replace(g, f.content, random(1024, 3), Backups(tmp.root), pending) }.exceptionOrNull() as SyncException).problem)
+        val left = pending.get(g)!!
+        assertArrayEquals(random(1024, 2), File(left.backup!!).readBytes())
+
+        // a write over the cut file keeps the copy of the first one; it goes once a write is verified
+        f.bad = 1
+        runCatching { replace(g, f.content, random(1024, 4), Backups(tmp.root), pending) }
+        assertEquals(left.backup, pending.get(g)!!.backup)
+        replace(g, f.content, random(1024, 4), Backups(tmp.root), pending)
+        assertNull(pending.get(g))
+    }
+
+    // Bases.clear forgets the Bases and the replaced Hashes of one emulator entry, nothing of the others.
+    @Test
+    fun basesClear() {
+        val b = Bases(tmp.root)
+        b.set("e", "K", "h1")
+        b.setReplaced("e", "K", "h0")
+        b.set("f", "K", "h2")
+        b.setReplaced("f", "K", "h3")
+        b.clear("e")
+        assertTrue(b.of("e").isEmpty())
+        assertTrue(b.replaced("e").isEmpty())
+        assertEquals(mapOf("K" to "h2"), b.of("f"))
+        assertEquals(mapOf("K" to "h3"), b.replaced("f"))
+        b.setReplaced("f", "K", null)
+        assertTrue(b.replaced("f").isEmpty())
+        b.clear("none") // nothing to delete
     }
 
     @Test
@@ -272,7 +325,7 @@ class PythonServerTest {
     }
 
     private fun syncer(name: String, reminded: () -> Boolean = { true }, clock: () -> Long = { java.lang.System.currentTimeMillis() }) =
-        Syncer(Remote(url, "test-token"), Bases(File(tmp.root, "bases-$name")), Backups(File(tmp.root, "copies-$name")), reminded, clock)
+        Syncer(Remote(url, "test-token"), Bases(File(tmp.root, "bases-$name")), Backups(File(tmp.root, "copies-$name")), Pending(File(tmp.root, "pending-$name.json")), reminded, clock)
 
     private fun gba(emulator: String, f: MemoryFile) = Game(System.GBA, "GBA-BPEF", "Pokemon Emeraude", f, Format(), emulator)
 
@@ -522,6 +575,99 @@ class PythonServerTest {
         assertEquals(sha256(random(32 shl 10, 4)), b.serverVersion("GBA-AXVE")!!.hash)
         assertNull(b.serverVersion("GBA-AXPE"))
         assertFalse(File(tmp.root, "copies-b").exists()) // no Backup copy: nothing was replaced
+    }
+
+    // An emulator left open writes its old save back after a Download (ADR 0026): Conflict with its reason, never To
+    // upload, never uploaded in the background. The rule stays while In sync; an Upload ends it.
+    @Test
+    fun emulatorWroteOldSaveBack() {
+        val a = syncer("a")
+        val b = syncer("b")
+        val server = random(32 shl 10, 1)
+        val old = random(32 shl 10, 9) // the progress on this phone before the Download
+        val fb = MemoryFile("e.sav", old)
+        val gb = gba("pizzaboy", fb)
+        val bases = Bases(File(tmp.root, "bases-b"))
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", MemoryFile("e.sav", server))))
+        assertEquals(Outcome.DOWNLOADED, b.sync(gb, Choice(keepPhone = false, serverHash = sha256(server))))
+        assertEquals(mapOf("GBA-BPEF" to sha256(old)), bases.replaced("pizzaboy"))
+        assertEquals(Outcome.IN_SYNC, b.sync(gb))
+        assertFalse(b.status(gb).cameBack)
+
+        fb.content = old // the emulator writes its old save back
+        val st = b.status(gb)
+        assertEquals(State.CONFLICT, st.state)
+        assertTrue(st.cameBack)
+        assertEquals(Outcome.CONFLICT, b.sync(gb, mayReplace = true))
+        assertEquals(listOf("Pokemon Emeraude"), b.syncAll(listOf(gb), setOf(gb)).conflicts)
+        val bg = b.uploadAll(listOf(gb))
+        assertEquals(0, bg.uploaded)
+        assertEquals(listOf("Pokemon Emeraude"), bg.conflicts)
+        assertEquals(sha256(server), b.serverVersion("GBA-BPEF")!!.hash)
+
+        // "Use the server save" writes it again (Backup copy first); the rule holds again
+        assertEquals(Outcome.DOWNLOADED, b.sync(gb, Choice(keepPhone = false, serverHash = sha256(server))))
+        assertArrayEquals(server, fb.content)
+        fb.content = old
+        assertTrue(b.status(gb).cameBack)
+        // "Keep this phone's save" is the user's choice: uploaded, and the rule ends
+        assertEquals(Outcome.UPLOADED, b.sync(gb, Choice(keepPhone = true, serverHash = sha256(server))))
+        assertTrue(bases.replaced("pizzaboy").isEmpty())
+        fb.content = random(32 shl 10, 3) // played on this phone: To upload as usual
+        assertEquals(State.TO_UPLOAD, b.status(gb).state)
+        assertEquals(1, b.uploadAll(listOf(gb)).uploaded)
+    }
+
+    // A write that did not finish (the app was killed between the marker and its removal, ADR 0026): Interrupted, a
+    // Conflict that is never uploaded and never kept as it is. "Use the server save" is a normal Download (the new file
+    // takes its shape from the Backup copy); "Restore the backup copy" writes the copy back. A marker whose write did
+    // finish is dropped.
+    @Test
+    fun interruptedWrite() {
+        val a = syncer("a")
+        val b = syncer("b")
+        val server = random(32 shl 10, 1)
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", MemoryFile("e.sav", server))))
+        val old = random(32 shl 10, 9) + random(16, 5) // with an RTC trailer
+        val copy = File(tmp.root, "copy.sav").apply { writeBytes(old) }
+        val fb = MemoryFile("e.sav", old.copyOf(1000)) // cut by the kill
+        val gb = gba("pizzaboy", fb)
+        val pending = Pending(File(tmp.root, "pending-b.json"))
+        pending.set(gb, PendingWrite(copy.path, sha256(server + random(16, 5))))
+
+        val st = b.status(gb)
+        assertEquals(State.CONFLICT, st.state)
+        assertEquals(copy.path, st.interrupted!!.backup)
+        assertEquals(Outcome.CONFLICT, b.sync(gb, mayReplace = true))
+        assertEquals(Outcome.CONFLICT, b.sync(gb, Choice(keepPhone = true, serverHash = sha256(server))))
+        assertEquals(listOf("Pokemon Emeraude"), b.uploadAll(listOf(gb)).conflicts)
+        assertEquals(sha256(server), b.serverVersion("GBA-BPEF")!!.hash) // nothing uploaded
+        assertArrayEquals(old.copyOf(1000), fb.content)
+
+        assertTrue(b.restoreCopy(gb))
+        assertArrayEquals(old, fb.content)
+        assertNull(pending.get(gb))
+        assertArrayEquals(old.copyOf(1000), File(tmp.root, "copies-b/pizzaboy").listFiles()!!.single().readBytes()) // the cut file
+        assertNull(b.status(gb).interrupted)
+        assertFalse(b.restoreCopy(gb)) // nothing to restore any more
+
+        fb.content = old.copyOf(1000)
+        pending.set(gb, PendingWrite(copy.path, sha256(server + random(16, 5))))
+        assertEquals(Outcome.DOWNLOADED, b.sync(gb, Choice(keepPhone = false, serverHash = sha256(server))))
+        assertArrayEquals(server + random(16, 5), fb.content) // the trailer of the copy, not of the cut file
+        assertNull(pending.get(gb))
+        assertEquals(State.IN_SYNC, b.status(gb).state)
+
+        pending.set(gb, PendingWrite(null, sha256(fb.content!!))) // killed after the write, before the removal
+        assertNull(b.status(gb).interrupted)
+        assertNull(pending.get(gb))
+
+        copy.delete() // no copy left: only the server save is offered
+        fb.content = old.copyOf(1000)
+        pending.set(gb, PendingWrite(copy.path, "x"))
+        assertNull(b.status(gb).interrupted!!.backup)
+        assertEquals(Problem.NO_COPY, problem(runCatching { b.restoreCopy(gb) }.exceptionOrNull()!!))
+        assertArrayEquals(old.copyOf(1000), fb.content)
     }
 
     @Test
