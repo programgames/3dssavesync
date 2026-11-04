@@ -64,6 +64,7 @@ typedef struct {
     char progress_hash[65];     /* server version read for server_progress; "" none */
     int has_server_progress;    /* that version is a known Pokémon game */
     unsigned char vc_cart, vc_ram; /* Virtual Console: cartridge type (0x147) and RAM size (0x149) of its ROM */
+    int vc_archive;    /* Virtual Console with no sav.dat: 1 if it has a Save archive anyway (then never written) */
     status_t status;
 } game_t;
 
@@ -341,7 +342,13 @@ static void read_local(game_t *j)
         snprintf(f, sizeof f, FORWARDERS "/%s.sav", j->name);
         snprintf(j->sav, sizeof j->sav, "%s", access(f, F_OK) == 0 ? f : j->sav_rom);
     }
-    if (j->rom_count != 1 || read_save(j, &bytes, &size)) return;
+    if (j->rom_count != 1 || read_save(j, &bytes, &size)) {
+        if (vc(j)) { /* no sav.dat: a game never started has no archive at all, and may get its first save */
+            char root[128];
+            j->vc_archive = title_root(j->title, root, sizeof root) >= 0;
+        }
+        return;
+    }
     if (vc(j)) { /* a savestate (rsm*.dat) could bring an old SRAM back: such a game is not synced */
         char root[128] = "";
         title_root(j->title, root, sizeof root);
@@ -720,7 +727,7 @@ static result_t create_vc_first_save(game_t *j, char *body, size_t size)
 
 static result_t download_save(game_t *j)
 {
-    char tmp[610], backup[700], url[300], hash[65], date[20], names[64];
+    char tmp[610], backup[700], url[300], hash[65], date[20];
     char *body;
     unsigned char *old_data = NULL, *new_data;
     size_t size, n = 0, sram;
@@ -731,7 +738,7 @@ static result_t download_save(game_t *j)
 
     /* The only local write of a Save goes through here (act, Conflict, Sync all, History). A VC game with an archive
      * but no sav.dat (or an unknown RAM size) is left alone; one with no archive at all gets its first save. */
-    if (vc(j) && !j->has_local && (title_root(j->title, names, sizeof names) >= 0 || !vc_sram_size(j)))
+    if (vc(j) && !j->has_local && (j->vc_archive || !vc_sram_size(j)))
         return make_result(RESULT_VC_NEVER_STARTED, NULL);
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_get(url, cfg.token, &body, &size);
@@ -1874,8 +1881,9 @@ static int switch_save_file(game_t *j)
     return 1;
 }
 
-/* What Sync all downloads: To download, except a Virtual Console game never started (no sav.dat to keep the footer of). */
-static int to_download(const game_t *j) { return j->status == STATUS_TO_DOWNLOAD && !(vc(j) && !j->has_local); }
+/* What Sync all downloads: To download, a Virtual Console game never started included (its first save is created), but
+ * not one with an archive and no sav.dat, nor one whose RAM size is not known. */
+static int to_download(const game_t *j) { return j->status == STATUS_TO_DOWNLOAD && !(vc(j) && !j->has_local && (j->vc_archive || !vc_sram_size(j))); }
 
 /* One Upload or Download of Sync all: progress, then the counts and the first failure. */
 static void sync_one(game_t *j, int upload, int done, int total, int *ok_count, int *failures, result_t *first, const char **first_game)
