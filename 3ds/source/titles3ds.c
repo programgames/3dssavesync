@@ -262,7 +262,7 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
 
 /* Product code of the title (AM, "CTR-N-QBXA"): GB/GBC Virtual Console or not (vc_product). The last answer is kept:
  * the choices screen asks for the same title at every frame. */
-Result title_product_code(u64 id, char *code)
+static Result title_product_code(u64 id, char *code)
 {
     Result r;
     code[0] = '\0';
