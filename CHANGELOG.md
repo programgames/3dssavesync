@@ -2,6 +2,17 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.11.0] - 2026-11-04
+
+### Added
+
+- **Android app.** The first release of the Android client: download `3dssavesync-android.apk` from this release and install it. It syncs melonDS, DraStic, RetroArch, Azahar, NooDS and other emulators with your server, and scans the QR code of the PC settings page to set itself up. Later versions install over it: never uninstall it, because that deletes its backup copies. See the [Android guide](docs/guide-android.md).
+- **Guided first run on Android**: server, emulator, folders, with the emulators installed on your phone first. The folder picker opens at the usual folder and tells you how many saves it found.
+
+### Safety
+
+- On Android, a save an emulator writes back after a download, or a write the phone interrupted, is shown as a conflict to resolve, never uploaded on its own.
+
 ## [3.10.0] - 2026-11-04
 
 ### Added
@@ -154,6 +165,7 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
+[3.11.0]: https://github.com/programgames/3dssavesync/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
 [3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
 [3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0

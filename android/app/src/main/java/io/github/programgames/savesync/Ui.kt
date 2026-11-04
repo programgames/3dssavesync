@@ -11,6 +11,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import io.github.programgames.savesync.core.parsePairing
 import android.os.Build
+import android.os.PowerManager
 import android.provider.OpenableColumns
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Switch
@@ -22,6 +23,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -194,6 +197,7 @@ fun problemText(p: Problem) = when (p) {
     Problem.VERSION_GONE -> R.string.p_version_gone
     Problem.VERSION_DAMAGED -> R.string.p_version_damaged
     Problem.SERVER_CHANGED -> R.string.p_server_changed
+    Problem.SAVE_GONE -> R.string.p_save_gone
     Problem.DAMAGED -> R.string.p_damaged
     Problem.BUSY -> R.string.p_busy
     Problem.BACKUP -> R.string.p_backup
@@ -234,6 +238,24 @@ fun ErrorBox(t: Throwable, lead: String? = null, note: String? = null, retry: ((
             }
         }
     }
+}
+
+// Confirm asks before an action: yes is the verb of its outcome ("Replace"), never "OK". The text scrolls (large fonts).
+// onNo closes the dialog, also before onYes runs.
+@Composable
+fun Confirm(title: String, yes: String, onYes: () -> Unit, onNo: () -> Unit, text: String = "", content: @Composable ColumnScope.() -> Unit = { Text(text) }) {
+    AlertDialog(
+        onDismissRequest = onNo,
+        title = { Text(title) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp), content = content) },
+        confirmButton = {
+            TextButton({
+                onNo()
+                onYes()
+            }) { Text(yes) }
+        },
+        dismissButton = { TextButton(onNo) { Text(stringResource(R.string.cancel)) } },
+    )
 }
 
 @Composable
@@ -422,11 +444,17 @@ fun SetupScreen(done: () -> Unit) {
 private fun BackgroundSection() {
     val ctx = LocalContext.current
     fun notificationsOn() = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    // battery optimisation on: Xiaomi, Samsung, Huawei, OnePlus… may never run the background work
+    fun batteryFree() = ctx.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) != false
     var on by remember { mutableStateOf(App.settings.background) }
     var notifications by remember { mutableStateOf(notificationsOn()) }
+    var battery by remember { mutableStateOf(batteryFree()) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifications = notificationsOn() }
-    // refused once, Android no longer asks: the notification settings of the app, then the state is read again
-    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { notifications = notificationsOn() }
+    // refused once, Android no longer asks: the settings of the app, then the states are read again
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        notifications = notificationsOn()
+        battery = batteryFree()
+    }
     Section(stringResource(R.string.bg_title))
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(on, role = Role.Switch) { v ->
@@ -450,6 +478,19 @@ private fun BackgroundSection() {
             }
             runCatching { open.launch(i) }
         }) { Text(stringResource(R.string.notifications_on)) }
+    }
+    if (on && !battery) {
+        // the app's own page (then Battery): no REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission; the list of every app
+        // when a phone has no such page
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.bg_battery), style = MaterialTheme.typography.bodySmall)
+                OutlinedButton({
+                    val page = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${ctx.packageName}".toUri())
+                    runCatching { open.launch(page) }.onFailure { runCatching { open.launch(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+                }) { Text(stringResource(R.string.bg_battery_open)) }
+            }
+        }
     }
     val last = App.lastRun
     Text(if (last == null) stringResource(R.string.bg_never) else pluralStringResource(R.plurals.bg_last, last.uploaded, dateText(last.time), last.uploaded))
@@ -507,18 +548,7 @@ fun HacksScreen(onBack: () -> Unit) {
         }
     }
     removing?.let { name ->
-        AlertDialog(
-            onDismissRequest = { removing = null },
-            title = { Text(stringResource(R.string.hack_remove_title)) },
-            text = { Text(stringResource(R.string.hack_remove_text, name)) },
-            confirmButton = {
-                TextButton({
-                    removing = null
-                    App.removeAlias(name)
-                }) { Text(stringResource(R.string.remove)) }
-            },
-            dismissButton = { TextButton({ removing = null }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.hack_remove_title), stringResource(R.string.remove), { App.removeAlias(name) }, { removing = null }, stringResource(R.string.hack_remove_text, name))
     }
 }
 
@@ -528,7 +558,8 @@ private fun check(uri: String?): FolderState {
     if (uri == null) return FolderState.NOT_SET
     val u = uri.toUri()
     if (App.resolver.persistedUriPermissions.none { it.uri == u && it.isReadPermission && it.isWritePermission }) return FolderState.NO_PERMISSION
-    return if (runCatching { children(App.resolver, u, rootId(u)) }.isSuccess) FolderState.READY else FolderState.MISSING
+    // SecurityException: the grant is there but the provider no longer honours it (revoked, card replaced)
+    return runCatching { children(App.resolver, u, rootId(u)) }.fold({ FolderState.READY }, { if (it is SecurityException) FolderState.NO_PERMISSION else FolderState.MISSING })
 }
 
 // emulatorState: the worst state of its folders. The saves folder of RetroArch is optional (saves next to the ROMs).
@@ -670,19 +701,10 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
         }
     }
     if (removing) {
-        AlertDialog(
-            onDismissRequest = { removing = false },
-            title = { Text(stringResource(R.string.remove_emulator_title, e.listName())) },
-            text = { Text(stringResource(R.string.remove_emulator_text)) },
-            confirmButton = {
-                TextButton({
-                    removing = false
-                    onBack()
-                    App.removeEmulator(id)
-                }) { Text(stringResource(R.string.remove)) }
-            },
-            dismissButton = { TextButton({ removing = false }) { Text(stringResource(R.string.cancel)) } },
-        )
+        Confirm(stringResource(R.string.remove_emulator_title, e.listName()), stringResource(R.string.remove), {
+            onBack()
+            App.removeEmulator(id)
+        }, { removing = false }, stringResource(R.string.remove_emulator_text))
     }
 }
 

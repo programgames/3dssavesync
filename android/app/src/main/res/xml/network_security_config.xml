@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Plain HTTP is allowed for a server on the home network, whose address the user types; https:// works the same way. -->
+<!-- Plain HTTP is allowed for a server on the home network, whose address the user types; https:// works the same way.
+     HTTPS also trusts the certificates the user installed (Android settings, Encryption and credentials): a home server
+     with its own certificate works once its certificate is installed on the phone. -->
 <network-security-config xmlns:tools="http://schemas.android.com/tools">
-    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration" />
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration,AcceptsUserCertificates">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

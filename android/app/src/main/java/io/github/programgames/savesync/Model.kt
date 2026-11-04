@@ -11,7 +11,9 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.Uploads
+import io.github.programgames.savesync.core.isGlobal
 import io.github.programgames.savesync.core.problem
 import androidx.compose.runtime.getValue
 import androidx.core.net.toUri
@@ -26,6 +28,7 @@ import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PlayInfo
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Remote
+import io.github.programgames.savesync.core.RomKeys
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
 import io.github.programgames.savesync.core.Summary
@@ -37,7 +40,9 @@ import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
 import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.newAlias
+import io.github.programgames.savesync.core.notRead
 import io.github.programgames.savesync.core.pokemonPlayInfo
+import io.github.programgames.savesync.core.pokemonSize
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
 import io.github.programgames.savesync.core.shortName
@@ -97,13 +102,13 @@ object App {
     private lateinit var context: Context
     private val io = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var syncer: Syncer? = null
 
     var emulators by mutableStateOf(listOf<Emulator>())
     var aliases by mutableStateOf(mapOf<String, String>()) // ROM hacks (ADR 0014)
     var entries by mutableStateOf(listOf<Entry>())
     var serverError by mutableStateOf<Throwable?>(null)
     var scanProblems by mutableStateOf(listOf<String>())
+    var scanNotes by mutableStateOf(listOf<String>()) // files the scan did not read (.7z…): not a problem, not notified
     var busy by mutableStateOf<String?>(null) // what runs now, for the progress line
     var summary by mutableStateOf<Summary?>(null)
     var message by mutableStateOf<Pair<String, Throwable?>?>(null) // result of the last action on one game
@@ -119,6 +124,7 @@ object App {
         emulators = settings.emulators
         aliases = settings.aliases
         lastRun = settings.lastRun
+        releaseFolders() // grants left by an older version, or by a pick the app did not save
     }
 
     fun setBackground(on: Boolean) {
@@ -132,26 +138,32 @@ object App {
         if (!settings.background || !configured()) return
         val (u, scanned) = withContext(io) {
             val (found, problems) = scanAll()
-            val s = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { false })
-            s.uploadAll(found.mapNotNull { it.game }) to problems
+            syncer { false }.uploadAll(found.mapNotNull { it.game }) to problems
         }
         record(u, scanned)
     }
 
-    // record keeps the result of a background pass for the settings screen, and notifies its problems once: the same
-    // problems are not notified again while they stay. ponytail: the text is the dedupe key, so a new language notifies again.
+    // record keeps the result of a background pass for the settings screen, and notifies only a new problem: one that
+    // the last pass did not have (by kind: a Conflict of a game, a Problem, a folder line). A server out of reach (away
+    // from home, Wi-Fi off) is never notified: the settings screen shows it, and such a pass says nothing of the other
+    // problems, so the known ones stay known. A problem that goes away is notified again if it comes back.
     internal fun record(u: Uploads, scanned: List<String>, now: Long = java.lang.System.currentTimeMillis()) {
-        val problems = (
-            u.conflicts.map { text(R.string.bg_conflict, it) } +
-                u.failures.map { (name, t) -> "$name: " + text(problemText(problem(t))) } + scanned
-            ).joinToString("\n")
-        val run = LastRun(now, u.uploaded, problems)
+        val lines = u.conflicts.map { text(R.string.bg_conflict, it) } + u.failures.map { (name, t) ->
+            val p = problem(t)
+            if (isGlobal(p)) text(problemText(p)) else "$name: " + text(problemText(p)) // the server, not this game
+        } + scanned
+        val run = LastRun(now, u.uploaded, lines.joinToString("\n"))
         settings.lastRun = run
         lastRun = run
-        if (problems == settings.notified) return
-        settings.notified = problems
-        if (problems.isNotEmpty()) notifyProblems(problems)
+        if (u.failures.any { problem(it.second) in unreachable }) return
+        val kinds = u.conflicts.map { "conflict $it" } + u.failures.map { problem(it.second).name } + scanned
+        val known = settings.notified.split('\n').toSet()
+        settings.notified = kinds.joinToString("\n")
+        if (kinds.any { it !in known }) notifyProblems(run.problems)
     }
+
+    // unreachable: the server can't be reached, which is normal away from home with a server on the home network.
+    private val unreachable = setOf(Problem.NO_HOST, Problem.REFUSED, Problem.NO_RESPONSE)
 
     // notifyProblems shows one notification; without the permission (Android 13+), the settings screen only.
     private fun notifyProblems(problems: String) {
@@ -192,6 +204,18 @@ object App {
     fun saveEmulators(list: List<Emulator>) {
         settings.emulators = list
         emulators = list
+        releaseFolders()
+    }
+
+    // releaseFolders gives back the folder grants that no emulator entry uses any more (a new pick, an entry or a system
+    // removed): Android keeps 128 to 512 of them, and when full it drops the oldest one, which can be a folder in use.
+    private fun releaseFolders() {
+        val used = emulators.flatMap { it.systems.values }.flatMap { listOfNotNull(it.roms, it.saves) }.toSet()
+        for (p in runCatching { resolver.persistedUriPermissions.toList() }.getOrDefault(emptyList())) {
+            if (p.uri.toString() in used) continue
+            val flags = (if (p.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or (if (p.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+            runCatching { resolver.releasePersistableUriPermission(p.uri, flags) }
+        }
     }
 
     // changeEmulator saves a change of one emulator entry; the list must be read again. Any change but its name forgets
@@ -236,8 +260,11 @@ object App {
     fun newId(profile: String): String = generateSequence(1) { it + 1 }.map { if (it == 1) profile else "$profile$it" }
         .first { id -> emulators.none { it.id == id } && !File(basesDir, "$id.json").exists() }
 
-    fun takeFolder(uri: Uri) =
+    // takeFolder keeps the access to a picked folder after a restart. Refused (a provider without persistent access):
+    // the folder still works until the app stops, then shows "Access lost" (Emulators).
+    fun takeFolder(uri: Uri) = runCatching {
         resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy != null) return
@@ -255,19 +282,22 @@ object App {
 
     // serverChanged: new address or token, the list and the States must be read again.
     fun serverChanged() {
-        syncer = null
         loaded = false
     }
 
-    private fun newSyncer() =
-        Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { !mustRemind() }).also { syncer = it }
+    // remote is the server of the settings; syncer, one pass of Syncs on it, with its own read of GET /saves (one per
+    // action: the list is never older than the action). reminded: the user saw the reminder to close the emulator.
+    private fun remote(client: String = "android") = Remote(settings.url, settings.token, client)
+
+    private fun syncer(reminded: () -> Boolean = { !mustRemind() }) = Syncer(remote(), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), reminded)
 
     // refresh reads the ROM folders, the server list and every Local save.
     fun refresh() = run(text(R.string.reading)) {
         message = null
-        val s = newSyncer()
-        val (found, problems) = withContext(io) { scanAll() }
+        val s = syncer()
+        val (found, problems, notes) = withContext(io) { scanAll() }
         scanProblems = problems
+        scanNotes = notes
         serverError = withContext(io) { runCatching { s.serverList() }.exceptionOrNull() }
         entries = withContext(io) { statuses(found, s) }
         loaded = true
@@ -283,7 +313,7 @@ object App {
     // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user. confirmed: the games whose save
     // on this phone the user agreed to see replaced (the list of the confirmation); no other save is replaced.
     fun syncAll(confirmed: List<Entry>) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val todo = entries.mapNotNull { e -> e.game?.takeIf { e.status?.state != null } }
         val ok = confirmed.mapNotNull { it.game }.toSet()
         summary = withContext(io) { s.syncAll(todo, ok) { i, g -> busy = text(R.string.syncing_game, i + 1, todo.size, g.name) } }
@@ -295,7 +325,7 @@ object App {
     // act runs the action of one Game (or the choice of a Conflict), then reads its State again. mayReplace: the user
     // confirmed that the server version replaces the save on this phone; else no existing save is replaced.
     fun act(e: Entry, choice: Choice? = null, mayReplace: Boolean = false) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val r = withContext(io) { runCatching { s.sync(e.game!!, choice, mayReplace) } }
         message = r.fold({
             text(
@@ -313,7 +343,7 @@ object App {
 
     // restoreCopy puts back the Backup copy of an interrupted write (ADR 0026), then reads the State of the game again.
     fun restoreCopy(e: Entry) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val r = withContext(io) { runCatching { s.restoreCopy(e.game!!) } }
         message = r.fold({ text(if (it) R.string.done_copy_restored else R.string.done_not_replaced) to null }, { text(R.string.done_failed) to it })
         reread(e, s)
@@ -327,25 +357,26 @@ object App {
     }
 
     // history reads the server Versions of a Game, newest first (ADR 0016).
-    suspend fun history(e: Entry): List<Version> = withContext(io) { Remote(settings.url, settings.token).history(e.game!!.key) }
+    suspend fun history(e: Entry): List<Version> = withContext(io) { remote().history(e.game!!.key) }
 
     // versionPlayInfo reads one Version of the History for its Pokémon play time; null if not a Pokémon save or not read.
-    suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = withContext(io) {
-        runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).version(e.game!!.key, v.file)) }.getOrNull()
+    suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = if (!pokemonSize(v.size)) null else withContext(io) {
+        runCatching { pokemonPlayInfo(remote().version(e.game!!.key, v.file)) }.getOrNull()
     }
 
     // restore makes an old Version the Current version on the server, then reads the State of the game again: this phone
     // gets it only through the usual Download, with its Backup copy and its checks (ADR 0016). done: the error, or null.
     fun restore(e: Entry, v: Version, current: Version, done: (Throwable?) -> Unit) = run(text(R.string.restoring)) {
-        val r = withContext(io) { runCatching { restoreVersion(Remote(settings.url, settings.token, RESTORE_CLIENT), e.game!!.key, v, current) } }
+        val r = withContext(io) { runCatching { restoreVersion(remote(RESTORE_CLIENT), e.game!!.key, v, current) } }
         message = r.fold({ text(R.string.restored, v.number) to null }, { text(R.string.restore_failed) to it })
-        if (r.isSuccess) reread(e, syncer ?: newSyncer())
+        if (r.isSuccess) reread(e, syncer())
         done(r.exceptionOrNull())
     }
 
-    // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details).
-    suspend fun serverPlayInfo(e: Entry): PlayInfo? = withContext(io) {
-        runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).get(e.game!!.key)) }.getOrNull()
+    // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details). Only a save of a
+    // Pokémon size is downloaded: the details of any other game read nothing.
+    suspend fun serverPlayInfo(e: Entry): PlayInfo? = if (e.status?.server?.size?.let(::pokemonSize) != true) null else withContext(io) {
+        runCatching { pokemonPlayInfo(remote().get(e.game!!.key)) }.getOrNull()
     }
 
     // testConnection reads GET /saves: the number of games, or the error.
@@ -353,18 +384,25 @@ object App {
         done(withContext(io) { runCatching { Remote(settings.url, settings.token, timeoutMs = 10_000).list().size } })
     }
 
-    internal fun scanAll(): Pair<List<Entry>, List<String>> { // internal: SafTest
+    private val romKeysFile get() = File(context.filesDir, "romkeys.json") // the Keys of the ROMs read (RomKeys)
+
+    // scanAll reads the folders of every emulator entry: the games, the problems, and the notes (files not read).
+    internal fun scanAll(): Triple<List<Entry>, List<String>, List<String>> { // internal: SafTest
         val all = mutableListOf<Entry>()
         val problems = mutableListOf<String>()
+        val notes = mutableListOf<String>()
+        val keys = RomKeys(romKeysFile)
         for (e in emulators) {
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
+            val skipped = mutableMapOf<String, String>() // document -> extension, once even in a folder of two systems
             for ((s, f) in e.systems) {
                 try {
-                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
+                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, keys, skipped)
                 } catch (t: Throwable) {
                     problems += text(R.string.folder_problem, "${e.listName()} ${s.label}") // human words only: no exception text
                 }
             }
+            skippedNote(e, skipped)?.let { notes += it }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })
             all += kept.map { it.first }
             // One line per Key, else per shared Save file, with the ROM files of the Duplicate.
@@ -374,7 +412,15 @@ object App {
                 all += group.first().first.copy(game = null, dups = group.map { it.first.rom }, sharedFile = shared)
             }
         }
-        return all.sortedBy { it.name.lowercase() } to problems
+        keys.save()
+        return Triple(all.sortedBy { it.name.lowercase() }, problems, notes)
+    }
+
+    // skippedNote: "melonDS: 3 files not read (.7z, .rar)…", or null when the scan read every ROM-like file.
+    private fun skippedNote(e: Emulator, skipped: Map<String, String>): String? {
+        if (skipped.isEmpty()) return null
+        val exts = skipped.values.toSortedSet().joinToString(", ")
+        return context.resources.getQuantityString(R.plurals.files_not_read, skipped.size, e.listName(), skipped.size, exts)
     }
 
     // folderResult is the line under the folders of one System after a pick: how many games have a save there, or why
@@ -386,26 +432,30 @@ object App {
         if (if (s == System.N3DS) f.saves == null else f.roms == null) return null
         val found = mutableListOf<Pair<Entry, String>>()
         val problems = mutableListOf<String>()
+        val skipped = mutableMapOf<String, String>()
         try {
-            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
+            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, RomKeys(romKeysFile), skipped) // read only
         } catch (_: Exception) {
             return text(R.string.folder_unreadable)
         }
         problems.firstOrNull()?.let { return it }
         val saves = found.count { it.first.game!!.file.exists() }
-        return when {
+        val line = when {
             found.isEmpty() -> text(R.string.folder_no_game)
             saves > 0 -> context.resources.getQuantityString(R.plurals.folder_found, saves, saves, found.size)
             e.profile == RETROARCH && f.saves == null -> text(R.string.folder_no_save_retroarch)
             else -> text(R.string.folder_no_save)
         }
+        return listOfNotNull(line, skippedNote(e, skipped)).joinToString("\n")
     }
 
     // scan walks the ROM folder of one System (subfolders too, hidden ones skipped) and pairs each ROM with its Save.
     // RetroArch: its saves folder is optional; the Save is in the folder of the core there ("Sort saves into folders by
-    // core"), at its root, or next to the ROM ("Write saves to content directory"). Several of them: the newest, the one
-    // RetroArch writes now. None: a new Save goes to the first of these places that exists.
-    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
+    // core"), at its root, or next to the ROM ("Write saves to content directory"); "Sort saves into folders by content
+    // directory" adds a folder named after the ROM's folder, in the core folder or at the root. Several of them: the
+    // newest, the one RetroArch writes now. None: a new Save goes to the first of these places that exists.
+    // skipped: the ROM-like files not read (notRead), by document.
+    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>, keys: RomKeys, skipped: MutableMap<String, String>) {
         val aliases = aliases
         val romTree = (f.roms ?: return).toUri()
         val retro = e.profile == RETROARCH
@@ -419,19 +469,23 @@ object App {
             children(resolver, saveTree, rootId(saveTree)).find { it.folder && it.name.equals(label, ignoreCase = true) }?.id
         } else null
         val format = e.format(s)
-        val lists = mutableMapOf<String, List<Doc>>() // "tree|folder" -> its files
-        fun files(tree: Uri, folder: String) = lists.getOrPut("$tree|$folder") { children(resolver, tree, folder).filter { !it.folder } }
-        fun walk(parent: String, depth: Int) {
+        val lists = mutableMapOf<String, List<Doc>>() // "tree|folder" -> what it holds
+        fun list(tree: Uri, folder: String) = lists.getOrPut("$tree|$folder") { children(resolver, tree, folder) }
+        fun files(tree: Uri, folder: String) = list(tree, folder).filter { !it.folder }
+        // sub: the folder of this name in a folder of the saves tree (RetroArch content directory), any case
+        fun sub(folder: String?, name: String) = folder?.let { p -> list(saveTree!!, p).find { it.folder && it.name.equals(name, ignoreCase = true) }?.id }
+        fun walk(parent: String, dirName: String, depth: Int) {
             for (d in children(resolver, romTree, parent)) {
                 if (d.name.startsWith(".")) continue
                 if (d.folder) {
-                    if (depth < 5) walk(d.id, depth + 1)
+                    if (depth < 5) walk(d.id, d.name, depth + 1)
                     continue
                 }
                 val ext = extension(d.name)
+                if (ext in notRead) skipped[d.id] = ext
                 if (ext != ".zip" && extensions[ext] != s) continue
                 val uri = android.provider.DocumentsContract.buildDocumentUriUsingTree(romTree, d.id)
-                val rom = readRom(d.name) { resolver.openInputStream(uri)!! } ?: continue
+                val rom = keys.rom(uri.toString(), d.name, d.size, d.modified) { readRom(d.name) { resolver.openInputStream(uri)!! } } ?: continue
                 if (rom.system != s || rom.key == null) continue
                 val name = rom.name // Android emulators name the save after the ROM or the .zip
                 // the Alias of a ROM hack, as on the PC; an invalid one: never synced under the header Key
@@ -442,7 +496,10 @@ object App {
                 }
                 val file = name + format.ext
                 val places = when {
-                    retro -> listOfNotNull(core?.let { saveTree!! to it }, saveTree?.let { it to rootId(it) }, romTree to parent)
+                    retro -> listOfNotNull(
+                        sub(core, dirName)?.let { saveTree!! to it }, core?.let { saveTree!! to it },
+                        saveTree?.let { t -> sub(rootId(t), dirName)?.let { t to it } }, saveTree?.let { it to rootId(it) }, romTree to parent,
+                    )
                     f.nextToRom -> listOf(romTree to parent)
                     else -> listOf(saveTree!! to rootId(saveTree))
                 }
@@ -456,7 +513,7 @@ object App {
                 out += Entry(e, s, name, d.name, g) to "$tree|$folder|$file"
             }
         }
-        walk(rootId(romTree), 0)
+        walk(rootId(romTree), rootId(romTree).substringAfter(':').substringAfterLast('/'), 0)
     }
 
     // scan3DS finds the 3DS Pokémon games in the Azahar user folder (or its sdmc folder): the title ID is in the path,

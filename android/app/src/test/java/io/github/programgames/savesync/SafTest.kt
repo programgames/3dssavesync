@@ -247,6 +247,39 @@ class SafTest {
         assertFalse(ops.any { it.startsWith("write") || it.startsWith("create") || it.startsWith("delete") }) // a scan only reads
     }
 
+    // A second scan opens no ROM that did not change (RomKeys): only the new or changed ones, by size and date.
+    @Test
+    fun scanOpensChangedRomsOnly() {
+        put("roms/nds/Platine.nds", nds("CPUF")).setLastModified(1_700_000_000_000L)
+        put("roms/nds/Noire.nds", nds("IRBF")).setLastModified(1_700_000_000_000L)
+        App.aliases = emptyMap()
+        App.saveEmulators(listOf(Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(roms = tree("roms/nds").toString(), nextToRom = true)))))
+        fun keys() = App.scanAll().first.map { it.game!!.key }.toSet()
+        fun opened() = ops.filter { it.startsWith("read roms/") }.sorted().also { ops.clear() }
+        assertEquals(setOf("CPUF", "IRBF"), keys())
+        assertEquals(listOf("read roms/nds/Noire.nds", "read roms/nds/Platine.nds"), opened())
+        assertEquals(setOf("CPUF", "IRBF"), keys())
+        assertEquals(emptyList<String>(), opened())
+        put("roms/nds/Platine.nds", nds("CPUE")).setLastModified(1_700_000_100_000L) // another region, another date
+        assertEquals(setOf("CPUE", "IRBF"), keys())
+        assertEquals(listOf("read roms/nds/Platine.nds"), opened())
+    }
+
+    // The folder grants that no entry uses are given back (Android keeps 128 to 512 and drops the oldest when full).
+    @Test
+    fun unusedGrantsReleased() {
+        val roms = tree("roms/nds")
+        val saves = tree("DraStic/backup")
+        for (u in listOf(roms, saves, tree("old"))) App.takeFolder(u)
+        App.saveEmulators(listOf(Emulator("drastic", "drastic", "", mapOf(System.DS to Folders(roms = roms.toString(), saves = saves.toString())))))
+        assertEquals(setOf(roms, saves), r.persistedUriPermissions.map { it.uri }.toSet())
+        App.changeEmulator("drastic") { it.copy(systems = mapOf(System.DS to Folders(roms = roms.toString(), nextToRom = true))) }
+        assertEquals(listOf(roms), r.persistedUriPermissions.map { it.uri })
+        App.removeEmulator("drastic")
+        assertEquals(emptyList<Uri>(), r.persistedUriPermissions.map { it.uri })
+        App.waitIo()
+    }
+
     // RetroArch: one saves folder for the entry. Each save is found in the folder of the chosen core, at the root of the
     // saves folder, or next to its ROM; the newest when several; a new save goes to the core folder. Never the save
     // of another core. No saves folder: next to the ROMs.
@@ -281,6 +314,31 @@ class SafTest {
         val alone = App.scanAll().first.associate { it.name to it.game!!.file.location }
         assertEquals("roms/gba/Saphir.srm", alone["Saphir"])
         assertEquals("roms/gba/Emeraude.srm", alone["Emeraude"]) // not found: next to the ROM
+    }
+
+    // RetroArch "Sort saves into folders by content directory": the folder named after the ROM's folder, in the core
+    // folder or at the root of the saves folder. The ROM files the app does not read (.7z, .rar) give one note per entry,
+    // even when two systems share the ROM folder; never a problem.
+    @Test
+    fun contentDirectoryAndFilesNotRead() {
+        put("roms/gba/Emeraude.gba", gba("BPEF"))
+        put("roms/gba/hacks/Rubis.gba", gba("AXVF"))
+        put("roms/gba/Pack.7z")
+        put("roms/gba/hacks/Old.rar")
+        put("roms/gba/notes.txt")
+        put("RetroArch/saves/mGBA/gba/Emeraude.srm", save(1)) // by core, then by content directory
+        put("RetroArch/saves/hacks/Rubis.srm", save(2)) // by content directory only
+        val folders = Folders(roms = tree("roms/gba").toString(), saves = tree("RetroArch/saves").toString())
+        App.aliases = emptyMap()
+        App.saveEmulators(listOf(Emulator("retroarch", RETROARCH, "", mapOf(System.GBA to folders, System.GB to folders))))
+        val (entries, problems, notes) = App.scanAll()
+        assertEquals(emptyList<String>(), problems)
+        val at = entries.associate { it.name to it.game!!.file.location }
+        assertEquals("RetroArch/saves/mGBA/gba/Emeraude.srm", at["Emeraude"])
+        assertEquals("RetroArch/saves/hacks/Rubis.srm", at["Rubis"])
+        val note = ctx.resources.getQuantityString(R.plurals.files_not_read, 2, App.emulators[0].listName(), 2, ".7z, .rar")
+        assertEquals(listOf(note), notes)
+        assertEquals(ctx.resources.getQuantityString(R.plurals.folder_found, 2, 2, 2) + "\n" + note, App.folderResult(App.emulators[0], System.GBA))
     }
 
     // The line after a pick: games with a save, or why none (no game, no save, Android/data).

@@ -36,7 +36,8 @@ class StringsTest {
             for (i in 0 until nodes.length) {
                 val t = nodes.item(i).textContent
                 if (Regex("[ \\t][:;?!»]|«[ \\t]|«[^\\u00A0]|[^\\u00A0]»").containsMatchIn(t)) bad += t
-                if (Regex("\\b(tu|toi|ton|ta|tes|te)\\b", RegexOption.IGNORE_CASE).containsMatchIn(t)) bad += t
+                // (?U): \b around the accented letters too ("complète" has no "te"), on every Java version
+                if (Regex("(?U)\\b(tu|toi|ton|ta|tes|te)\\b", RegexOption.IGNORE_CASE).containsMatchIn(t)) bad += t
             }
         }
         assertEquals(emptyList<String>(), bad)

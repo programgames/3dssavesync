@@ -38,6 +38,8 @@ Then **Show my games** opens the list. To add another emulator later: **Emulator
 
 Plain `http://` is allowed for a server on your home network. An `https://` address works the same way. The app gives up on a connection after 5 seconds, so a home server that can't be reached (away from home) fails fast.
 
+**HTTPS with your own certificate.** A home server with a self-signed certificate, or one signed by your own certificate authority, works once its certificate is installed on the phone: copy the certificate file (`.crt` or `.pem`) to the phone, then in the Android settings open **Security** (or **Security and privacy**) > **Encryption and credentials** > **Install a certificate** > **CA certificate**. The menu names change a little between makers. Without it, the app says that the phone doesn't trust the server's certificate. On your home network, the `http://` address of the server works without a certificate.
+
 ## Emulators
 
 The app can only read the folders that you choose with the Android folder picker. It writes only the save files of these folders. It never deletes a file, except the files it has just created itself when the first save of a 3DS game fails (see [3DS games never started in Azahar](#3ds-games-never-started-in-azahar)).
@@ -62,9 +64,13 @@ The folder picker opens where the emulator usually keeps its folders when that f
 
 A folder on an SD card shows **SD card** before its path. If the card is out, the folder shows as not found: insert the card.
 
+**Files not read.** The app reads `.nds`, `.gb`, `.gbc`, `.gba` and `.zip` ROMs, like the PC. It does not open `.7z` or `.rar` archives, nor `.dsi`, `.srl` or `.sgb` files. When a ROM folder has some, one line says how many, after the folder choice and above the games list. Unzip the archive, or make it a `.zip`, to sync that game.
+
+If Android takes back the access to a folder (an app cleaner, a card that was changed), the folder shows **Access lost**: choose it again. The app gives back the access to the folders that no emulator uses any more, so Android never drops a folder still in use (it keeps 128 to 512 of them).
+
 RetroArch supports these cores, with the same formats as on the PC: melonDS DS and DeSmuME (DS); Gambatte, SameBoy, mGBA, VBA-M (GB); mGBA, gpSP, Beetle GBA, VBA-M (GBA). gpSP and Beetle GBA write a fixed-size file: a game must first be on the server, uploaded from another emulator, before they can sync it ([ADR 0011](adr/0011-srm-gpsp-beetle-taille-du-serveur.md)).
 
-**RetroArch saves.** The app looks for the save of each game in three places: the folder of the chosen core in the saves folder (`RetroArch/saves/mGBA`, "Sort saves into folders by core", the default), the saves folder itself (that option off), and next to the ROM ("Write saves to content directory"). It never takes the save of another core. If two places have a save, it takes the newest one: the one RetroArch writes now. A game with no save yet gets its first one in the core folder if it exists, else in the saves folder, else next to the ROM. Not supported: "Sort saves into folders by content directory".
+**RetroArch saves.** The app looks for the save of each game in three places: the folder of the chosen core in the saves folder (`RetroArch/saves/mGBA`, "Sort saves into folders by core", the default), the saves folder itself (that option off), and next to the ROM ("Write saves to content directory"). With "Sort saves into folders by content directory", it also looks in the folder named after the ROM's folder, inside the core folder or the saves folder (`RetroArch/saves/mGBA/gba` for a ROM in `roms/gba`). It never takes the save of another core. If two places have a save, it takes the newest one: the one RetroArch writes now. A game with no save yet gets its first one in the first of these folders that exists, else next to the ROM.
 
 **Not supported:** Lemuroid and SkyEmu. They keep their saves in `Android/data`, and since Android 11 no other app can open that folder, with or without "All files access". The same applies to Pizza Boy and My Boy! unless they can save elsewhere.
 
@@ -188,9 +194,11 @@ What it never does:
 - It never writes a save or a backup copy on this phone. The only thing it changes on the phone is its record of the last sync, after the server has accepted an upload.
 - It never uploads a save that changed in the last 30 seconds: the emulator may still be writing it. That save waits for the next run.
 
-On Android 13 and later, the app asks for the permission to show notifications when you turn the setting on. A conflict or a failure then shows as one notification, which is not shown again while the same problems stay. If you refuse the permission, the background upload still works: the problems show only in **Settings**, with **Turn on notifications**, which opens the notification settings of the app. **Settings** always shows the last run: its time, the number of saves uploaded and the problems.
+On Android 13 and later, the app asks for the permission to show notifications when you turn the setting on. A new problem then shows as one notification: a conflict, a refused token, a folder the app can't read. The same problems are not notified again while they stay. A server that can't be reached is never notified: away from home, a server on your home network can't answer, and that is normal. If you refuse the permission, the background upload still works: the problems show only in **Settings**, with **Turn on notifications**, which opens the notification settings of the app. **Settings** always shows the last run: its time, the number of saves uploaded and the problems.
 
-Battery and data: each run reads the save folders and the server list, and uploads only the saves that changed. Android may run it later than every 15 minutes, for example in battery saver mode or when the app is rarely used. Turn the setting off to stop it.
+Battery and data: each run reads the save folders and the server list, and uploads only the saves that changed. It opens again only the ROM files that are new or changed since the last run. Android may run it later than every 15 minutes, for example in battery saver mode or when the app is rarely used. Turn the setting off to stop it.
+
+**Phones that stop background work.** Xiaomi (HyperOS, MIUI), Samsung, Huawei, OnePlus and other makers often stop the work of an app to save battery. While Android optimises the battery use of the app, **Settings** shows a short help with **Open the app settings**: there, tap **Battery** and choose **Unrestricted** (or **Don't optimise**). On Xiaomi, also turn on **Autostart** for the app. The names change between makers; [dontkillmyapp.com](https://dontkillmyapp.com) lists the steps for each one.
 
 ## Look
 
@@ -203,7 +211,7 @@ On Android 12 and later, the app takes the colours of your wallpaper; before, it
 
 ## Build it yourself
 
-With JDK 17 and the Android SDK (platform 35, build-tools 35.0.0):
+With JDK 17 and the Android SDK (platform 36; Gradle adds the build-tools it needs). The unit tests also need a JDK 21 (Robolectric runs Android 16 on it only): Gradle finds an installed one, or downloads one.
 
 ```
 cd android

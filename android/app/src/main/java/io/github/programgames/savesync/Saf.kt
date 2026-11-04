@@ -16,17 +16,18 @@ import java.io.IOException
 // Storage Access Framework: the app sees only the folders the user chose (ACTION_OPEN_DOCUMENT_TREE) and writes only
 // the Save files of these folders. It deletes only what it created itself in the same action (SafArchive.undo).
 
-// Doc is one entry of a folder: its document id inside the tree, its name, folder or not, last change.
-data class Doc(val id: String, val name: String, val folder: Boolean, val modified: Long?)
+// Doc is one entry of a folder: its document id inside the tree, its name, folder or not, last change, size.
+data class Doc(val id: String, val name: String, val folder: Boolean, val modified: Long?, val size: Long? = null)
 
 fun children(r: ContentResolver, tree: Uri, parent: String): List<Doc> {
     val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent)
-    val cols = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED)
+    val cols = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED, Document.COLUMN_SIZE)
     val c = r.query(uri, cols, null, null, null) ?: throw FileNotFoundException("$tree: folder not readable")
     return c.use {
         buildList {
             while (it.moveToNext()) {
-                add(Doc(it.getString(0), it.getString(1) ?: "", it.getString(2) == Document.MIME_TYPE_DIR, if (it.isNull(3)) null else it.getLong(3)))
+                fun long(i: Int) = if (it.isNull(i)) null else it.getLong(i)
+                add(Doc(it.getString(0), it.getString(1) ?: "", it.getString(2) == Document.MIME_TYPE_DIR, long(3), long(4)))
             }
         }
     }
@@ -42,6 +43,18 @@ fun make(r: ContentResolver, tree: Uri, parent: String, mime: String, name: Stri
     val created = children(r, tree, parent).find { it.id == doc }?.name
     if (created != name) throw FileNotFoundException("${parent.substringAfter(':')}/$name: the folder created \"$created\" instead")
     return doc
+}
+
+// writeDoc replaces the whole content of a document ("wt": truncate; "w" may leave the end of a longer old file), synced
+// to the disk. The callers read it back.
+fun writeDoc(r: ContentResolver, uri: Uri, content: ByteArray) {
+    r.openFileDescriptor(uri, "wt")!!.use { pfd ->
+        FileOutputStream(pfd.fileDescriptor).use {
+            it.write(content)
+            it.flush()
+            it.fd.sync()
+        }
+    }
 }
 
 // rootId is the document id of the folder the user chose.
@@ -92,18 +105,10 @@ class SafFile(
         return r.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, found))!!.use { it.readBytes() }
     }
 
-    // write replaces the whole content ("wt": truncate), synced to the disk. The caller reads it back (replace). Then
-    // the folder is listed again, so the details show the new date (modified).
+    // write replaces the whole content (writeDoc). The caller reads it back (replace). Then the folder is listed again,
+    // so the details show the new date (modified).
     override fun write(content: ByteArray) {
-        val doc = find() ?: create()
-        val uri = DocumentsContract.buildDocumentUriUsingTree(tree, doc)
-        r.openFileDescriptor(uri, "wt")!!.use { pfd ->
-            FileOutputStream(pfd.fileDescriptor).use {
-                it.write(content)
-                it.flush()
-                it.fd.sync()
-            }
-        }
+        writeDoc(r, DocumentsContract.buildDocumentUriUsingTree(tree, find() ?: create()), content)
         runCatching { find() } // only the date: the write itself succeeded
     }
 
@@ -151,13 +156,7 @@ class SafArchive(
         val data = missing.fold(base) { p, n -> child(p, n, true) ?: make(r, tree, p, dir, n) { made += it to true } }
         val meta = make(r, tree, data, "application/octet-stream", "00000001.metadata") { made += it to false }
         val uri = DocumentsContract.buildDocumentUriUsingTree(tree, meta)
-        r.openFileDescriptor(uri, "wt")!!.use { pfd ->
-            FileOutputStream(pfd.fileDescriptor).use {
-                it.write(metadata)
-                it.flush()
-                it.fd.sync()
-            }
-        }
+        writeDoc(r, uri, metadata)
         val back = r.openInputStream(uri)!!.use { it.readBytes() }
         if (!back.contentEquals(metadata)) throw IOException("${main.location}: 00000001.metadata doesn't match once written")
         main.parent = make(r, tree, data, dir, "00000001") { made += it to true }

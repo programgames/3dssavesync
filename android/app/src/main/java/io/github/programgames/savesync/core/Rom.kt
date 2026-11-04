@@ -1,5 +1,7 @@
 package io.github.programgames.savesync.core
 
+import org.json.JSONObject
+import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipInputStream
 
@@ -23,6 +25,9 @@ val titles3DS = mapOf(
 
 // extensions maps a ROM extension to its System.
 val extensions = mapOf(".nds" to System.DS, ".gb" to System.GB, ".gbc" to System.GB, ".gba" to System.GBA)
+
+// notRead: ROM files the app does not read (like the PC): the scan counts them, so the user knows why a game is missing.
+val notRead = setOf(".7z", ".rar", ".dsi", ".srl", ".sgb")
 
 fun extension(file: String): String = file.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" }.lowercase()
 
@@ -53,6 +58,33 @@ fun readRom(fileName: String, open: () -> InputStream): Rom? {
     }
     val system = extensions[ext] ?: return null
     return Rom(system, open().use { key(system, readHeader(it)) }, name)
+}
+
+// RomKeys is what readRom found in each ROM file at the last pass, by document, with the size and date of the file
+// (romkeys.json in app-private storage): a refresh or a background pass opens only the new or changed ROMs. A file the
+// cache can't vouch for (no size or date from the provider, damaged cache) is read again; save keeps the ROMs of this
+// pass only. ponytail: size + date, not the content; a ROM replaced by another of the same size and date keeps the old
+// Key. Add a hash of the header if a provider is seen to keep the date on a new file.
+class RomKeys(private val file: File) {
+    private val old = runCatching { JSONObject(file.readText()) }.getOrNull() ?: JSONObject()
+    private val now = JSONObject()
+
+    // rom: readRom of a ROM file (id: its document; name: its file name), from the cache when the file did not change.
+    fun rom(id: String, name: String, size: Long?, modified: Long?, read: () -> Rom?): Rom? {
+        val stamp = if (size == null || modified == null || modified <= 0) null else "$size|$modified|"
+        val cached = stamp?.let { old.optString(id).takeIf { v -> v.startsWith(it) } }?.removePrefix(stamp)?.split('|')
+        val r = if (cached?.size == 2) {
+            runCatching { cached[0].takeIf { it.isNotEmpty() }?.let { Rom(System.valueOf(it), cached[1].ifEmpty { null }, withoutExtension(name)) } }
+        } else null
+        val rom = if (r != null && r.isSuccess) r.getOrNull() else read()
+        if (stamp != null) now.put(id, stamp + (rom?.system?.name ?: "") + "|" + (rom?.key ?: ""))
+        return rom
+    }
+
+    // save writes the cache when it changed; a failure only costs a full read next time.
+    fun save() {
+        if (now.toString() != old.toString()) runCatching { writeAtomic(file, now.toString()) }
+    }
 }
 
 // readHeader reads the first 0x200 bytes; a ROM shorter than the header keeps zeros.

@@ -65,8 +65,8 @@ class Settings(context: Context) {
         get() = p.getBoolean("background", false)
         set(v) = p.edit { putBoolean("background", v) }
 
-    // lastRun: the last background pass. notified: the problems of the last notification, so the same ones are not
-    // notified again.
+    // lastRun: the last background pass. notified: the kinds of problem of the last pass that reached the server, one
+    // per line, so the same ones are not notified again (App.record).
     var lastRun: LastRun?
         get() = if (p.contains("lastRunTime")) LastRun(p.getLong("lastRunTime", 0), p.getInt("lastRunUploaded", 0), p.getString("lastRunProblems", "") ?: "") else null
         set(v) = p.edit {
