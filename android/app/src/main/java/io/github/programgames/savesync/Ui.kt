@@ -162,6 +162,7 @@ fun problemText(p: Problem) = when (p) {
     Problem.OPEN -> R.string.p_open
     Problem.FORMAT -> R.string.p_format
     Problem.PERMISSION -> R.string.p_permission
+    Problem.NO_COPY -> R.string.p_no_copy
     Problem.OTHER -> R.string.p_other
 }
 
@@ -447,10 +448,7 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
     val e = App.emulators.firstOrNull { it.id == id } ?: return
     val pr = e.profile()
     val custom = pr == CUSTOM
-    fun update(f: (Emulator) -> Emulator) {
-        App.saveEmulators(App.emulators.map { if (it.id == id) f(it) else it })
-        App.loaded = false // the game list must be read again
-    }
+    fun update(f: (Emulator) -> Emulator) = App.changeEmulator(id, f = f) // forgets the Bases of this entry (ADR 0026)
     fun updateSystem(s: System, f: (Folders) -> Folders) = update { it.copy(systems = it.systems + (s to f(it.systems[s] ?: Folders()))) }
     // "DS|saves": which folder the picker is for (kept if the activity restarts meanwhile)
     var target by rememberSaveable { mutableStateOf<String?>(null) }
@@ -471,7 +469,7 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
         Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(pr.hint))
             if (custom) {
-                OutlinedTextField(e.label, { v -> update { it.copy(label = v) } }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
+                OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } },Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     for (s in CUSTOM.systems.keys) {
                         Checkbox(s in e.systems, { on -> update { it.copy(systems = if (on) it.systems + (s to Folders()) else it.systems - s) } })
@@ -522,8 +520,7 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
                 TextButton({
                     removing = false
                     onBack()
-                    App.saveEmulators(App.emulators.filter { it.id != id })
-                    App.loaded = false
+                    App.removeEmulator(id)
                 }) { Text(stringResource(R.string.remove)) }
             },
             dismissButton = { TextButton({ removing = false }) { Text(stringResource(R.string.cancel)) } },

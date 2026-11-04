@@ -22,6 +22,7 @@ import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Choice
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Outcome
+import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PlayInfo
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Remote
@@ -50,8 +51,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
 
-// Shown is what the list shows for a Game: its State, or why it has none.
-enum class Shown { CONFLICT, TO_DOWNLOAD, TO_UPLOAD, IN_SYNC, DUPLICATE, UNKNOWN, NONE }
+// Shown is what the list shows for a Game: its State, or why it has none. INTERRUPTED: a write of its save on this
+// phone did not finish (a Conflict with only two choices, ADR 0026).
+enum class Shown { CONFLICT, INTERRUPTED, TO_DOWNLOAD, TO_UPLOAD, IN_SYNC, DUPLICATE, UNKNOWN, NONE }
 
 // Entry is one ROM of one emulator. game null: Duplicate (never synced); dups: the ROM files of the Duplicate.
 data class Entry(
@@ -71,6 +73,7 @@ data class Entry(
         get() = when {
             game == null -> Shown.DUPLICATE
             error != null || status == null -> Shown.UNKNOWN
+            status.interrupted != null -> Shown.INTERRUPTED
             else -> when (status.state) {
                 State.CONFLICT -> Shown.CONFLICT
                 State.TO_DOWNLOAD -> Shown.TO_DOWNLOAD
@@ -124,7 +127,7 @@ object App {
         if (!settings.background || !configured()) return
         val (u, scanned) = withContext(io) {
             val (found, problems) = scanAll()
-            val s = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), { false })
+            val s = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { false })
             s.uploadAll(found.mapNotNull { it.game }) to problems
         }
         record(u, scanned)
@@ -167,6 +170,7 @@ object App {
     val resolver: ContentResolver get() = context.contentResolver
     val backupsDir: File get() = File(context.getExternalFilesDir(null) ?: context.filesDir, "copies")
     private val basesDir get() = File(context.filesDir, "bases")
+    private val pendingFile get() = File(context.filesDir, "pending.json") // markers of the writes in progress (ADR 0026)
 
     fun text(id: Int, vararg args: Any): String = context.getString(id, *args)
 
@@ -184,6 +188,29 @@ object App {
         settings.emulators = list
         emulators = list
     }
+
+    // changeEmulator saves a change of one emulator entry; the list must be read again. Any change but its name forgets
+    // its Bases (ADR 0026): a Base of the old folders, core or extension must never turn a save into To upload.
+    fun changeEmulator(id: String, keepBases: Boolean = false, f: (Emulator) -> Emulator) {
+        if (!keepBases) forgetBases(id)
+        saveEmulators(emulators.map { if (it.id == id) f(it) else it })
+        loaded = false
+    }
+
+    // removeEmulator forgets an entry and deletes its Bases; no file of its folders and no Backup copy is touched.
+    fun removeEmulator(id: String) {
+        forgetBases(id)
+        saveEmulators(emulators.filter { it.id != id })
+        loaded = false
+    }
+
+    // forgetBases runs on the io thread, after the action that runs now: a sync in progress can't write a Base after it.
+    private fun forgetBases(id: String) = scope.launch {
+        withContext(io) { runCatching { Bases(basesDir).clear(id) } }.onFailure { message = text(R.string.done_failed) to it }
+    }
+
+    // waitIo: the tests wait for the actions queued on the io thread.
+    internal fun waitIo() = kotlinx.coroutines.runBlocking(io) {}
 
     // addAlias gives this ROM its own save (ADR 0014): the Key of the PC for the same ROM name. The list must be read
     // again. Returns the error text, or null.
@@ -227,7 +254,8 @@ object App {
         loaded = false
     }
 
-    private fun newSyncer() = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), { !mustRemind() }).also { syncer = it }
+    private fun newSyncer() =
+        Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { !mustRemind() }).also { syncer = it }
 
     // refresh reads the ROM folders, the server list and every Local save.
     fun refresh() = run(text(R.string.reading)) {
@@ -274,6 +302,14 @@ object App {
                 },
             ) to null
         }, { text(R.string.done_failed) to it })
+        reread(e, s)
+    }
+
+    // restoreCopy puts back the Backup copy of an interrupted write (ADR 0026), then reads the State of the game again.
+    fun restoreCopy(e: Entry) = run(text(R.string.syncing)) {
+        val s = syncer ?: newSyncer()
+        val r = withContext(io) { runCatching { s.restoreCopy(e.game!!) } }
+        message = r.fold({ text(if (it) R.string.done_copy_restored else R.string.done_not_replaced) to null }, { text(R.string.done_failed) to it })
         reread(e, s)
     }
 

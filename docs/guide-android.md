@@ -8,9 +8,22 @@ The Android app syncs the saves of the emulators on your phone or tablet with yo
 
 ## Install
 
-1. Get `3dssavesync-android-debug.apk` (for now: the `android-debug-apk` artifact of the CI, or build it, see below).
+1. Get `3dssavesync-android.apk` from the assets of a release on GitHub. Check it against `SHA256SUMS` if you want. (Development builds: the `android-debug-apk` artifact of the CI, or build it, see below.)
 2. Open it on the phone. Android asks to allow installs from this source: allow it for your file manager or browser.
-3. Start **3dssavesync**.
+3. Start **3dssavesync**. **Settings** shows its version at the bottom.
+
+## Update
+
+**Never uninstall the app to update it: uninstalling deletes the backup copies**, the record of the last sync of each game and the settings. Install the new `3dssavesync-android.apk` over the old one: open it, then tap **Update**. Android keeps the app's data.
+
+Every release APK is signed with the same key, so each one installs over the previous one. A development build (the `android-debug-apk` artifact, or one you built) has another key: Android refuses to install a release over it. Only then do you have to uninstall once. Back up the copies first (see below).
+
+To keep the backup copies on a computer, at any time:
+
+1. Connect the phone to the computer over USB and choose **File transfer** on the phone.
+2. Copy the folder `Android/data/io.github.programgames.savesync/files/copies/` to the computer. The Android Files app may hide `Android/data`: use the computer.
+
+With `adb`: `adb pull /sdcard/Android/data/io.github.programgames.savesync/files/copies/`. To put them back after a new install, copy the folder to the same place, or restore one copy by hand (see [Backup copies](#backup-copies)).
 
 ## First start
 
@@ -40,6 +53,8 @@ RetroArch supports these cores, with the same formats as on the PC: melonDS DS a
 
 The folder picker cannot choose the root of the internal storage or the `Download` folder itself: choose a folder inside it.
 
+When you change a folder, a core, an extension, the systems or **Saves next to the ROMs** of an emulator, the app forgets the last sync of its games. The record of the old folders must not decide for the new ones: each game that the server also has then shows **In sync** or **Conflict**, never **To upload**. Open each Conflict and choose. A new name keeps the record. Removing an emulator also deletes its record (never its saves or the backup copies).
+
 ## Games
 
 Each line shows the state, the system and the game. The states are the same words as on the 3DS:
@@ -48,7 +63,8 @@ Each line shows the state, the system and the game. The states are the same word
 |---|---|---|
 | **To upload** (yellow) | The save on this phone is newer. | **Upload** sends it to the server. |
 | **To download** (cyan) | The server has a newer version. | **Download** replaces the phone save, after a backup copy. |
-| **Conflict** (red) | The save changed on the phone and on the server since the last sync. | Open the game and choose which one to keep. |
+| **Conflict** (red) | The save changed on the phone and on the server since the last sync, or it came back to the save a download replaced (see below). | Open the game and choose which one to keep. |
+| **Interrupted** (red) | The last write of this save on the phone did not finish. | Don't play the game. Open it and choose the server save or the backup copy (see [Interrupted write](#interrupted-write)). |
 | **In sync** (green) | Same save on both sides. | Nothing. |
 | **Duplicate** (grey) | Two ROMs hold the same game, or would use the same save file. | Same game: keep one ROM. A ROM hack: give it its own save (see [ROM hacks](#rom-hacks)). Same save file: rename one ROM. |
 | **Unknown** (grey) | The server or the save could not be read. | The message says why. |
@@ -61,6 +77,7 @@ Games with no save anywhere are hidden; a line at the end of the list counts the
 
 - Before the first of these actions, or the first Sync all, since the app started, it shows a reminder to close the emulator. Tick **Don't show again** to skip it from then on. Sync all shows it once for the whole pass.
 - It refuses to replace a save that changed less than 30 seconds ago: the emulator may still be open. The message says to close it, then sync again. Sync all goes on with the next games and lists the refused ones in its summary. Some folders give no date for their files: there, the app relies on the reminder only.
+- It remembers the save that each download replaced. If that exact save comes back later, the emulator was probably still open and wrote it back. The game then shows **Conflict** with this reason, never **To upload**, and the background upload does not send it. Open the game and choose: **Use the server save** writes the downloaded save again, **Keep this phone's save** uploads the old one. The app stops this check for a game after its next upload.
 
 Uploads are always allowed: reading a save while the emulator is open loses nothing.
 
@@ -72,6 +89,15 @@ The game details show two cards, **This phone** and **Server**, with the date, t
 - **Use the server save**: replaces the phone save, after a backup copy.
 
 If the server changed while you were choosing, nothing is done and the screen shows the new version.
+
+## Interrupted write
+
+Before it replaces a save, the app writes a small note in its private storage, and it deletes the note after it has read the new save back. If Android stops the app during the write (low memory, the app swiped away, a battery saver, the phone switched off), the note stays and the save file may be cut. At the next refresh, the game shows **Interrupted**. Don't play it before you choose:
+
+- **Use the server save**: the usual download, with its confirmation and a backup copy of the cut file.
+- **Restore the backup copy**: puts back the copy that the app made before the interrupted write. The app first makes a copy of the cut file too, then reads the result back.
+
+The app never uploads a cut file and never offers to keep it. If the backup copy is no longer there, only the server save is offered. A note whose file was fully written (the app stopped just after the write) is deleted without a question.
 
 ## History and Restore
 
@@ -128,7 +154,7 @@ Before any save is replaced, the app writes a copy, reads it back and compares i
 
 Connect the phone to a computer over USB to see them (the Android Files app may hide `Android/data`). To restore one, copy it into the emulator's save folder with the name of the save file (for example `Pokemon Emerald.srm`), then open the game in the app: it shows **To upload** or **Conflict**. Older versions of every save are also on the server: see [History and Restore](#history-and-restore).
 
-Removing an emulator from the app, or uninstalling the app, deletes nothing in your save folders. Uninstalling the app deletes its backup copies: copy them first if you want to keep them.
+Removing an emulator from the app, or uninstalling the app, deletes nothing in your save folders. **Uninstalling the app deletes its backup copies**: to update, install the new APK over the old one (see [Update](#update)), and copy the backups to a computer if you want to keep them.
 
 ## Background upload
 
@@ -137,7 +163,7 @@ In **Settings**, turn on **Upload saves in the background** (it is off by defaul
 What it never does:
 
 - It never downloads. A background download could write under an emulator that is still open, and Android gives no way to see if one runs. Open the app and use **Sync all** to get the saves of your other devices.
-- It never resolves a conflict: it only reports it.
+- It never resolves a conflict: it only reports it. A save that came back after a download and an interrupted write are conflicts too.
 - It never writes a save or a backup copy on this phone. The only thing it changes on the phone is its record of the last sync, after the server has accepted an upload.
 - It never uploads a save that changed in the last 30 seconds: the emulator may still be writing it. That save waits for the next run.
 
@@ -159,4 +185,4 @@ cd android
 ./gradlew testDebugUnitTest assembleDebug
 ```
 
-The APK is in `android/app/build/outputs/apk/debug/`. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). The UI tests run every screen on the computer with Robolectric, in English and in French, on a small screen. The storage tests run the real folder code (scan, replace with its backup copy, 3DS folder creation) against a test document provider over a temporary folder: no emulator or phone needed (the first run downloads Robolectric and its Android library). Design choices: [ADR 0026](adr/0026-client-android.md).
+The APK is in `android/app/build/outputs/apk/debug/`. `./gradlew assembleRelease` builds a shrunk (R8) release APK; it is unsigned unless `ANDROID_KEYSTORE_FILE`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` are set. `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME` set its version (default 1 and `dev`). The CI signs the release APK of each tag with the project key. The unit tests read the shared files in `tests/` and run a sync against `server/server.py` (Python 3 needed). The UI tests run every screen on the computer with Robolectric, in English and in French, on a small screen. The storage tests run the real folder code (scan, replace with its backup copy, 3DS folder creation) against a test document provider over a temporary folder: no emulator or phone needed (the first run downloads Robolectric and its Android library). Design choices: [ADR 0026](adr/0026-client-android.md).
