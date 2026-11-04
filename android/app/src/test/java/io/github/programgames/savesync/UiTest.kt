@@ -811,7 +811,16 @@ open class UiTest {
         row.performScrollTo().assertIsOff().performClick().assertIsOn()
         assertTrue(App.settings.background)
         assertEquals(WorkInfo.State.ENQUEUED, work().single().state)
-        row.performClick().assertIsOff()
+        // battery optimisation on (Robolectric's default): the help card opens the app's own settings page
+        rule.onNodeWithText(s(R.string.bg_battery)).performScrollTo().assertIsDisplayed()
+        val app = shadowOf(ctx as android.app.Application)
+        while (app.nextStartedActivity != null) Unit // the notification permission request
+        rule.onNodeWithText(s(R.string.bg_battery_open)).performScrollTo().performClick()
+        val page = app.nextStartedActivity
+        assertEquals(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, page.action)
+        assertEquals("package:${ctx.packageName}", page.dataString)
+        row.performScrollTo().performClick().assertIsOff()
+        rule.onAllNodesWithText(s(R.string.bg_battery)).assertCountEquals(0)
         assertFalse(App.settings.background)
         assertEquals(WorkInfo.State.CANCELLED, work().single().state)
 

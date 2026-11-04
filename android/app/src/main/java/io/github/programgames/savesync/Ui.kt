@@ -11,6 +11,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import io.github.programgames.savesync.core.parsePairing
 import android.os.Build
+import android.os.PowerManager
 import android.provider.OpenableColumns
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Switch
@@ -51,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -423,11 +425,17 @@ fun SetupScreen(done: () -> Unit) {
 private fun BackgroundSection() {
     val ctx = LocalContext.current
     fun notificationsOn() = NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+    // battery optimisation on: Xiaomi, Samsung, Huawei, OnePlus… may never run the background work
+    fun batteryFree() = ctx.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(ctx.packageName) != false
     var on by remember { mutableStateOf(App.settings.background) }
     var notifications by remember { mutableStateOf(notificationsOn()) }
+    var battery by remember { mutableStateOf(batteryFree()) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifications = notificationsOn() }
-    // refused once, Android no longer asks: the notification settings of the app, then the state is read again
-    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { notifications = notificationsOn() }
+    // refused once, Android no longer asks: the settings of the app, then the states are read again
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        notifications = notificationsOn()
+        battery = batteryFree()
+    }
     Section(stringResource(R.string.bg_title))
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(on, role = Role.Switch) { v ->
@@ -451,6 +459,19 @@ private fun BackgroundSection() {
             }
             runCatching { open.launch(i) }
         }) { Text(stringResource(R.string.notifications_on)) }
+    }
+    if (on && !battery) {
+        // the app's own page (then Battery): no REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission; the list of every app
+        // when a phone has no such page
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.bg_battery), style = MaterialTheme.typography.bodySmall)
+                OutlinedButton({
+                    val page = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${ctx.packageName}".toUri())
+                    runCatching { open.launch(page) }.onFailure { runCatching { open.launch(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+                }) { Text(stringResource(R.string.bg_battery_open)) }
+            }
+        }
     }
     val last = App.lastRun
     Text(if (last == null) stringResource(R.string.bg_never) else pluralStringResource(R.plurals.bg_last, last.uploaded, dateText(last.time), last.uploaded))

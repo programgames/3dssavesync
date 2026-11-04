@@ -287,6 +287,8 @@
     <string name="bg_help">Toutes les 15 minutes environ, l\'application envoie les sauvegardes jouées sur ce téléphone. Elle ne récupère rien et ne remplace aucune sauvegarde ici&#160;: pour cela, ouvrez l\'application et touchez Tout synchroniser.</string>
     <string name="bg_no_notification">Les notifications sont désactivées&#160;: les problèmes s\'affichent seulement ici.</string>
     <string name="notifications_on">Activer les notifications</string>
+    <string name="bg_battery">Android peut arrêter l\'envoi en arrière-plan pour économiser la batterie, surtout sur les téléphones Xiaomi, Samsung, Huawei et OnePlus. Ouvrez les paramètres de l\'application, touchez Batterie, puis choisissez Sans restriction (ou Ne pas optimiser). Sur Xiaomi, activez aussi le Démarrage automatique.</string>
+    <string name="bg_battery_open">Ouvrir les paramètres de l\'application</string>
     <string name="bg_never">Aucun passage en arrière-plan pour l\'instant.</string>
     <plurals name="bg_last">
         <item quantity="one">Dernier passage&#160;: %1$s. %2$d sauvegarde envoyée.</item>

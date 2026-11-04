@@ -285,6 +285,8 @@
     <string name="bg_help">About every 15 minutes, the app uploads the saves you played on this phone. It never downloads and never replaces a save here: open the app and tap Sync all for that.</string>
     <string name="bg_no_notification">Notifications are off: the problems show only here.</string>
     <string name="notifications_on">Turn on notifications</string>
+    <string name="bg_battery">Android may stop the background upload to save battery, above all on Xiaomi, Samsung, Huawei and OnePlus phones. Open the app settings, tap Battery, then choose Unrestricted (or Don\'t optimise). On Xiaomi, also turn on Autostart.</string>
+    <string name="bg_battery_open">Open the app settings</string>
     <string name="bg_never">No background run yet.</string>
     <plurals name="bg_last">
         <item quantity="one">Last run: %1$s. %2$d save uploaded.</item>
