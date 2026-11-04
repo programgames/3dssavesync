@@ -265,6 +265,21 @@ class SafTest {
         assertEquals(listOf("read roms/nds/Platine.nds"), opened())
     }
 
+    // The folder grants that no entry uses are given back (Android keeps 128 to 512 and drops the oldest when full).
+    @Test
+    fun unusedGrantsReleased() {
+        val roms = tree("roms/nds")
+        val saves = tree("DraStic/backup")
+        for (u in listOf(roms, saves, tree("old"))) App.takeFolder(u)
+        App.saveEmulators(listOf(Emulator("drastic", "drastic", "", mapOf(System.DS to Folders(roms = roms.toString(), saves = saves.toString())))))
+        assertEquals(setOf(roms, saves), r.persistedUriPermissions.map { it.uri }.toSet())
+        App.changeEmulator("drastic") { it.copy(systems = mapOf(System.DS to Folders(roms = roms.toString(), nextToRom = true))) }
+        assertEquals(listOf(roms), r.persistedUriPermissions.map { it.uri })
+        App.removeEmulator("drastic")
+        assertEquals(emptyList<Uri>(), r.persistedUriPermissions.map { it.uri })
+        App.waitIo()
+    }
+
     // RetroArch: one saves folder for the entry. Each save is found in the folder of the chosen core, at the root of the
     // saves folder, or next to its ROM; the newest when several; a new save goes to the core folder. Never the save
     // of another core. No saves folder: next to the ROMs.

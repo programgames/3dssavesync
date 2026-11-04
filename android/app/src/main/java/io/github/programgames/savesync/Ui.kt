@@ -550,7 +550,8 @@ private fun check(uri: String?): FolderState {
     if (uri == null) return FolderState.NOT_SET
     val u = uri.toUri()
     if (App.resolver.persistedUriPermissions.none { it.uri == u && it.isReadPermission && it.isWritePermission }) return FolderState.NO_PERMISSION
-    return if (runCatching { children(App.resolver, u, rootId(u)) }.isSuccess) FolderState.READY else FolderState.MISSING
+    // SecurityException: the grant is there but the provider no longer honours it (revoked, card replaced)
+    return runCatching { children(App.resolver, u, rootId(u)) }.fold({ FolderState.READY }, { if (it is SecurityException) FolderState.NO_PERMISSION else FolderState.MISSING })
 }
 
 // emulatorState: the worst state of its folders. The saves folder of RetroArch is optional (saves next to the ROMs).

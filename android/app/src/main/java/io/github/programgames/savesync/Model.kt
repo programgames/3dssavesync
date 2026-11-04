@@ -123,6 +123,7 @@ object App {
         emulators = settings.emulators
         aliases = settings.aliases
         lastRun = settings.lastRun
+        releaseFolders() // grants left by an older version, or by a pick the app did not save
     }
 
     fun setBackground(on: Boolean) {
@@ -203,6 +204,18 @@ object App {
     fun saveEmulators(list: List<Emulator>) {
         settings.emulators = list
         emulators = list
+        releaseFolders()
+    }
+
+    // releaseFolders gives back the folder grants that no emulator entry uses any more (a new pick, an entry or a system
+    // removed): Android keeps 128 to 512 of them, and when full it drops the oldest one, which can be a folder in use.
+    private fun releaseFolders() {
+        val used = emulators.flatMap { it.systems.values }.flatMap { listOfNotNull(it.roms, it.saves) }.toSet()
+        for (p in runCatching { resolver.persistedUriPermissions.toList() }.getOrDefault(emptyList())) {
+            if (p.uri.toString() in used) continue
+            val flags = (if (p.isReadPermission) Intent.FLAG_GRANT_READ_URI_PERMISSION else 0) or (if (p.isWritePermission) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else 0)
+            runCatching { resolver.releasePersistableUriPermission(p.uri, flags) }
+        }
     }
 
     // changeEmulator saves a change of one emulator entry; the list must be read again. Any change but its name forgets
@@ -247,8 +260,11 @@ object App {
     fun newId(profile: String): String = generateSequence(1) { it + 1 }.map { if (it == 1) profile else "$profile$it" }
         .first { id -> emulators.none { it.id == id } && !File(basesDir, "$id.json").exists() }
 
-    fun takeFolder(uri: Uri) =
+    // takeFolder keeps the access to a picked folder after a restart. Refused (a provider without persistent access):
+    // the folder still works until the app stops, then shows "Access lost" (Emulators).
+    fun takeFolder(uri: Uri) = runCatching {
         resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    }
 
     private fun run(label: String, block: suspend () -> Unit) {
         if (busy != null) return
