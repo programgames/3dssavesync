@@ -102,7 +102,6 @@ object App {
     private lateinit var context: Context
     private val io = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var syncer: Syncer? = null
 
     var emulators by mutableStateOf(listOf<Emulator>())
     var aliases by mutableStateOf(mapOf<String, String>()) // ROM hacks (ADR 0014)
@@ -139,8 +138,7 @@ object App {
         if (!settings.background || !configured()) return
         val (u, scanned) = withContext(io) {
             val (found, problems) = scanAll()
-            val s = Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { false })
-            s.uploadAll(found.mapNotNull { it.game }) to problems
+            syncer { false }.uploadAll(found.mapNotNull { it.game }) to problems
         }
         record(u, scanned)
     }
@@ -284,17 +282,19 @@ object App {
 
     // serverChanged: new address or token, the list and the States must be read again.
     fun serverChanged() {
-        syncer = null
         loaded = false
     }
 
-    private fun newSyncer() =
-        Syncer(Remote(settings.url, settings.token), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), { !mustRemind() }).also { syncer = it }
+    // remote is the server of the settings; syncer, one pass of Syncs on it, with its own read of GET /saves (one per
+    // action: the list is never older than the action). reminded: the user saw the reminder to close the emulator.
+    private fun remote(client: String = "android") = Remote(settings.url, settings.token, client)
+
+    private fun syncer(reminded: () -> Boolean = { !mustRemind() }) = Syncer(remote(), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), reminded)
 
     // refresh reads the ROM folders, the server list and every Local save.
     fun refresh() = run(text(R.string.reading)) {
         message = null
-        val s = newSyncer()
+        val s = syncer()
         val (found, problems, notes) = withContext(io) { scanAll() }
         scanProblems = problems
         scanNotes = notes
@@ -313,7 +313,7 @@ object App {
     // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user. confirmed: the games whose save
     // on this phone the user agreed to see replaced (the list of the confirmation); no other save is replaced.
     fun syncAll(confirmed: List<Entry>) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val todo = entries.mapNotNull { e -> e.game?.takeIf { e.status?.state != null } }
         val ok = confirmed.mapNotNull { it.game }.toSet()
         summary = withContext(io) { s.syncAll(todo, ok) { i, g -> busy = text(R.string.syncing_game, i + 1, todo.size, g.name) } }
@@ -325,7 +325,7 @@ object App {
     // act runs the action of one Game (or the choice of a Conflict), then reads its State again. mayReplace: the user
     // confirmed that the server version replaces the save on this phone; else no existing save is replaced.
     fun act(e: Entry, choice: Choice? = null, mayReplace: Boolean = false) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val r = withContext(io) { runCatching { s.sync(e.game!!, choice, mayReplace) } }
         message = r.fold({
             text(
@@ -343,7 +343,7 @@ object App {
 
     // restoreCopy puts back the Backup copy of an interrupted write (ADR 0026), then reads the State of the game again.
     fun restoreCopy(e: Entry) = run(text(R.string.syncing)) {
-        val s = syncer ?: newSyncer()
+        val s = syncer()
         val r = withContext(io) { runCatching { s.restoreCopy(e.game!!) } }
         message = r.fold({ text(if (it) R.string.done_copy_restored else R.string.done_not_replaced) to null }, { text(R.string.done_failed) to it })
         reread(e, s)
@@ -357,26 +357,26 @@ object App {
     }
 
     // history reads the server Versions of a Game, newest first (ADR 0016).
-    suspend fun history(e: Entry): List<Version> = withContext(io) { Remote(settings.url, settings.token).history(e.game!!.key) }
+    suspend fun history(e: Entry): List<Version> = withContext(io) { remote().history(e.game!!.key) }
 
     // versionPlayInfo reads one Version of the History for its Pokémon play time; null if not a Pokémon save or not read.
     suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = if (!pokemonSize(v.size)) null else withContext(io) {
-        runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).version(e.game!!.key, v.file)) }.getOrNull()
+        runCatching { pokemonPlayInfo(remote().version(e.game!!.key, v.file)) }.getOrNull()
     }
 
     // restore makes an old Version the Current version on the server, then reads the State of the game again: this phone
     // gets it only through the usual Download, with its Backup copy and its checks (ADR 0016). done: the error, or null.
     fun restore(e: Entry, v: Version, current: Version, done: (Throwable?) -> Unit) = run(text(R.string.restoring)) {
-        val r = withContext(io) { runCatching { restoreVersion(Remote(settings.url, settings.token, RESTORE_CLIENT), e.game!!.key, v, current) } }
+        val r = withContext(io) { runCatching { restoreVersion(remote(RESTORE_CLIENT), e.game!!.key, v, current) } }
         message = r.fold({ text(R.string.restored, v.number) to null }, { text(R.string.restore_failed) to it })
-        if (r.isSuccess) reread(e, syncer ?: newSyncer())
+        if (r.isSuccess) reread(e, syncer())
         done(r.exceptionOrNull())
     }
 
     // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details). Only a save of a
     // Pokémon size is downloaded: the details of any other game read nothing.
     suspend fun serverPlayInfo(e: Entry): PlayInfo? = if (e.status?.server?.size?.let(::pokemonSize) != true) null else withContext(io) {
-        runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).get(e.game!!.key)) }.getOrNull()
+        runCatching { pokemonPlayInfo(remote().get(e.game!!.key)) }.getOrNull()
     }
 
     // testConnection reads GET /saves: the number of games, or the error.
