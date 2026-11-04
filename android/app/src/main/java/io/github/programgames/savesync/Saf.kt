@@ -16,17 +16,18 @@ import java.io.IOException
 // Storage Access Framework: the app sees only the folders the user chose (ACTION_OPEN_DOCUMENT_TREE) and writes only
 // the Save files of these folders. It deletes only what it created itself in the same action (SafArchive.undo).
 
-// Doc is one entry of a folder: its document id inside the tree, its name, folder or not, last change.
-data class Doc(val id: String, val name: String, val folder: Boolean, val modified: Long?)
+// Doc is one entry of a folder: its document id inside the tree, its name, folder or not, last change, size.
+data class Doc(val id: String, val name: String, val folder: Boolean, val modified: Long?, val size: Long? = null)
 
 fun children(r: ContentResolver, tree: Uri, parent: String): List<Doc> {
     val uri = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent)
-    val cols = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED)
+    val cols = arrayOf(Document.COLUMN_DOCUMENT_ID, Document.COLUMN_DISPLAY_NAME, Document.COLUMN_MIME_TYPE, Document.COLUMN_LAST_MODIFIED, Document.COLUMN_SIZE)
     val c = r.query(uri, cols, null, null, null) ?: throw FileNotFoundException("$tree: folder not readable")
     return c.use {
         buildList {
             while (it.moveToNext()) {
-                add(Doc(it.getString(0), it.getString(1) ?: "", it.getString(2) == Document.MIME_TYPE_DIR, if (it.isNull(3)) null else it.getLong(3)))
+                fun long(i: Int) = if (it.isNull(i)) null else it.getLong(i)
+                add(Doc(it.getString(0), it.getString(1) ?: "", it.getString(2) == Document.MIME_TYPE_DIR, long(3), long(4)))
             }
         }
     }

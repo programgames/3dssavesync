@@ -4,12 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 class RomTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private fun header(at: Int, bytes: ByteArray, size: Int = 0x200) = ByteArray(size).also { bytes.copyInto(it, at) }
 
     private fun gb(title: String, checksum: Int) = header(0x134, title.toByteArray(Charsets.ISO_8859_1)).also {
@@ -115,5 +121,45 @@ class RomTest {
             "Tetris" to "Tetris",
             "(Proto) Game" to "(Proto) Game", // a leading tag stays, as on the 3DS
         )) assertEquals(name, short, shortName(name))
+    }
+
+    // The cache of the ROM Keys (romkeys.json): a ROM file is opened again only when its size or date changed, when the
+    // provider gives no date, or when the cache is damaged (it is then made again).
+    @Test
+    fun romKeys() {
+        val f = File(tmp.root, "romkeys.json")
+        var opens = 0
+        fun scan(size: Long?, date: Long?, code: String = "IRBF", name: String = "Noire 2.nds"): Rom? {
+            val keys = RomKeys(f)
+            return keys.rom("doc1", name, size, date) {
+                opens++
+                read(name, header(0x0C, code.toByteArray()))
+            }.also { keys.save() }
+        }
+        assertEquals(Rom(System.DS, "IRBF", "Noire 2"), scan(10, 100))
+        assertEquals(1, opens)
+        assertEquals(Rom(System.DS, "IRBF", "Noire 2"), scan(10, 100))
+        assertEquals(1, opens) // same size and date: not opened
+        assertEquals("Blanche", scan(10, 100, name = "Blanche.nds")!!.name) // the name always comes from the file
+        assertEquals(1, opens)
+        assertEquals("IRAF", scan(10, 200, "IRAF")!!.key) // new date
+        assertEquals("IRAF", scan(12, 200, "IRAF")!!.key) // new size
+        assertEquals(3, opens)
+        scan(12, null, "IRAF")
+        scan(12, 0, "IRAF") // some providers: no date, or 0
+        scan(12, 0, "IRAF")
+        assertEquals(6, opens)
+        assertNull(scan(1, 1, name = "notes.zip")) // not a ROM: remembered too
+        assertNull(scan(1, 1, name = "notes.zip"))
+        assertEquals(7, opens)
+        for (bad in listOf("{broken", """{"doc1":"1|1|NOPE|X"}""", """{"doc1":"1|1"}""", "[]")) {
+            f.writeText(bad)
+            assertEquals("IRBF", scan(1, 1)!!.key)
+        }
+        assertEquals(11, opens)
+        assertEquals("IRBF", scan(1, 1)!!.key)
+        assertEquals(11, opens) // made again
+        RomKeys(f).save() // a pass that saw no ROM keeps no old line
+        assertEquals("{}", f.readText())
     }
 }

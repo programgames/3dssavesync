@@ -26,6 +26,7 @@ import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PlayInfo
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Remote
+import io.github.programgames.savesync.core.RomKeys
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
 import io.github.programgames.savesync.core.Summary
@@ -355,14 +356,17 @@ object App {
         done(withContext(io) { runCatching { Remote(settings.url, settings.token, timeoutMs = 10_000).list().size } })
     }
 
+    private val romKeysFile get() = File(context.filesDir, "romkeys.json") // the Keys of the ROMs read (RomKeys)
+
     internal fun scanAll(): Pair<List<Entry>, List<String>> { // internal: SafTest
         val all = mutableListOf<Entry>()
         val problems = mutableListOf<String>()
+        val keys = RomKeys(romKeysFile)
         for (e in emulators) {
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
             for ((s, f) in e.systems) {
                 try {
-                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
+                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, keys)
                 } catch (t: Throwable) {
                     problems += text(R.string.folder_problem, "${e.listName()} ${s.label}") // human words only: no exception text
                 }
@@ -376,6 +380,7 @@ object App {
                 all += group.first().first.copy(game = null, dups = group.map { it.first.rom }, sharedFile = shared)
             }
         }
+        keys.save()
         return all.sortedBy { it.name.lowercase() } to problems
     }
 
@@ -389,7 +394,7 @@ object App {
         val found = mutableListOf<Pair<Entry, String>>()
         val problems = mutableListOf<String>()
         try {
-            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
+            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, RomKeys(romKeysFile)) // read only
         } catch (_: Exception) {
             return text(R.string.folder_unreadable)
         }
@@ -407,7 +412,7 @@ object App {
     // RetroArch: its saves folder is optional; the Save is in the folder of the core there ("Sort saves into folders by
     // core"), at its root, or next to the ROM ("Write saves to content directory"). Several of them: the newest, the one
     // RetroArch writes now. None: a new Save goes to the first of these places that exists.
-    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
+    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>, keys: RomKeys) {
         val aliases = aliases
         val romTree = (f.roms ?: return).toUri()
         val retro = e.profile == RETROARCH
@@ -433,7 +438,7 @@ object App {
                 val ext = extension(d.name)
                 if (ext != ".zip" && extensions[ext] != s) continue
                 val uri = android.provider.DocumentsContract.buildDocumentUriUsingTree(romTree, d.id)
-                val rom = readRom(d.name) { resolver.openInputStream(uri)!! } ?: continue
+                val rom = keys.rom(uri.toString(), d.name, d.size, d.modified) { readRom(d.name) { resolver.openInputStream(uri)!! } } ?: continue
                 if (rom.system != s || rom.key == null) continue
                 val name = rom.name // Android emulators name the save after the ROM or the .zip
                 // the Alias of a ROM hack, as on the PC; an invalid one: never synced under the header Key

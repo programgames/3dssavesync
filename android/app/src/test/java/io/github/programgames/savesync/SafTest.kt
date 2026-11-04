@@ -247,6 +247,24 @@ class SafTest {
         assertFalse(ops.any { it.startsWith("write") || it.startsWith("create") || it.startsWith("delete") }) // a scan only reads
     }
 
+    // A second scan opens no ROM that did not change (RomKeys): only the new or changed ones, by size and date.
+    @Test
+    fun scanOpensChangedRomsOnly() {
+        put("roms/nds/Platine.nds", nds("CPUF")).setLastModified(1_700_000_000_000L)
+        put("roms/nds/Noire.nds", nds("IRBF")).setLastModified(1_700_000_000_000L)
+        App.aliases = emptyMap()
+        App.saveEmulators(listOf(Emulator("melonds", "melonds", "", mapOf(System.DS to Folders(roms = tree("roms/nds").toString(), nextToRom = true)))))
+        fun keys() = App.scanAll().first.map { it.game!!.key }.toSet()
+        fun opened() = ops.filter { it.startsWith("read roms/") }.sorted().also { ops.clear() }
+        assertEquals(setOf("CPUF", "IRBF"), keys())
+        assertEquals(listOf("read roms/nds/Noire.nds", "read roms/nds/Platine.nds"), opened())
+        assertEquals(setOf("CPUF", "IRBF"), keys())
+        assertEquals(emptyList<String>(), opened())
+        put("roms/nds/Platine.nds", nds("CPUE")).setLastModified(1_700_000_100_000L) // another region, another date
+        assertEquals(setOf("CPUE", "IRBF"), keys())
+        assertEquals(listOf("read roms/nds/Platine.nds"), opened())
+    }
+
     // RetroArch: one saves folder for the entry. Each save is found in the folder of the chosen core, at the root of the
     // saves folder, or next to its ROM; the newest when several; a new save goes to the core folder. Never the save
     // of another core. No saves folder: next to the ROMs.
