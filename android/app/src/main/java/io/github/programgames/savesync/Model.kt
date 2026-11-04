@@ -40,6 +40,7 @@ import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
 import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.newAlias
+import io.github.programgames.savesync.core.notRead
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.pokemonSize
 import io.github.programgames.savesync.core.readRom
@@ -108,6 +109,7 @@ object App {
     var entries by mutableStateOf(listOf<Entry>())
     var serverError by mutableStateOf<Throwable?>(null)
     var scanProblems by mutableStateOf(listOf<String>())
+    var scanNotes by mutableStateOf(listOf<String>()) // files the scan did not read (.7z…): not a problem, not notified
     var busy by mutableStateOf<String?>(null) // what runs now, for the progress line
     var summary by mutableStateOf<Summary?>(null)
     var message by mutableStateOf<Pair<String, Throwable?>?>(null) // result of the last action on one game
@@ -293,8 +295,9 @@ object App {
     fun refresh() = run(text(R.string.reading)) {
         message = null
         val s = newSyncer()
-        val (found, problems) = withContext(io) { scanAll() }
+        val (found, problems, notes) = withContext(io) { scanAll() }
         scanProblems = problems
+        scanNotes = notes
         serverError = withContext(io) { runCatching { s.serverList() }.exceptionOrNull() }
         entries = withContext(io) { statuses(found, s) }
         loaded = true
@@ -383,19 +386,23 @@ object App {
 
     private val romKeysFile get() = File(context.filesDir, "romkeys.json") // the Keys of the ROMs read (RomKeys)
 
-    internal fun scanAll(): Pair<List<Entry>, List<String>> { // internal: SafTest
+    // scanAll reads the folders of every emulator entry: the games, the problems, and the notes (files not read).
+    internal fun scanAll(): Triple<List<Entry>, List<String>, List<String>> { // internal: SafTest
         val all = mutableListOf<Entry>()
         val problems = mutableListOf<String>()
+        val notes = mutableListOf<String>()
         val keys = RomKeys(romKeysFile)
         for (e in emulators) {
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
+            val skipped = mutableMapOf<String, String>() // document -> extension, once even in a folder of two systems
             for ((s, f) in e.systems) {
                 try {
-                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, keys)
+                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, keys, skipped)
                 } catch (t: Throwable) {
                     problems += text(R.string.folder_problem, "${e.listName()} ${s.label}") // human words only: no exception text
                 }
             }
+            skippedNote(e, skipped)?.let { notes += it }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })
             all += kept.map { it.first }
             // One line per Key, else per shared Save file, with the ROM files of the Duplicate.
@@ -406,7 +413,14 @@ object App {
             }
         }
         keys.save()
-        return all.sortedBy { it.name.lowercase() } to problems
+        return Triple(all.sortedBy { it.name.lowercase() }, problems, notes)
+    }
+
+    // skippedNote: "melonDS: 3 files not read (.7z, .rar)…", or null when the scan read every ROM-like file.
+    private fun skippedNote(e: Emulator, skipped: Map<String, String>): String? {
+        if (skipped.isEmpty()) return null
+        val exts = skipped.values.toSortedSet().joinToString(", ")
+        return context.resources.getQuantityString(R.plurals.files_not_read, skipped.size, e.listName(), skipped.size, exts)
     }
 
     // folderResult is the line under the folders of one System after a pick: how many games have a save there, or why
@@ -418,26 +432,30 @@ object App {
         if (if (s == System.N3DS) f.saves == null else f.roms == null) return null
         val found = mutableListOf<Pair<Entry, String>>()
         val problems = mutableListOf<String>()
+        val skipped = mutableMapOf<String, String>()
         try {
-            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, RomKeys(romKeysFile)) // read only
+            if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems, RomKeys(romKeysFile), skipped) // read only
         } catch (_: Exception) {
             return text(R.string.folder_unreadable)
         }
         problems.firstOrNull()?.let { return it }
         val saves = found.count { it.first.game!!.file.exists() }
-        return when {
+        val line = when {
             found.isEmpty() -> text(R.string.folder_no_game)
             saves > 0 -> context.resources.getQuantityString(R.plurals.folder_found, saves, saves, found.size)
             e.profile == RETROARCH && f.saves == null -> text(R.string.folder_no_save_retroarch)
             else -> text(R.string.folder_no_save)
         }
+        return listOfNotNull(line, skippedNote(e, skipped)).joinToString("\n")
     }
 
     // scan walks the ROM folder of one System (subfolders too, hidden ones skipped) and pairs each ROM with its Save.
     // RetroArch: its saves folder is optional; the Save is in the folder of the core there ("Sort saves into folders by
-    // core"), at its root, or next to the ROM ("Write saves to content directory"). Several of them: the newest, the one
-    // RetroArch writes now. None: a new Save goes to the first of these places that exists.
-    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>, keys: RomKeys) {
+    // core"), at its root, or next to the ROM ("Write saves to content directory"); "Sort saves into folders by content
+    // directory" adds a folder named after the ROM's folder, in the core folder or at the root. Several of them: the
+    // newest, the one RetroArch writes now. None: a new Save goes to the first of these places that exists.
+    // skipped: the ROM-like files not read (notRead), by document.
+    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>, keys: RomKeys, skipped: MutableMap<String, String>) {
         val aliases = aliases
         val romTree = (f.roms ?: return).toUri()
         val retro = e.profile == RETROARCH
@@ -451,16 +469,20 @@ object App {
             children(resolver, saveTree, rootId(saveTree)).find { it.folder && it.name.equals(label, ignoreCase = true) }?.id
         } else null
         val format = e.format(s)
-        val lists = mutableMapOf<String, List<Doc>>() // "tree|folder" -> its files
-        fun files(tree: Uri, folder: String) = lists.getOrPut("$tree|$folder") { children(resolver, tree, folder).filter { !it.folder } }
-        fun walk(parent: String, depth: Int) {
+        val lists = mutableMapOf<String, List<Doc>>() // "tree|folder" -> what it holds
+        fun list(tree: Uri, folder: String) = lists.getOrPut("$tree|$folder") { children(resolver, tree, folder) }
+        fun files(tree: Uri, folder: String) = list(tree, folder).filter { !it.folder }
+        // sub: the folder of this name in a folder of the saves tree (RetroArch content directory), any case
+        fun sub(folder: String?, name: String) = folder?.let { p -> list(saveTree!!, p).find { it.folder && it.name.equals(name, ignoreCase = true) }?.id }
+        fun walk(parent: String, dirName: String, depth: Int) {
             for (d in children(resolver, romTree, parent)) {
                 if (d.name.startsWith(".")) continue
                 if (d.folder) {
-                    if (depth < 5) walk(d.id, depth + 1)
+                    if (depth < 5) walk(d.id, d.name, depth + 1)
                     continue
                 }
                 val ext = extension(d.name)
+                if (ext in notRead) skipped[d.id] = ext
                 if (ext != ".zip" && extensions[ext] != s) continue
                 val uri = android.provider.DocumentsContract.buildDocumentUriUsingTree(romTree, d.id)
                 val rom = keys.rom(uri.toString(), d.name, d.size, d.modified) { readRom(d.name) { resolver.openInputStream(uri)!! } } ?: continue
@@ -474,7 +496,10 @@ object App {
                 }
                 val file = name + format.ext
                 val places = when {
-                    retro -> listOfNotNull(core?.let { saveTree!! to it }, saveTree?.let { it to rootId(it) }, romTree to parent)
+                    retro -> listOfNotNull(
+                        sub(core, dirName)?.let { saveTree!! to it }, core?.let { saveTree!! to it },
+                        saveTree?.let { t -> sub(rootId(t), dirName)?.let { t to it } }, saveTree?.let { it to rootId(it) }, romTree to parent,
+                    )
                     f.nextToRom -> listOf(romTree to parent)
                     else -> listOf(saveTree!! to rootId(saveTree))
                 }
@@ -488,7 +513,7 @@ object App {
                 out += Entry(e, s, name, d.name, g) to "$tree|$folder|$file"
             }
         }
-        walk(rootId(romTree), 0)
+        walk(rootId(romTree), rootId(romTree).substringAfter(':').substringAfterLast('/'), 0)
     }
 
     // scan3DS finds the 3DS Pokémon games in the Azahar user folder (or its sdmc folder): the title ID is in the path,

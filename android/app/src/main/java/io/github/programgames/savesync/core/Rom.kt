@@ -26,6 +26,9 @@ val titles3DS = mapOf(
 // extensions maps a ROM extension to its System.
 val extensions = mapOf(".nds" to System.DS, ".gb" to System.GB, ".gbc" to System.GB, ".gba" to System.GBA)
 
+// notRead: ROM files the app does not read (like the PC): the scan counts them, so the user knows why a game is missing.
+val notRead = setOf(".7z", ".rar", ".dsi", ".srl", ".sgb")
+
 fun extension(file: String): String = file.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" }.lowercase()
 
 fun withoutExtension(file: String): String = if (file.contains('.')) file.substringBeforeLast('.') else file

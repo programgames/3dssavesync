@@ -316,6 +316,31 @@ class SafTest {
         assertEquals("roms/gba/Emeraude.srm", alone["Emeraude"]) // not found: next to the ROM
     }
 
+    // RetroArch "Sort saves into folders by content directory": the folder named after the ROM's folder, in the core
+    // folder or at the root of the saves folder. The ROM files the app does not read (.7z, .rar) give one note per entry,
+    // even when two systems share the ROM folder; never a problem.
+    @Test
+    fun contentDirectoryAndFilesNotRead() {
+        put("roms/gba/Emeraude.gba", gba("BPEF"))
+        put("roms/gba/hacks/Rubis.gba", gba("AXVF"))
+        put("roms/gba/Pack.7z")
+        put("roms/gba/hacks/Old.rar")
+        put("roms/gba/notes.txt")
+        put("RetroArch/saves/mGBA/gba/Emeraude.srm", save(1)) // by core, then by content directory
+        put("RetroArch/saves/hacks/Rubis.srm", save(2)) // by content directory only
+        val folders = Folders(roms = tree("roms/gba").toString(), saves = tree("RetroArch/saves").toString())
+        App.aliases = emptyMap()
+        App.saveEmulators(listOf(Emulator("retroarch", RETROARCH, "", mapOf(System.GBA to folders, System.GB to folders))))
+        val (entries, problems, notes) = App.scanAll()
+        assertEquals(emptyList<String>(), problems)
+        val at = entries.associate { it.name to it.game!!.file.location }
+        assertEquals("RetroArch/saves/mGBA/gba/Emeraude.srm", at["Emeraude"])
+        assertEquals("RetroArch/saves/hacks/Rubis.srm", at["Rubis"])
+        val note = ctx.resources.getQuantityString(R.plurals.files_not_read, 2, App.emulators[0].listName(), 2, ".7z, .rar")
+        assertEquals(listOf(note), notes)
+        assertEquals(ctx.resources.getQuantityString(R.plurals.folder_found, 2, 2, 2) + "\n" + note, App.folderResult(App.emulators[0], System.GBA))
+    }
+
     // The line after a pick: games with a save, or why none (no game, no save, Android/data).
     @Test
     fun folderResult() {

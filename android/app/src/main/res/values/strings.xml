@@ -98,6 +98,10 @@
     <string name="retroarch_saves">RetroArch saves folder (optional)</string>
     <string name="sd_card">SD card</string>
     <string name="no_picker">This phone has no folder picker, so the app can\'t open a folder.</string>
+    <plurals name="files_not_read">
+        <item quantity="one">%1$s: %2$d file not read (%3$s). The app reads .nds, .gb, .gbc, .gba and .zip files only: unzip a .7z or .rar archive, or make it a .zip.</item>
+        <item quantity="other">%1$s: %2$d files not read (%3$s). The app reads .nds, .gb, .gbc, .gba and .zip files only: unzip a .7z or .rar archive, or make it a .zip.</item>
+    </plurals>
     <plurals name="folder_found">
         <item quantity="one">%1$d of %2$d games has a save here.</item>
         <item quantity="other">%1$d of %2$d games have a save here.</item>

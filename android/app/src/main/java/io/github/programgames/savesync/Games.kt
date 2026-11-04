@@ -198,6 +198,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
                     App.serverError?.let { ErrorBox(it, note = if (offline > 0) stringResource(R.string.hidden_offline) else null, retry = { App.refresh() }) }
                     App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
                     for (line in App.scanProblems) Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    for (line in App.scanNotes) Text(line, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     if (shown.isNotEmpty()) {
                         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
                         Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
