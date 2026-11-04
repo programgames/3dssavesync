@@ -101,18 +101,22 @@ jobs:
       ANDROID_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && 'yes' || 'no' }}
     steps:
       - uses: actions/checkout@v4
+      # Java 21 for the unit tests (Robolectric runs Android 16 only on 21: the Gradle toolchain of app/build.gradle.kts
+      # finds it through JAVA_HOME_21_X64), Java 17 for Gradle and the build (the last one listed is the default).
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: |
+            21
+            17
       # The JVM tests sync against the real server/server.py.
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      # Android SDK of the runner (ANDROID_HOME); Gradle adds platform 35 and build-tools 35.0.0 if they are missing.
+      # Android SDK of the runner (ANDROID_HOME); Gradle adds platform 36 and the build-tools of AGP if they are missing.
       - name: Unit tests, lint, debug APK
         working-directory: android
-        run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleDebug
+        run: ./gradlew --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64 testDebugUnitTest lintDebug assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
