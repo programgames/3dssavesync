@@ -90,24 +90,26 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// Colors of the States, like the 3DS app: To upload yellow, To download cyan, Conflict red, In sync green.
-@Composable
-fun stateColor(s: Shown): Color {
-    val dark = isSystemInDarkTheme()
-    return when (s) {
-        Shown.TO_UPLOAD -> if (dark) Color(0xFFFFC94D) else Color(0xFF9A6700)
-        Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00838F)
-        Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFC62828)
-        Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant // grey with a readable contrast
-    }
+// Colors of the States, like the 3DS app: To upload yellow, To download cyan, Conflict red, In sync green. Each one
+// reads at 4.5:1 or more on the light or dark surface, inside its label too (ColorsTest). null: the grey of the theme.
+fun stateColor(s: Shown, dark: Boolean): Color? = when (s) {
+    Shown.TO_UPLOAD -> if (dark) Color(0xFFFFC94D) else Color(0xFF7D5400)
+    Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00666F)
+    Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFB71C1C)
+    Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF1E6B23)
+    else -> null
 }
+
+@Composable
+fun stateColor(s: Shown): Color = stateColor(s, isSystemInDarkTheme()) ?: MaterialTheme.colorScheme.onSurfaceVariant
+
+const val LABEL_TINT = 0.14f // the background of a StatusLabel: its colour at 14 %
 
 // StatusLabel: the State as a coloured label (dot and word, never the colour alone). Not a chip: it does nothing.
 @Composable
-fun StatusLabel(s: Shown) {
+fun StatusLabel(s: Shown, modifier: Modifier = Modifier) {
     val c = stateColor(s)
-    Surface(shape = RoundedCornerShape(50), color = c.copy(alpha = 0.14f)) {
+    Surface(modifier, shape = RoundedCornerShape(50), color = c.copy(alpha = LABEL_TINT)) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(c, CircleShape))
             Text(stateWord(s), Modifier.padding(start = 6.dp), color = c, style = MaterialTheme.typography.labelLarge)
