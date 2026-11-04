@@ -48,7 +48,7 @@ import android.provider.DocumentsContract
 import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
-import io.github.programgames.savesync.core.Local
+import io.github.programgames.savesync.core.LocalInfo
 import io.github.programgames.savesync.core.NetworkException
 import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PendingWrite
@@ -63,6 +63,7 @@ import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.mainSunMoon
 import io.github.programgames.savesync.core.newAlias
+import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.sha256
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -403,20 +404,21 @@ open class UiTest {
     private val emu = Emulator("retroarch", "retroarch", "RetroArch", mapOf(System.GBA to Folders()))
     private val sram = ByteArray(0x8000) { (it % 7).toByte() }
     private val sun = mainSunMoon(12, 5, "Ash")
-    private fun local(b: ByteArray) = Local(Version(sha256(b), b.size.toLong()), b, b, blank = false)
+    private fun local(b: ByteArray) = LocalInfo(Version(sha256(b), b.size.toLong()), blank = false, pokemonPlayInfo(b))
     private val other = Version("b".repeat(64), 0x8000, client = "pc", date = "20261103T101500Z", age = 3600)
     private val files = mutableMapOf<String, MemFile>()
 
-    private fun entry(name: String, sys: System, key: String, l: Local?, srv: Version?, base: String?, state: State?, error: Throwable? = null): Entry {
-        val f = MemFile("$name.sav", l?.raw).also { files[name] = it }
-        return Entry(emu, sys, name, "$name.rom", Game(sys, key, name, f, Format(), emu.id), status = if (error == null) Status(l, srv, base, state) else null, error = error)
+    // entry: a game whose save on this phone holds content (null: none).
+    private fun entry(name: String, sys: System, key: String, content: ByteArray?, srv: Version?, base: String?, state: State?, error: Throwable? = null): Entry {
+        val f = MemFile("$name.sav", content).also { files[name] = it }
+        return Entry(emu, sys, name, "$name.rom", Game(sys, key, name, f, Format(), emu.id), status = if (error == null) Status(content?.let(::local), srv, base, state) else null, error = error)
     }
 
     private fun games() = listOf(
-        entry("Pokémon Émeraude", System.GBA, "GBA-BPEF", local(sram), null, null, State.TO_UPLOAD),
-        entry("Zelda", System.GB, "GB-ZELDA-1234", local(sram), Version(sha256(sram), 0x8000), sha256(sram), State.IN_SYNC),
-        entry(KART, System.DS, "AMCE", local(sram), other, sha256(sram), State.TO_DOWNLOAD), // the list shows "Mario Kart DS"
-        entry("Pokemon Soleil", System.N3DS, "3DS-0004000000164800", local(sun), other.copy(size = sun.size.toLong()), "c".repeat(64), State.CONFLICT),
+        entry("Pokémon Émeraude", System.GBA, "GBA-BPEF", sram, null, null, State.TO_UPLOAD),
+        entry("Zelda", System.GB, "GB-ZELDA-1234", sram, Version(sha256(sram), 0x8000), sha256(sram), State.IN_SYNC),
+        entry(KART, System.DS, "AMCE", sram, other, sha256(sram), State.TO_DOWNLOAD), // the list shows "Mario Kart DS"
+        entry("Pokemon Soleil", System.N3DS, "3DS-0004000000164800", sun, other.copy(size = sun.size.toLong()), "c".repeat(64), State.CONFLICT),
         entry("Metroid", System.GBA, "GBA-AMTE", null, null, null, null),
         entry("Wario", System.GBA, "GBA-RWZE", null, null, null, null, error = IOException("read error")),
         Entry(emu, System.GB, "Tetris", "Tetris.gb", null, dups = listOf("Tetris.gb", "Tetris (1).gb")),
@@ -653,7 +655,7 @@ open class UiTest {
                 else -> 404 to ByteArray(0)
             }
         }
-        val game = entry("Pokemon Soleil", System.N3DS, key, local(sun), Version(sha256(sun), sun.size.toLong(), client = "android"), sha256(sun), State.IN_SYNC)
+        val game = entry("Pokemon Soleil", System.N3DS, key, sun, Version(sha256(sun), sun.size.toLong(), client = "android"), sha256(sun), State.IN_SYNC)
         Bases(File(ctx.filesDir, "bases")).set(emu.id, key, sha256(sun)) // last Sync: this version
         start(url = url, token = "t", emulators = listOf(emu), entries = listOf(game))
         open("Pokemon Soleil")

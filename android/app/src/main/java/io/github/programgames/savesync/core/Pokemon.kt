@@ -148,6 +148,9 @@ private fun gen67(d: ByteArray): PlayInfo? {
     return PlayInfo(u16(d, time), u8(d, time + 2), name16(d, trainer, 13) { it.toChar() })
 }
 
+// pokemonSize: a Save of this size may be a Pokémon game; only then is a server Version read for its play time.
+fun pokemonSize(size: Long) = size == 0x8000L || size == 0x20000L || size == 0x80000L || size.toInt() in pokemonFormats
+
 // pokemonPlayInfo returns the play time and trainer of a Save (SRAM only) of a recognized Pokémon game, else null.
 fun pokemonPlayInfo(d: ByteArray?): PlayInfo? = when (d?.size) {
     null -> null

@@ -85,7 +85,6 @@ import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.aliasExamples
 import io.github.programgames.savesync.core.withoutExtension
 import io.github.programgames.savesync.core.Version
-import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.problem
 import java.io.File
 import java.text.DateFormat
@@ -499,7 +498,7 @@ private fun phoneLines(e: Entry): List<String> {
         e.game?.file?.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },
         sizeText(local.version.size),
         if (local.blank) stringResource(R.string.blank_save) else null,
-        pokemonPlayInfo(local.sram)?.let { playText(it) },
+        local.play?.let { playText(it) },
     )
 }
 

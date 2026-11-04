@@ -38,6 +38,7 @@ import io.github.programgames.savesync.core.extensions
 import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
+import io.github.programgames.savesync.core.pokemonSize
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
 import io.github.programgames.savesync.core.shortName
@@ -330,7 +331,7 @@ object App {
     suspend fun history(e: Entry): List<Version> = withContext(io) { Remote(settings.url, settings.token).history(e.game!!.key) }
 
     // versionPlayInfo reads one Version of the History for its Pokémon play time; null if not a Pokémon save or not read.
-    suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = withContext(io) {
+    suspend fun versionPlayInfo(e: Entry, v: Version): PlayInfo? = if (!pokemonSize(v.size)) null else withContext(io) {
         runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).version(e.game!!.key, v.file)) }.getOrNull()
     }
 
@@ -343,8 +344,9 @@ object App {
         done(r.exceptionOrNull())
     }
 
-    // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details).
-    suspend fun serverPlayInfo(e: Entry): PlayInfo? = withContext(io) {
+    // serverPlayInfo reads the Current version to show its Pokémon play time (Conflict screen, details). Only a save of a
+    // Pokémon size is downloaded: the details of any other game read nothing.
+    suspend fun serverPlayInfo(e: Entry): PlayInfo? = if (e.status?.server?.size?.let(::pokemonSize) != true) null else withContext(io) {
         runCatching { pokemonPlayInfo(Remote(settings.url, settings.token).get(e.game!!.key)) }.getOrNull()
     }
 

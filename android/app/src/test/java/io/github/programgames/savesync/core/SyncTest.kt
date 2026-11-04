@@ -678,3 +678,65 @@ class PythonServerTest {
         assertEquals(Problem.REFUSED, problem(refused))
     }
 }
+
+// A big library: the States of 300 games with 512 KiB saves keep no save content (a phone has 128 to 512 MB of heap).
+// A Sync reads the file again when it needs the content.
+class MemoryUseTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    // bytesHeld: the size of every ByteArray reachable from o through the objects of this app and the collections.
+    private fun bytesHeld(o: Any?): Long {
+        val seen = java.util.IdentityHashMap<Any, Boolean>()
+        val todo = ArrayDeque<Any>(listOfNotNull(o))
+        var total = 0L
+        while (todo.isNotEmpty()) {
+            val x = todo.removeLast()
+            if (seen.put(x, true) != null) continue
+            when {
+                x is ByteArray -> total += x.size
+                x is Iterable<*> -> x.filterNotNullTo(todo)
+                x is Array<*> -> x.filterNotNullTo(todo)
+                x.javaClass.name.startsWith("io.github.programgames") -> {
+                    var c: Class<*>? = x.javaClass
+                    while (c != null && c.name.startsWith("io.github.programgames")) {
+                        for (f in c.declaredFields) {
+                            if (java.lang.reflect.Modifier.isStatic(f.modifiers) || f.type.isPrimitive) continue
+                            f.isAccessible = true
+                            f.get(x)?.let(todo::add)
+                        }
+                        c = c.superclass
+                    }
+                }
+            }
+        }
+        return total
+    }
+
+    @Test
+    fun statusesKeepNoContent() {
+        val http = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0)
+        http.createContext("/saves") { x ->
+            val body = "[]".toByteArray()
+            x.sendResponseHeaders(200, body.size.toLong())
+            x.responseBody.use { it.write(body) }
+        }
+        http.start()
+        try {
+            val s = Syncer(Remote("http://127.0.0.1:${http.address.port}", "t"), Bases(File(tmp.root, "bases")), Backups(File(tmp.root, "copies")), Pending(File(tmp.root, "pending.json")), { true })
+            val games = (1..300).map { i ->
+                // the content is made at each read: the test itself keeps no 150 MB of saves
+                val f = object : MemoryFile("game$i.sav") {
+                    override fun read() = ByteArray(512 shl 10) { (it * 31 + i).toByte() }
+                }
+                Game(System.DS, "A%03d".format(i), "Game $i", f, Format(), "melonds")
+            }
+            val statuses = games.map { s.status(it) }
+            assertEquals(setOf(State.TO_UPLOAD to (512L shl 10)), statuses.map { it.state to it.local?.version?.size }.toSet())
+            val held = bytesHeld(statuses)
+            assertTrue("$held bytes of save content kept by 300 States", held < 64 shl 10)
+        } finally {
+            http.stop(0)
+        }
+    }
+}

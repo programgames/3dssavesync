@@ -1,7 +1,9 @@
 package io.github.programgames.savesync.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private fun putU16(d: ByteArray, i: Int, v: Int) {
@@ -88,7 +90,9 @@ class PokemonTest {
             Triple("mainSunMoon", mainSunMoon(152, 30, "Sacha"), PlayInfo(152, 30, "Sacha")),
         )) {
             assertEquals(name, expected, pokemonPlayInfo(d))
+            assertTrue(name, pokemonSize(d.size.toLong())) // a server Version of this size is read for its play time
         }
+        assertFalse(pokemonSize(0x10000)) // 64 KB: no Pokémon game, the details download nothing
         for (size in listOf(0x8000, 0x20000, 0x80000, 1024)) { // blank or unknown size: refused
             assertNull("$size blank bytes", pokemonPlayInfo(ByteArray(size)))
         }

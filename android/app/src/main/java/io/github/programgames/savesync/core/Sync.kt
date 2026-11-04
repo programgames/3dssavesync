@@ -59,8 +59,14 @@ interface NewArchive {
     fun undo(): Boolean // deletes main and what create made, and nothing else; false: something remains
 }
 
-// Local is the Local save: its Version covers the SRAM only (decode).
-class Local(val version: Version, val raw: ByteArray, val sram: ByteArray, val blank: Boolean)
+// Local is the Local save as read now, for one Sync: its Version covers the SRAM only (decode).
+class Local(val version: Version, val raw: ByteArray, val sram: ByteArray, val blank: Boolean) {
+    val info get() = LocalInfo(version, blank, pokemonPlayInfo(sram))
+}
+
+// LocalInfo is what the list and the details keep of a Local save: no content. Hundreds of saves of 512 KB each would
+// not fit in the memory of a phone; a Sync reads the file again (Syncer.sync, uploadOnly).
+data class LocalInfo(val version: Version, val blank: Boolean, val play: PlayInfo? = null)
 
 fun readLocal(g: Game, srv: Version?): Local? {
     val raw = g.file.read() ?: return null
@@ -172,7 +178,7 @@ class Backups(val root: File) {
 // Conflict because the save came back to the one a Download replaced; interrupted: a write of this file did not
 // finish (state Conflict, only two choices). Its backup is null when the Backup copy is not there.
 class Status(
-    val local: Local?,
+    val local: LocalInfo?,
     val server: Version?,
     val base: String?,
     val state: State?,
@@ -254,12 +260,12 @@ class Syncer(
         val base = bases.of(g.emulator)[g.key]
         interrupted(g)?.let { p ->
             val local = runCatching { readLocal(g, srv) }.getOrNull() // a cut file may not decode
-            return Status(local, srv, base, State.CONFLICT, interrupted = p.copy(backup = p.backup?.takeIf { File(it).isFile }))
+            return Status(local?.info, srv, base, State.CONFLICT, interrupted = p.copy(backup = p.backup?.takeIf { File(it).isFile }))
         }
         val l = readLocal(g, srv)
         val seen = seen(l, srv)
         val back = cameBack(g, seen, srv, base)
-        return Status(l, srv, base, if (seen == null && srv == null) null else if (back) State.CONFLICT else state(seen, srv, base), cameBack = back)
+        return Status(l?.info, srv, base, if (seen == null && srv == null) null else if (back) State.CONFLICT else state(seen, srv, base), cameBack = back)
     }
 
     // sync runs the Sync of one Game, like syncGame on the PC. A Conflict without a matching choice changes nothing.
