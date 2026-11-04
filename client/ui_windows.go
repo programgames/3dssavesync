@@ -138,7 +138,7 @@ type notifyIconData struct {
 var activeNotifs sync.WaitGroup
 
 // systemNotify shows a Windows notification, nothing to confirm, without delaying the game. Windows removes it with
-// the icon: main waits for the notifications to end (8 s each) before the program ends.
+// the icon: main waits for the notifications to end (notifySeconds each) before the program ends.
 func systemNotify(text string) {
 	activeNotifs.Add(1)
 	go func() {
@@ -175,8 +175,16 @@ func notification(text string) {
 	if r, _, _ := notif.Call(0, uintptr(unsafe.Pointer(&n))); r == 0 { // NIM_ADD
 		return
 	}
-	time.Sleep(8 * time.Second)
+	time.Sleep(time.Duration(notifySeconds()) * time.Second)
 	notif.Call(2, uintptr(unsafe.Pointer(&n))) // NIM_DELETE
+}
+
+// notifySeconds is how long the icon (and so its notification) stays: the Windows setting "Dismiss notifications
+// after this amount of time" (5 s by default) plus 1 s, at least 8 s.
+func notifySeconds() uint32 {
+	var s uint32
+	user32.NewProc("SystemParametersInfoW").Call(0x2016, 0, uintptr(unsafe.Pointer(&s)), 0) // SPI_GETMESSAGEDURATION
+	return max(s+1, 8)
 }
 
 // openConsole opens a console for the setup: the exe has none (-H windowsgui).

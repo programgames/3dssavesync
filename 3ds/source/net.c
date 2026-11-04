@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include "github_roots.h"
 #include "isrg_root_x1.h"
 #include "net.h"
@@ -35,6 +36,7 @@ int net_init(void)
 void net_exit(void)
 {
     curl_easy_cleanup(c);
+    SOCU_CloseSockets(); /* what curl left open: closed now, not after the app (see no_linger) */
     curl_global_cleanup();
     acExit();
     sslcExit();
@@ -65,6 +67,15 @@ static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_to
 {
     on_progress((size_t)done, (size_t)total);
     return 0;
+}
+
+/* Linger 0: a closed connection is reset at once, not kept waiting (TIME_WAIT). Seen on a New 3DS XL: after the app
+ * used the network, the next DS game (TWiLight Menu++ forwarder) started 10 s later, unless the app ended 60 s before. */
+static int no_linger(void *u, curl_socket_t fd, curlsocktype purpose)
+{
+    struct linger l = { 1, 0 };
+    setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof l);
+    return CURL_SOCKOPT_OK;
 }
 
 /* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). client: X-Client of the Server. */
@@ -106,6 +117,7 @@ static long request(const char *url, const char *token, const char *client, cons
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
     curl_easy_setopt(c, CURLOPT_TIMEOUT, on_progress ? 300L : 60L);
     curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* required by the GitHub API */
+    curl_easy_setopt(c, CURLOPT_SOCKOPTFUNCTION, no_linger);
     if (on_progress) { /* github.com redirects to release-assets.githubusercontent.com */
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
