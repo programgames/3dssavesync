@@ -250,7 +250,7 @@ object App {
         done(withContext(io) { runCatching { Remote(settings.url, settings.token, timeoutMs = 10_000).list().size } })
     }
 
-    private fun scanAll(): Pair<List<Entry>, List<String>> {
+    internal fun scanAll(): Pair<List<Entry>, List<String>> { // internal: SafTest
         val all = mutableListOf<Entry>()
         val problems = mutableListOf<String>()
         for (e in emulators) {

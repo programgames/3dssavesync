@@ -298,10 +298,13 @@ fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups): Fil
     if (back != null && back.contentEquals(content)) return copy
     val why = written?.toString() ?: "${g.file.location}: the written file doesn't match (${back?.size} bytes read, ${content.size} written)"
     if (old == null) {
-        // A new file: emptied, so the next pass sees a blank save (absent), never a Local save to upload.
+        // A new file: emptied, so the next pass sees a blank save (absent), never a Local save to upload. No file (never
+        // created, or created under another name): nothing to empty, and a write would create one more.
         val emptied = runCatching {
-            g.file.write(ByteArray(0))
-            g.file.read()?.isEmpty() != false
+            g.file.read() == null || run {
+                g.file.write(ByteArray(0))
+                g.file.read()?.isEmpty() != false
+            }
         }.getOrDefault(false)
         throw SyncException(Problem.NOT_WRITTEN, if (emptied) why else "$why\n${g.file.location}: an incomplete file may remain")
     }
