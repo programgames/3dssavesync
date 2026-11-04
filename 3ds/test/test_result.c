@@ -83,10 +83,10 @@ int main(void)
     expect(make(RESULT_VC_READ_ONLY, ""), 0, KIND_INFO,
            "Zelda : la récupération des jeux Virtual Console arrive dans une prochaine version. Votre sauvegarde n'a pas été modifiée.", "");
     expect(make(RESULT_VC_UNEXPECTED, "sav.dat, SecureValue, rsm2.dat"), 1, KIND_FAILURE,
-           "Zelda: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line.",
+           "Zelda: this game has restore points (or other files than sav.dat) that could bring an old game back. It is not synced, and its save is not changed.",
            "Files: sav.dat, SecureValue, rsm2.dat");
     expect(make(RESULT_VC_UNEXPECTED, ""), 0, KIND_FAILURE, /* archive no longer readable: no empty technical line */
-           "Zelda : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.", "");
+           "Zelda : ce jeu a des points de restauration (ou d'autres fichiers que sav.dat), qui pourraient ramener une ancienne partie. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.", "");
     expect(make(RESULT_VC_NO_KEY, "1:D9004676 2:D9004676"), 1, KIND_FAILURE,
            "Zelda: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line.",
            "ROM : 1:D9004676 2:D9004676");

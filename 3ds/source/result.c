@@ -82,8 +82,8 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         return KIND_INFO;
     case RESULT_VC_UNEXPECTED:
         if (r->path[0]) snprintf(detail, dn, T("Fichiers : %s", "Files: %s"), r->path);
-        snprintf(text, n, T("%s : fichiers inattendus dans la sauvegarde Virtual Console. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
-                            "%s: unexpected files in the Virtual Console save. This game is not synced, and its save is not changed. Report the technical line."), game);
+        snprintf(text, n, T("%s : ce jeu a des points de restauration (ou d'autres fichiers que sav.dat), qui pourraient ramener une ancienne partie. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
+                            "%s: this game has restore points (or other files than sav.dat) that could bring an old game back. It is not synced, and its save is not changed."), game);
         return KIND_FAILURE;
     case RESULT_VC_NO_KEY:
         if (r->path[0]) snprintf(detail, dn, "ROM : %s", r->path);

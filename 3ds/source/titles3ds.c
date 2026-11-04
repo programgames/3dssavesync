@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "titles3ds.h"
+#include "vc.h"
 
 /* Binary path {media, low, high} of ARCHIVE_USER_SAVEDATA (3dbrew, FS:OpenArchive). */
 static Result open_save_archive(u64 id, FS_MediaType media, FS_Archive *a)
@@ -220,52 +221,60 @@ static Result title_seed(u64 id, u32 *seed)
 
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    /* DIAGNOSTIC (v3.10 rc6): archive path {low, high, media, 0}. File path = 3dbrew Title Access path, 0x24 bytes as fs
-     * itself sends it (decompiled fs, handler 0x10e798): title access 0, content 0, NCCH section, u64 mask of allowed
-     * content types, then the title's 16-byte NCCH seed. rc5 read with a zero seed: 0xD9004587, NCCH hash check failed;
-     * the Gen 1/2 Pokémon VC titles are seeded (3dstool ext_key.txt). Tries: 1 = section 5, seed check only (0: right
-     * seed); 2 = RomFS, all six types; 3 = RomFS, "unspecified" only. */
-    u32 files[3][9] = { { 0, 0, 5 }, { 0, 0, 0, 0x3F }, { 0, 0, 0, 1 } };
-    u32 seed[4] = { 0 };
+    /* Archive path {low, high, media, 0}. File path = 3dbrew Title Access path, 0x24 bytes as fs itself sends it
+     * (decompiled fs, handler 0x10e798): title access 0, content 0, NCCH section 0 = RomFS, u64 mask of allowed content
+     * types (all six; a zero mask allows nothing), then the title's NCCH seed (zero when it has none). Without the seed
+     * of a seeded title (the Pokémon VC titles, 3dstool ext_key.txt) the first read fails: 0xD9004587, NCCH hash check.
+     * Checked on a real 3DS (v3.10 rc6): Pokémon Cristal FR, GB-PM_CRYSTAL-F2E2, the key of the cartridge ROM. */
+    u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, 0 }, file[9] = { 0, 0, 0, 0x3F };
+    const char *step = NULL;
+    FSPXI_Archive a;
+    FSPXI_File f;
     Handle h;
     Result r;
-    int x;
     why[0] = '\0';
-    if (R_FAILED(r = title_seed(id, seed))) snprintf(why, wn, "seed:%08lX", (unsigned long)r);
-    for (x = 0; x < 3; x++) memcpy(files[x] + 5, seed, sizeof seed);
     if (!luma()) {
         snprintf(why, wn, "no Luma3DS");
+        return -1;
+    }
+    if (R_FAILED(r = title_seed(id, file + 5)) && r != (Result)0xC8804464) { /* 0xC8804464: no seed, title not seeded */
+        snprintf(why, wn, "GetSeed:%08lX", (unsigned long)r);
         return -1;
     }
     if (R_FAILED(r = svc_control_service(0, &h, "PxiFS0"))) {
         snprintf(why, wn, "PxiFS0:%08lX", (unsigned long)r);
         return -1;
     }
-    for (x = 0; x < 3; x++) {
-        u32 archive[4] = { (u32)id, (u32)(id >> 32), MEDIATYPE_SD, 0 };
-        FSPXI_Archive a;
-        FSPXI_File f;
-        const char *step = NULL, *call = "a"; /* a: OpenArchive failed, f: OpenFile failed */
-        size_t l = strlen(why);
-        if (R_SUCCEEDED(r = FSPXI_OpenArchive(h, &a, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive }))) {
-            call = "f";
-            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizeof files[x], files[x] }, FS_OPEN_READ, 0))) {
-                step = x ? rom_from_romfs(h, f, header, n) : NULL;
-                FSPXI_CloseFile(h, f);
-            }
-            FSPXI_CloseArchive(h, a);
-        }
-        if (R_FAILED(r)) snprintf(why + l, wn - l, "%s%d%s:%08lX", l ? " " : "", x + 1, call, (unsigned long)r);
-        else if (step) snprintf(why + l, wn - l, "%s%d:%s", l ? " " : "", x + 1, step);
-        else if (!x) snprintf(why + l, wn - l, "%s1:seed OK", l ? " " : ""); /* a check only, no ROM read */
+    if (R_FAILED(r = FSPXI_OpenArchive(h, &a, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive })))
+        snprintf(why, wn, "OpenArchive:%08lX", (unsigned long)r);
+    else {
+        if (R_FAILED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizeof file, file }, FS_OPEN_READ, 0)))
+            snprintf(why, wn, "OpenFile:%08lX", (unsigned long)r);
         else {
-            snprintf(why + l, wn - l, "%s%d:OK", l ? " " : "", x + 1);
-            svcCloseHandle(h);
-            return 0;
+            if ((step = rom_from_romfs(h, f, header, n))) snprintf(why, wn, "%s", step);
+            FSPXI_CloseFile(h, f);
         }
+        FSPXI_CloseArchive(h, a);
     }
     svcCloseHandle(h);
-    return -1;
+    return R_FAILED(r) || step ? -1 : 0;
+}
+
+/* Product code of the title (AM, "CTR-N-QBXA"): GB/GBC Virtual Console or not (vc_product). The last answer is kept:
+ * the choices screen asks for the same title at every frame. */
+int title_vc(u64 id)
+{
+    static u64 last;
+    static int last_vc;
+    char code[16] = "";
+    if (id == last) return last_vc;
+    if (R_SUCCEEDED(amInit())) {
+        if (R_FAILED(AM_GetTitleProductCode(MEDIATYPE_SD, id, code))) code[0] = '\0';
+        amExit();
+    }
+    code[sizeof code - 1] = '\0';
+    last = id;
+    return last_vc = vc_product(code);
 }
 
 /* SMDH of the title (0x36C0 bytes): ExeFS:/icon of ARCHIVE_SAVEDATA_AND_CONTENT (FBI's method). 0 if read. */

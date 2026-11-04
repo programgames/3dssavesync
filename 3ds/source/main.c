@@ -59,7 +59,7 @@ typedef struct {
     int mbc2;       /* GB: MBC2 cartridge, byte 0x147 of the ROM (ADR 0012) */
     int unexpected; /* Virtual Console: other files than sav.dat in the archive (vc_root_ok): not synced */
     int by_rom;     /* Virtual Console: a ROM has its Key and keeps the sync; this one is not synced (empty key) */
-    char why[160];  /* Virtual Console: how its ROM was read (title_rom_header), and its Key; empty key: unknown */
+    char why[160];  /* Virtual Console: by_rom, its Key; empty key, the step where reading its ROM failed */
     progress_t progress;
     status_t status;
 } game_t;
@@ -371,10 +371,10 @@ static void scan_3ds(void)
     }
 }
 
-/* GB/GBC Virtual Console Pokémon installed on the SD card (vc_title): a GB Game whose Key is read in the ROM of its
- * RomFS (else taken from vc_known_key), and whose Save is /sav.dat of its Save archive (read_save). Called after the
- * ROMs: a ROM with the same Key keeps the sync as before, and the VC game is listed Not synced (by_rom). Key unknown:
- * listed Not synced with an empty key, never a guessed Key. */
+/* GB/GBC Virtual Console games installed on the SD card (title_vc, by product code): a GB Game whose Key is read in the
+ * ROM of its RomFS, and whose Save is /sav.dat of its Save archive (read_save). Called after the ROMs: a ROM with the
+ * same Key keeps the sync as before, and the VC game is listed Not synced (by_rom, its Key in why). ROM not read:
+ * listed Not synced with an empty key and the failed step in why, never a guessed Key. */
 static void scan_vc(void)
 {
     u64 *ids = NULL;
@@ -390,22 +390,16 @@ static void scan_vc(void)
     for (i = 0; i < n; i++) {
         unsigned char header[0x200];
         char key[KEY_MAX] = "", name[256], why[160];
-        const char *known;
         game_t *j = NULL;
         int read, by_rom;
-        size_t l;
-        if (medias[i] != MEDIATYPE_SD || !vc_title(ids[i])) continue;
+        if (medias[i] != MEDIATYPE_SD || !title_vc(ids[i])) continue;
         if (title_name(ids[i], MEDIATYPE_SD, language, name, sizeof name)) snprintf(name, sizeof name, "%016llX", ids[i]);
         show_progress(0, 0, T("Lecture des jeux Virtual Console\n%s", "Reading Virtual Console games\n%s"), name);
         read = !title_rom_header(ids[i], header, sizeof header, why, sizeof why);
-        l = strlen(why);
         if (read && rom_key(SYS_GB, header, key)) {
             key[0] = '\0';
-            snprintf(why + l, sizeof why - l, " rom_key: no title");
-        } else if (!read && (known = vc_known_key(ids[i]))) {
-            snprintf(key, sizeof key, "%s", known);
-            snprintf(why + l, sizeof why - l, " table %s", key);
-        } else if (read) snprintf(why + l, sizeof why - l, " %s", key);
+            snprintf(why, sizeof why, "rom_key: no title");
+        }
         for (k = 0; key[0] && k < game_count; k++)
             if (!strcmp(games[k].key, key)) j = &games[k];
         if (j && vc(j)) { /* two VC titles with one Key: Duplicate, as two ROMs */
@@ -417,7 +411,7 @@ static void scan_vc(void)
         game_count++;
         if (!by_rom) snprintf(j->key, sizeof j->key, "%s", key);
         j->by_rom = by_rom;
-        snprintf(j->why, sizeof j->why, "%s", why);
+        snprintf(j->why, sizeof j->why, "%s", by_rom ? key : why);
         j->system = SYS_GB;
         j->title = ids[i];
         j->media = MEDIATYPE_SD;
@@ -1007,8 +1001,8 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
                                 "This game is already synced by its ROM (mGBA forwarder / TWiLight Menu++).");
         if (!j->key[0]) return T("La ROM de ce jeu Virtual Console est illisible : sa clé est inconnue. Ce jeu n'est pas synchronisé, rien n'y est modifié.",
                                  "The ROM of this Virtual Console game can't be read: its Key is unknown. This game is not synced, and nothing in it is changed.");
-        return T("Sa sauvegarde Virtual Console contient d'autres fichiers que sav.dat : ce jeu n'est pas synchronisé, et rien n'y est modifié.",
-                                     "Its Virtual Console save holds other files than sav.dat: this game is not synced, and nothing in it is changed.");
+        return T("Ce jeu a des points de restauration : ils pourraient ramener une ancienne partie. Il n'est pas synchronisé, rien n'y est modifié.",
+                 "This game has restore points that could bring an old game back. It is not synced, and nothing in it is changed.");
     case STATUS_OFFLINE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     default: return T("La 3DS et le serveur ont la même sauvegarde.", "The 3DS and the server have the same save.");
     }
@@ -1092,9 +1086,9 @@ static void draw_bottom(const game_t *j)
             y = detail(y, T("Sur le serveur", "On the server"), t);
             y = detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
         }
-        if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key); /* to compare with the Key the PC shows under the game name */
-        /* DIAGNOSTIC (v3.10 rc6): how the ROM was read, for every VC game. After it: only for a Not synced one. */
-        if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
+        /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
+        if (vc(j) && (j->key[0] || j->by_rom)) y = detail(y, T("Clé", "Key"), j->key[0] ? j->key : j->why);
+        else if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);
     else if (update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
@@ -1323,7 +1317,7 @@ static void choose_titles(void)
             y += screen_lines(8, y, 0.55f, WHITE, ICON_X - 16, 2, ch->name) + 4;
             y = y < UNDER_ICON ? UNDER_ICON + 4 : y + 4;
             if (ch->main_only == 1) y += screen_paragraph(8, y, 0.45f, C_GREEN, TEXT_WIDTH, T("Ce jeu peut être synchronisé.", "This game can be synced.")) + 6;
-            else if (vc_title(ch->id))
+            else if (title_vc(ch->id))
                 y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, T("Jeu Virtual Console : il est dans la liste des jeux GB, sans le cocher ici.",
                                                                        "Virtual Console game: it is in the list of GB games, no need to tick it here.")) + 6;
             else if (ch->main_only == 0)

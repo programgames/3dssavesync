@@ -23,9 +23,12 @@ int title_main_only(u64 id);
 int title_root(u64 id, char *names, size_t n);
 
 /* First 0x200 bytes (n) of the GB ROM of a Virtual Console title installed on the SD card: the file of rom/ in its
- * RomFS, read through FSPXI (Luma3DS only). In why, each file path tried and its result ("1f:D9004676 2:OK"; a/f: OpenArchive/OpenFile failed).
+ * RomFS, read through FSPXI (Luma3DS only). On failure, why says which step failed ("OpenFile:D9004676").
  * 0 if read, -1 otherwise. */
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn);
+
+/* 1 if title id (SD) is a GB or GBC Virtual Console game, by its product code (vc_product). */
+int title_vc(u64 id);
 
 /* Short name of the game (SMDH), in the given language, in UTF-8. 0 if read. */
 int title_name(u64 id, FS_MediaType media, int language, char *name, size_t n);
