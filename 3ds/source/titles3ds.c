@@ -142,12 +142,12 @@ static Result pxi_result;
 static u32 pxi_got;
 static unsigned long long pxi_size;
 
-/* FSPXI reads go to Process9 through a PXI buffer: the bytes are read in whole 0x200-byte media units into a page-aligned
+/* FSPXI reads go to Process9 through a PXI buffer: the bytes are read in whole 0x1000-byte blocks into a page-aligned
  * buffer, then copied (rc4: a 0x60-byte read at 0 into the stack failed). */
 static Result pxi_read(Handle h, FSPXI_File f, u64 offset, void *buffer, u32 size)
 {
-    u64 start = offset & ~0x1FFULL;
-    u32 length = (u32)((offset + size - start + 0x1FF) & ~0x1FFULL);
+    u64 start = offset & ~0xFFFULL;
+    u32 length = (u32)((offset + size - start + 0xFFF) & ~0xFFFULL);
     unsigned char *bounce = memalign(0x1000, length);
     pxi_got = 0;
     pxi_result = bounce ? FSPXI_ReadFile(h, f, &pxi_got, start, bounce, length) : (Result)-2;
@@ -203,18 +203,36 @@ static const char *rom_from_romfs(Handle h, FSPXI_File f, unsigned char *header,
     return NULL;
 }
 
+/* NCCH seed of a title (16 bytes): fs:USER GetSeed, 0x087B0080 (3dbrew "Filesystem services"; no libctru wrapper), FS
+ * access bit 0x200000, which Luma3DS gives every process. 0xC8804464: no seed in SEEDDB. */
+static Result title_seed(u64 id, u32 *seed)
+{
+    u32 *cmd = getThreadCommandBuffer();
+    Result r;
+    cmd[0] = 0x087B0080;
+    cmd[1] = (u32)id;
+    cmd[2] = (u32)(id >> 32);
+    if (R_FAILED(r = svcSendSyncRequest(*fsGetSessionHandle()))) return r;
+    if (R_FAILED(r = (Result)cmd[1])) return r;
+    memcpy(seed, cmd + 2, 16);
+    return 0;
+}
+
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    /* DIAGNOSTIC (v3.10 rc5): archive path {low, high, media, 0}. File path = 3dbrew Title Access path: title access 0,
-     * content 0, NCCH section 0 = RomFS, u64 mask of allowed content types, then a 16-byte seed (zero). fs itself sends
-     * 0x24 bytes with a mask computed from the title's contents (decompiled fs, handler 0x10e798); rc3's zero mask
-     * allowed nothing. Tries: 1 = 0x24 bytes, all six types; 2 = 0x24, "unspecified" only; 3 = 0x14 bytes, all six. */
-    static const u32 files[3][9] = { { 0, 0, 0, 0x3F }, { 0, 0, 0, 1 }, { 0, 0, 0, 0x3F } };
-    static const u32 sizes[3] = { 0x24, 0x24, 0x14 };
+    /* DIAGNOSTIC (v3.10 rc6): archive path {low, high, media, 0}. File path = 3dbrew Title Access path, 0x24 bytes as fs
+     * itself sends it (decompiled fs, handler 0x10e798): title access 0, content 0, NCCH section, u64 mask of allowed
+     * content types, then the title's 16-byte NCCH seed. rc5 read with a zero seed: 0xD9004587, NCCH hash check failed;
+     * the Gen 1/2 Pokémon VC titles are seeded (3dstool ext_key.txt). Tries: 1 = section 5, seed check only (0: right
+     * seed); 2 = RomFS, all six types; 3 = RomFS, "unspecified" only. */
+    u32 files[3][9] = { { 0, 0, 5 }, { 0, 0, 0, 0x3F }, { 0, 0, 0, 1 } };
+    u32 seed[4] = { 0 };
     Handle h;
     Result r;
     int x;
     why[0] = '\0';
+    if (R_FAILED(r = title_seed(id, seed))) snprintf(why, wn, "seed:%08lX", (unsigned long)r);
+    for (x = 0; x < 3; x++) memcpy(files[x] + 5, seed, sizeof seed);
     if (!luma()) {
         snprintf(why, wn, "no Luma3DS");
         return -1;
@@ -231,14 +249,15 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
         size_t l = strlen(why);
         if (R_SUCCEEDED(r = FSPXI_OpenArchive(h, &a, ARCHIVE_SAVEDATA_AND_CONTENT, (FS_Path){ PATH_BINARY, sizeof archive, archive }))) {
             call = "f";
-            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizes[x], files[x] }, FS_OPEN_READ, 0))) {
-                step = rom_from_romfs(h, f, header, n);
+            if (R_SUCCEEDED(r = FSPXI_OpenFile(h, &f, a, (FS_Path){ PATH_BINARY, sizeof files[x], files[x] }, FS_OPEN_READ, 0))) {
+                step = x ? rom_from_romfs(h, f, header, n) : NULL;
                 FSPXI_CloseFile(h, f);
             }
             FSPXI_CloseArchive(h, a);
         }
         if (R_FAILED(r)) snprintf(why + l, wn - l, "%s%d%s:%08lX", l ? " " : "", x + 1, call, (unsigned long)r);
         else if (step) snprintf(why + l, wn - l, "%s%d:%s", l ? " " : "", x + 1, step);
+        else if (!x) snprintf(why + l, wn - l, "%s1:seed OK", l ? " " : ""); /* a check only, no ROM read */
         else {
             snprintf(why + l, wn - l, "%s%d:OK", l ? " " : "", x + 1);
             svcCloseHandle(h);
