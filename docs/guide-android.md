@@ -14,8 +14,9 @@ The Android app syncs the saves of the emulators on your phone or tablet with yo
 
 ## First start
 
-1. **Settings**: type the server address with its scheme and port, for example `http://<PC address>:8080`, and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`.
-2. Tap **Test the connection**. "Connected. The server has N games." means it works. Otherwise the message says what to fix, with the technical detail under it.
+1. **Settings**: on the PC, open the settings page, **Server**, and click **Show the QR code**. On the phone, tap **Scan the PC's QR code** and point the phone at it. The app fills in the address and token, saves them and tests the connection. The scanner comes from Google Play services: no camera permission, nothing leaves the phone.
+   No QR code (no Google Play services, or no PC settings page at hand)? Type the server address with its scheme and port, for example `http://<PC address>:8080`, and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`.
+2. After a manual entry, tap **Test the connection**. "Connected. The server has N games." means it works. Otherwise the message says what to fix, with the technical detail under it.
 3. **Emulators** > **Add an emulator**, choose yours, then choose its folders (see below).
 4. **Games**: the list shows each game with its state. Tap **Sync all**, or a game for its details.
 

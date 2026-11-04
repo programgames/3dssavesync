@@ -24,6 +24,8 @@ At the top, four badges show the state at a glance: server reachable or not, emu
 
 The **Save** bar shows only on **Server**, **Emulators** and **Frontends and install**: the settings of these parts apply when you click **Save**. The buttons that do one thing (**Prepare the 3DS SD card**, **Repair frontends**, **Restore this version**, **Add** a ROM hack, **Update**, **Uninstall 3dssavesync**) act at once. A personal server that isn't responding blocks the save. Every file that changes (`config.json`, frontend files) is copied first, with the date in its name. The token is never shown, except the address and token of the local server, in the box "Enter these on the 3DS". The program stops when you click **Close settings**, or 2 minutes after you close the tab.
 
+**Set up the phone** (on **Server**, after the server is saved): **Show the QR code** shows a QR code with the saved address and token (for the local server, the same network address as for the 3DS). In the Android app, tap **Scan the PC's QR code** in **Settings**: see the [Android guide](guide-android.md). The QR code holds your token: keep it private, and click **Hide** when the phone is set up.
+
 No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --no-browser` prints the address of the page, and `3dssavesync setup --text` asks the same questions in the terminal.
 
 **Repair frontends**: after a frontend update or reset (EmuDeck rewrites the ES-DE files), close the frontend, open **3dssavesync settings** and click **Repair frontends**. What is already in place does not change. Same in a terminal: `3dssavesync repair`.
