@@ -262,6 +262,19 @@ class SafTest {
         assertEquals(listOf("read saves/Emeraude.sav", "write saves/Emeraude.sav", "read saves/Emeraude.sav"), ops)
     }
 
+    // After a write, the Save file has the date of the new file: the details show it without a refresh.
+    @Test
+    fun dateAfterWrite() {
+        val f = put("saves/Emeraude.sav", save(1)).apply { setLastModified(1_600_000_000_000L) }
+        val saf = saf("saves", "saves", "Emeraude.sav")
+        assertEquals(1_600_000_000_000L, saf.modified())
+        assertTrue(saf.exists())
+        replace(game(saf), save(1), save(2), Backups(App.backupsDir))
+        assertEquals(f.lastModified(), saf.modified())
+        assertTrue(saf.modified()!! > 1_600_000_000_000L)
+        assertFalse(saf("saves", "saves", "Rubis.sav").exists())
+    }
+
     // breakWrites: the next n writes keep only half of the content (the provider reports no error; the next read shows it).
     private fun breakWrites(n: Int) {
         var left = n

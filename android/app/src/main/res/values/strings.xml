@@ -76,14 +76,20 @@
     <string name="reading_saves">Reading the saves: %1$d of %2$d</string>
     <string name="syncing">Syncing…</string>
     <string name="syncing_game">Syncing %1$d of %2$d: %3$s</string>
-    <string name="server_not_read">The server wasn\'t read, so the states are unknown.</string>
-    <string name="folder_problem">Folder not read: %1$s. Choose it again in Emulators.</string>
+    <string name="sync_off_server">Server unreachable</string>
+    <string name="sync_off_nothing">Nothing to sync</string>
+    <string name="hidden_offline">Games without a save on this phone are hidden until the server answers.</string>
+    <string name="retry">Retry</string>
+    <string name="show_details">Show details</string>
+    <string name="hide_details">Hide details</string>
+    <string name="open_emulators">Open the emulators</string>
+    <string name="folder_problem">%1$s: this folder can\'t be read. Choose it again in Emulators.</string>
     <string name="azahar_not_set_up">%1$s: no Nintendo 3DS folder in the chosen folder, so Azahar was never set up there. Start Azahar once, or choose its user folder again in Emulators.</string>
     <string name="search">Search a game</string>
     <string name="filter_all">All</string>
     <string name="filter_todo">To do</string>
     <string name="no_match">No game matches this search or filter.</string>
-    <string name="no_game">No game found. Check the ROM folders in Emulators.</string>
+    <string name="no_game">No game found in the ROM folders.</string>
     <plurals name="hidden_games">
         <item quantity="one">%1$d game has no save yet, on this phone or on the server: it is not shown.</item>
         <item quantity="other">%1$d games have no save yet, on this phone or on the server: they are not shown.</item>
@@ -147,12 +153,7 @@
     <string name="age_min">%1$d min ago</string>
     <string name="age_h">%1$d h ago</string>
     <string name="age_d">%1$d d ago</string>
-    <string name="last_sync">Last sync:</string>
-    <string name="base_never">never</string>
-    <string name="base_both">same version as both</string>
-    <string name="base_phone">same version as this phone</string>
-    <string name="base_server">same version as the server</string>
-    <string name="base_differs">differs from both</string>
+    <string name="file_row">File: %1$s</string>
     <string name="upload">Upload</string>
     <string name="download">Download</string>
     <string name="confirm_download">The server version will replace the save on this phone. A backup copy is made first. Close the emulator before you continue.</string>
@@ -173,7 +174,7 @@
     <string name="done_copy_restored">The backup copy is back in place.</string>
     <string name="done_failed">Sync failed.</string>
 
-    <!-- Problems: what happened and what to do; the technical detail follows on its own line -->
+    <!-- Problems: what happened and what to do; the technical detail is behind "Show details" -->
     <string name="p_token">The server rejected this token. Copy the exact token from the server into the settings.</string>
     <string name="p_not_server">This address isn\'t a 3dssavesync server. Check it in the settings.</string>
     <string name="p_too_large">Save too large for the server. Raise the size limit on the server or its proxy.</string>
@@ -182,7 +183,7 @@
     <string name="p_unexpected">The server sent an unexpected response. Check its address in the settings.</string>
     <string name="p_certificate">The server\'s certificate isn\'t valid. Check the address (https://) and the date of the phone.</string>
     <string name="p_no_host">Can\'t find the server. Check the Wi-Fi connection and the server address.</string>
-    <string name="p_refused">The server refused the connection. It may be stopped, or the port is wrong. Start the server or check the address.</string>
+    <string name="p_refused">The server refused the connection. Check that it\'s running and that the address and port are right.</string>
     <string name="p_no_response">The server isn\'t responding. Check the Wi-Fi connection and the server address.</string>
     <string name="p_damaged">The save from the server arrived incomplete, so yours wasn\'t replaced. Try again.</string>
     <string name="p_busy">Another device is uploading this save at the same time. Try again in a moment.</string>

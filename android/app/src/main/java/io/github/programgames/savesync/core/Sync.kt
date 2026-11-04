@@ -25,6 +25,8 @@ interface SaveFile {
     fun modified(): Long? // last change, ms since 1970, as last listed (no storage access); null if unknown
 
     fun modifiedNow(): Long? = modified() // last change read now from the storage; null or 0 if unknown
+
+    fun exists(): Boolean = read() != null // as last listed where a listing exists (no full read)
 }
 
 // Game is a Key and its Save file in one emulator of this phone. emulator: id of the emulator entry, which owns the

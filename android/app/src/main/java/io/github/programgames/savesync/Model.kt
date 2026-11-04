@@ -40,6 +40,7 @@ import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
+import io.github.programgames.savesync.core.shortName
 import io.github.programgames.savesync.core.splitDuplicates
 import io.github.programgames.savesync.core.titles3DS
 import kotlinx.coroutines.CoroutineScope
@@ -66,12 +67,16 @@ data class Entry(
     val sharedFile: Boolean = false, // Duplicate because the ROMs would use one Save file (else: same Key)
     val status: Status? = null,
     val error: Throwable? = null,
+    val noLocal: Boolean = false, // server not read and no save on this phone: hidden until the server answers
 ) {
     val id get() = emulator.id + "|" + system + "|" + rom // one line of the list
+
+    val short get() = shortName(name) // the name the list shows, as on the 3DS
 
     val shown: Shown
         get() = when {
             game == null -> Shown.DUPLICATE
+            noLocal && status == null -> Shown.NONE
             error != null || status == null -> Shown.UNKNOWN
             status.interrupted != null -> Shown.INTERRUPTED
             else -> when (status.state) {
@@ -270,7 +275,8 @@ object App {
 
     private fun statuses(list: List<Entry>, s: Syncer): List<Entry> = list.mapIndexed { i, e ->
         busy = text(R.string.reading_saves, i + 1, list.size)
-        if (e.game == null || serverError != null) e.copy(status = null, error = null)
+        if (e.game == null) e.copy(status = null, error = null)
+        else if (serverError != null) e.copy(status = null, error = null, noLocal = !runCatching { e.game.file.exists() }.getOrDefault(true))
         else runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) })
     }
 
@@ -356,7 +362,7 @@ object App {
                 try {
                     if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
                 } catch (t: Throwable) {
-                    problems += text(R.string.folder_problem, "${e.label} ${s.name}: $t")
+                    problems += text(R.string.folder_problem, "${e.title()} ${s.label}") // human words only: no exception text
                 }
             }
             val (kept, dups) = splitDuplicates(found, { it.first.game!!.key }, { it.second })

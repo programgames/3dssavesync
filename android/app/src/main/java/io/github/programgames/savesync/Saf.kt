@@ -79,7 +79,8 @@ class SafFile(
         return r.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, found))!!.use { it.readBytes() }
     }
 
-    // write replaces the whole content ("wt": truncate), synced to the disk. The caller reads it back (replace).
+    // write replaces the whole content ("wt": truncate), synced to the disk. The caller reads it back (replace). Then
+    // the folder is listed again, so the details show the new date (modified).
     override fun write(content: ByteArray) {
         val doc = find() ?: create()
         val uri = DocumentsContract.buildDocumentUriUsingTree(tree, doc)
@@ -90,7 +91,10 @@ class SafFile(
                 it.fd.sync()
             }
         }
+        runCatching { find() } // only the date: the write itself succeeded
     }
+
+    override fun exists() = id != null
 
     private fun create(): String {
         id = make(r, tree, parent ?: throw FileNotFoundException("$location: no folder"), "application/octet-stream", name) {}

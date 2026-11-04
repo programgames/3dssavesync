@@ -103,4 +103,17 @@ class RomTest {
         assertEquals(0, left.size)
         assertNotEquals(kept[0].second, kept[1].second)
     }
+
+    // The display name of the 3DS app (main.c make_short_name): no " - Version", no "(...)" tags.
+    @Test
+    fun shortNames() {
+        for ((name, short) in listOf(
+            "Pokemon - Version Diamant (France) (Rev 5)" to "Pokemon Diamant",
+            "Mario Kart DS (Europe) (En,Fr,De,Es,It)" to "Mario Kart DS",
+            "Mario & Luigi - Bowser's Inside Story (Europe)" to "Mario & Luigi - Bowser's Inside Story",
+            "Radical Red (4.10)" to "Radical Red",
+            "Tetris" to "Tetris",
+            "(Proto) Game" to "(Proto) Game", // a leading tag stays, as on the 3DS
+        )) assertEquals(name, short, shortName(name))
+    }
 }

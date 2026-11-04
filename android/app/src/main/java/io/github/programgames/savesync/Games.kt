@@ -15,10 +15,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Surface
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -91,7 +99,19 @@ fun stateColor(s: Shown): Color {
         Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00838F)
         Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFC62828)
         Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
-        else -> Color.Gray
+        else -> MaterialTheme.colorScheme.onSurfaceVariant // grey with a readable contrast
+    }
+}
+
+// StatusLabel: the State as a coloured label (dot and word, never the colour alone). Not a chip: it does nothing.
+@Composable
+fun StatusLabel(s: Shown) {
+    val c = stateColor(s)
+    Surface(shape = RoundedCornerShape(50), color = c.copy(alpha = 0.14f)) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(c, CircleShape))
+            Text(stateWord(s), Modifier.padding(start = 6.dp), color = c, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -125,47 +145,72 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     var confirm by remember { mutableStateOf<List<Entry>?>(null) }
     var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
     val shown = App.entries.filter { it.shown != Shown.NONE }
+    val q = fold(query.trim())
     val visible = shown.filter {
         when (filter) {
             "ALL" -> true
             "TODO" -> it.shown in listOf(Shown.TO_UPLOAD, Shown.TO_DOWNLOAD, Shown.CONFLICT, Shown.INTERRUPTED)
             else -> it.system.name == filter
-        } && fold(it.name).contains(fold(query.trim()))
+        } && (fold(it.short).contains(q) || fold(it.name).contains(q))
     }
     val several = App.emulators.size > 1
+    val systems = App.emulators.flatMap { it.systems.keys }.distinct().sorted() // a chip only for a system some emulator has
+    // why Sync all can't run now; null: it can (or an action runs, and the progress line says it)
+    val why = when {
+        App.busy != null || !App.loaded -> null
+        App.serverError != null -> R.string.sync_off_server
+        App.entries.none { it.shown == Shown.TO_UPLOAD || it.shown == Shown.TO_DOWNLOAD } -> R.string.sync_off_nothing
+        else -> null
+    }
     Column(Modifier.padding(p).padding(horizontal = 16.dp)) {
-        Text(stringResource(R.string.tab_games), Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleLarge)
-        // FlowRow: on a small screen or with longer words (French), the second button goes below instead of being cut
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton({ App.refresh() }, enabled = App.busy == null) { Text(stringResource(R.string.refresh)) }
+        Text(stringResource(R.string.tab_games), Modifier.padding(top = 16.dp).semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+        // FlowRow: on a small screen or with a large font, the reason goes below the button instead of being cut
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.Center) {
             Button({
                 // one reminder for the whole pass, even if it only uploads: a download may come up during the pass
                 beforeWrite({ reminder = it }) {
                     val replaced = App.entries.filter { it.shown == Shown.TO_DOWNLOAD && it.status?.local != null }
                     if (replaced.isEmpty()) App.syncAll(emptyList()) else confirm = replaced
                 }
-            }, enabled = App.busy == null && App.loaded && App.serverError == null) { Text(stringResource(R.string.sync_all)) }
+            }, enabled = App.busy == null && App.loaded && why == null) { Text(stringResource(R.string.sync_all)) }
+            why?.let { Text(stringResource(it), Modifier.align(Alignment.CenterVertically), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         App.busy?.let {
             LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        App.serverError?.let { ErrorText(it, stringResource(R.string.server_not_read)) }
-        App.message?.let { (text, t) -> if (t != null) ErrorText(t, text) }
+        val offline = App.entries.count { it.noLocal }
+        App.serverError?.let { ErrorBox(it, note = if (offline > 0) stringResource(R.string.hidden_offline) else null, retry = { App.refresh() }) }
+        App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
         for (line in App.scanProblems) Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
-        Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for ((f, label) in listOf("ALL" to stringResource(R.string.filter_all), "TODO" to stringResource(R.string.filter_todo)) + System.entries.map { it.name to it.label }) {
-                FilterChip(filter == f, { filter = f }, { Text(label) })
+        if (shown.isNotEmpty()) {
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(top = 8.dp), placeholder = { Text(stringResource(R.string.search)) }, singleLine = true)
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val chips = listOf("ALL" to stringResource(R.string.filter_all), "TODO" to stringResource(R.string.filter_todo)) +
+                    if (systems.size > 1) systems.map { it.name to it.label } else emptyList()
+                for ((f, label) in chips) FilterChip(filter == f, { filter = f }, { Text(label) })
             }
         }
-        LazyColumn(Modifier.weight(1f)) {
-            items(visible, key = { it.id }) { e -> GameRow(e, several) { onOpen(e) } }
-            item {
-                val hidden = App.entries.size - shown.size
-                if (App.loaded && App.busy == null && App.entries.isEmpty()) Text(stringResource(R.string.no_game), Modifier.padding(vertical = 16.dp))
-                if (visible.isEmpty() && shown.isNotEmpty()) Text(stringResource(R.string.no_match), Modifier.padding(vertical = 16.dp))
-                if (hidden > 0) Text(pluralStringResource(R.plurals.hidden_games, hidden, hidden), Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.bodySmall)
+        val refresh = stringResource(R.string.refresh)
+        // pull down to read the folders and the server again; TalkBack and keyboards get the same as an action
+        PullToRefreshBox(
+            App.busy != null, { App.refresh() },
+            Modifier.weight(1f).semantics { customActions = listOf(CustomAccessibilityAction(refresh) { App.refresh(); true }) },
+        ) {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(visible, key = { it.id }) { e -> GameRow(e, several) { onOpen(e) } }
+                item {
+                    val hidden = App.entries.size - shown.size
+                    if (App.loaded && App.busy == null && App.entries.isEmpty()) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(stringResource(R.string.no_game))
+                            OutlinedButton(goEmulators, Modifier.padding(top = 12.dp)) { Text(stringResource(R.string.open_emulators)) }
+                        }
+                    }
+                    if (visible.isEmpty() && shown.isNotEmpty()) Text(stringResource(R.string.no_match), Modifier.padding(vertical = 16.dp))
+                    // offline: the banner says why games are hidden
+                    if (hidden > 0 && App.serverError == null) Text(pluralStringResource(R.plurals.hidden_games, hidden, hidden), Modifier.padding(vertical = 16.dp), style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
     }
@@ -173,7 +218,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
         AlertDialog(
             onDismissRequest = { confirm = null },
             title = { Text(stringResource(R.string.sync_all)) },
-            text = { Text(stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.name })) },
+            text = { Text(stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.short })) },
             confirmButton = {
                 TextButton({
                     confirm = null
@@ -217,19 +262,20 @@ fun Reminder(then: () -> Unit, close: () -> Unit) {
     )
 }
 
+// GameRow: the short name on the full width, then the State, the system and the emulator. One focus stop for
+// TalkBack ("Mario Kart DS, To download, DS"): clickable merges the texts of the row.
 @Composable
 private fun GameRow(e: Entry, several: Boolean, onClick: () -> Unit) {
-    val c = stateColor(e.shown)
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(c, CircleShape))
-        Text(stateWord(e.shown), Modifier.padding(start = 8.dp).width(96.dp), color = c, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-        Text(
-            e.system.label, Modifier.border(BorderStroke(1.dp, Color.Gray), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-        )
-        Column(Modifier.padding(start = 10.dp)) {
-            Text(e.name, maxLines = 2)
-            if (several) Text(e.emulator.title(), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+    Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(vertical = 8.dp)) {
+        Text(e.short, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
+        FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StatusLabel(e.shown)
+            Text(
+                e.system.label,
+                Modifier.align(Alignment.CenterVertically).border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (several) Text(e.emulator.title(), Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     HorizontalDivider()
@@ -246,7 +292,7 @@ private fun SummaryDialog(s: Summary) {
                 if (s.conflicts.isNotEmpty()) Text(stringResource(R.string.summary_conflicts, s.conflicts.joinToString(", ")))
                 if (s.notReplaced.isNotEmpty()) Text(stringResource(R.string.summary_not_replaced, s.notReplaced.joinToString(", ")))
                 if (s.stopped) Text(stringResource(R.string.summary_stopped), color = MaterialTheme.colorScheme.error)
-                for ((name, t) in s.failures) ErrorText(t, name)
+                for ((name, t) in s.failures) ErrorBox(t, name)
             }
         },
         confirmButton = { TextButton({ App.summary = null }) { Text(stringResource(R.string.ok)) } },
@@ -294,13 +340,19 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
         BackHandler { history = false }
         return HistoryScreen(e) { history = false }
     }
+    // the name in the page, not in the bar: a long name wraps instead of being cut
     Scaffold(topBar = {
-        TopAppBar(title = { Text(e.name, maxLines = 1) }, navigationIcon = {
+        TopAppBar(title = {}, navigationIcon = {
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
         })
     }) { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("${systemName(e.system)} · ${e.emulator.title()} · ${e.rom}", style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(e.short, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+            Column {
+                Text("${systemName(e.system)} · ${e.emulator.title()}", style = MaterialTheme.typography.bodyMedium)
+                // the full ROM file name, with its tags; a 3DS game has no ROM file here
+                if (e.game != null && e.system != System.N3DS) Text(stringResource(R.string.file_row, e.rom), style = MaterialTheme.typography.bodySmall)
+            }
             Text(stateWord(e.shown), color = stateColor(e.shown), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(
                 when (e.shown) {
@@ -325,9 +377,9 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     }, enabled = App.busy == null) { Text(stringResource(R.string.own_save)) }
                 }
             }
-            e.error?.let { ErrorText(it) }
-            if (e.shown == Shown.UNKNOWN) App.serverError?.let { ErrorText(it, stringResource(R.string.server_not_read)) }
-            App.message?.let { (text, t) -> if (t == null) Text(text, color = MaterialTheme.colorScheme.primary) else ErrorText(t, text) }
+            // a server not read: the list says it once, with Retry; here only the why line above
+            e.error?.let { ErrorBox(it) }
+            App.message?.let { (text, t) -> if (t == null) Text(text, color = MaterialTheme.colorScheme.primary) else ErrorBox(t, text) }
             App.busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (e.game == null || st == null) return@Column // Duplicate, or nothing read: no cards
 
@@ -358,21 +410,6 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
             } else {
                 InfoCard(stringResource(R.string.this_phone), phoneLines)
                 InfoCard(stringResource(R.string.server), serverText)
-                st?.let {
-                    val b = it.base
-                    Text(
-                        stringResource(R.string.last_sync) + " " + stringResource(
-                            when {
-                                b == null -> R.string.base_never
-                                b == local?.version?.hash && b == server?.hash -> R.string.base_both
-                                b == local?.version?.hash -> R.string.base_phone
-                                b == server?.hash -> R.string.base_server
-                                else -> R.string.base_differs
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
                 when (e.shown) {
                     Shown.TO_UPLOAD -> Button({ App.act(e) }, enabled = App.busy == null) { Text(stringResource(R.string.upload)) }
                     Shown.TO_DOWNLOAD -> Button({ beforeWrite({ reminder = it }) { if (local != null) download = true else App.act(e) } }, enabled = App.busy == null) { Text(stringResource(R.string.download)) }
@@ -487,13 +524,13 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
     }) { p ->
         LazyColumn(Modifier.padding(p).padding(horizontal = 16.dp)) {
             item {
-                Text(e.name, style = MaterialTheme.typography.titleMedium)
+                Text(e.short, style = MaterialTheme.typography.titleMedium)
                 Text(stringResource(R.string.history_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
                 if (list == null) Text(stringResource(R.string.reading_history), style = MaterialTheme.typography.bodySmall)
                 if (list == null || App.busy != null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
                 App.busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                list?.exceptionOrNull()?.let { ErrorText(it, stringResource(R.string.history_failed)) }
-                App.message?.let { (text, t) -> if (t != null) ErrorText(t, text) }
+                list?.exceptionOrNull()?.let { ErrorBox(it, stringResource(R.string.history_failed), retry = { load++ }) }
+                App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
                 if (list?.isSuccess == true && versions.isEmpty()) Text(stringResource(R.string.no_versions), Modifier.padding(vertical = 8.dp))
             }
             items(versions, key = { it.file }) { x ->

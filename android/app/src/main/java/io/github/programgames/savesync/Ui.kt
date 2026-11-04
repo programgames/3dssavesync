@@ -73,6 +73,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.aliasExamples
@@ -166,13 +173,29 @@ fun problemText(p: Problem) = when (p) {
     Problem.OTHER -> R.string.p_other
 }
 
-// ErrorText: the text for the user, then the technical detail on its own line (to report it).
+// ErrorBox: what happened and what to do in plain words, Retry when the action can run again, and the technical detail
+// (exception, address, HTTP code) only behind "Show details", to report it. lead: which action failed; note: one more
+// line about the screen (hidden games).
 @Composable
-fun ErrorText(t: Throwable, lead: String? = null) {
-    Column(Modifier.padding(vertical = 4.dp)) {
-        if (lead != null) Text(lead, color = MaterialTheme.colorScheme.error)
-        Text(stringResource(problemText(problem(t))), color = MaterialTheme.colorScheme.error)
-        Text(t.message ?: t.toString(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+fun ErrorBox(t: Throwable, lead: String? = null, note: String? = null, retry: (() -> Unit)? = null) {
+    var details by rememberSaveable { mutableStateOf(false) }
+    val c = MaterialTheme.colorScheme.onErrorContainer
+    Surface(Modifier.fillMaxWidth().padding(vertical = 4.dp), MaterialTheme.shapes.medium, MaterialTheme.colorScheme.errorContainer) {
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
+            if (lead != null) Text(lead, Modifier.padding(end = 8.dp), color = c, fontWeight = FontWeight.Bold)
+            Text(stringResource(problemText(problem(t))), Modifier.padding(end = 8.dp), color = c)
+            note?.let { Text(it, Modifier.padding(top = 4.dp, end = 8.dp), color = c, style = MaterialTheme.typography.bodySmall) }
+            FlowRow {
+                val colors = ButtonDefaults.textButtonColors(contentColor = c)
+                retry?.let { TextButton(it, colors = colors) { Text(stringResource(R.string.retry)) } }
+                TextButton({ details = !details }, colors = colors) { Text(stringResource(if (details) R.string.hide_details else R.string.show_details)) }
+            }
+            if (details) {
+                SelectionContainer {
+                    Text(t.message ?: t.toString(), Modifier.padding(end = 8.dp, bottom = 8.dp), color = c, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
     }
 }
 
@@ -251,7 +274,7 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
             Text(stringResource(R.string.test_connection))
         }
         App.busy?.let { Text(it) }
-        result?.fold({ Text(pluralStringResource(R.plurals.connected, it, it)) }, { ErrorText(it) })
+        result?.fold({ Text(pluralStringResource(R.plurals.connected, it, it)) }, { ErrorBox(it, retry = { App.testConnection { r -> result = r } }) })
         HorizontalDivider()
         BackgroundSection()
         HorizontalDivider()
