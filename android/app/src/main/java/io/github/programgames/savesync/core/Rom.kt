@@ -83,3 +83,41 @@ fun key(system: System, h: ByteArray): String? {
     }
     return k.takeIf { system.shape.matches(it) }
 }
+
+// Aliases (ADR 0014): a ROM hack that keeps the code of its original game gets its own Key. As client/cases.go, the
+// same ROM file name gives the same Key on the PC, the 3DS and this phone. aliasExamples: the Systems with Aliases
+// (a 3DS save follows the title ID), with a Key for the help text.
+val aliasExamples = mapOf(System.DS to "0RAD", System.GBA to "GBA-0RAD", System.GB to "GB-MONHACK-0001")
+
+// aliasKey returns the Key of the Alias of this ROM (file name without extension), else the header Key. null: the
+// Alias is not valid, the ROM is not synced (never under the header Key, the one of the original game).
+fun aliasKey(aliases: Map<String, String>, system: System, name: String, key: String): String? {
+    val a = aliases[name] ?: return key
+    if (system !in aliasExamples) return key
+    return a.trim().uppercase().takeIf { system.shape.matches(it) }
+}
+
+// newAlias returns the Key of the Alias of this ROM name: the one it has, else a new one derived from the name (a Key
+// already taken by another Alias gives the next derivation). IllegalArgumentException: no Alias possible.
+fun newAlias(aliases: Map<String, String>, system: System, name: String): String {
+    require(system in aliasExamples) { "${system.label} games don't use aliases." }
+    require(name.isNotBlank() && name.none { it in "=\r\n" }) { "This ROM name can't be used as an alias: \"$name\"" }
+    aliases[name]?.uppercase()?.takeIf { system.shape.matches(it) }?.let { return it }
+    val taken = aliases.filterKeys { it != name }.values.map { it.uppercase() }.toSet()
+    val signs = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for (i in 0..Int.MAX_VALUE) {
+        val d = java.security.MessageDigest.getInstance("SHA-256").digest("$name\u0000$i".toByteArray())
+        val h = d.map { it.toInt() and 0xFF }
+        val suffix = "${signs[h[0] % 36]}${signs[h[1] % 36]}${signs[h[2] % 36]}"
+        val key = when (system) {
+            System.DS -> "0$suffix"
+            System.GBA -> "GBA-0$suffix"
+            else -> "GB-ALIAS-" + hex(d.copyOfRange(0, 2)).uppercase()
+        }
+        if (key !in taken) return key
+    }
+    error("no free key")
+}
+
+// aliasSystem returns the System of an Alias Key (the console shown in the list).
+fun aliasSystem(key: String): System = key.trim().uppercase().let { if (it.startsWith("GBA-")) System.GBA else if (it.startsWith("GB-")) System.GB else System.DS }

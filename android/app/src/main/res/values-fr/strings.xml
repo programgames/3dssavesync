@@ -103,10 +103,22 @@
     <string name="why_to_download">Le serveur a une version plus récente. Récupérer la télécharge, après une copie de sécurité de la sauvegarde du téléphone.</string>
     <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
     <string name="why_in_sync">Ce téléphone et le serveur ont la même sauvegarde.</string>
-    <string name="why_duplicate">%1$d ROM contiennent ce jeu : il n\'est pas synchronisé. Gardez-en une seule dans le dossier des ROM.</string>
+    <string name="why_duplicate">%1$d ROM contiennent ce jeu : il n\'est pas synchronisé. Si l\'une d\'elles est un ROM hack, donnez-lui sa propre sauvegarde. Sinon, gardez-en une seule dans le dossier des ROM.</string>
     <string name="why_shared_file">%1$d ROM utiliseraient le même fichier de sauvegarde : elles ne sont pas synchronisées. Renommez-en une.</string>
     <string name="why_unknown">État inconnu : le serveur ou cette sauvegarde n\'a pas pu être lu.</string>
     <string name="why_none">Aucune sauvegarde sur ce téléphone ni sur le serveur. Jouez et sauvegardez dans le jeu, puis actualisez.</string>
+
+    <!-- ROM hacks (ADR 0014) -->
+    <string name="hacks_title">ROM hacks</string>
+    <string name="hacks_text">Un ROM hack garde souvent le code de son jeu d\'origine, et l\'application risque de les confondre. Ajoutez ici la ROM du hack pour lui donner sa propre sauvegarde.</string>
+    <string name="hacks_same_key">La clé de la sauvegarde vient du nom du fichier de la ROM, comme sur le PC. Pour synchroniser le hack avec le PC et la 3DS, ajoutez le même fichier de ROM dans les réglages du PC (ROM hacks), puis préparez de nouveau la carte SD de la 3DS.</string>
+    <string name="no_hack">Aucun ROM hack.</string>
+    <string name="hack_choose_rom">Choisir la ROM</string>
+    <string name="hack_no_file">Aucune ROM choisie.</string>
+    <string name="hack_add">Ajouter</string>
+    <string name="hack_remove_text">Oublier le ROM hack %1$s ? L\'application le lit de nouveau comme son jeu d\'origine. Aucune sauvegarde n\'est supprimée.</string>
+    <string name="own_save">Donner sa propre sauvegarde à cette ROM</string>
+    <string name="alias_invalid">%1$s : sa clé de ROM hack (%2$s) n\'est pas valable, il n\'est pas synchronisé. Retirez-le dans Réglages, ROM hacks, puis ajoutez de nouveau la ROM.</string>
 
     <!-- Game details -->
     <string name="this_phone">Ce téléphone</string>

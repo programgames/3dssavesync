@@ -18,6 +18,7 @@ import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.performClick
@@ -28,6 +29,9 @@ import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
@@ -42,6 +46,7 @@ import io.github.programgames.savesync.core.SyncException
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.mainSunMoon
+import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.sha256
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -51,6 +56,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -99,8 +105,11 @@ open class UiTest {
         emulators: List<Emulator> = emptyList(),
         entries: List<Entry>? = null,
         noReminder: Boolean = true,
+        aliases: Map<String, String> = emptyMap(),
     ): ActivityScenario<MainActivity> {
         App.init(ctx)
+        App.settings.aliases = aliases
+        App.aliases = aliases
         App.settings.noReminder = noReminder
         App.settings.url = url
         App.settings.token = token
@@ -502,6 +511,63 @@ open class UiTest {
         rule.onNode(hasText("Mario Kart DS", substring = true) and dialog).assertExists()
         rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
         assertTrue(files.values.all { it.writes == 0 })
+    }
+
+    // ROM hacks (ADR 0014): the list, an addition by ROM file (console from the extension, Key of the PC), and a
+    // removal that only forgets the mapping, after a confirmation.
+    @Test
+    fun romHacks() {
+        val sc = start(url = "http://127.0.0.1:1", token = "t", aliases = mapOf("Radical Red (4.10)" to "GBA-0EE3"))
+        rule.onNodeWithText(s(R.string.tab_settings)).performClick()
+        rule.onNode(hasText(s(R.string.hacks_title)) and hasClickAction()).performScrollTo().performClick()
+        rule.onNodeWithText(s(R.string.hacks_same_key)).assertExists()
+        rule.onNodeWithText("Radical Red (4.10)").assertExists()
+        rule.onNodeWithText(s(R.string.system_gba)).assertExists()
+        rule.onNodeWithText(s(R.string.hack_add)).assertIsNotEnabled() // no ROM chosen yet
+        fits(s(R.string.hack_choose_rom))
+        for (sys in listOf("DS", "GB", "GBA")) fits(sys)
+
+        rule.onNodeWithText(s(R.string.hack_choose_rom)).performScrollTo().performClick()
+        sc.onActivity { a ->
+            val sh = shadowOf(a)
+            val asked = sh.nextStartedActivityForResult
+            assertEquals(Intent.ACTION_OPEN_DOCUMENT, asked.intent.action)
+            sh.receiveResult(asked.intent, Activity.RESULT_OK, Intent().setData(Uri.parse("file:///roms/Hack.nds")))
+        }
+        rule.onNodeWithText("Hack.nds").assertExists()
+        rule.onNodeWithText(s(R.string.hack_add)).performScrollTo().assertIsEnabled().performClick()
+        assertEquals(mapOf("Radical Red (4.10)" to "GBA-0EE3", "Hack" to "0KP0"), App.settings.aliases)
+        rule.onNodeWithText("Hack").assertExists()
+        rule.onNodeWithText(s(R.string.hack_no_file)).assertExists()
+
+        sc.recreate() // rotation: still on the ROM hacks
+        rule.onNodeWithText("Radical Red (4.10)").assertExists()
+        rule.onAllNodes(hasText(s(R.string.remove)) and hasClickAction())[1].performClick() // sorted: Hack, then Radical Red
+        rule.onNodeWithText(s(R.string.hack_remove_text, "Radical Red (4.10)")).assertExists()
+        rule.onNode(hasText(s(R.string.cancel)) and dialog).performClick()
+        assertEquals(2, App.settings.aliases.size)
+        rule.onAllNodes(hasText(s(R.string.remove)) and hasClickAction())[1].performClick()
+        rule.onNode(hasText(s(R.string.remove)) and dialog).performClick()
+        assertEquals(mapOf("Hack" to "0KP0"), App.settings.aliases)
+        rule.onAllNodesWithText("Radical Red (4.10)").assertCountEquals(0)
+        back()
+        rule.onNodeWithText(s(R.string.settings_title)).assertExists()
+    }
+
+    // A Duplicate (same Key): each ROM can get its own save, the Key of the PC for this ROM name; the list is read
+    // again.
+    @Test
+    fun duplicateGetsItsOwnSave() {
+        start(url = "http://127.0.0.1:1", token = "t", emulators = listOf(emu), entries = games())
+        open("Tetris")
+        rule.onNodeWithText("• Tetris (1).gb").assertExists()
+        fits(s(R.string.own_save), 2)
+        rule.onAllNodesWithText(s(R.string.own_save))[1].performScrollTo().performClick()
+        val key = App.settings.aliases["Tetris (1)"]!!
+        assertEquals(newAlias(emptyMap(), System.GB, "Tetris (1)"), key)
+        assertTrue(key.startsWith("GB-ALIAS-"))
+        assertEquals(1, App.settings.aliases.size)
+        rule.onAllNodesWithContentDescription(s(R.string.back)).assertCountEquals(0) // back on the list, read again
     }
 }
 

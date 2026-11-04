@@ -1,7 +1,9 @@
 package io.github.programgames.savesync.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
@@ -50,5 +52,55 @@ class RomTest {
         assertEquals(Rom(System.DS, "CPUF", "Platine", "Pokemon Platine (F)"), read("Platine.zip", o.toByteArray()))
         val empty = ByteArrayOutputStream().also { ZipOutputStream(it).use { z -> z.putNextEntry(ZipEntry("a.txt")) } }
         assertNull(read("other.zip", empty.toByteArray()))
+    }
+
+    // aliasKey: the cases of TestAliasKey in client/cases_test.go, same ROM names, same Keys.
+    @Test
+    fun aliasKeys() {
+        val a = mapOf("Hack DS" to "0rad", "Hack GBA" to " GBA-0RAD ", "Hack GB" to "GB-MONHACK-0001", "Trop long" to "GBA-BPRE-RADICALRED", "Mauvais Système" to "0RAD")
+        assertEquals("0RAD", aliasKey(a, System.DS, "Hack DS", "ADAF"))
+        assertEquals("GBA-0RAD", aliasKey(a, System.GBA, "Hack GBA", "GBA-BPRE"))
+        assertEquals("GB-MONHACK-0001", aliasKey(a, System.GB, "Hack GB", "GB-POKEMON_RED-91E6"))
+        assertEquals("GBA-BPRE", aliasKey(a, System.GBA, "Sans alias", "GBA-BPRE"))
+        assertNull(aliasKey(a, System.GBA, "Trop long", "GBA-BPRE"))
+        assertNull(aliasKey(a, System.GBA, "Mauvais Système", "GBA-BPRE"))
+        assertEquals("3DS-0004000000055D00", aliasKey(a, System.N3DS, "Hack DS", "3DS-0004000000055D00")) // never a 3DS Alias
+    }
+
+    // newAlias: the Key derived from the ROM name by SHA-256, byte for byte the one of addAlias in client/cases.go
+    // (literal Keys computed by the Go code), so the hack syncs between the PC, the 3DS and this phone.
+    @Test
+    fun newAliasKeys() {
+        assertEquals("GBA-0EE3", newAlias(emptyMap(), System.GBA, "Radical Red (4.10)"))
+        assertEquals("0KP0", newAlias(emptyMap(), System.DS, "Hack"))
+        assertEquals("GBA-0KP0", newAlias(emptyMap(), System.GBA, "Hack"))
+        assertEquals("GB-ALIAS-8019", newAlias(emptyMap(), System.GB, "Hack"))
+        assertEquals("0Y0G", newAlias(emptyMap(), System.DS, "Pokémon Blaze Black 2")) // UTF-8, as Go
+        // the Alias it has is kept; a Key taken by another Alias gives the next derivation
+        assertEquals("GBA-0EE3", newAlias(mapOf("Radical Red (4.10)" to "gba-0ee3"), System.GBA, "Radical Red (4.10)"))
+        assertEquals("GBA-03DD", newAlias(mapOf("Autre hack" to "GBA-0EE3"), System.GBA, "Radical Red (4.10)"))
+        for (name in listOf("", "  ", "a=b", "a\nb")) assertThrows(IllegalArgumentException::class.java) { newAlias(emptyMap(), System.GBA, name) }
+        assertThrows(IllegalArgumentException::class.java) { newAlias(emptyMap(), System.N3DS, "Hack") }
+        assertEquals(System.GBA, aliasSystem("GBA-0EE3"))
+        assertEquals(System.GB, aliasSystem("GB-ALIAS-8019"))
+        assertEquals(System.DS, aliasSystem("0KP0"))
+    }
+
+    // A ROM hack and its original game: one Key, a Duplicate (none synced). With an Alias for the hack: two games,
+    // each with its Key. The same steps as the scan of the app (aliasKey, then splitDuplicates).
+    @Test
+    fun duplicateThenAlias() {
+        val code = "BPRE".toByteArray()
+        val roms = listOf("Pokemon FireRed.gba", "Radical Red (4.10).gba").map { read(it, header(0xAC, code))!! }
+        fun scan(aliases: Map<String, String>) =
+            splitDuplicates(roms.map { it.name to aliasKey(aliases, it.system, it.name, it.key!!)!! }, { it.second }, { it.first + ".srm" })
+        val (none, dups) = scan(emptyMap())
+        assertEquals(0, none.size)
+        assertEquals(2, dups.size)
+        val aliases = mapOf("Radical Red (4.10)" to newAlias(emptyMap(), System.GBA, "Radical Red (4.10)"))
+        val (kept, left) = scan(aliases)
+        assertEquals(listOf("Pokemon FireRed" to "GBA-BPRE", "Radical Red (4.10)" to "GBA-0EE3"), kept)
+        assertEquals(0, left.size)
+        assertNotEquals(kept[0].second, kept[1].second)
     }
 }

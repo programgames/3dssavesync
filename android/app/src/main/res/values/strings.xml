@@ -103,10 +103,22 @@
     <string name="why_to_download">The server has a newer version. Download gets it, after a backup copy of the save on this phone.</string>
     <string name="why_conflict">The save changed on this phone and on the server since the last sync. Choose which one to keep.</string>
     <string name="why_in_sync">This phone and the server have the same save.</string>
-    <string name="why_duplicate">%1$d ROMs hold this game, so it isn\'t synced. Keep only one of them in the ROM folder.</string>
+    <string name="why_duplicate">%1$d ROMs hold this game, so it isn\'t synced. If one of them is a ROM hack, give it its own save. Else keep only one of them in the ROM folder.</string>
     <string name="why_shared_file">%1$d ROMs would use the same save file, so they aren\'t synced. Rename one of them.</string>
     <string name="why_unknown">State unknown: the server or this save could not be read.</string>
     <string name="why_none">No save on this phone or on the server yet. Play and save in the game, then refresh.</string>
+
+    <!-- ROM hacks (ADR 0014) -->
+    <string name="hacks_title">ROM hacks</string>
+    <string name="hacks_text">A ROM hack often keeps the code of its original game, so the app could mix them up. Add the hack ROM here to give it its own save.</string>
+    <string name="hacks_same_key">The save key comes from the ROM file name, as on the PC. To sync the hack with the PC and the 3DS, add the same ROM file in the PC settings (ROM hacks), then prepare the 3DS SD card again.</string>
+    <string name="no_hack">No ROM hack.</string>
+    <string name="hack_choose_rom">Choose the ROM</string>
+    <string name="hack_no_file">No ROM chosen.</string>
+    <string name="hack_add">Add</string>
+    <string name="hack_remove_text">Forget the ROM hack %1$s? The app then reads it again as its original game. No save is deleted.</string>
+    <string name="own_save">Give this ROM its own save</string>
+    <string name="alias_invalid">%1$s: its ROM hack key (%2$s) isn\'t valid, so it isn\'t synced. Remove it in Settings, ROM hacks, then add the ROM again.</string>
 
     <!-- Game details -->
     <string name="this_phone">This phone</string>

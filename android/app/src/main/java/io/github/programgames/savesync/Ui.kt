@@ -3,6 +3,7 @@
 package io.github.programgames.savesync
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,6 +62,11 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.System
+import io.github.programgames.savesync.core.aliasExamples
+import io.github.programgames.savesync.core.aliasSystem
+import io.github.programgames.savesync.core.extension
+import io.github.programgames.savesync.core.extensions
+import io.github.programgames.savesync.core.withoutExtension
 import io.github.programgames.savesync.core.problem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -74,6 +80,7 @@ fun Root() {
     // reads its State again)
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
+    var hacks by rememberSaveable { mutableStateOf(false) }
     val o = App.entries.find { it.id == open }
     val ed = editing
     when {
@@ -88,6 +95,10 @@ fun Root() {
         ed != null && App.emulators.any { it.id == ed } -> {
             BackHandler { editing = null }
             EmulatorScreen(ed) { editing = null }
+        }
+        hacks -> {
+            BackHandler { hacks = false }
+            HacksScreen { hacks = false }
         }
         else -> Scaffold(
             bottomBar = {
@@ -105,7 +116,7 @@ fun Root() {
             when (tab) {
                 Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
                 Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
-                Tab.SETTINGS -> SettingsScreen(p)
+                Tab.SETTINGS -> SettingsScreen(p) { hacks = true }
             }
         }
     }
@@ -155,7 +166,7 @@ fun ErrorText(t: Throwable, lead: String? = null) {
 fun Title(text: String) = Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp))
 
 @Composable
-fun SettingsScreen(p: PaddingValues) {
+fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
     var url by rememberSaveable { mutableStateOf(App.settings.url) }
     var token by rememberSaveable { mutableStateOf(App.settings.token) }
     var show by remember { mutableStateOf(false) }
@@ -197,7 +208,77 @@ fun SettingsScreen(p: PaddingValues) {
         Text(stringResource(R.string.backups_where))
         Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         HorizontalDivider()
+        Text(stringResource(R.string.hacks_title), style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.hacks_text))
+        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
+        HorizontalDivider()
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// HacksScreen lists the ROM hacks that have their own save (ADR 0014): add one by its ROM file, or forget one (the
+// mapping only, never a save). The Key comes from the ROM file name, as on the PC.
+@Composable
+fun HacksScreen(onBack: () -> Unit) {
+    var picked by rememberSaveable { mutableStateOf<String?>(null) } // ROM file name
+    var system by rememberSaveable { mutableStateOf<System?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var removing by remember { mutableStateOf<String?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val name = runCatching {
+            App.resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        }.getOrNull() ?: uri.lastPathSegment.orEmpty().substringAfterLast('/').substringAfterLast(':')
+        picked = name
+        system = extensions[extension(name)] ?: system
+        error = null
+    }
+    Scaffold(topBar = {
+        TopAppBar(title = { Text(stringResource(R.string.hacks_title)) }, navigationIcon = {
+            IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
+        })
+    }) { p ->
+        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.hacks_text))
+            Text(stringResource(R.string.hacks_same_key), style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            if (App.aliases.isEmpty()) Text(stringResource(R.string.no_hack))
+            for ((name, key) in App.aliases.toSortedMap(String.CASE_INSENSITIVE_ORDER)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(name)
+                        Text(systemName(aliasSystem(key)), style = MaterialTheme.typography.bodySmall)
+                    }
+                    TextButton({ removing = name }) { Text(stringResource(R.string.remove)) }
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            OutlinedButton({ picker.launch(arrayOf("*/*")) }) { Text(stringResource(R.string.hack_choose_rom)) }
+            Text(picked ?: stringResource(R.string.hack_no_file), style = MaterialTheme.typography.bodySmall)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (s in aliasExamples.keys) FilterChip(system == s, { system = s }, { Text(s.label) })
+            }
+            val name = picked?.let { withoutExtension(it) }
+            Button({
+                error = App.addAlias(system!!, name!!)
+                if (error == null) picked = null
+            }, enabled = name != null && system != null) { Text(stringResource(R.string.hack_add)) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }
+    removing?.let { name ->
+        AlertDialog(
+            onDismissRequest = { removing = null },
+            title = { Text(stringResource(R.string.hacks_title)) },
+            text = { Text(stringResource(R.string.hack_remove_text, name)) },
+            confirmButton = {
+                TextButton({
+                    removing = null
+                    App.removeAlias(name)
+                }) { Text(stringResource(R.string.remove)) }
+            },
+            dismissButton = { TextButton({ removing = null }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
 }
 

@@ -69,6 +69,8 @@ import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.System
+import io.github.programgames.savesync.core.aliasExamples
+import io.github.programgames.savesync.core.withoutExtension
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.problem
@@ -284,6 +286,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     var download by remember { mutableStateOf(false) }
     var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
     var history by rememberSaveable { mutableStateOf(false) }
+    val hackable = e.game == null && !e.sharedFile && e.system in aliasExamples
     if (history && e.game != null) {
         BackHandler { history = false }
         return HistoryScreen(e) { history = false }
@@ -303,11 +306,21 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     Shown.CONFLICT -> stringResource(R.string.why_conflict)
                     Shown.IN_SYNC -> stringResource(R.string.why_in_sync)
                     Shown.DUPLICATE -> stringResource(if (e.sharedFile) R.string.why_shared_file else R.string.why_duplicate, e.dups.size) +
-                        "\n" + e.dups.joinToString("\n") { "• $it" }
+                        if (hackable) "" else "\n" + e.dups.joinToString("\n") { "• $it" }
                     Shown.UNKNOWN -> stringResource(R.string.why_unknown)
                     Shown.NONE -> stringResource(R.string.why_none)
                 },
             )
+            if (hackable) {
+                // same Key: one of the ROMs may be a ROM hack. Its Alias gives it the Key of the PC (ADR 0014).
+                for (rom in e.dups) {
+                    Text("• $rom")
+                    OutlinedButton({
+                        App.message = App.addAlias(e.system, withoutExtension(rom))?.let { App.text(R.string.done_failed) to IllegalArgumentException(it) }
+                        if (App.message == null) onBack() // the list is read again: the two ROMs, each with its Key
+                    }, enabled = App.busy == null) { Text(stringResource(R.string.own_save)) }
+                }
+            }
             e.error?.let { ErrorText(it) }
             if (e.shown == Shown.UNKNOWN) App.serverError?.let { ErrorText(it, stringResource(R.string.server_not_read)) }
             App.message?.let { (text, t) -> if (t == null) Text(text, color = MaterialTheme.colorScheme.primary) else ErrorText(t, text) }

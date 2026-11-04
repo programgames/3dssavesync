@@ -23,9 +23,11 @@ import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.Syncer
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.System
+import io.github.programgames.savesync.core.aliasKey
 import io.github.programgames.savesync.core.extension
 import io.github.programgames.savesync.core.extensions
 import io.github.programgames.savesync.core.formats3DS
+import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
@@ -82,6 +84,7 @@ object App {
     private var syncer: Syncer? = null
 
     var emulators by mutableStateOf(listOf<Emulator>())
+    var aliases by mutableStateOf(mapOf<String, String>()) // ROM hacks (ADR 0014)
     var entries by mutableStateOf(listOf<Entry>())
     var serverError by mutableStateOf<Throwable?>(null)
     var scanProblems by mutableStateOf(listOf<String>())
@@ -97,6 +100,7 @@ object App {
         reminded = false
         settings = Settings(context)
         emulators = settings.emulators
+        aliases = settings.aliases
     }
 
     val resolver: ContentResolver get() = context.contentResolver
@@ -118,6 +122,21 @@ object App {
     fun saveEmulators(list: List<Emulator>) {
         settings.emulators = list
         emulators = list
+    }
+
+    // addAlias gives this ROM its own save (ADR 0014): the Key of the PC for the same ROM name. The list must be read
+    // again. Returns the error text, or null.
+    fun addAlias(system: System, name: String): String? = runCatching {
+        saveAliases(aliases + (name to newAlias(aliases, system, name)))
+    }.exceptionOrNull()?.let { it.message ?: it.toString() }
+
+    // removeAlias only forgets the mapping: no save is touched.
+    fun removeAlias(name: String) = saveAliases(aliases - name)
+
+    private fun saveAliases(a: Map<String, String>) {
+        settings.aliases = a
+        aliases = a
+        loaded = false
     }
 
     // newId never reuses an id that has Bases: a new entry could point at other folders than the old one.
@@ -238,7 +257,7 @@ object App {
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
             for ((s, f) in e.systems) {
                 try {
-                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found)
+                    if (s == System.N3DS) scan3DS(e, f, found, problems) else scan(e, s, f, found, problems)
                 } catch (t: Throwable) {
                     problems += text(R.string.folder_problem, "${e.label} ${s.name}: $t")
                 }
@@ -256,7 +275,8 @@ object App {
     }
 
     // scan walks the ROM folder of one System (subfolders too, hidden ones skipped) and pairs each ROM with its Save.
-    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>) {
+    private fun scan(e: Emulator, s: System, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
+        val aliases = aliases
         val romTree = (f.roms ?: return).toUri()
         val saveTree = if (f.nextToRom) romTree else (f.saves ?: return).toUri()
         val format = e.format(s)
@@ -274,11 +294,17 @@ object App {
                 val rom = readRom(d.name) { resolver.openInputStream(uri)!! } ?: continue
                 if (rom.system != s || rom.key == null) continue
                 val name = rom.name // Android emulators name the save after the ROM or the .zip
+                // the Alias of a ROM hack, as on the PC; an invalid one: never synced under the header Key
+                val key = aliasKey(aliases, s, name, rom.key)
+                if (key == null) {
+                    problems += text(R.string.alias_invalid, name, aliases[name].orEmpty())
+                    continue
+                }
                 val file = name + format.ext
                 val folder = if (f.nextToRom) parent else rootId(saveTree)
                 val doc = saves.getOrPut(folder) { children(resolver, saveTree, folder).filter { !it.folder } }
                     .let { l -> l.find { it.name == file } ?: l.find { it.name.equals(file, ignoreCase = true) } }
-                val g = Game(s, rom.key, name, SafFile(resolver, saveTree, folder, file, doc?.id, doc?.modified), format, e.id)
+                val g = Game(s, key, name, SafFile(resolver, saveTree, folder, file, doc?.id, doc?.modified), format, e.id)
                 out += Entry(e, s, name, d.name, g) to "$saveTree|$folder|$file"
             }
         }

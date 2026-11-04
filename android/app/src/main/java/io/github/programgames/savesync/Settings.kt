@@ -50,6 +50,11 @@ class Settings(context: Context) {
         get() = p.getBoolean("noReminder", false)
         set(v) = p.edit { putBoolean("noReminder", v) }
 
+    // aliases: ROM name without extension -> Key of its own save (ADR 0014), as "alias" in the PC config.json.
+    var aliases: Map<String, String>
+        get() = JSONObject(p.getString("aliases", "{}") ?: "{}").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
+        set(v) = p.edit { putString("aliases", JSONObject(v).toString()) }
+
     var emulators: List<Emulator>
         get() {
             val a = JSONArray(p.getString("emulators", "[]"))

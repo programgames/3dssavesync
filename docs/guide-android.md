@@ -49,7 +49,7 @@ Each line shows the state, the system and the game. The states are the same word
 | **To download** (cyan) | The server has a newer version. | **Download** replaces the phone save, after a backup copy. |
 | **Conflict** (red) | The save changed on the phone and on the server since the last sync. | Open the game and choose which one to keep. |
 | **In sync** (green) | Same save on both sides. | Nothing. |
-| **Duplicate** (grey) | Two ROMs hold the same game, or would use the same save file. | Keep one ROM, or rename one. ROM hack aliases are not supported on Android yet. |
+| **Duplicate** (grey) | Two ROMs hold the same game, or would use the same save file. | Same game: keep one ROM. A ROM hack: give it its own save (see [ROM hacks](#rom-hacks)). Same save file: rename one ROM. |
 | **Unknown** (grey) | The server or the save could not be read. | The message says why. |
 
 Games with no save anywhere are hidden; a line at the end of the list counts them. Use the chips (**All**, **To do**, **DS**, **GB**, **GBA**, **3DS**) and the search field (accents ignored) to find a game.
@@ -91,6 +91,22 @@ If the Restore fails, nothing changes on the server, and the message says why, w
 - **The version arrived damaged** (its content does not match the hash listed by the server): try again.
 - The server cannot be reached: the usual network messages.
 
+## ROM hacks
+
+A ROM hack often keeps the code of its original game: Pokémon Radical Red keeps the code of Pokémon FireRed. The app then sees one game in two ROMs and shows **Duplicate**: neither is synced. Give the hack its own save in one of two ways:
+
+- Open the **Duplicate** line, then tap **Give this ROM its own save** under the hack ROM. The list is read again and shows the two games.
+- In **Settings**, tap **ROM hacks**, then **Choose the ROM**. Choose the hack ROM file. The console comes from the extension (choose it for a `.zip`). Tap **Add**.
+
+The hack then syncs under its own key on the server. The app makes this key from the ROM file name, with the same rule as the PC program: for example `Radical Red (4.10).gba` always gives `GBA-0EE3`. So the same ROM file name gives the same save on the PC, the 3DS and this phone. To sync the hack with them:
+
+1. On the PC, add the same ROM file in the settings page, **ROM hacks** (or choose **Sync separately** when the PC asks).
+2. On the PC, prepare the 3DS SD card again: it writes the hack to `alias.ini` on the card.
+
+Keep the same ROM file name on every device: another name gives another key. 3DS games have no ROM hacks: their key is the title ID.
+
+To remove a ROM hack, tap **Remove** next to it in **ROM hacks**. The app only forgets that this ROM is a hack: no save is deleted, on the phone or on the server. The ROM then counts again as its original game. See [ADR 0014](adr/0014-rom-hack-et-alias.md).
+
 ## 3DS games never started in Azahar
 
 The app knows the 8 Pokémon games of the 3DS even if you never started them in Azahar. Such a game shows in the list when the server has a save for it, as **To download**; its details say **Never started in Azahar**. **Download** (or **Sync all**) creates its save folder in Azahar, like the PC program does:
@@ -117,7 +133,6 @@ Removing an emulator from the app, or uninstalling the app, deletes nothing in y
 
 - No background sync: open the app and tap **Sync all** before and after you play.
 - The app does not start games.
-- No ROM hack aliases ([ADR 0014](adr/0014-rom-hack-et-alias.md)).
 
 ## Build it yourself
 
