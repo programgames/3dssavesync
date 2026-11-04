@@ -125,8 +125,10 @@ open class UiTest {
         entries: List<Entry>? = null,
         noReminder: Boolean = true,
         aliases: Map<String, String> = emptyMap(),
+        setup: Boolean = false, // the guided first run shows (no server, never finished)
     ): ActivityScenario<MainActivity> {
         App.init(ctx)
+        App.settings.setupDone = !setup
         App.settings.aliases = aliases
         App.aliases = aliases
         App.settings.noReminder = noReminder
@@ -198,7 +200,12 @@ open class UiTest {
 
     @Test
     fun firstStartShowsTheSettingsAndAClearConnectionError() {
-        val sc = start()
+        val sc = start(setup = true)
+        rule.onNodeWithText(s(R.string.welcome_title)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.later)).performClick() // put off: the list says what is missing
+        assertTrue(App.settings.setupDone)
+        rule.onNodeWithText(s(R.string.need_server)).assertIsDisplayed()
+        rule.onNodeWithText(s(R.string.open_settings)).performClick()
         rule.onNodeWithText(s(R.string.settings_title)).assertIsDisplayed()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsNotEnabled()
         val fields = rule.onAllNodes(hasSetTextAction())
@@ -221,6 +228,59 @@ open class UiTest {
         sc.recreate() // rotation: the settings stay
         rule.onNodeWithText("127.0.0.1:1").assertExists()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled()
+    }
+
+    // The guided first run: welcome, server by QR code, the installed emulator first, its folders, done. Back from the
+    // folders forgets an entry without folders; every step can be skipped; Settings starts it again.
+    @Test
+    fun guidedFirstRun() {
+        val real = scanQr
+        try {
+            val url = fakeServer(ByteArray(0))
+            scanQr = { _, done -> done(Result.success("3dssavesync://serveur?adresse=" + URLEncoder.encode(url, "UTF-8") + "&jeton=fake-token")) }
+            shadowOf(ctx.packageManager).installPackage(PackageInfo().apply { packageName = "me.magnum.melonds" })
+            val sc = start(setup = true)
+            fits(s(R.string.welcome_title))
+            fits(s(R.string.setup_start))
+            rule.onNodeWithText(s(R.string.setup_start)).performClick()
+
+            rule.onNodeWithText(s(R.string.setup_step, 1, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.next)).assertIsNotEnabled()
+            rule.onAllNodes(hasSetTextAction()).assertCountEquals(0) // typing is the other way, behind a button
+            fits(s(R.string.type_address))
+            rule.onNodeWithText(s(R.string.scan_qr)).performClick()
+            waitFor(ctx.resources.getQuantityString(R.plurals.connected, 0, 0))
+            rule.onNodeWithText(s(R.string.next)).performScrollTo().assertIsEnabled().performClick()
+
+            rule.onNodeWithText(s(R.string.setup_step, 2, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.installed_emulators)).assertExists()
+            rule.onNode(hasText("melonDS") and hasClickAction()).performClick()
+            rule.onNodeWithText(s(R.string.setup_step, 3, 3)).assertExists()
+            rule.onNodeWithText(s(R.string.hint_melonds)).assertExists()
+            assertEquals(listOf("melonds"), App.emulators.map { it.id })
+            sc.recreate() // rotation: still this step
+            rule.onNodeWithText(s(R.string.hint_melonds)).assertExists()
+            sc.onActivity { it.onBackPressedDispatcher.onBackPressed() } // a wrong tap: back to the choice, the entry without folders is gone
+            rule.onNodeWithText(s(R.string.setup_step, 2, 3)).assertExists()
+            assertEquals(emptyList<Emulator>(), App.emulators)
+            rule.onNode(hasText("melonDS") and hasClickAction()).performClick()
+            rule.onNodeWithText(s(R.string.later)).performScrollTo().performClick() // no folder yet: later
+            rule.onNodeWithText(s(R.string.setup_done_title)).assertExists()
+            rule.onNodeWithText(s(R.string.setup_done_text)).assertExists()
+            rule.onNodeWithText(s(R.string.show_games)).performClick()
+            assertTrue(App.settings.setupDone)
+            rule.onNode(hasText(s(R.string.tab_games)) and !hasClickAction()).assertIsDisplayed()
+
+            rule.onNodeWithText(s(R.string.tab_settings)).performClick()
+            rule.onNodeWithText(s(R.string.setup_again)).performScrollTo().performClick()
+            rule.onNodeWithText(s(R.string.welcome_title)).assertIsDisplayed()
+            rule.onNodeWithText(s(R.string.setup_start)).performClick()
+            rule.onNodeWithText(s(R.string.skip)).performClick()
+            rule.onNodeWithText(s(R.string.skip)).performScrollTo().performClick()
+            rule.onNodeWithText(s(R.string.setup_done_title)).assertExists()
+        } finally {
+            scanQr = real
+        }
     }
 
     // "Scan the PC's QR code": the scanner can't run here, scanQr is replaced. A good code fills, saves and tests; a

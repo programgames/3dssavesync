@@ -33,6 +33,26 @@
     <string name="backups_where">Before it replaces a save, the app keeps a copy of it here, one folder per emulator. Connect the phone to a computer over USB to see them (Android/data folder). Uninstalling the app deletes these copies: to update the app, install the new APK over the old one.</string>
     <string name="version">3dssavesync for Android %1$s</string>
 
+    <string name="type_address">Type the address</string>
+    <string name="setup_again">Start the guided setup</string>
+
+    <!-- Guided first run -->
+    <string name="welcome_title">Welcome</string>
+    <string name="welcome_text">3dssavesync keeps your game saves the same on this phone, your 3DS and your PC. Three short steps set it up: your server, your emulator, its folders.</string>
+    <string name="setup_start">Start</string>
+    <string name="later">Later</string>
+    <string name="next">Next</string>
+    <string name="skip">Skip</string>
+    <string name="setup_step">Step %1$d of %2$d</string>
+    <string name="setup_server">Connect to your server</string>
+    <string name="setup_emulator">Choose your emulator</string>
+    <string name="setup_emulator_help">Which emulator do you play with? You can add others later in Emulators.</string>
+    <string name="setup_folders">Choose its folders</string>
+    <string name="setup_done_title">All set</string>
+    <string name="setup_done_text">Your games are in the Games tab. Pull the list down to read it again.</string>
+    <string name="setup_done_no_server">Connect to your server in Settings when you want: the games then show their state.</string>
+    <string name="show_games">Show my games</string>
+
     <!-- Emulators -->
     <string name="emulators_title">Emulators</string>
     <string name="no_emulator">No emulator yet. Add the emulators you play with, then choose their folders.</string>

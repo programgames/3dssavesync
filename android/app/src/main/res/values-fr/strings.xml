@@ -32,6 +32,26 @@
     <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie ici, un dossier par émulateur. Branchez le téléphone à un ordinateur en USB pour les voir (dossier Android/data). Désinstaller l\'application supprime ces copies : pour la mettre à jour, installez le nouvel APK par-dessus l\'ancien.</string>
     <string name="version">3dssavesync pour Android %1$s</string>
 
+    <string name="type_address">Saisir l\'adresse</string>
+    <string name="setup_again">Lancer la configuration guidée</string>
+
+    <!-- Guided first run -->
+    <string name="welcome_title">Bienvenue</string>
+    <string name="welcome_text">3dssavesync garde les mêmes sauvegardes de jeux sur ce téléphone, votre 3DS et votre PC. Trois étapes courtes suffisent : votre serveur, votre émulateur, ses dossiers.</string>
+    <string name="setup_start">Commencer</string>
+    <string name="later">Plus tard</string>
+    <string name="next">Suivant</string>
+    <string name="skip">Passer</string>
+    <string name="setup_step">Étape %1$d sur %2$d</string>
+    <string name="setup_server">Connectez-vous à votre serveur</string>
+    <string name="setup_emulator">Choisissez votre émulateur</string>
+    <string name="setup_emulator_help">Avec quel émulateur jouez-vous ? Vous pourrez en ajouter d\'autres plus tard dans Émulateurs.</string>
+    <string name="setup_folders">Choisissez ses dossiers</string>
+    <string name="setup_done_title">C\'est prêt</string>
+    <string name="setup_done_text">Vos jeux sont dans l\'onglet Jeux. Tirez la liste vers le bas pour la lire de nouveau.</string>
+    <string name="setup_done_no_server">Connectez-vous à votre serveur dans Réglages quand vous le souhaitez : les jeux afficheront alors leur état.</string>
+    <string name="show_games">Voir mes jeux</string>
+
     <!-- Emulators -->
     <string name="emulators_title">Émulateurs</string>
     <string name="no_emulator">Aucun émulateur pour l\'instant. Ajoutez les émulateurs avec lesquels vous jouez, puis choisissez leurs dossiers.</string>

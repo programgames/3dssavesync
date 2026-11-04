@@ -55,6 +55,11 @@ class Settings(context: Context) {
         get() = p.getBoolean("noReminder", false)
         set(v) = p.edit { putBoolean("noReminder", v) }
 
+    // setupDone: the guided first run was finished or put off; it then shows only from Settings.
+    var setupDone: Boolean
+        get() = p.getBoolean("setupDone", false)
+        set(v) = p.edit { putBoolean("setupDone", v) }
+
     // background: the user turned on the background upload (Background.kt). Off by default.
     var background: Boolean
         get() = p.getBoolean("background", false)

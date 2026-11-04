@@ -83,6 +83,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableIntStateOf
 import kotlinx.coroutines.launch
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.System
@@ -105,9 +106,16 @@ fun Root() {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
     var hacks by rememberSaveable { mutableStateOf(false) }
+    // the guided first run: at the first start without a server, or from Settings
+    var setup by rememberSaveable { mutableStateOf(!App.configured() && !App.settings.setupDone) }
     val o = App.entries.find { it.id == open }
     val ed = editing
     when {
+        setup -> SetupScreen {
+            App.settings.setupDone = true
+            setup = false
+            tab = Tab.GAMES
+        }
         o != null -> {
             val close = {
                 open = null
@@ -140,7 +148,7 @@ fun Root() {
             when (tab) {
                 Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
                 Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
-                Tab.SETTINGS -> SettingsScreen(p) { hacks = true }
+                Tab.SETTINGS -> SettingsScreen(p, { setup = true }) { hacks = true }
             }
         }
     }
@@ -219,15 +227,39 @@ var scanQr: (Context, (Result<String?>) -> Unit) -> Unit = { ctx, done ->
 }
 
 @Composable
-fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
+fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
+    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Title(stringResource(R.string.tab_settings))
+        Text(stringResource(R.string.settings_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        ServerFields(manual = true)
+        HorizontalDivider()
+        BackgroundSection()
+        HorizontalDivider()
+        Text(stringResource(R.string.backups_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.backups_where))
+        Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+        HorizontalDivider()
+        Text(stringResource(R.string.hacks_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.hacks_text))
+        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
+        HorizontalDivider()
+        OutlinedButton(onSetup) { Text(stringResource(R.string.setup_again)) }
+        Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// ServerFields: "Scan the PC's QR code" first, the address and token typed by hand as the other way (shown at once
+// when manual, else behind "Type the address"), and the connection test.
+@Composable
+fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
     val ctx = LocalContext.current
     var url by rememberSaveable { mutableStateOf(App.settings.url) }
     var token by rememberSaveable { mutableStateOf(App.settings.token) }
     var show by remember { mutableStateOf(false) }
+    var typing by rememberSaveable { mutableStateOf(manual) }
     var result by remember { mutableStateOf<Result<Int>?>(null) }
     var scanned by remember { mutableStateOf<Int?>(null) } // why the last scan filled nothing
-    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Title(stringResource(R.string.settings_title))
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Button({
             scanned = null
             scanQr(ctx) { r ->
@@ -243,7 +275,7 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
                     token = pairing.token
                     App.settings.url = pairing.url
                     App.settings.token = pairing.token
-                    App.serverChanged()
+                    App.serverChanged().also { changed() }
                     result = null
                     App.testConnection { result = it }
                 }
@@ -251,22 +283,23 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
         }, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
         Text(stringResource(scanned ?: R.string.scan_help), style = MaterialTheme.typography.bodySmall,
             color = if (scanned == null) Color.Unspecified else MaterialTheme.colorScheme.error)
-        OutlinedTextField(
+        if (!typing) OutlinedButton({ typing = true }) { Text(stringResource(R.string.type_address)) }
+        if (typing) OutlinedTextField(
             url, {
                 url = it
                 App.settings.url = it
-                App.serverChanged()
+                App.serverChanged().also { changed() }
                 result = null
             },
             Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.server_address)) },
             placeholder = { Text("192.168.1.20:8080") }, supportingText = { Text(stringResource(R.string.server_address_help)) },
             singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         )
-        OutlinedTextField(
+        if (typing) OutlinedTextField(
             token, {
                 token = it
                 App.settings.token = it
-                App.serverChanged()
+                App.serverChanged().also { changed() }
                 result = null
             },
             Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.token)) }, singleLine = true,
@@ -274,23 +307,77 @@ fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = { TextButton({ show = !show }) { Text(stringResource(if (show) R.string.hide else R.string.show)) } },
         )
-        Button({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
-            Text(stringResource(R.string.test_connection))
+        if (typing) {
+            Button({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
+                Text(stringResource(R.string.test_connection))
+            }
         }
         App.busy?.let { Text(it) }
-        result?.fold({ Text(pluralStringResource(R.plurals.connected, it, it)) }, { ErrorBox(it, retry = { App.testConnection { r -> result = r } }) })
-        HorizontalDivider()
-        BackgroundSection()
-        HorizontalDivider()
-        Text(stringResource(R.string.backups_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.backups_where))
-        Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        HorizontalDivider()
-        Text(stringResource(R.string.hacks_title), style = MaterialTheme.typography.titleMedium)
-        Text(stringResource(R.string.hacks_text))
-        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
-        HorizontalDivider()
-        Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+        result?.fold(
+            { Text(pluralStringResource(R.plurals.connected, it, it), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = stateColor(Shown.IN_SYNC)) },
+            { ErrorBox(it, retry = { App.testConnection { r -> result = r } }) },
+        )
+    }
+}
+
+// SetupScreen: the guided first run. A welcome, then three steps (server, emulator, its folders); each one can be
+// skipped, and Settings starts it again. done: finished or put off.
+@Composable
+fun SetupScreen(done: () -> Unit) {
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var emulator by rememberSaveable { mutableStateOf<String?>(null) } // the entry added at step 2
+    BackHandler(step > 0) {
+        if (step == 3) emulator?.let { id -> // back to the choice: an entry without any folder was a wrong tap
+            if (App.emulators.find { it.id == id }?.systems?.values?.all { it.roms == null && it.saves == null } == true) App.removeEmulator(id)
+            emulator = null
+        }
+        step = if (step == 4 && emulator == null) 2 else step - 1
+    }
+    Scaffold { p ->
+        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            @Composable
+            fun header(n: Int, title: Int) {
+                Text(stringResource(R.string.setup_step, n, 3), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
+            }
+            when (step) {
+                0 -> {
+                    Text(stringResource(R.string.welcome_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(R.string.welcome_text))
+                    Button({ step = 1 }) { Text(stringResource(R.string.setup_start)) }
+                    TextButton(done) { Text(stringResource(R.string.later)) }
+                }
+                1 -> {
+                    header(1, R.string.setup_server)
+                    var configured by remember { mutableStateOf(App.configured()) } // the settings are not Compose state
+                    ServerFields(manual = false) { configured = App.configured() }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button({ step = 2 }, enabled = configured) { Text(stringResource(R.string.next)) }
+                        TextButton({ step = 2 }) { Text(stringResource(R.string.skip)) }
+                    }
+                }
+                2 -> {
+                    header(2, R.string.setup_emulator)
+                    Text(stringResource(R.string.setup_emulator_help))
+                    ProfileList {
+                        emulator = addEmulator(it)
+                        step = 3
+                    }
+                    TextButton({ step = 4 }) { Text(stringResource(R.string.skip)) }
+                }
+                3 -> {
+                    header(3, R.string.setup_folders)
+                    emulator?.let { EmulatorBody(it) }
+                    val chosen = App.emulators.find { it.id == emulator }?.systems?.values?.any { it.roms != null || it.saves != null } == true
+                    if (chosen) Button({ step = 4 }) { Text(stringResource(R.string.next)) } else TextButton({ step = 4 }) { Text(stringResource(R.string.later)) }
+                }
+                else -> {
+                    Text(stringResource(R.string.setup_done_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                    Text(stringResource(if (App.configured()) R.string.setup_done_text else R.string.setup_done_no_server))
+                    Button(done) { Text(stringResource(R.string.show_games)) }
+                }
+            }
+        }
     }
 }
 
