@@ -36,7 +36,7 @@ android {
         release {
             isMinifyEnabled = true // R8; the libraries bring their own keep rules (WorkManager workers, ML Kit)
             isShrinkResources = true // the resources no code uses (the app reads every string through R.string)
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
     }

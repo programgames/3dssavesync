@@ -2,6 +2,12 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.11.1] - 2026-11-04
+
+### Fixed
+
+- **Android: "Scan the PC's QR code" works again.** In 3.11.0 the scanner said it was not ready on every phone. Install 3.11.1 over 3.11.0.
+
 ## [3.11.0] - 2026-11-04
 
 ### Added
@@ -165,6 +171,7 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
+[3.11.1]: https://github.com/programgames/3dssavesync/compare/v3.11.0...v3.11.1
 [3.11.0]: https://github.com/programgames/3dssavesync/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
 [3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0

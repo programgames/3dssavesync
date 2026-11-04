@@ -272,8 +272,8 @@ var scanQr: (Context, (Result<String?>) -> Unit) -> Unit = { ctx, done ->
             .startScan()
             .addOnSuccessListener { done(Result.success(it.rawValue.orEmpty())) }
             .addOnCanceledListener { done(Result.success(null)) }
-            .addOnFailureListener { done(Result.failure(it)) }
-    }.onFailure { done(Result.failure(it)) }
+            .addOnFailureListener { android.util.Log.w("3dssavesync", "QR scanner", it); done(Result.failure(it)) }
+    }.onFailure { android.util.Log.w("3dssavesync", "QR scanner", it); done(Result.failure(it)) }
 }
 
 @Composable
