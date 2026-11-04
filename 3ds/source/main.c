@@ -60,6 +60,9 @@ typedef struct {
     int unexpected; /* Virtual Console: other files than sav.dat in the archive (vc_root_ok): not synced */
     char why[160];  /* Virtual Console with an empty key: the step where reading its ROM failed */
     progress_t progress;
+    progress_t server_progress; /* Pokémon: play time of the server version whose hash is progress_hash */
+    char progress_hash[65];     /* server version read for server_progress; "" none */
+    int has_server_progress;    /* that version is a known Pokémon game */
     status_t status;
 } game_t;
 
@@ -579,12 +582,15 @@ static void update_states(void)
     for (i = 0; i < n; i++) save_base(base_id(&games[outdated[i]]), games[outdated[i]].local_hash);
 }
 
+static void read_server_progresses(void);
+
 /* After an action: the Game it touched is already read again (read_local), only the server changes. */
 static void reread_server(void)
 {
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     read_server();
     update_states(); /* server not read: the local games stay listed, with no action */
+    if (server_read) read_server_progresses();
     loaded = 1;
 }
 
@@ -828,20 +834,46 @@ static void server_text(const game_t *j, char *out, size_t n)
     else snprintf(out, n, T("Depuis %s", "From %s"), j->client[0] ? j->client : "?");
 }
 
-/* Play time of the server version (downloaded), only if the 3DS has a known Pokémon game. 1 if read. */
-static int server_progress(const game_t *j, progress_t *p)
+/* Play time of the server version, only for a Pokémon game (known on the 3DS, or no save there yet). Read once per
+ * server version: from another Game of the same Key (a ROM and its Virtual Console game), else downloaded. 1 if read. */
+static int server_progress(game_t *j, progress_t *p)
 {
     char url[300], *body;
     size_t size;
     long status;
-    int ok;
-    if (!j->has_server || !j->has_progress) return 0;
-    show_progress(0, 0, "%s", T("Lecture de la version du serveur…", "Reading the server version…"));
-    snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
-    status = net_get(url, cfg.token, &body, &size);
-    ok = status == 200 && pokemon_progress((unsigned char *)body, size, p) == 0;
-    if (status > 0) free(body);
-    return ok;
+    int i;
+    if (!j->has_server || (!j->has_progress && j->has_local)) return 0;
+    if (strcmp(j->progress_hash, j->server_hash)) {
+        for (i = 0; i < game_count && strcmp(games[i].progress_hash, j->server_hash); i++);
+        if (i < game_count) {
+            j->server_progress = games[i].server_progress;
+            j->has_server_progress = games[i].has_server_progress;
+        } else {
+            show_progress(0, 0, "%s\n%s", T("Lecture de la version du serveur", "Reading the server version"), j->short_name);
+            snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
+            status = net_get(url, cfg.token, &body, &size);
+            if (status != 200) { /* not kept: read again next time */
+                if (status > 0) free(body);
+                return 0;
+            }
+            j->has_server_progress = pokemon_progress((unsigned char *)body, size, &j->server_progress) == 0;
+            free(body);
+        }
+        strcpy(j->progress_hash, j->server_hash);
+    }
+    *p = j->server_progress;
+    return j->has_server_progress;
+}
+
+/* After a server read: the play time of each server version that would replace or be replaced (Pokémon only), so that
+ * the bottom screen shows both before any choice. */
+static void read_server_progresses(void)
+{
+    int i;
+    progress_t p;
+    for (i = 0; i < game_count; i++)
+        if (games[i].status == STATUS_TO_UPLOAD || games[i].status == STATUS_TO_DOWNLOAD || games[i].status == STATUS_CONFLICT)
+            server_progress(&games[i], &p);
 }
 
 /* ---------------------------------------------------------------- main screen (citro2d) */
@@ -1119,6 +1151,10 @@ static void draw_bottom(const game_t *j)
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
             server_text(j, t, sizeof t);
             y = detail(y, T("Sur le serveur", "On the server"), t);
+            if (j->status != STATUS_IN_SYNC && j->has_server_progress && !strcmp(j->progress_hash, j->server_hash)) {
+                progress_text(&j->server_progress, t, sizeof t); /* Pokémon: the play time of both, before any choice */
+                y = detail(y, "", t);
+            }
             y = detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
         }
         /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
@@ -1844,8 +1880,12 @@ static void sync_all(void)
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
         if (to_download(j) && j->has_local && overwrites++ < 8) {
-            char t[80] = "";
+            char t[160] = "";
             if (j->has_progress) progress_text(&j->progress, t, sizeof t);
+            if (j->has_progress && j->has_server_progress && !strcmp(j->progress_hash, j->server_hash)) { /* Pokémon: 3DS -> server */
+                snprintf(t + strlen(t), sizeof t - strlen(t), T(" ; serveur ", " ; server "));
+                progress_text(&j->server_progress, t + strlen(t), sizeof t - strlen(t));
+            }
             snprintf(q + strlen(q), sizeof q - strlen(q), "%.40s%s%s%s%s\n", j->short_name, vc(j) ? " (Virtual Console)" : "", t[0] ? " (" : "", t, t[0] ? ")" : "");
         }
     }

@@ -7,6 +7,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 ### Added
 
 - **Virtual Console on the 3DS.** Game Boy and Game Boy Color games bought on the eShop are synced like your ROMs (Luma3DS needed). A Virtual Console game and the mGBA forwarder of the same game are both synced: play either one, and **Sync all** brings your progress to the other.
+- **Pokémon play time of the server version on the 3DS.** For a Pokémon game that is not in sync, the bottom screen shows the play time and trainer of the server version under **On the server**, and **Sync all** lists both before replacing a save.
 
 ## [3.9.0] - Unreleased
 
