@@ -713,12 +713,47 @@ open class UiTest {
         rule.onNodeWithText(s(R.string.restore)).performClick()
         rule.onNode(hasText(s(R.string.restore)) and dialog).performClick()
         waitFor(s(R.string.restored, 1))
-        rule.onNodeWithText(s(R.string.s_to_download)).assertExists()
+        waitFor(s(R.string.s_to_download)) // the History shows the message too, before it goes back
         rule.onNodeWithText(s(R.string.download)).performScrollTo().assertExists()
         val put = synchronized(requests) { requests.filter { it.startsWith("PUT /saves/$key ") } }
         assertEquals(2, put.size)
         assertTrue(put.joinToString(), put.all { "X-Client: $RESTORE_CLIENT" in it && "If-Match: \"${sha256(sun)}\"" in it })
         assertTrue(files.values.all { it.writes == 0 })
+    }
+
+    // The Backup copies of a game are in its History, even without a server version (the app folder is out of reach of
+    // the file managers): newest first. "Save elsewhere…" opens Android's file picker; "Put back" writes the copy after
+    // a confirmation, with a Backup copy of the phone save first.
+    @Test
+    fun phoneCopies() {
+        val dir = File(App.backupsDir, emu.id).apply { mkdirs() }
+        val older = ByteArray(0x8000) { 1 }
+        val t1 = 1_761_984_000_000L
+        val t2 = t1 + 86_400_000
+        File(dir, "Pokémon Émeraude-20261101-080000.sav").apply { writeBytes(older) }.setLastModified(t1)
+        File(dir, "Pokémon Émeraude-20261102-080000.sav").apply { writeBytes(sram) }.setLastModified(t2)
+        File(dir, "Zelda-20261102-080000.sav").writeBytes(sram) // another game
+        val sc = start(url = fakeServer(sram), token = "t", emulators = listOf(emu), entries = games())
+        open("Pokémon Émeraude")
+        rule.onNodeWithText(s(R.string.show_history)).performScrollTo().performClick()
+        waitFor(s(R.string.copies_help))
+        rule.onNodeWithText(s(R.string.no_versions)).assertExists()
+        // the order (newest first) is checked in SyncTest.putBackCopy: at 200 % the oldest is below the screen
+        val oldest = s(R.string.copy_of, dateText(t1))
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(s(R.string.copy_of, dateText(t2))))
+        rule.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(oldest))
+        rule.onNodeWithText(oldest).performClick()
+        rule.onNodeWithText(s(R.string.save_copy)).performScrollTo().performClick()
+        sc.onActivity { assertEquals(Intent.ACTION_CREATE_DOCUMENT, shadowOf(it).nextStartedActivityForResult.intent.action) }
+        assertEquals(0, files["Pokémon Émeraude"]!!.writes)
+
+        rule.onNodeWithText(s(R.string.put_back)).performScrollTo().performClick()
+        rule.onNode(hasText(s(R.string.confirm_put_back)) and dialog).performScrollTo().assertExists()
+        rule.onNode(hasText(s(R.string.replace)) and dialog).performClick()
+        waitFor(s(R.string.done_put_back))
+        assertArrayEquals(older, files["Pokémon Émeraude"]!!.content)
+        assertEquals(4, dir.listFiles()!!.size) // the phone save was copied first
+        assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded
     }
 
     // The reminder to close the emulator comes once per session, before the first action that may write a save on

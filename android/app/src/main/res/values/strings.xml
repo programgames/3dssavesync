@@ -33,7 +33,7 @@
         <item quantity="other">Connected. The server has %1$d games.</item>
     </plurals>
     <string name="backups_title">Backup copies</string>
-    <string name="backups_where">Before it replaces a save, the app keeps a copy of it here, one folder per emulator. Connect the phone to a computer over USB to see them (Android/data folder). Uninstalling the app deletes these copies: to update the app, install the new APK over the old one.</string>
+    <string name="backups_where">Before it replaces a save, the app keeps a copy of it. To find them, open a game, then Show the history: its copies are at the bottom, ready to put back or to save to a folder of your choice. Uninstalling the app deletes these copies: to update the app, install the new APK over the old one.</string>
     <string name="version">3dssavesync for Android %1$s</string>
 
     <string name="type_address">Type the address</string>
@@ -226,6 +226,17 @@
     <string name="restore_copy">Restore the backup copy</string>
     <string name="confirm_restore_copy">The backup copy made before the interrupted write will replace the file on this phone. A backup copy of the file as it is now is made first. Close the emulator before you continue.</string>
     <string name="done_copy_restored">The backup copy is back in place.</string>
+    <string name="copies_help">Copies the app kept before it replaced this save, newest first. Tap one to put it back or to save it elsewhere.</string>
+    <string name="no_copies">No backup copy of this game on this phone yet.</string>
+    <string name="copy_of">Copy from %1$s</string>
+    <string name="this_copy">This copy</string>
+    <string name="put_back">Put back</string>
+    <string name="save_copy">Save elsewhere…</string>
+    <string name="confirm_put_back">This copy will replace the save on this phone. A backup copy of the current save is made first. The game then shows To upload: upload it to get this copy on your other devices too. Close the emulator before you continue.</string>
+    <string name="done_put_back">The copy is back in place. Upload it to get it on your other devices too.</string>
+    <string name="saving_copy">Saving the copy…</string>
+    <string name="done_copy_saved">Copy saved.</string>
+    <string name="copy_not_saved">The app couldn\'t save the copy.</string>
     <string name="done_failed">Sync failed.</string>
 
     <!-- Problems: what happened and what to do; the technical detail is behind "Show details" -->

@@ -670,6 +670,38 @@ class PythonServerTest {
         assertArrayEquals(old.copyOf(1000), fb.content)
     }
 
+    // History screen: the Backup copies of one game, newest first, and "Put back": the copy replaces the phone save
+    // after a Backup copy of it. The game is then To upload, never "came back": the user chose this copy.
+    @Test
+    fun putBackCopy() {
+        val a = syncer("a")
+        val b = syncer("b")
+        val server = random(32 shl 10, 1)
+        val old = random(32 shl 10, 9)
+        val fb = MemoryFile("e.sav", old)
+        val gb = gba("pizzaboy", fb)
+        assertEquals(Outcome.UPLOADED, a.sync(gba("mgba", MemoryFile("e.sav", server))))
+        assertEquals(Outcome.DOWNLOADED, b.sync(gb, Choice(keepPhone = false, serverHash = sha256(server))))
+        val backups = Backups(File(tmp.root, "copies-b"))
+        val dir = File(tmp.root, "copies-b/pizzaboy")
+        File(dir, "Pokemon Emeraude 2-20260101-000000.sav").writeBytes(random(8, 1)) // another game
+        File(dir, "Pokemon Emeraude-20260101-000000.srm").writeBytes(random(8, 1)) // another save file
+        val copy = backups.of(gb).single()
+        assertArrayEquals(old, copy.readBytes())
+
+        b.putBack(gb, copy)
+        assertArrayEquals(old, fb.content)
+        val st = b.status(gb)
+        assertEquals(State.TO_UPLOAD, st.state)
+        assertFalse(st.cameBack)
+        val two = backups.of(gb)
+        assertEquals(2, two.size)
+        assertArrayEquals(server, two.first().readBytes()) // the newest: the save that was just replaced
+        assertEquals(copy, two.last())
+        assertEquals(Outcome.UPLOADED, b.sync(gb))
+        assertEquals(sha256(old), b.serverVersion("GBA-BPEF")!!.hash)
+    }
+
     @Test
     fun wrongToken() {
         val e = runCatching { Remote(url, "bad").list() }.exceptionOrNull()!!

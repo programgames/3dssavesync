@@ -349,6 +349,26 @@ object App {
         reread(e, s)
     }
 
+    // copies: the Backup copies of a Game on this phone, newest first (History screen).
+    suspend fun copies(e: Entry): List<File> = withContext(io) { runCatching { Backups(backupsDir).of(e.game!!) }.getOrDefault(emptyList()) }
+
+    // putBack writes a Backup copy back as the save of this phone (History screen); the game is then To upload.
+    fun putBack(e: Entry, copy: File, done: (Throwable?) -> Unit) = run(text(R.string.syncing)) {
+        val s = syncer()
+        val r = withContext(io) { runCatching { s.putBack(e.game!!, copy) } }
+        message = r.fold({ text(R.string.done_put_back) to null }, { text(R.string.done_failed) to it })
+        reread(e, s)
+        done(r.exceptionOrNull())
+    }
+
+    // saveCopy writes a Backup copy to a file the user created (Android's file picker): a folder they can open.
+    fun saveCopy(copy: File, to: Uri) = run(text(R.string.saving_copy)) {
+        val r = withContext(io) {
+            runCatching { resolver.openOutputStream(to, "w")!!.use { it.write(copy.readBytes()) } }
+        }
+        message = r.fold({ text(R.string.done_copy_saved) to null }, { text(R.string.copy_not_saved) to it })
+    }
+
     // reread reads the State of one Game again, after an action changed the server or this phone.
     private suspend fun reread(e: Entry, s: Syncer) {
         s.refresh()

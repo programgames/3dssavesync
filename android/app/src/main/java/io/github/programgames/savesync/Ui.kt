@@ -287,7 +287,6 @@ fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
         HorizontalDivider()
         Section(stringResource(R.string.backups_title))
         Text(stringResource(R.string.backups_where))
-        Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         HorizontalDivider()
         Section(stringResource(R.string.hacks_title))
         Text(stringResource(R.string.hacks_text))

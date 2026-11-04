@@ -2,6 +2,12 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Android: the backup copies are in the history of each game.** Open a game, tap **Show the history**, and look under **This phone**: put a copy back, or save it to a folder you can open (Downloads, for example). Before, the copies were in a folder that file managers on the phone cannot open.
+
 ## [3.11.1] - 2026-11-04
 
 ### Fixed
@@ -177,6 +183,7 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
+[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.11.1...HEAD
 [3.11.1]: https://github.com/programgames/3dssavesync/compare/v3.11.0...v3.11.1
 [3.11.0]: https://github.com/programgames/3dssavesync/compare/v3.10.0...v3.11.0
 [3.10.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
