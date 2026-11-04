@@ -46,6 +46,8 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0") // the background upload (Background.kt)
+    // "Scan the PC's QR code" (Settings): Google code scanner, on the phone, without the CAMERA permission.
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     testImplementation("junit:junit:4.13.2")
     // org.json is part of Android, but the JVM unit tests only see stubs of it.

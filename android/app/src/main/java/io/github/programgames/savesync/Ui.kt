@@ -3,7 +3,13 @@
 package io.github.programgames.savesync
 
 import android.Manifest
+import android.content.Context
 import android.net.Uri
+import androidx.compose.ui.graphics.Color
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import io.github.programgames.savesync.core.parsePairing
 import android.os.Build
 import android.provider.OpenableColumns
 import androidx.compose.foundation.selection.toggleable
@@ -172,14 +178,51 @@ fun ErrorText(t: Throwable, lead: String? = null) {
 @Composable
 fun Title(text: String) = Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp))
 
+// scanQr opens Google code scanner (QR codes only, on the phone, no CAMERA permission). done: the text, null when the
+// user cancels, or the error (no Google Play services, scanner module not downloaded yet). Tests replace it.
+var scanQr: (Context, (Result<String?>) -> Unit) -> Unit = { ctx, done ->
+    runCatching {
+        GmsBarcodeScanning.getClient(ctx, GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build())
+            .startScan()
+            .addOnSuccessListener { done(Result.success(it.rawValue.orEmpty())) }
+            .addOnCanceledListener { done(Result.success(null)) }
+            .addOnFailureListener { done(Result.failure(it)) }
+    }.onFailure { done(Result.failure(it)) }
+}
+
 @Composable
 fun SettingsScreen(p: PaddingValues, onHacks: () -> Unit) {
+    val ctx = LocalContext.current
     var url by rememberSaveable { mutableStateOf(App.settings.url) }
     var token by rememberSaveable { mutableStateOf(App.settings.token) }
     var show by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Result<Int>?>(null) }
+    var scanned by remember { mutableStateOf<Int?>(null) } // why the last scan filled nothing
     Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Title(stringResource(R.string.settings_title))
+        Button({
+            scanned = null
+            scanQr(ctx) { r ->
+                val pairing = r.getOrNull()?.let(::parsePairing)
+                scanned = when {
+                    r.isFailure -> R.string.scan_unavailable
+                    r.getOrNull() == null -> R.string.scan_cancelled
+                    pairing == null -> R.string.scan_not_ours
+                    else -> null
+                }
+                if (pairing != null) { // the token is never logged
+                    url = pairing.url
+                    token = pairing.token
+                    App.settings.url = pairing.url
+                    App.settings.token = pairing.token
+                    App.serverChanged()
+                    result = null
+                    App.testConnection { result = it }
+                }
+            }
+        }, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
+        Text(stringResource(scanned ?: R.string.scan_help), style = MaterialTheme.typography.bodySmall,
+            color = if (scanned == null) Color.Unspecified else MaterialTheme.colorScheme.error)
         OutlinedTextField(
             url, {
                 url = it

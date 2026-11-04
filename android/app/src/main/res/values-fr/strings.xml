@@ -17,6 +17,11 @@
     <string name="token">Jeton</string>
     <string name="show">Afficher</string>
     <string name="hide">Masquer</string>
+    <string name="scan_qr">Scanner le QR code du PC</string>
+    <string name="scan_help">Sur le PC, ouvrez les réglages de 3dssavesync, page Serveur, et cliquez sur « Afficher le QR code ». Ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_cancelled">Scan annulé. Scannez à nouveau, ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_unavailable">Le scanner de QR code n\'est pas disponible sur ce téléphone. Il a besoin des services Google Play, et la première fois, il peut être encore en cours de téléchargement. Réessayez dans une minute, ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_not_ours">Ce n\'est pas le QR code de 3dssavesync. Scannez celui qu\'affiche le PC dans ses réglages, page Serveur.</string>
     <string name="test_connection">Tester la connexion</string>
     <string name="testing">Test de la connexion…</string>
     <plurals name="connected">

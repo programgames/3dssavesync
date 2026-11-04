@@ -70,6 +70,7 @@ import java.io.File
 import java.io.IOException
 import java.net.InetAddress
 import java.net.ServerSocket
+import java.net.URLEncoder
 import kotlin.concurrent.thread
 
 // MemFile is a Save file in memory: the tests check that nothing was written without a confirmation.
@@ -206,6 +207,39 @@ open class UiTest {
         sc.recreate() // rotation: the settings stay
         rule.onNodeWithText("http://127.0.0.1:1").assertExists()
         rule.onNodeWithText(s(R.string.test_connection)).assertIsEnabled()
+    }
+
+    // "Scan the PC's QR code": the scanner can't run here, scanQr is replaced. A good code fills, saves and tests; a
+    // cancel, a missing scanner or another code fills nothing and says why.
+    @Test
+    fun scanTheQrCodeFillsTheSettings() {
+        val real = scanQr
+        var answer: Result<String?> = Result.success(null)
+        scanQr = { _, done -> done(answer) }
+        try {
+            val url = fakeServer(ByteArray(0))
+            start()
+            val scan = rule.onNodeWithText(s(R.string.scan_qr))
+            scan.performClick()
+            rule.onNodeWithText(s(R.string.scan_cancelled)).assertExists()
+            answer = Result.failure(IllegalStateException("no Google Play services"))
+            scan.performClick()
+            rule.onNodeWithText(s(R.string.scan_unavailable)).assertExists()
+            answer = Result.success("https://saves.example.com")
+            scan.performClick()
+            rule.onNodeWithText(s(R.string.scan_not_ours)).assertExists()
+            assertEquals("", App.settings.url)
+            answer = Result.success("3dssavesync://serveur?adresse=" + URLEncoder.encode(url, "UTF-8") + "&jeton=fake-token")
+            scan.performClick()
+            waitFor(ctx.resources.getQuantityString(R.plurals.connected, 0, 0))
+            assertEquals(url, App.settings.url)
+            assertEquals("fake-token", App.settings.token)
+            rule.onNodeWithText(url).assertExists()
+            rule.onNodeWithText(s(R.string.scan_help)).assertExists()
+            assertTrue(synchronized(requests) { requests.any { it.startsWith("GET /saves") && it.contains("Bearer fake-token") } })
+        } finally {
+            scanQr = real
+        }
     }
 
     @Test
