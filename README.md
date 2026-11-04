@@ -39,26 +39,26 @@ About 10 minutes. Do the PC first: it prepares the 3DS for you.
    | macOS (Intel) | [3dssavesync-darwin-amd64](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-darwin-amd64) |
 
 2. Start it:
-   - **Windows**: double-click it. Windows shows "Windows protected your PC"? [Here is what to do](docs/troubleshooting.md#windows-protected-your-pc).
+   - **Windows**: double-click it. If Windows shows "Windows protected your PC", [here's what to do](docs/troubleshooting.md#windows-protected-your-pc).
    - **macOS**: the program is not signed. In a terminal, run `xattr -d com.apple.quarantine <file>` once, then double-click it.
    - **Linux**: run `chmod +x 3dssavesync-linux-amd64`, then `./3dssavesync-linux-amd64 setup`.
-3. A settings page opens in your browser. Keep **Local server on this PC** (the default, nothing else to install). Check the emulators it found and the frontends (LaunchBox, ES-DE, shortcuts), then click **Save**.
-4. Windows asks about the firewall? Allow **private networks**. Without this, the 3DS cannot reach the PC.
-5. Put the 3DS SD card in the PC. In the **3DS SD card** part of the page, click **Prepare the 3DS SD card**. The page writes the server address and token to the card. Nothing else on the card changes.
+3. A settings page opens in your browser and walks you through 4 steps. On **Server**, keep **Local server on this PC**: it's the default and needs nothing else. On **Emulators and frontends**, check the emulators it found and your frontends (LaunchBox, ES-DE, shortcuts), then click **Save and continue**.
+4. If Windows asks about the firewall, allow **private networks**. Otherwise the 3DS can't reach the PC.
+5. On **3DS SD card**, put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. This writes the server address and token to the card and copies the 3DS app (`3dssavesync.cia`) to its `cias` folder. Nothing else on the card changes.
+6. On **Everything is ready**, each line shows ✓ or tells you what's left to do.
 
 ### 2. The 3DS
 
-1. Download [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) and copy it to the SD card.
-2. Put the SD card back in the 3DS. Install the `.cia` with FBI.
-3. Start **3dssavesync** from the HOME menu. It connects to the PC by itself: you type nothing.
+1. Put the SD card back in the 3DS. Open FBI and go to **SD** > **cias** > **3dssavesync.cia** > **Install and delete CIA**. Don't have FBI? Get [FBI.3dsx](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder on the card and open it from the Homebrew Launcher.
+2. Start **3dssavesync** from the HOME Menu. It connects to the PC on its own, with nothing to type.
 
-No SD card reader? Press SELECT on the 3DS and enter the **Server** and **Token** that the PC page shows. Or click **Download config.ini** on the PC page and copy it to `sdmc:/3ds/3dssavesync/` by FTP.
+No SD card reader? Copy [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) to the 3DS by FTP and install it with FBI. Then press SELECT on the 3DS and enter the **Server** and **Token** that the PC page shows, or click **Download config.ini** on the PC page and copy it to `sdmc:/3ds/3dssavesync/` by FTP.
 
 ### 3. Check that it works
 
 1. On the 3DS, 3dssavesync lists your games. Press **START** to sync them all.
-2. On the PC, start one of these games from your frontend (LaunchBox, ES-DE) or from the **3dssavesync &lt;emulator&gt;** shortcut. You continue where you stopped on the 3DS.
-3. Save in the game and quit. Open 3dssavesync on the 3DS: the game shows **Download**. Press **A** to get it.
+2. On the PC, start one of these games from your frontend (LaunchBox, ES-DE) or from the **3dssavesync &lt;emulator&gt;** shortcut. You pick up where you left off on the 3DS.
+3. Save in the game and quit. Back on the 3DS, open 3dssavesync: the game now shows **Download**. Press **A** to get your save.
 
 Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
 
@@ -66,15 +66,28 @@ Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
 
 The local server syncs at home, when the PC is on. To sync from anywhere, run the server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. See the [server guide](docs/guide-server.md).
 
+### Portable version
+
+Keep everything in one folder, for example `LaunchBox\ThirdParty\3dssavesync`, a USB drive or the SD card of a Steam Deck:
+
+1. Download [3dssavesync-windows-amd64-portable.zip](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-windows-amd64-portable.zip) or [3dssavesync-linux-amd64-portable.tar.gz](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-linux-amd64-portable.tar.gz).
+2. Extract it to a folder where you can write (not `Program Files`, not a read-only drive).
+3. Start `3dssavesync` from this folder (Linux: `./3dssavesync setup`), then continue at step 3 of [The PC](#1-the-pc).
+
+The `portable.txt` file next to the program is what makes it portable: settings, log, backups and local server data all stay in this folder, and LaunchBox, ES-DE and the shortcuts start the program from here. Delete `portable.txt` to switch back to the normal install. See [ADR 0020](docs/adr/0020-version-portable.md).
+
 ## Everyday use
 
-- **PC**: start your games from your frontend or the shortcuts, as before. Close the emulator to send the save.
+- **PC**: start your games from your frontend or the shortcuts, as before. Your save is uploaded when you close the emulator.
 - **3DS**: open 3dssavesync before and after you play. Press **START** to sync everything, or **A** on one game.
-- **Conflict** (you played on both sides): you choose the version to keep. The other version stays on the server.
-- **Get back an old version**: open the **3dssavesync settings** shortcut, part **History**, choose the game and the version, then click **Restore this version**. Or run `3dssavesync restore`. Each device gets it at its next sync, after a backup copy.
-- **No network after a game on the PC**: the save stays on the PC and goes out at the next launch, whatever game you start.
-- **ROM hacks** (Radical Red and others) use the same game code as the original game. 3dssavesync refuses to mix them, and offers to give the hack [its own save](docs/troubleshooting.md#a-rom-hack-is-not-synced).
-- **ROMs in subfolders** on the 3DS are found (4 levels deep). The save goes where your 3DS app writes it.
+- **Conflict** (you played on both sides): you choose which save to keep. Nothing is lost: the other one stays in the server history or in a backup.
+- **Get back an old version**: open the **3dssavesync settings** shortcut, go to **History**, pick the game and the version, and click **Restore this version** (or run `3dssavesync restore`). Each device gets it at its next sync, after a backup.
+- **No network after a game on the PC**: the save stays on the PC and is uploaded the next time you start any game.
+- **Icon near the clock** (Windows, Linux KDE): right-click it to open the settings, upload pending saves now or see the local server address. More in the [PC guide](docs/guide-pc.md#the-icon-near-the-clock).
+- **Updates**: the settings page and the icon near the clock tell you when a new version is out. Click **Update** on the settings page and the program updates and restarts itself. For the 3DS app, update it from its settings (**SELECT** > **Update**), or prepare the SD card again. More in the [PC guide](docs/guide-pc.md#updates).
+
+- **ROM hacks** (Radical Red and others) use the same game code as the original. 3dssavesync won't mix them up and offers to give the hack [its own save](docs/troubleshooting.md#a-rom-hack-is-not-synced).
+- **ROMs in subfolders** on the 3DS are found, up to 4 levels deep. Each save goes where your 3DS app expects it.
 - **More PC settings** (emulators, frontends, commands): [PC guide](docs/guide-pc.md). **3DS settings**: [3DS guide](docs/guide-3ds.md).
 
 ## Supported
@@ -115,7 +128,7 @@ With the local server, nothing leaves your home network. Your saves stay in your
 2. Open **3dssavesync settings**, part **Frontends and install**, then click **Uninstall 3dssavesync**.
 3. On the 3DS, open FBI, **Titles**, **3dssavesync**, **Delete Title**.
 
-LaunchBox and ES-DE get their original emulators back, so your games start as before. The shortcuts and the program go to the Recycle Bin. Your saves do not move; the settings, the backup copies and the local server data stay, and the report says where. Without the settings page: `3dssavesync uninstall`.
+LaunchBox and ES-DE get their original emulators back, so your games start as before. The shortcuts and the program go to the Recycle Bin (portable version: the program stays; delete its folder yourself). Your saves do not move; the settings, the backup copies and the local server data stay, and the report says where. Without the settings page: `3dssavesync uninstall`.
 
 ## How it works
 
@@ -140,7 +153,7 @@ cd 3ds && make cia                                   # devkitPro, makerom and ba
 
 C tests (gcc on the PC): see `.github/workflows/ci.yml`. GitHub Actions runs every test (Go on Windows, Linux and macOS) and builds the `.cia`. A `v*` tag publishes a release with the PC programs and the server image.
 
-Code identifiers and comments are in French. The apps speak English and French.
+The apps speak English and French. Most code identifiers and comments are still French and are being moved to English. See [CONTRIBUTING.md](CONTRIBUTING.md) for the build steps, the rules every change follows, and how AI tools are used here. Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

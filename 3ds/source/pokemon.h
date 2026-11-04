@@ -1,18 +1,18 @@
-/* Temps de jeu et dresseur des Pokémon, pour comparer deux Versions avant un choix (écran de Conflit,
- * Récupération). Aucune dépendance libctru : testé sur PC (test/test_pokemon.c). */
+/* Play time and trainer of the Pokémon games, to compare two Versions before a choice (Conflict screen,
+ * Download). No libctru dependency: tested on the PC (test/test_pokemon.c). */
 #ifndef POKEMON_H
 #define POKEMON_H
 
 #include <stddef.h>
 
 typedef struct {
-    int heures, minutes;
-    char dresseur[40]; /* UTF-8 ; vide : partie jamais commencée */
-} partie_t;
+    int hours, minutes;
+    char trainer[40]; /* UTF-8; empty: game never started */
+} progress_t;
 
-/* 0 si la sauvegarde est un Pokémon reconnu : Rouge/Bleu/Jaune, Or/Argent/Cristal, Rubis/Saphir/Émeraude/Rouge Feu/
- * Vert Feuille, Diamant/Perle/Platine/HeartGold/SoulSilver, Noir/Blanc 1 et 2 (versions européennes et américaines),
- * puis les jeux 3DS (fichier main). La sauvegarde est la SRAM seule, sans Trailer d'horloge. -1 sinon. */
-int pokemon_partie(const unsigned char *d, size_t taille, partie_t *p);
+/* 0 if the save is a known Pokémon game: Red/Blue/Yellow, Gold/Silver/Crystal, Ruby/Sapphire/Emerald/FireRed/
+ * LeafGreen, Diamond/Pearl/Platinum/HeartGold/SoulSilver, Black/White 1 and 2 (European and American versions),
+ * then the 3DS games (main file). The save is the SRAM only, without Clock trailer. -1 otherwise. */
+int pokemon_progress(const unsigned char *d, size_t size, progress_t *p);
 
 #endif

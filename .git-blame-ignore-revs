@@ -1,0 +1,16 @@
+# Commits that only rename or reword, without a behaviour change. git blame skips them with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Rename the PC program's Go identifiers to English
+924875a7cd5e8ed9c34af5757447a78066078e2a
+# Rename the PC program's Go files to English
+02d4e897ff069039207f59cbf9a47b99ed361602
+# Rewrite the PC program's code comments in English
+33c3540c02bdb519ed1013a4bee65e64a800e0f0
+
+# 3DS: rename source and test files to English
+79aa697afd2323c60c50c48b18274f246c826a90
+# 3DS: rename C identifiers to English
+4e59958975dd8d657c62f31afc26390161798a25
+# Server and forwarder tool: rename Python identifiers to English
+00fe2dfe83126d8b5fdb65389ef21cc2e85e153e

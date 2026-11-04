@@ -2,7 +2,7 @@
 
 Before, the homebrew read only the root of each ROM folder (decision Q10). It now reads subfolders, up to 4 levels. It never reads `saves` folders, hidden folders (`.…`) or folders starting with `_` (`_nds` of TWiLight Menu++), nor `3ds`, `luma`, `mGBA` and `Nintendo 3DS` (useful if the ROM folder is the root of the SD card).
 
-Save of a ROM `<roms>/<subfolder>/X.nds` (or `.gb`, `.gbc`, `.gba`), depending on the "Saves" setting of its System (`docs/research-v2.md`, French: `SAVE_LOCATION` of TWiLight Menu++ and NTR_Forwarder, GameYob, `useSavesFolder` of open_agb_firm):
+Save of a ROM `<roms>/<subfolder>/X.nds` (or `.gb`, `.gbc`, `.gba`), depending on the "Saves" setting of its System (`docs/notes/research-v2.md`, French: `SAVE_LOCATION` of TWiLight Menu++ and NTR_Forwarder, GameYob, `useSavesFolder` of open_agb_firm):
 
 | "Saves" setting | Save | Launcher |
 |---|---|---|
@@ -19,4 +19,4 @@ The X key (switch between the mGBA forwarder and the ROM launcher) moves the Sav
 ## Consequences
 
 - Paths deduced from the launchers' code, not verified on the 3DS for a ROM in a subfolder.
-- The 512-game limit (`MAX_JEUX`) also counts ROMs in subfolders; beyond it, ROMs are skipped and reported.
+- The 512-game limit (`MAX_GAMES`) also counts ROMs in subfolders; beyond it, ROMs are skipped and reported.

@@ -19,34 +19,26 @@ jobs:
           python-version: "3.13"
       - run: python -m unittest -v test_server.py
         working-directory: server
+      - run: pipx run ruff==0.17.3 check server/
 
   tests-c:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: etat, cle, fichiers (C hôte)
+      - name: state, key, files (host C)
         working-directory: 3ds
         run: |
-          gcc -std=c99 -Wall -I source source/etat.c test/test_etat.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
-          gcc -std=c99 -Wall -I source source/cle.c test/test_cle.c -o /tmp/c && /tmp/c
-          gcc -std=c99 -Wall -I source source/fichiers.c test/test_fichiers.c -o /tmp/f && (cd /tmp && /tmp/f)
-          gcc -std=c99 -Wall -I source source/fichiers.c source/reglages.c test/test_reglages.c -o /tmp/r && (cd /tmp && /tmp/r)
-          gcc -std=c99 -Wall -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
-          gcc -std=c99 -Wall -I source source/erreurs.c test/test_erreurs.c -o /tmp/e && /tmp/e
-
-  lanceur-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - shell: powershell
-        run: |
-          powershell -NoProfile -File pc/test_etat.ps1
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          powershell -NoProfile -File pc/test_lanceur.ps1
-          exit $LASTEXITCODE
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/state.c test/test_state.c -o /tmp/t && /tmp/t ../tests/cas_etat.csv
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/state.c source/games.c test/test_games.c -o /tmp/g && /tmp/g
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/key.c test/test_key.c -o /tmp/c && /tmp/c
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c test/test_files.c -o /tmp/f && (cd /tmp && /tmp/f)
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/settings.c test/test_settings.c -o /tmp/r && (cd /tmp && /tmp/r)
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c test/test_errors.c -o /tmp/e && /tmp/e
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/text.c test/test_text.c -o /tmp/x && /tmp/x
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c source/text.c source/result.c test/test_result.c -o /tmp/s && /tmp/s
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json
 
   client-go:
     strategy:
@@ -74,6 +66,31 @@ jobs:
       - run: go test -count=1 -v ./...
         working-directory: client
 
+  lint-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: client/go.mod
+          cache: false
+      - name: gofmt
+        working-directory: client
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "Run gofmt -w on:"; echo "$out"; exit 1; fi
+      # Any finding fails the job, for each target system (build tags select different files).
+      - name: staticcheck
+        working-directory: client
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          for goos in windows linux darwin; do
+            echo "::group::GOOS=$goos"
+            GOOS=$goos "$(go env GOPATH)/bin/staticcheck" ./... || status=1
+            echo "::endgroup::"
+          done
+          exit ${status:-0}
+
   homebrew-3ds:
     runs-on: ubuntu-latest
     steps:
@@ -89,10 +106,12 @@ jobs:
           cp "$(find bannertool -type f -path '*linux*x86*64*' -name bannertool | head -1)" ../3ds/bannertool
           chmod +x ../3ds/makerom ../3ds/bannertool
       # Compilation et bannertool dans l'image devkitPro ; makerom sur l'hôte (il exige une glibc plus récente).
+      # VERSION : celle du tag (v3.7.0 -> 3.7.0), "dev" sinon ; un build "dev" ne propose jamais de mise à jour (ADR 0021).
       - name: .3dsx, bannière, icône
         run: |
-          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src/3ds devkitpro/devkitarm:latest sh -c '
-            make &&
+          case "$GITHUB_REF" in refs/tags/v*) version="${GITHUB_REF_NAME#v}" ;; *) version=dev ;; esac
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD:/src" -w /src/3ds -e VERSION="$version" devkitpro/devkitarm:20260610@sha256:116afba8df8453961de2936ffab20dd441edf4d682856c1ec8b0e53d7ed0bbf5 sh -c '
+            make VERSION="$VERSION" &&
             ./bannertool makebanner -i meta/banner.png -a meta/banner.wav -o build/banner.bnr &&
             ./bannertool makesmdh -s "$(sed -n "s/^APP_TITLE[[:space:]]*:=[[:space:]]*//p" Makefile)" \
               -l "$(sed -n "s/^APP_DESCRIPTION[[:space:]]*:=[[:space:]]*//p" Makefile)" \
@@ -109,7 +128,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [serveur, tests-c, lanceur-windows, client-go, homebrew-3ds]
+    needs: [serveur, tests-c, client-go, lint-go, homebrew-3ds]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -124,14 +143,30 @@ jobs:
         with:
           go-version-file: client/go.mod
           cache: false
+      # Le .cia de la même version, inclus dans le programme PC qui le copie sur la carte SD (ADR 0023) ; la version
+      # du tag (v3.7.0 -> 3.7.0) pour la mise à jour du PC.
       - name: Binaires PC (sans console sous Windows)
         working-directory: client
         run: |
+          cp ../dist/3dssavesync.cia embarque/3dssavesync.cia
           for cible in windows/amd64 windows/arm64 linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
-            os=${cible%/*}; arch=${cible#*/}; ext=; drapeaux="-s -w"
+            os=${cible%/*}; arch=${cible#*/}; ext=; drapeaux="-s -w -X main.version=${GITHUB_REF_NAME#v}"
             if [ "$os" = windows ]; then ext=.exe; drapeaux="$drapeaux -H windowsgui"; fi
             GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "$drapeaux" -o "../dist/3dssavesync-$os-$arch$ext" .
           done
+      # Version portable (ADR 0020) : l'exe et portable.txt (une seule source : .github/portable.txt), hors de dist/.
+      - name: Archives portables
+        run: |
+          mkdir -p portable/windows portable/linux
+          cp .github/portable.txt portable/windows/ && cp .github/portable.txt portable/linux/
+          cp dist/3dssavesync-windows-amd64.exe portable/windows/3dssavesync.exe
+          cp dist/3dssavesync-linux-amd64 portable/linux/3dssavesync && chmod +x portable/linux/3dssavesync
+          (cd portable/windows && zip -q ../../dist/3dssavesync-windows-amd64-portable.zip 3dssavesync.exe portable.txt)
+          tar -czf dist/3dssavesync-linux-amd64-portable.tar.gz -C portable/linux 3dssavesync portable.txt
+      # Vérifié par la 3DS avant d'installer une mise à jour (ADR 0021).
+      - name: SHA256SUMS
+        working-directory: dist
+        run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       - name: Release GitHub
         env:
           GH_TOKEN: ${{ github.token }}

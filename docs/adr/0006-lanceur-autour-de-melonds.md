@@ -2,7 +2,7 @@
 
 LaunchBox calls `powershell.exe -File sync.ps1 <rom>` instead of `melonDS.exe`. The Launcher does the Download, starts melonDS, waits for the process to end, then does the Upload.
 
-Reason: melonDS keeps the Save in memory, rewrites the whole file 2 to 3 s after each in-game save (non-atomic write), and does not lock the file (`docs/research.md`, part 1 §2, French). Reading the `.sav` while melonDS runs can give a truncated file; writing it while it runs is lost at the next in-game save. Only the end of the process is a safe point.
+Reason: melonDS keeps the Save in memory, rewrites the whole file 2 to 3 s after each in-game save (non-atomic write), and does not lock the file (`docs/notes/research.md`, part 1 §2, French). Reading the `.sav` while melonDS runs can give a truncated file; writing it while it runs is lost at the next in-game save. Only the end of the process is a safe point.
 
 ## Rejected options
 

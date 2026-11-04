@@ -14,9 +14,10 @@ Une 3DS modifiée (Luma3DS) est nécessaire.
 
 ## Installation
 
-1. **PC** : téléchargez le programme de votre système dans la [dernière version](https://github.com/programgames/3dssavesync/releases/latest), lancez-le, puis cliquez sur **Enregistrer** dans la page qui s'ouvre (serveur local par défaut).
-2. **Carte SD** : mettez la carte SD de la 3DS dans le PC, puis cliquez sur **Préparer la carte SD de la 3DS**.
-3. **3DS** : installez `3dssavesync.cia` avec FBI, puis lancez 3dssavesync : il se connecte sans rien taper.
+1. **PC** : téléchargez le programme de votre système dans la [dernière version](https://github.com/programgames/3dssavesync/releases/latest), lancez-le, puis suivez les 4 étapes de la page qui s'ouvre (serveur local par défaut) : **Enregistrer et continuer** écrit les réglages.
+2. **Carte SD** : mettez la carte SD de la 3DS dans le PC, puis cliquez sur **Préparer la carte SD de la 3DS**. La carte reçoit l'adresse, le jeton et `3dssavesync.cia`.
+3. **3DS** : dans FBI, ouvrez **SD**, **cias**, **3dssavesync.cia**, **Install and delete CIA**, puis lancez 3dssavesync : il se connecte sans rien taper.
+
 
 Un problème ? Lisez le [dépannage](docs/troubleshooting.md) (en anglais). Les programmes affichent leurs messages en français si le système est en français.
 

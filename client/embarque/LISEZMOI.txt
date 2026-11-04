@@ -1,0 +1,2 @@
+Le job release de la CI copie ici 3dssavesync.cia (homebrew de la même version) avant go build :
+il est alors inclus dans le programme PC et copié sur la carte SD (ADR 0023). Sans lui, le programme le dit.

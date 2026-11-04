@@ -1,17 +1,17 @@
-# Serveur 3dssavesync. .env (chmod 600) : NDSSYNC_TOKEN=<jeton long et aléatoire>. ./data doit appartenir à 1000:1000.
-# Le serveur parle HTTP sur le port 8080 : placez-le derrière un reverse proxy HTTPS (la 3DS exige HTTPS, TLS 1.2 ECDHE).
-# Sans reverse proxy : docker-compose.caddy.yml (HTTPS automatique).
+# 3dssavesync server. .env (chmod 600): NDSSYNC_TOKEN=<long random token>. ./data must belong to 1000:1000.
+# The server speaks HTTP on port 8080: put it behind an HTTPS reverse proxy (the 3DS needs HTTPS, TLS 1.2 ECDHE).
+# Without a reverse proxy: docker-compose.caddy.yml (automatic HTTPS).
 services:
   3dssavesync:
     image: ghcr.io/programgames/3dssavesync-server:latest
-    build: .  # ou l'image construite ici : docker compose build
+    build: .  # or the image built here: docker compose build
     restart: unless-stopped
     env_file: .env
     volumes:
       - ./data:/data
     ports:
       - "127.0.0.1:8080:8080"
-    # Exemple Traefik (remplacer les ports ci-dessus) :
+    # Traefik example (replaces the ports above):
     # labels:
     #   - "traefik.enable=true"
     #   - "traefik.http.routers.3dssavesync.rule=Host(`saves.example.com`)"

@@ -1,6 +1,6 @@
 # Design
 
-Vocabulary: [GLOSSARY.md](GLOSSARY.md). Decisions: [adr/](adr/). Technical facts: `research-v3-*.md` (French).
+Vocabulary: [GLOSSARY.md](GLOSSARY.md). Decisions: [adr/](adr/). Technical facts: [`notes/research-v3-*.md`](notes/) (French working notes).
 
 ## 1. The deep module: `etat`
 
@@ -34,7 +34,7 @@ What the caller must know, and nothing else:
 
 ### Two implementations, one case table
 
-The module exists in C (3DS homebrew) and in PowerShell (Launcher). Both read `tests/cas_etat.csv` in their tests. A case added to the file is checked on both sides.
+The module exists in C (3DS homebrew) and in Go (PC program). Both read `tests/cas_etat.csv` in their tests. A case added to the file is checked on both sides.
 
 | case | local | server | base | expected |
 |---|---|---|---|---|
@@ -86,24 +86,24 @@ Under a global lock:
 
 `server/docker-compose.yml` + `Dockerfile` (`python:3-slim`, user 1000) + `.env` (`NDSSYNC_TOKEN`, chmod 600) + `./data`, behind an HTTPS reverse proxy (example Traefik labels in the file).
 
-## 3. PC Launcher: `pc/sync.ps1`
+## 3. PC program: `client/`
 
-PowerShell 5.1 (built into Windows 11): `Invoke-WebRequest`, `Get-FileHash`, `System.IO.Compression` (read the header inside a `.zip`) and `System.Windows.Forms.MessageBox` are all native. Nothing to install. Configuration: `pc/sync.config.json` (URL, token, path of `melonDS.exe`, save folder). Base: `pc/base.json` (`{code: hash}`).
+One Go program, `3dssavesync`, for Windows, Linux and macOS. It has one dependency (`godbus/dbus`, for the icon near the clock on Linux) and nothing to install next to it. Configuration: `config.json` in the settings folder (see the [PC guide](guide-pc.md#configuration)). Base: `bases/<emulator>.json` (`{key: hash}`), one file per emulator.
 
-LaunchBox calls: `powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "<path>\sync.ps1" "<rom>"`.
+A frontend calls `3dssavesync run [--emulator <name>] "<rom>"` instead of the emulator (ADR 0006). The `launch <name>` command and the shortcuts do the same for every game of an emulator.
 
-1. If `melonDS.exe` is running → message, stop.
-2. Read the Game code of the ROM (`.nds`, or first `.nds` entry of a `.zip`). Invalid code → start melonDS without sync.
-3. Local save = `<save folder>\DS\<ROM name without extension>.sav`.
+1. If the same game already runs, or the emulator was opened outside 3dssavesync → message, stop.
+2. Read the Key of the ROM (ADR 0007), or its Alias (ADR 0014). Unknown ROM → a notification, and the emulator starts without sync.
+3. Local save = the file the emulator profile names for this ROM (`client/profiles.go`).
 4. **Before the game**: `GET /saves`, then `etat`.
-   - `A_RECUPERER` → Backup copy (if the file exists), download into a temporary file, Hash check, replace.
+   - `A_RECUPERER` → Backup copy (if the file exists), download into a temporary file, Hash check, rename.
    - `A_ENVOYER` → Upload.
-   - `CONFLIT` → Yes (take the server) / No (keep the PC: immediate Upload with `If-Match` = server Hash) / Cancel (do not play) box.
-   - Server unreachable (10 s timeout, enough to upload 512 KiB) → "Play with the Local save?".
-5. Start `melonDS.exe "<rom>"` and wait for the process to end.
-6. **After the game**: read the Local save again, `etat` with the Base. `A_ENVOYER` → Upload with `If-Match` = Base. `412` → `etat` with the received `ETag`; `CONFLIT` → "Keep the PC" / "Do nothing" box. Network error → message, the Save stays local.
+   - `CONFLIT` → **Use server save** / **Keep PC save** (immediate Upload with `If-Match` = server Hash) / **Don't play**.
+   - Server unreachable (30 s timeout) → "Play with the PC save?". The save goes to the server at the next launch.
+5. Start the emulator and wait for its process to end.
+6. **After the game**: read the Local save again, `etat` with the Base. `A_ENVOYER` → Upload with `If-Match` = Base. `412` → `etat` again with the new Current version; `CONFLIT` → **Keep PC save** / **Do nothing**. Network error → the save is written to `en-attente.json` and uploaded first at the next `run` or `launch`.
 
-Backup copies: `<save folder>\DS\ndssync-copies\<name>-<date>.sav`.
+Backup copies: `<copies>/<emulator>/<name>-<date>`. The Go tests (`client/launcher_test.go`) run this flow against the local server (`client/server.go`) in a temporary folder; `client/server_test.go` checks that it keeps the contract of `server/server.py` by running `server/test_server.py` against it.
 
 ## 4. 3DS homebrew: `3ds/`
 
@@ -112,9 +112,14 @@ C + libctru, text console, `3ds-curl` + `3ds-mbedtls`.
 | File | Role |
 |---|---|
 | `source/main.c` | configuration (`swkbd`), scan, list, actions, Backup copies |
-| `source/etat.c` / `etat.h` | the `etat` module (no libctru dependency) |
+| `source/state.c` / `state.h` | the `sync_state` module (no libctru dependency) |
+| `source/games.c` | status of a Game in the list: State, Duplicate, Unknown, hidden, Blank save rule (no libctru dependency) |
+| `source/settings.c` | `config.ini`, `base.ini`, `alias.ini`, `titres.ini`, `maj.ini`: one INI reader, writes by `replace_file` (no libctru dependency) |
+| `source/result.c` | result of an action and its message text (no libctru dependency) |
+| `source/views.c` / `views.h` | layout, palette, button bar, message band, progress, questions |
+| `source/app_update.c` | update of the app from GitHub (ADR 0021) |
 | `source/net.c` | the 4 HTTP calls with curl, ISRG Root X1 embedded |
-| `test/test_etat.c` | reads `tests/cas_etat.csv`, compiled with `gcc` on the PC |
+| `test/*.c` | host tests of the modules without libctru (`test_state.c` reads `tests/cas_etat.csv`), compiled with `gcc` on the PC |
 
 Files on the SD card, in `sd:/3ds/3dssavesync/` (before v3: `sd:/3ds/nds-save-sync/`, taken over at first start): `config.ini` (URL, token, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba`; empty saves = next to the ROM), `titres.ini` (synced 3DS games, `<title ID>=<name>`; absent = the 8 Pokémon), `base.ini` (`KEY=hash`), `alias.ini` (optional, `<ROM name>=KEY`, ADR 0014), `copies/`.
 
@@ -139,6 +144,6 @@ The core does not change (`etat`, conditional Upload, Backup copy). What is adde
 
 - **Key per System**, read in the ROM: DS `ADAF`, GBA `GBA-BPEF`, GB `GB-<title>-<checksum>`, 3DS `3DS-<title ID>` (ADR 0007). The server accepts only these forms.
 - **GB/GBA**: `.sav` files next to the ROMs on the 3DS (TWiLight, open_agb_firm), `<save folder>\GB` / `GBA` folders on the PC (mGBA, `-C savegamePath=…` per launch). Hash, size and Upload cover the **SRAM only**; at Download each machine puts back its own Clock trailer (ADR 0008). Trailer = remainder of `size mod 512` if it is 16, 44 or 48 bytes (ADR 0010).
-- **3DS**: the `main` file of the save archive (8 Pokémon, fixed table), read and written by `titres3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
-- **Launcher**: one `$SYSTEMES` table (executable, process, folder, extensions); everything else is shared.
+- **3DS**: the `main` file of the save archive (8 Pokémon, fixed table), read and written by `titles3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
+- **Launcher**: one profile per emulator (executable, process, save folder, extensions); everything else is shared.
 - **Homebrew**: sources `sd:/roms/nds`, `sd:/roms/gb`, `sd:/roms/gba` (`config.ini`: `roms_gb`, `roms_gba`) and the 3DS archives; the System is shown in the list.

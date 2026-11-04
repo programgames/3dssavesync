@@ -2,7 +2,7 @@
 
 3dssavesync keeps the same game save between a 3DS and the emulators of a PC (DS, GB, GBC, GBA and native 3DS games), through a server that never loses anything.
 
-This glossary fixes one word per idea, for the design docs and the ADRs. The code is written in French: each term gives its French name, used in code identifiers and comments.
+This glossary fixes one word per idea, for the code, the design docs and the ADRs. Each term also gives its French name, used in the French texts of the apps and in older notes.
 
 ## Games
 
@@ -61,7 +61,7 @@ The bytes that an emulator adds after the SRAM for the real-time clock (mGBA: 48
 _Avoid_: RTC, footer, RTC footer
 
 **Blank save** (*Sauvegarde vierge*):
-A DS, GB or GBA Save whose SRAM holds only 0x00 or only 0xFF: no game is written in it yet. It counts as absent.
+A DS, GB or GBA Save whose SRAM holds only 0x00 or only 0xFF: no game is written in it yet. It counts as absent, unless the Current version is the same Save (then the Game is In sync).
 _Avoid_: empty save
 
 **Save archive** (*Archive de sauvegarde*):
@@ -110,6 +110,7 @@ _Avoid_: last sync, ancestor, reference, previous state
 
 **State** (*État*):
 The result of the comparison between Local save, Current version and Base for a Game: In sync (*À jour*), To upload (*À envoyer*), To download (*À récupérer*) or Conflict.
+When the Server could not be read, the 3DS shows Unknown (*Inconnu*) in place of a State, and offers no action.
 _Avoid_: action, status, decision
 
 **Conflict** (*Conflit*):
@@ -125,7 +126,7 @@ The Client replaces its Local save with the Current version, after a Backup copy
 _Avoid_: pull
 
 **Launcher** (*Lanceur*):
-The PC program (`3dssavesync`, formerly `pc/sync.ps1`) that a frontend or a shortcut calls in place of the emulator: Sync, game, then Sync.
+The PC program (`3dssavesync`; before v3, a PowerShell script) that a frontend or a shortcut calls in place of the emulator: Sync, game, then Sync.
 _Avoid_: wrapper, plugin, sync script
 
 **Profile** (*Profil*):

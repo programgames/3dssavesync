@@ -13,7 +13,7 @@ Both keep the same files: `data/<game key>/<number>-<date>-<client>-<hash>.sav`.
 ## Local server on the PC
 
 1. Start the settings page (double-click the program, or `3dssavesync setup`). In the **Server** part, **Local server on this PC** is the default (choice **2** in text mode).
-2. Click **Save**. The program picks a port (8765 by default), creates a token, starts the server, and makes it start with your session (Windows: Startup folder; Linux: autostart; macOS: LaunchAgent).
+2. Click **Save**. The program picks a port (8765 by default), creates a token, starts the server, and makes it start with your session (Windows: Startup folder; Linux: autostart; macOS: LaunchAgent). With the [icon near the clock](guide-pc.md#the-icon-near-the-clock) (Windows, Linux), the icon program runs the server.
 3. On Windows, allow the firewall request for **private networks** ([help](troubleshooting.md#windows-defender-firewall-asks-about-3dssavesync)).
 4. The page shows the address and token for the 3DS. The address of the PC on your home network comes first; the others (WSL, Docker, VPN) are under **Other addresses**.
 5. Easiest: put the 3DS SD card in the PC, then click **Prepare the 3DS SD card**. `3ds/3dssavesync/config.ini` gets the address and token. Otherwise, enter them on the 3DS: 3dssavesync, **SELECT**, lines **Server** (`http://192.168.1.20:8765` for example) and **Token**.

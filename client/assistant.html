@@ -3,289 +3,576 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</title>
 <style>
+/* Jetons : grille de 4 px, échelle de texte Fluent, couleurs vérifiées (texte 4,5:1, bordures de champ 3:1). */
 :root {
-  --fond: #f4f5f7; --carte: #ffffff; --texte: #1d2129; --doux: #5d6573; --bord: #d9dde3;
-  --accent: #2f6fdf; --accent-texte: #ffffff; --ok: #1f7a43; --alerte: #a15c00; --erreur: #b3261e;
-  --champ: #ffffff; --accent-doux: #e8f0fd;
-  --ds: #6d4fc2; --ds-fond: #eeebfb; --gb: #3b7d23; --gb-fond: #e9f3df; --gba: #0f6e6e; --gba-fond: #ddf2f1; --n3ds: #b3261e; --n3ds-fond: #fbe9e8;
+  color-scheme: light dark;
+  --e1: 4px; --e2: 8px; --e3: 12px; --e4: 16px; --e5: 24px; --e6: 32px;
+  --t-legende: 12px; --t-texte: 14px; --t-fort: 16px; --t-sous-titre: 20px; --t-titre: 28px;
+  --rayon: 4px; --rayon-carte: 8px;
+  --fond: #f5f5f5; --carte: #ffffff; --texte: #1a1a1a; --doux: #5c5c5c; --bord: #e0e0e0; --bord-champ: #8a8a8a; --champ: #ffffff;
+  --accent: #0f6cbd; --lien: #0f6cbd; --accent-texte: #ffffff; --accent-doux: #ebf3fc; --survol: #f0f0f0;
+  --ok: #0e700e; --ok-fond: #f1faf1; --alerte: #8a4b00; --alerte-fond: #fff6eb; --erreur: #b10e1c; --erreur-fond: #fdf3f4;
+  --ds: #5b3fb0; --ds-fond: #efeafb; --gb: #2f6b1a; --gb-fond: #e8f3e0; --gba: #0b6262; --gba-fond: #dcf1f0; --n3ds: #a3201a; --n3ds-fond: #fbe7e6;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --fond: #15171c; --carte: #1e2128; --texte: #e6e8ec; --doux: #9aa2b1; --bord: #343944;
-    --accent: #6a9cf5; --accent-texte: #0d1117; --ok: #5fc48b; --alerte: #e0a24a; --erreur: #f2847b;
-    --champ: #15171c; --accent-doux: #1d2a42;
-    --ds: #b9a8f2; --ds-fond: #2e2647; --gb: #a5d27f; --gb-fond: #23331b; --gba: #7fd6d1; --gba-fond: #173434; --n3ds: #f2847b; --n3ds-fond: #3d1f1d;
+    --fond: #1c1c1c; --carte: #262626; --texte: #f0f0f0; --doux: #b3b3b3; --bord: #3d3d3d; --bord-champ: #8f8f8f; --champ: #1c1c1c;
+    --accent: #479ef5; --lien: #6cb1f7; --accent-texte: #0a0a0a; --accent-doux: #1e3550; --survol: #303030;
+    --ok: #6ccb5f; --ok-fond: #1d2e1b; --alerte: #f5b161; --alerte-fond: #3a2a14; --erreur: #ff8a8f; --erreur-fond: #3f1f21;
+    --ds: #c2b2f5; --ds-fond: #2f2748; --gb: #a8d48a; --gb-fond: #24331c; --gba: #82d7d2; --gba-fond: #173535; --n3ds: #f5938c; --n3ds-fond: #3f201e;
   }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-.page { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 24px; max-width: 1280px; margin: 0 auto; padding: 24px 16px 96px; }
-main { min-width: 0; }
-#menu { position: sticky; top: 16px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
-#menu .titre { font-weight: 700; font-size: 17px; padding: 4px 10px 12px; }
-#menu button { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; color: var(--texte); }
-#menu button:hover { background: var(--accent-doux); }
-#menu button.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
-#menu button.attention::after { content: ""; display: inline-block; width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--alerte); vertical-align: middle; }
-.cachee { display: none !important; }
-.bandeau { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.case { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 12px 14px; }
-.case span { display: block; color: var(--doux); font-size: 13px; }
-.case b { font-size: 18px; }
-.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
-.badge.DS { color: var(--ds); background: var(--ds-fond); }
-.badge.GB { color: var(--gb); background: var(--gb-fond); }
-.badge.GBA { color: var(--gba); background: var(--gba-fond); }
-.badge.n3DS { color: var(--n3ds); background: var(--n3ds-fond); }
-.histo { display: grid; grid-template-columns: minmax(200px, 300px) minmax(0, 1fr); gap: 16px; margin-top: 12px; }
-#listeJeux { display: flex; flex-direction: column; gap: 2px; max-height: 60vh; overflow-y: auto; margin-top: 8px; }
-#listeJeux button { text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 6px; }
-#listeJeux button:hover { background: var(--accent-doux); }
-#listeJeux button.actif { background: var(--accent-doux); color: var(--accent); font-weight: 600; }
-@media (max-width: 760px) {
-  .page { grid-template-columns: 1fr; }
-  #menu { position: static; flex-direction: row; flex-wrap: wrap; }
-  #menu .titre { width: 100%; }
-  .histo { grid-template-columns: 1fr; }
-}
-h1 { font-size: 22px; margin: 0 0 4px; }
-h2 { font-size: 17px; margin: 0 0 12px; }
-p.sous { color: var(--doux); margin: 0 0 20px; }
-section { background: var(--carte); border: 1px solid var(--bord); border-radius: 10px; padding: 18px; margin-bottom: 16px; }
-label { display: block; margin: 8px 0 4px; font-weight: 600; }
-label.choix { font-weight: normal; display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; }
-label.choix span { min-width: 0; }
-code, .aide { overflow-wrap: anywhere; }
-input[type=text], input[type=password], input[type=number], select {
-  width: 100%; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 6px; background: var(--champ); color: var(--texte); font: inherit;
-}
-input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.aide { color: var(--doux); font-size: 13px; margin: 4px 0 0; }
-.alerte { color: var(--alerte); }
-.erreur { color: var(--erreur); }
-.ok { color: var(--ok); }
-.ligne { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
-.ligne > div { flex: 1 1 220px; }
-button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--bord); background: var(--carte); color: var(--texte); cursor: pointer; }
-button.principal { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); font-weight: 600; }
-button:disabled { opacity: .6; cursor: default; }
-#emulateurs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
-.emu { border: 1px solid var(--bord); border-radius: 8px; padding: 12px; }
-.emu.ouverte { grid-column: 1 / -1; }
-.emu:not(.ouverte) .details { display: none; }
-.emu.inactif { opacity: .75; }
-.emu .tete { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.emu .resume { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-.emu .resume .regler { margin-left: auto; }
-.emu .tete strong { font-size: 15px; }
-.emu .chemin { color: var(--doux); font-size: 13px; word-break: break-all; }
-.systeme { display: grid; grid-template-columns: 52px 1fr 1fr; gap: 8px; align-items: center; margin-top: 8px; }
-.systeme span { font-weight: 600; }
-.masque { display: none !important; }
-.barre { position: fixed; left: 0; right: 0; bottom: 0; background: var(--carte); border-top: 1px solid var(--bord); padding: 12px 16px; }
-.barre div { max-width: 1280px; margin: 0 auto; display: flex; gap: 8px; flex-wrap: wrap; }
-#resultat ul { margin: 0; padding-left: 20px; }
-summary { cursor: pointer; }
-.tableau { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord); white-space: nowrap; }
-.cadre { border: 2px solid var(--accent); border-radius: 8px; padding: 12px; margin: 0 0 12px; }
-.cadre h3 { font-size: 15px; margin: 0 0 8px; }
-.cadre .valeur { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+body { margin: 0; background: var(--fond); color: var(--texte); font: var(--t-texte)/20px "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif; }
+a { color: var(--lien); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+h1 { font-size: var(--t-titre); line-height: 36px; font-weight: 600; margin: 0 0 var(--e1); }
+h2 { font-size: var(--t-sous-titre); line-height: 28px; font-weight: 600; margin: 0 0 var(--e3); }
+h3 { font-size: var(--t-fort); line-height: 22px; font-weight: 600; margin: 0; }
+p { margin: 0; }
+.doux { color: var(--doux); }
+.legende { font-size: var(--t-legende); line-height: 16px; color: var(--doux); }
+code, .chemin { font-family: inherit; overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+.cachee, .masque { display: none !important; }
+
+/* Mise en page : menu de 240 px, colonne de 1040 px au plus */
+.app { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; }
+#menu { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 2px; padding: var(--e5) var(--e3); border-right: 1px solid var(--bord); }
+.marque { padding: 0 var(--e3) var(--e4); }
+.marque b { display: block; font-size: var(--t-fort); }
+#menu button[data-page] { display: flex; align-items: center; gap: var(--e2); width: 100%; padding: var(--e2) var(--e3); border: 0; border-radius: var(--rayon); background: none; color: var(--texte); font-weight: 400; text-align: left; min-height: 36px; }
+#menu button[data-page]:hover { background: var(--survol); }
+#menu button[aria-current] { background: var(--accent-doux); color: var(--lien); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
+#menu .compte { margin-left: auto; }
+#menu .pied { margin-top: auto; padding: var(--e3); }
+main { padding: var(--e6) var(--e6) 120px; max-width: calc(1040px + 2 * var(--e6)); width: 100%; min-width: 0; }
+.entete { margin-bottom: var(--e5); }
+.entete p { color: var(--doux); max-width: 72ch; margin-top: var(--e1); }
+
+/* Composants */
+.pastille { display: inline-flex; align-items: center; gap: var(--e1); padding: 2px var(--e2); border-radius: 999px; font-size: var(--t-legende); line-height: 16px; font-weight: 600; white-space: nowrap; }
+.pastille::before { font-weight: 700; }
+.pastille.ok { color: var(--ok); background: var(--ok-fond); } .pastille.ok::before { content: "✓"; }
+.pastille.alerte { color: var(--alerte); background: var(--alerte-fond); } .pastille.alerte::before { content: "!"; }
+.pastille.erreur { color: var(--erreur); background: var(--erreur-fond); } .pastille.erreur::before { content: "×"; }
+.pastille.neutre { color: var(--doux); background: var(--survol); }
+.compte { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; font-size: var(--t-legende); line-height: 20px; font-weight: 600; text-align: center; color: var(--alerte); background: var(--alerte-fond); }
+.sys { display: inline-block; padding: 0 6px; border-radius: var(--rayon); font-size: var(--t-legende); line-height: 18px; font-weight: 600; }
+.sys.DS { color: var(--ds); background: var(--ds-fond); } .sys.GB { color: var(--gb); background: var(--gb-fond); }
+.sys.GBA { color: var(--gba); background: var(--gba-fond); } .sys.n3DS { color: var(--n3ds); background: var(--n3ds-fond); }
+
+button, .bouton { font: inherit; font-weight: 600; min-height: 32px; padding: 5px var(--e3); border-radius: var(--rayon); border: 1px solid var(--bord-champ); background: var(--carte); color: var(--texte); cursor: pointer; display: inline-flex; align-items: center; gap: var(--e2); text-decoration: none; }
+button:hover, .bouton:hover { background: var(--survol); }
+button.principal { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
+button.principal:hover { filter: brightness(1.08); }
+button.discret { border-color: transparent; background: none; color: var(--lien); }
+button.discret:hover { background: var(--accent-doux); }
+button.danger { color: var(--erreur); border-color: var(--erreur); }
+button.danger:hover { background: var(--erreur-fond); }
+button:disabled { opacity: .5; cursor: default; }
+
+input[type=text], input[type=password], input[type=number], select { width: 100%; min-height: 32px; padding: 5px var(--e2); border: 1px solid var(--bord-champ); border-radius: var(--rayon); background: var(--champ); color: var(--texte); font: inherit; }
+input.court { width: 12ch; }
+label.titre, .titre { display: block; font-weight: 600; margin-bottom: var(--e1); }
+.champ + .champ { margin-top: var(--e4); }
+.champ .legende { margin-top: var(--e1); }
+
+/* Interrupteur : la case à cocher native, dessinée en interrupteur (même valeur pour le script). */
+input.interrupteur { appearance: none; flex: none; width: 40px; height: 20px; margin: 0; border: 1px solid var(--bord-champ); border-radius: 10px; background: var(--champ); position: relative; cursor: pointer; }
+input.interrupteur::before { content: ""; position: absolute; top: 3px; left: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--doux); transition: left .15s; }
+input.interrupteur:checked { background: var(--accent); border-color: var(--accent); }
+input.interrupteur:checked::before { left: 23px; background: var(--accent-texte); }
+
+/* Groupe de lignes de réglage : libellé et aide à gauche, contrôle à droite */
+.groupe { background: var(--carte); border: 1px solid var(--bord); border-radius: var(--rayon-carte); margin-bottom: var(--e5); }
+.groupe > h2 { padding: var(--e4) var(--e4) 0; margin: 0; font-size: var(--t-fort); }
+.reglage { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--e2) var(--e5); align-items: center; padding: var(--e3) var(--e4); min-height: 64px; }
+.reglage + .reglage { border-top: 1px solid var(--bord); }
+.reglage .texte b { display: block; font-weight: 600; }
+.reglage .texte .legende { display: block; }
+.reglage.large { grid-template-columns: minmax(0, 1fr); }
+.message { display: flex; gap: var(--e3); align-items: center; flex-wrap: wrap; padding: var(--e3) var(--e4); border-radius: var(--rayon-carte); border: 1px solid; margin-bottom: var(--e5); white-space: pre-line; }
+.message .texte { flex: 1 1 320px; }
+.message.info { background: var(--accent-doux); border-color: var(--accent); }
+.message.alerte { background: var(--alerte-fond); border-color: var(--alerte); }
+.message.erreur { background: var(--erreur-fond); border-color: var(--erreur); }
+.message.compact { display: block; margin: var(--e2) 0 0; padding: var(--e2) var(--e3); overflow-wrap: anywhere; }
+.detail { display: block; margin-top: var(--e1); font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; font-weight: 400; }
+.resultat { padding: var(--e4); }
+.resultat h2 { font-size: var(--t-fort); }
+.resultat ul { margin: var(--e2) 0 0; padding-left: 20px; }
+.resultat li { white-space: pre-line; overflow-wrap: anywhere; }
+.statut { margin-top: var(--e2); white-space: pre-line; overflow-wrap: anywhere; }
+.statut:empty { display: none; }
+.statut.ok { color: var(--ok); } .statut.erreur { color: var(--erreur); }
+
+/* Bande d'état : 4 pastilles qui ouvrent leur page */
+.etat { display: flex; flex-wrap: wrap; gap: var(--e2); margin-bottom: var(--e5); }
+.etat button { font-weight: 400; padding: var(--e1) var(--e3) var(--e1) var(--e1); border: 1px solid var(--bord); border-radius: 999px; }
+.etat button:hover { border-color: var(--bord-champ); background: var(--carte); }
+
+/* Émulateurs : une ligne chacun, réglages dépliés dessous */
+.emu .tete { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--e2) var(--e4); align-items: center; padding: var(--e3) var(--e4); }
+.emu + .emu { border-top: 1px solid var(--bord); }
+.emu .nom b { font-size: var(--t-fort); }
+.emu .nom .chemin { display: block; font-size: var(--t-legende); color: var(--doux); }
+.emu .infos { display: flex; gap: var(--e1); align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.emu .infos .pastille { margin-left: var(--e2); }
+.emu .actions { display: flex; gap: var(--e1); }
+.emu .details { display: none; padding: 0 var(--e4) var(--e4) calc(40px + 2 * var(--e4)); }
+.emu.ouverte .details { display: block; }
+.emu.inactif .nom, .emu.inactif .infos { opacity: .6; }
+.emu .details label { display: block; margin-top: var(--e3); }
+.emu .details label > span { display: block; font-weight: 600; margin-bottom: var(--e1); }
+.emu .details label.choix { display: flex; gap: var(--e2); align-items: center; font-weight: 400; }
+.emu .details label.choix > span { display: inline; font-weight: 400; margin: 0; }
+.coches { display: flex; gap: var(--e4); flex-wrap: wrap; }
+.dossiers { display: grid; grid-template-columns: 48px 1fr 1fr; gap: var(--e2) var(--e3); align-items: center; margin-top: var(--e3); }
+.commande { margin-top: var(--e3); padding: var(--e2) var(--e3); border-radius: var(--rayon); background: var(--fond); font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; }
+.commande:empty { display: none; }
+.commande.erreur { color: var(--erreur); }
+details > summary { cursor: pointer; }
+details.repli { border-top: 1px solid var(--bord); }
+details.repli > summary { padding: var(--e3) var(--e4); color: var(--lien); font-weight: 600; }
+#emulateursAutres > .emu:first-child { border-top: 1px solid var(--bord); }
+.formulaire { display: flex; flex-wrap: wrap; gap: var(--e3); align-items: end; padding: 0 var(--e4) var(--e4); }
+.formulaire > div { flex: 1 1 180px; }
+.formulaire > div:nth-last-child(2) { flex: 2 1 260px; } /* exécutable */
+.vide { padding: var(--e5) var(--e4); }
+.vide h3 { margin-bottom: var(--e1); }
+#ouvert:not(:empty) { margin: 0 var(--e4) var(--e4); }
+
+/* Serveur : deux choix en cartes */
+.choix-serveur { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e3); padding: var(--e4); }
+.choix-serveur label { display: flex; gap: var(--e3); align-items: flex-start; padding: var(--e3) var(--e4); border: 1px solid var(--bord-champ); border-radius: var(--rayon-carte); cursor: pointer; }
+.choix-serveur label:has(:checked) { border: 2px solid var(--accent); padding: calc(var(--e3) - 1px) calc(var(--e4) - 1px); background: var(--accent-doux); }
+.choix-serveur input { margin: 3px 0 0; accent-color: var(--accent); }
+.choix-serveur .legende { display: block; }
+.zone { padding: 0 var(--e4) var(--e4); }
+.ligne-test { display: flex; gap: var(--e3); align-items: center; flex-wrap: wrap; margin-top: var(--e4); }
+.ligne-test .message { flex: 1 1 320px; margin: 0; }
+.cadre { border: 2px solid var(--accent); border-radius: var(--rayon-carte); padding: var(--e3); margin: 0 0 var(--e3); }
+.cadre h3 { margin: 0 0 var(--e2); }
+.cadre .valeur { display: flex; gap: var(--e2); align-items: center; flex-wrap: wrap; margin: 6px 0; }
 .cadre .valeur b { min-width: 70px; }
-.cadre .valeur code { font-size: 16px; }
-@media (max-width: 560px) { .systeme { grid-template-columns: 1fr; } }
+.cadre .valeur code { font-size: var(--t-fort); font-family: ui-monospace, Consolas, monospace; }
+
+/* Historique : liste des jeux, versions du jeu choisi */
+.histo { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 420px; }
+.histo .liste { border-right: 1px solid var(--bord); padding: var(--e3); }
+.jeux { list-style: none; margin: var(--e2) 0 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.jeux button { width: 100%; border: 0; background: none; font-weight: 400; text-align: left; display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--e2); padding: var(--e2); min-height: 44px; }
+.jeux button:hover { background: var(--survol); }
+.jeux button[aria-current] { background: var(--accent-doux); box-shadow: inset 3px 0 0 var(--accent); }
+.jeux .sys { justify-self: start; align-self: start; margin-top: 1px; }
+.jeux .cle { display: block; font-size: var(--t-legende); color: var(--doux); overflow-wrap: anywhere; }
+#versions { padding: var(--e4); min-width: 0; }
+#versions h3 { font-size: var(--t-sous-titre); line-height: 28px; }
+table { border-collapse: collapse; width: 100%; margin-top: var(--e3); }
+th { font-size: var(--t-legende); color: var(--doux); font-weight: 600; text-align: left; padding: var(--e2); border-bottom: 1px solid var(--bord); }
+td { padding: var(--e2); border-bottom: 1px solid var(--bord); height: 48px; white-space: nowrap; }
+td:last-child, th:last-child { text-align: right; }
+tr.actuelle td { background: var(--ok-fond); }
+
+/* Vérifications */
+.verifs { list-style: none; margin: 0; padding: 0; }
+.verifs li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: var(--e3); align-items: start; padding: var(--e3) var(--e4); white-space: pre-line; overflow-wrap: anywhere; }
+.verifs li + li { border-top: 1px solid var(--bord); }
+.verifs .icone { width: 20px; height: 20px; border-radius: 50%; font-size: var(--t-legende); font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+.verifs .afaire .icone { color: var(--alerte); background: var(--alerte-fond); }
+.verifs .bon .icone { color: var(--ok); background: var(--ok-fond); }
+details.bons > summary { padding: var(--e3) var(--e4); font-weight: 600; border-top: 1px solid var(--bord); }
+#listeVerifs:empty + details.bons > summary { border-top: 0; }
+
+/* Carte SD : étapes numérotées */
+ol.etapes-carte { margin: 0; padding: var(--e4) var(--e4) var(--e4) calc(var(--e4) + 20px); display: grid; gap: var(--e4); }
+ol.etapes-carte li::marker { font-weight: 600; color: var(--accent); }
+ol.etapes-carte li > b { display: block; margin-bottom: var(--e1); }
+.ligne { display: flex; gap: var(--e2); align-items: end; flex-wrap: wrap; margin-top: var(--e2); }
+.ligne > .champ { flex: 1 1 260px; margin: 0; }
+#carteEtat { margin: var(--e2) 0 0; padding-left: 20px; }
+#carteEtat:empty { display: none; }
+#carteEtat li { white-space: pre-line; overflow-wrap: anywhere; }
+#carteEtat li.erreur { color: var(--erreur); }
+details.sans-lecteur > summary { padding: var(--e3) var(--e4); font-weight: 600; border-top: 1px solid var(--bord); }
+details.sans-lecteur > div { padding: 0 var(--e4) var(--e4); display: grid; gap: var(--e2); justify-items: start; }
+
+/* ROM hacks */
+.ajout-hack { display: grid; grid-template-columns: minmax(0, 1fr) 160px auto; gap: var(--e3); align-items: end; padding: var(--e4); }
+.fichier { display: flex; gap: var(--e2); align-items: center; min-height: 32px; position: relative; cursor: pointer; }
+.fichier input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.fichier:focus-within .bouton { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hack { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--e3); align-items: center; padding: var(--e2) var(--e4); min-height: 48px; border-top: 1px solid var(--bord); }
+#hackEtat:not(:empty), #listeHacks > p { padding: 0 var(--e4) var(--e4); }
+
+.groupe.danger { border-color: var(--erreur); }
+
+/* Barre d'enregistrement : dans la colonne, seulement sur les pages qui ont des réglages à enregistrer */
+.barre { position: fixed; bottom: 0; left: 240px; right: 0; background: var(--carte); border-top: 1px solid var(--bord); }
+.barre > div { max-width: calc(1040px + 2 * var(--e6)); padding: var(--e3) var(--e6); display: flex; gap: var(--e3); align-items: center; }
+.barre .legende { flex: 1; }
+body:not([data-barre]) .barre { display: none; }
+
+/* Assistant du premier lancement */
+.etapes { display: none; list-style: none; margin: 0 0 var(--e5); padding: 0; gap: var(--e2); counter-reset: etape; }
+.etapes li { counter-increment: etape; display: flex; align-items: center; gap: var(--e2); flex: 1; color: var(--doux); font-weight: 600; }
+.etapes li::before { content: counter(etape); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--bord-champ); font-size: var(--t-legende); flex: none; }
+.etapes li[aria-current] { color: var(--texte); }
+.etapes li[aria-current]::before { background: var(--accent); border-color: var(--accent); color: var(--accent-texte); }
+.etapes li.faite::before { content: "✓"; color: var(--ok); border-color: var(--ok); }
+.etapes li:not(:last-child)::after { content: ""; flex: 1; height: 1px; background: var(--bord); }
+body.assistant .app, body.fin .app { grid-template-columns: minmax(0, 1fr); }
+body.assistant #menu, body.assistant .normal { display: none !important; }
+body.assistant main, body.fin main { margin: 0 auto; max-width: calc(880px + 2 * var(--e6)); }
+body.assistant .etapes { display: flex; }
+body.assistant .barre { left: 0; }
+body.assistant .barre > div { margin: 0 auto; max-width: calc(880px + 2 * var(--e6)); }
+.seul-assistant { display: none !important; }
+body.assistant .seul-assistant { display: revert !important; }
+body.assistant .barre .seul-assistant { display: inline-flex !important; }
+.espace { flex: 1; }
+
+/* Petits écrans */
+@media (max-width: 1100px) { main { padding: var(--e5) var(--e5) 120px; } .barre > div { padding: var(--e3) var(--e5); } }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  #menu { position: sticky; top: 0; z-index: 2; height: auto; flex-direction: row; overflow-x: auto; padding: var(--e2) var(--e4); border-right: 0; border-bottom: 1px solid var(--bord); background: var(--fond); scrollbar-width: none; }
+  #menu .marque { display: none; }
+  #menu button[data-page] { width: auto; white-space: nowrap; min-height: 44px; }
+  #menu button[aria-current] { box-shadow: inset 0 -3px 0 var(--accent); }
+  #menu .pied { margin: 0; padding: 0; }
+  #menu .pied button { white-space: nowrap; }
+  main { padding: var(--e4) var(--e4) 112px; }
+  h1 { font-size: 24px; line-height: 32px; }
+  .barre { left: 0; }
+  .barre > div { padding: var(--e3) var(--e4); }
+  .barre .legende { display: none; }
+  .barre button.principal { flex: 1; justify-content: center; }
+  .reglage { grid-template-columns: minmax(0, 1fr); }
+  .reglage > :last-child:not(.texte) { justify-self: start; }
+  .reglage:has(> .interrupteur) { grid-template-columns: minmax(0, 1fr) auto; }
+  .emu .tete { grid-template-columns: auto minmax(0, 1fr); }
+  .emu .infos { grid-column: 2; justify-content: flex-start; }
+  .emu .infos .pastille { margin-left: 0; }
+  .emu .actions { grid-column: 2; }
+  .emu .details { padding: 0 var(--e4) var(--e4); }
+  .dossiers { grid-template-columns: 36px minmax(0, 1fr) minmax(0, 1fr); gap: var(--e2); }
+  .choix-serveur, .ajout-hack { grid-template-columns: minmax(0, 1fr); }
+  .verifs li { grid-template-columns: 24px minmax(0, 1fr); }
+  .verifs li > button { grid-column: 2; justify-self: start; }
+  .histo { grid-template-columns: minmax(0, 1fr); }
+  .histo .liste { border-right: 0; border-bottom: 1px solid var(--bord); }
+  .jeux { max-height: 240px; }
+  thead { display: none; }
+  table, tbody, tr, td { display: block; }
+  tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding: var(--e2) 0; border-bottom: 1px solid var(--bord); }
+  td { border: 0; height: auto; padding: 0 var(--e2); }
+  td:nth-child(1) { font-weight: 600; } td:nth-child(n+2):not(:last-child) { font-size: var(--t-legende); color: var(--doux); }
+  td:last-child { grid-column: 2; grid-row: 1 / span 4; align-self: center; }
+  tr.actuelle { background: var(--ok-fond); } tr.actuelle td { background: none; }
+  .etapes li span { display: none; }
+  .etapes li[aria-current] span { display: inline; }
+  button { min-height: 44px; }
+}
 </style>
 </head>
 <body>
-<div class="page">
+<div class="app">
 <nav id="menu" aria-label="{{t "Sections" "Sections"}}">
-  <div class="titre">3dssavesync</div>
-  <button type="button" data-page="emulateurs">{{t "Émulateurs" "Emulators"}}</button>
-  <button type="button" data-page="serveur">{{t "Serveur" "Server"}}</button>
-  <button type="button" data-page="carte">{{t "Carte SD 3DS" "3DS SD card"}}</button>
-  <button type="button" data-page="frontends">{{t "Frontends et installation" "Frontends and install"}}</button>
-  <button type="button" data-page="historique">{{t "Historique" "History"}}</button>
-  <button type="button" data-page="hacks">{{t "ROM hacks" "ROM hacks"}}</button>
+  <div class="marque"><b>3dssavesync</b><span class="legende" id="version"></span></div>
+  <button type="button" data-page="emulateurs"><span>{{t "Émulateurs" "Emulators"}}</span></button>
+  <button type="button" data-page="serveur"><span>{{t "Serveur" "Server"}}</span></button>
+  <button type="button" data-page="carte"><span>{{t "Carte SD 3DS" "3DS SD card"}}</span></button>
+  <button type="button" data-page="frontends"><span>{{t "Frontends et installation" "Frontends and install"}}</span></button>
+  <button type="button" data-page="historique"><span>{{t "Historique" "History"}}</span></button>
+  <button type="button" data-page="hacks"><span>{{t "ROM hacks" "ROM hacks"}}</span></button>
+  <button type="button" data-page="verifs"><span>{{t "Vérifications" "Checks"}}</span></button>
+  <div class="pied"><button type="button" id="terminer">{{t "Fermer les réglages" "Close settings"}}</button></div>
 </nav>
 <main>
-  <h1>{{t "3dssavesync - Réglages" "3dssavesync - Settings"}}</h1>
-  <p class="sous">{{t "Synchronise les sauvegardes DS, GB, GBA et 3DS entre la 3DS et ce PC. Rien n'est écrit avant le bouton « Enregistrer » ; chaque fichier modifié est copié avant." "Syncs DS, GB, GBA and 3DS saves between the 3DS and this PC. Nothing is written before the \"Save\" button; every changed file is copied first."}}</p>
+  <ol class="etapes" id="etapes" aria-label="{{t "Étapes de l'installation" "Setup steps"}}">
+    <li><span>{{t "Serveur" "Server"}}</span></li>
+    <li><span>{{t "Émulateurs et frontends" "Emulators and frontends"}}</span></li>
+    <li><span>{{t "Carte SD de la 3DS" "3DS SD card"}}</span></li>
+    <li><span>{{t "Tout est prêt" "Everything is ready"}}</span></li>
+  </ol>
+  <p id="progression" class="sr" aria-live="polite"></p>
 
-  <div class="bandeau">
-    <div class="case"><span>{{t "Serveur" "Server"}}</span><b id="etatServeur">…</b></div>
-    <div class="case"><span>{{t "Émulateurs prêts" "Emulators ready"}}</span><b id="etatEmus">…</b></div>
-    <div class="case"><span>{{t "Jeux sur le serveur" "Games on the server"}}</span><b id="etatJeux">…</b></div>
+  <div class="etat normal">
+    <button type="button" data-page="serveur"><span id="etatServeur" class="pastille neutre">…</span>{{t "Serveur" "Server"}}</button>
+    <button type="button" data-page="emulateurs"><span id="etatEmus" class="pastille neutre">…</span>{{t "Émulateurs prêts" "Emulators ready"}}</button>
+    <button type="button" data-page="historique"><span id="etatJeux" class="pastille neutre">…</span>{{t "Jeux sur le serveur" "Games on the server"}}</button>
+    <button type="button" data-page="verifs" id="caseVerifs"><span id="etatVerifs" class="pastille neutre">…</span>{{t "Vérifications" "Checks"}}</button>
   </div>
 
-  <section id="resultat" class="masque" aria-live="polite"></section>
+  <div id="maj" class="message info normal masque" aria-live="polite">
+    <div class="texte"><b id="majTitre"></b> <a id="majPage" target="_blank" rel="noopener">{{t "Nouveautés" "What's new"}}</a>
+      <span class="detail">{{t "3dssavesync télécharge la nouvelle version, la vérifie et l'installe. L'ancienne version reste sur le disque, au cas où." "3dssavesync downloads the new version, checks it and installs it. The old version stays on disk, just in case."}}</span>
+      <span id="majEtat" class="statut" role="status"></span></div>
+    <button type="button" class="principal" id="majBouton">{{t "Mettre à jour" "Update"}}</button>
+  </div>
 
-  <section id="sectionOuvrir" class="masque" data-page="emulateurs">
-    <h2>{{t "Ouvrir un émulateur" "Open an emulator"}}</h2>
-    <p class="aide">{{t "Sans jeu : ses jeux sont synchronisés avant, puis envoyés à sa fermeture." "Without a game: its games are synced first, then uploaded when it closes."}}</p>
-    <p class="ligne" id="ouvrir"></p>
-    <p id="ouvert" role="status"></p>
+  <div id="resultat" class="groupe resultat masque" aria-live="polite"></div>
+
+  <section data-page="emulateurs">
+    <div class="entete"><h1 class="normal">{{t "Émulateurs" "Emulators"}}</h1><h1 class="seul-assistant">{{t "Émulateurs et frontends" "Emulators and frontends"}}</h1>
+      <p>{{t "Sauvegardes : laissez vide ou gardez la valeur proposée pour suivre le réglage de l'émulateur. ROM : sert seulement aux raccourcis, qui synchronisent tous les jeux." "Saves: leave empty or keep the suggested value to follow the emulator's setting. ROMs: only used by shortcuts, which sync all games."}}</p></div>
+    <div class="groupe">
+      <div id="emulateurs"></div>
+      <div id="videEmus" class="vide masque"><h3 id="videTitre"></h3><p class="doux" id="videTexte"></p></div>
+      <p id="ouvert" role="status"></p>
+      <details id="autresEmus" class="repli masque">
+        <summary>{{t "Autres émulateurs trouvés sur ce PC" "Other emulators found on this PC"}} (<span id="nbAutres"></span>)</summary>
+        <div id="emulateursAutres"></div>
+      </details>
+      <details id="ajoutEmu" class="repli">
+        <summary>{{t "Ajouter un émulateur à la main" "Add an emulator by hand"}}</summary>
+        <div class="formulaire">
+          <div><label class="titre" for="profil">{{t "Profil" "Profile"}}</label><select id="profil"></select></div>
+          <div id="nomPerso" class="masque"><label class="titre" for="nom">{{t "Nom (minuscules, chiffres, tirets)" "Name (lowercase, digits, dashes)"}}</label><input type="text" id="nom" placeholder="bgb"></div>
+          <div><label class="titre" for="exe">{{t "Exécutable" "Executable"}}</label><input type="text" id="exe"></div>
+          <button type="button" id="ajouter">{{t "Ajouter" "Add"}}</button>
+        </div>
+      </details>
+    </div>
   </section>
 
   <section data-page="serveur">
-    <h2>{{t "Serveur" "Server"}}</h2>
-    <label class="choix"><input type="radio" name="type" value="perso"> <span><b>{{t "Serveur personnel" "Personal server"}}</b> — {{t "Docker, adresse https://… : synchronisation partout." "Docker, https://… address: sync anywhere."}}</span></label>
-    <label class="choix"><input type="radio" name="type" value="local"> <span><b>{{t "Serveur local sur ce PC" "Local server on this PC"}}</b> — {{t "rien d'autre à installer ; synchronisation à la maison, PC allumé." "nothing else to install; sync at home, PC on."}}</span></label>
-    <div id="perso">
-      <label for="url">{{t "Adresse du serveur" "Server address"}}</label>
-      <input type="text" id="url" placeholder="https://saves.example.com" autocomplete="off">
-      <label for="jeton">{{t "Jeton" "Token"}}</label>
-      <input type="password" id="jeton" autocomplete="off">
-      <p class="ligne" style="margin-top:10px"><button type="button" id="tester">{{t "Tester la connexion" "Test the connection"}}</button> <span id="test" role="status"></span></p>
-    </div>
-    <div id="local" class="masque">
-      <label for="port">Port</label>
-      <input type="number" id="port" min="1" max="65535">
-      <p class="aide">{{t "Le jeton est créé ou gardé. Après l'enregistrement, cette page affiche l'adresse et le jeton pour la 3DS, et peut les écrire sur sa carte SD." "The token is created or kept. After saving, this page shows the address and token for the 3DS, and can write them to its SD card."}}</p>
-      <p class="aide alerte">{{t "N'ouvrez jamais ce port sur Internet (box, routeur) : il n'est pas chiffré." "Never open this port on the Internet (router): it is not encrypted."}}</p>
+    <div class="entete"><h1 class="normal">{{t "Serveur" "Server"}}</h1><h1 class="seul-assistant">{{t "Installer 3dssavesync" "Set up 3dssavesync"}}</h1>
+      <p class="seul-assistant">{{t "Synchronise vos sauvegardes DS, GB, GBA et 3DS entre la 3DS et ce PC. Choisissez d'abord où elles sont gardées." "Syncs your DS, GB, GBA and 3DS saves between the 3DS and this PC. First, choose where they're kept."}}</p></div>
+    <div class="groupe">
+      <div class="choix-serveur" role="radiogroup" aria-label="{{t "Type de serveur" "Server type"}}">
+        <label><input type="radio" name="type" value="perso"><span><b>{{t "Serveur personnel" "Personal server"}}</b><span class="legende">{{t "Pour synchroniser de n'importe où (Docker, adresse https://…)." "Sync from anywhere (Docker, https://… address)."}}</span></span></label>
+        <label><input type="radio" name="type" value="local"><span><b>{{t "Serveur local sur ce PC" "Local server on this PC"}}</b><span class="legende">{{t "Rien à installer, synchronisation à la maison quand le PC est allumé." "Nothing to install, syncs at home while the PC is on."}}</span></span></label>
+      </div>
+      <div id="perso" class="zone">
+        <div class="champ"><label class="titre" for="url">{{t "Adresse du serveur" "Server address"}}</label><input type="text" id="url" placeholder="https://saves.example.com" autocomplete="off"></div>
+        <div class="champ"><label class="titre" for="jeton">{{t "Jeton" "Token"}}</label><input type="password" id="jeton" autocomplete="off">
+          <p class="legende masque" id="jetonAide">{{t "Laissez vide pour garder le jeton enregistré." "Leave empty to keep the saved token."}}</p></div>
+        <div class="ligne-test"><button type="button" id="tester">{{t "Tester la connexion" "Test the connection"}}</button><span id="test" role="status"></span></div>
+      </div>
+      <div id="local" class="zone masque">
+        <div class="champ"><label class="titre" for="port">Port</label><input type="number" id="port" class="court" min="1" max="65535"></div>
+        <p class="legende" style="margin-top:var(--e2)">{{t "Après l'enregistrement, cette page affiche l'adresse et le jeton à entrer sur la 3DS, et peut les écrire sur sa carte SD." "Once you save, this page shows the address and token for the 3DS, and can write them to its SD card."}}</p>
+        <p class="message alerte compact">{{t "N'ouvrez jamais ce port sur Internet depuis votre box : la connexion n'est pas chiffrée." "Never open this port to the Internet on your router: the connection isn't encrypted."}}</p>
+      </div>
     </div>
   </section>
 
   <section id="sectionCarte" class="masque" data-page="carte">
-    <h2>{{t "Carte SD de la 3DS" "3DS SD card"}}</h2>
-    <p class="aide">{{t "Mettez la carte SD de la 3DS dans ce PC. Le fichier 3ds/3dssavesync/config.ini reçoit l'adresse et le jeton (l'ancien est copié avant, le reste de la carte n'est pas touché) : la 3DS se connecte sans rien taper." "Put the 3DS SD card in this PC. The file 3ds/3dssavesync/config.ini gets the address and token (the old one is copied first, the rest of the card is not touched): the 3DS connects without typing anything."}}</p>
-    <p class="aide">{{t "Adresse écrite :" "Address written:"}} <code id="adresseCarte"></code></p>
-    <div class="ligne">
-      <div><label for="carte">{{t "Carte SD trouvée" "SD card found"}}</label><select id="carte"></select></div>
-      <button type="button" id="chercher">{{t "Chercher à nouveau" "Search again"}}</button>
+    <div class="entete"><h1>{{t "Carte SD de la 3DS" "3DS SD card"}}</h1>
+      <p>{{t "Mettez la carte SD de la 3DS dans ce PC. 3dssavesync y écrit l'adresse et le jeton, et la 3DS se connectera toute seule. Le reste de la carte n'est pas modifié, et l'ancien config.ini est gardé en copie." "Put the 3DS SD card in this PC. 3dssavesync writes the address and token to it, so the 3DS connects by itself. Nothing else on the card changes, and the old config.ini is kept as a backup."}}</p></div>
+    <div class="groupe">
+      <ol class="etapes-carte">
+        <li><b>{{t "Choisissez la carte SD" "Choose the SD card"}}</b>
+          <div class="ligne"><div class="champ"><label class="titre" for="carte">{{t "Carte SD trouvée" "SD card found"}}</label><select id="carte"></select></div><button type="button" id="chercher">{{t "Chercher à nouveau" "Search again"}}</button></div>
+          <div class="champ" style="margin-top:var(--e3)"><label class="titre" for="carteChemin">{{t "Ou indiquez le dossier de la carte SD" "Or enter the SD card folder"}}</label><input type="text" id="carteChemin" autocomplete="off"></div></li>
+        <li><b>{{t "Préparez la carte" "Prepare the card"}}</b>
+          <p class="legende">{{t "Adresse pour la 3DS :" "Address for the 3DS:"}} <code id="adresseCarte"></code></p>
+          <div class="ligne"><button type="button" class="principal" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button></div>
+          <ul id="carteEtat" role="status"></ul></li>
+        <li><b>{{t "Installez l'application 3DS" "Install the 3DS app"}}</b>
+          <p>{{t "La carte reçoit aussi l'application 3DS, à la même version que ce programme. Pour l'installer, ouvrez FBI sur la 3DS, puis SD > cias > 3dssavesync.cia > « Install and delete CIA »." "The card also gets the 3DS app, at the same version as this program. To install it, open FBI on the 3DS, then SD > cias > 3dssavesync.cia > \"Install and delete CIA\"."}}</p></li>
+      </ol>
+      <details class="sans-lecteur">
+        <summary>{{t "Pas de lecteur de carte SD ?" "No SD card reader?"}}</summary>
+        <div>
+          <p>{{t "Passez cette étape. Récupérez 3dssavesync.cia sur la" "Skip this step. Get 3dssavesync.cia from the"}} <a id="lienCia" target="_blank" rel="noopener">{{t "page de cette version" "release page"}}</a>{{t ", copiez-le sur la 3DS par FTP et installez-le avec FBI. Ensuite, entrez l'adresse et le jeton dans 3dssavesync (touche SELECT), ou copiez config.ini par FTP :" ", copy it to the 3DS by FTP and install it with FBI. Then enter the address and token in 3dssavesync (SELECT button), or copy config.ini by FTP:"}}</p>
+          <a class="bouton" href="config.ini" download>{{t "Télécharger config.ini" "Download config.ini"}}</a>
+          <p class="legende">{{t "Copiez-le par FTP dans sdmc:/3ds/3dssavesync/. Attention : ce fichier remet les dossiers de la 3DS à leurs valeurs par défaut, alors que la préparation de la carte SD les garde." "Copy it by FTP to sdmc:/3ds/3dssavesync/. Note: this file resets the 3DS folders to their defaults, while preparing the SD card keeps them."}}</p>
+        </div>
+      </details>
     </div>
-    <label for="carteChemin">{{t "Ou dossier de la carte SD (facultatif)" "Or SD card folder (optional)"}}</label>
-    <input type="text" id="carteChemin" autocomplete="off">
-    <p class="ligne" style="margin-top:10px"><button type="button" id="preparer">{{t "Préparer la carte SD de la 3DS" "Prepare the 3DS SD card"}}</button> <span id="carteEtat" role="status"></span></p>
-    <p class="aide"><a href="config.ini" download>{{t "Télécharger config.ini" "Download config.ini"}}</a> : {{t "pour le copier par FTP dans sdmc:/3ds/3dssavesync/. Ce fichier remet les dossiers de la 3DS à leur valeur par défaut ; avec la carte SD, ils sont gardés." "to copy it by FTP to sdmc:/3ds/3dssavesync/. This file resets the 3DS folders to their default value; with the SD card, they are kept."}}</p>
   </section>
 
-  <section id="sectionProgramme" data-page="frontends">
-    <h2>{{t "Programme" "Program"}}</h2>
-    <label class="choix"><input type="checkbox" id="installer"> <span>{{t "Copier le programme dans" "Copy the program to"}} <code id="installe"></code></span></label>
-    <p class="aide">{{t "Les frontends et les raccourcis pointent vers cet emplacement fixe." "Frontends and shortcuts point to this fixed location."}}</p>
-  </section>
-
-  <section data-page="emulateurs">
-    <h2>{{t "Émulateurs" "Emulators"}}</h2>
-    <p class="aide">{{t "Sauvegardes : vide ou valeur proposée = le réglage de l'émulateur. ROM : seulement pour les raccourcis (synchroniser tous les jeux)." "Saves: empty or suggested value = the emulator setting. ROMs: only for shortcuts (sync all games)."}}</p>
-    <div id="emulateurs"></div>
-    <details style="margin-top:12px">
-      <summary>{{t "Ajouter un émulateur à la main" "Add an emulator by hand"}}</summary>
-      <div class="ligne" style="margin-top:8px">
-        <div><label for="profil">{{t "Profil" "Profile"}}</label><select id="profil"></select></div>
-        <div id="nomPerso" class="masque"><label for="nom">{{t "Nom (minuscules, chiffres, tirets)" "Name (lowercase, digits, dashes)"}}</label><input type="text" id="nom" placeholder="bgb"></div>
-        <div><label for="exe">{{t "Exécutable" "Executable"}}</label><input type="text" id="exe"></div>
-        <button type="button" id="ajouter">{{t "Ajouter" "Add"}}</button>
-      </div>
-    </details>
+  <section id="carteImpossible" class="masque" data-page="carte">
+    <div class="entete"><h1>{{t "Carte SD de la 3DS" "3DS SD card"}}</h1></div>
+    <p class="message alerte">{{t "Impossible de préparer la carte SD pour l'instant : l'adresse du PC sur le réseau est introuvable. Vérifiez que le PC est connecté à la box et rouvrez les réglages." "Can't prepare the SD card yet: the PC's network address wasn't found. Check that the PC is connected to the router and open the settings again."}}</p>
   </section>
 
   <section data-page="frontends">
-    <h2>{{t "Frontends et raccourcis" "Frontends and shortcuts"}}</h2>
-    <div id="lb" class="masque">
-      <label for="launchbox">{{t "Dossier de LaunchBox (vide = pas de LaunchBox)" "LaunchBox folder (empty = no LaunchBox)"}}</label>
-      <input type="text" id="launchbox">
-      <p class="aide">{{t "Un nouvel émulateur « … (3dssavesync) » devient celui par défaut ; l'émulateur d'origine reste intact. LaunchBox doit être fermé." "A new \"… (3dssavesync)\" emulator becomes the default one; the original emulator stays intact. LaunchBox must be closed."}}</p>
+    <div class="entete normal"><h1>{{t "Frontends et installation" "Frontends and install"}}</h1></div>
+    <div class="groupe" id="sectionProgramme">
+      <h2>{{t "Programme" "Program"}}</h2>
+      <div class="reglage">
+        <div class="texte"><b>{{t "Copier le programme dans" "Copy the program to"}}</b><span class="legende"><code id="installe"></code><br>{{t "Les frontends et les raccourcis lanceront le programme depuis cet emplacement." "Frontends and shortcuts start the program from this location."}}</span></div>
+        <input type="checkbox" class="interrupteur" id="installer" aria-label="{{t "Copier le programme" "Copy the program"}}">
+      </div>
     </div>
-    <label class="choix masque" id="esdeLigne"><input type="checkbox" id="esde"> <span>{{t "Configurer ES-DE" "Set up ES-DE"}} (<code id="esdeChemin"></code>)</span></label>
-    <label class="choix"><input type="checkbox" id="raccourcis"> <span>{{t "Créer un raccourci par émulateur, et « 3dssavesync réglages »" "Create one shortcut per emulator, and \"3dssavesync settings\""}}</span></label>
-  </section>
-
-  <section id="sectionDesinstaller" class="masque" data-page="frontends">
-    <h2>{{t "Désinstaller" "Uninstall"}}</h2>
-    <p class="aide">{{t "LaunchBox et ES-DE retrouvent leur émulateur d'origine par défaut ; les raccourcis et le programme vont à la Corbeille. Vos sauvegardes, les réglages et les copies de sécurité restent. Fermez d'abord LaunchBox et ES-DE." "LaunchBox and ES-DE get their original default emulator back; the shortcuts and the program go to the Recycle Bin. Your saves, the settings and the backup copies stay. Close LaunchBox and ES-DE first."}}</p>
-    <button type="button" id="desinstaller">{{t "Désinstaller 3dssavesync" "Uninstall 3dssavesync"}}</button>
+    <div class="groupe">
+      <h2>{{t "Frontends" "Frontends"}}</h2>
+      <div class="reglage large masque" id="lb">
+        <div class="champ"><label class="titre" for="launchbox">{{t "Dossier de LaunchBox (laissez vide sans LaunchBox)" "LaunchBox folder (leave empty if you don't use it)"}}</label><input type="text" id="launchbox">
+          <p class="legende">{{t "3dssavesync ajoute un émulateur « … (3dssavesync) » et le met par défaut. Votre émulateur d'origine reste en place. Fermez LaunchBox avant d'enregistrer." "3dssavesync adds a \"… (3dssavesync)\" emulator and makes it the default. Your original emulator stays as it is. Close LaunchBox before saving."}}</p>
+          <p class="message alerte compact normal masque" id="lbVerif"></p></div>
+      </div>
+      <div class="reglage masque" id="esdeLigne">
+        <div class="texte"><b>{{t "Configurer ES-DE" "Set up ES-DE"}}</b><code class="legende" id="esdeChemin"></code></div>
+        <input type="checkbox" class="interrupteur" id="esde" aria-label="{{t "Configurer ES-DE" "Set up ES-DE"}}">
+      </div>
+      <div class="reglage normal">
+        <div class="texte"><b>{{t "Réparer les frontends" "Repair frontends"}}</b><span class="legende">{{t "Remet 3dssavesync par défaut dans LaunchBox et ES-DE. Fermez-les d'abord." "Makes 3dssavesync the default again in LaunchBox and ES-DE. Close them first."}}</span></div>
+        <button type="button" id="reparer">{{t "Réparer les frontends" "Repair frontends"}}</button>
+      </div>
+    </div>
+    <div class="groupe">
+      <h2>{{t "Ce PC" "This PC"}}</h2>
+      <div class="reglage">
+        <div class="texte"><b>{{t "Créer un raccourci par émulateur, et le raccourci « 3dssavesync réglages »" "Create a shortcut for each emulator, plus the \"3dssavesync settings\" shortcut"}}</b></div>
+        <input type="checkbox" class="interrupteur" id="raccourcis" aria-label="{{t "Créer les raccourcis" "Create the shortcuts"}}">
+      </div>
+      <div class="reglage masque" id="iconeLigne">
+        <div class="texte"><b>{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}</b><span class="legende" id="iconeAide">{{t "Un clic droit sur l'icône permet d'ouvrir les réglages, d'envoyer les sauvegardes en attente et de voir l'état du serveur local. Elle démarre avec votre session." "Right-click the icon to open the settings, upload pending saves or see the local server status. It starts when you sign in."}}</span></div>
+        <input type="checkbox" class="interrupteur" id="icone" aria-label="{{t "Afficher l'icône près de l'horloge" "Show the icon near the clock"}}">
+      </div>
+      <div class="reglage">
+        <div class="texte"><b>{{t "Rechercher chaque jour les mises à jour sur GitHub" "Check GitHub for updates once a day"}}</b></div>
+        <input type="checkbox" class="interrupteur" id="majAuto" aria-label="{{t "Rechercher les mises à jour" "Check for updates"}}">
+      </div>
+    </div>
+    <div class="groupe danger normal masque" id="sectionDesinstaller">
+      <div class="reglage">
+        <div class="texte"><b>{{t "Désinstaller" "Uninstall"}}</b><span class="legende">{{t "Fermez d'abord LaunchBox et ES-DE. Ils retrouveront leur émulateur d'origine, et les raccourcis et le programme iront à la Corbeille. Vos sauvegardes, vos réglages et vos copies de sécurité restent en place." "Close LaunchBox and ES-DE first. They get their original emulator back, and the shortcuts and the program go to the Recycle Bin. Your saves, settings and backups stay where they are."}}</span></div>
+        <button type="button" class="danger" id="desinstaller">{{t "Désinstaller 3dssavesync" "Uninstall 3dssavesync"}}</button>
+      </div>
+    </div>
   </section>
 
   <section id="sectionHistorique" class="masque" data-page="historique">
-      <h2>{{t "Historique : restaurer une ancienne version" "History: restore an old version"}}</h2>
-      <p class="aide">{{t "Le serveur garde chaque version reçue. Restaurer une version en fait la version actuelle du serveur ; chaque appareil la reçoit ensuite à sa prochaine synchronisation, après une copie de sécurité. Rien n'est écrit sur ce PC maintenant." "The server keeps every version it receives. Restoring a version makes it the current server version; each device then gets it at its next sync, after a backup copy. Nothing is written on this PC now."}}</p>
-      <p id="histoEtat" role="status"></p>
-      <div class="histo">
-        <div>
-          <label for="chercheJeu">{{t "Chercher un jeu" "Search a game"}}</label>
-          <input type="text" id="chercheJeu" autocomplete="off" placeholder="Pokemon">
-          <div id="listeJeux"></div>
-        </div>
-        <div id="versions" class="tableau"></div>
+    <div class="entete"><h1>{{t "Historique" "History"}}</h1>
+      <p>{{t "Le serveur garde toutes les versions de vos sauvegardes. Restaurer une version change seulement le serveur : chaque appareil la recevra à sa prochaine synchronisation, après une copie de sécurité." "The server keeps every version of your saves. Restoring one only changes the server: each device gets it at its next sync, after a backup."}}</p>
+      <p id="histoEtat" class="statut" role="status"></p></div>
+    <div class="groupe histo">
+      <div class="liste">
+        <label class="titre" for="chercheJeu">{{t "Chercher un jeu" "Search for a game"}}</label>
+        <input type="text" id="chercheJeu" autocomplete="off" placeholder="Pokemon">
+        <ul id="listeJeux" class="jeux"></ul>
       </div>
+      <div id="versions"></div>
+    </div>
   </section>
 
   <section id="sectionHacks" class="masque" data-page="hacks">
-      <h2>{{t "ROM hacks : une sauvegarde à part" "ROM hacks: a separate save"}}</h2>
-      <p class="aide">{{t "Un ROM hack garde souvent le code du jeu d'origine : 3dssavesync le prendrait pour ce jeu, et lui donnerait sa partie. Choisissez ici la ROM du hack : elle reçoit sa propre sauvegarde. Pour la 3DS, préparez ensuite de nouveau sa carte SD." "A ROM hack often keeps the code of the original game: 3dssavesync would take it for that game, and give it its save. Choose the hack ROM here: it gets its own save. For the 3DS, then prepare its SD card again."}}</p>
-      <div class="ligne">
-        <div><label for="hackRom">{{t "ROM du hack" "Hack ROM"}}</label><input type="file" id="hackRom" accept=".gba,.gb,.gbc,.nds,.zip"></div>
-        <div><label for="hackSysteme">{{t "Console" "Console"}}</label><select id="hackSysteme"><option value="GBA">GBA</option><option value="GB">GB / GBC</option><option value="DS">DS</option></select></div>
+    <div class="entete"><h1>{{t "ROM hacks" "ROM hacks"}}</h1>
+      <p>{{t "Un ROM hack garde souvent le code du jeu d'origine, et 3dssavesync risque de les confondre. Ajoutez ici la ROM du hack pour lui donner sa propre sauvegarde. Pour la 3DS, préparez ensuite de nouveau la carte SD." "A ROM hack often keeps the original game's code, so 3dssavesync could mix them up. Add the hack ROM here to give it its own save. For the 3DS, prepare the SD card again afterwards."}}</p></div>
+    <div class="groupe">
+      <div class="ajout-hack">
+        <div><span class="titre">{{t "ROM du hack" "Hack ROM"}}</span>
+          <label class="fichier"><input type="file" id="hackRom" accept=".gba,.gb,.gbc,.nds,.zip"><span class="bouton">{{t "Choisir la ROM…" "Choose the ROM…"}}</span><span class="legende" id="hackNom">{{t "Aucun fichier choisi" "No file chosen"}}</span></label></div>
+        <div><label class="titre" for="hackSysteme">{{t "Console" "Console"}}</label><select id="hackSysteme"><option value="GBA">GBA</option><option value="GB">GB / GBC</option><option value="DS">DS</option></select></div>
         <button type="button" id="hackAjouter">{{t "Ajouter" "Add"}}</button>
       </div>
-      <p id="hackEtat" role="status"></p>
+      <p id="hackEtat" class="statut" role="status"></p>
       <div id="listeHacks"></div>
+    </div>
+  </section>
+
+  <section id="sectionVerifs" class="masque" data-page="verifs">
+    <div class="entete"><h1 class="normal">{{t "Vérifications" "Checks"}}</h1><h1 class="seul-assistant">{{t "Tout est prêt ?" "Is everything ready?"}}</h1>
+      <p>{{t "Chaque ligne affiche ✓ si tout va bien, ou ! avec ce qu'il reste à faire." "Each line shows ✓ when it's fine, or ! with what's left to do."}}</p>
+      <p id="verifsEtat" class="statut" role="status"></p></div>
+    <div class="groupe">
+      <ul id="listeVerifs" class="verifs"></ul>
+      <details id="bons" class="bons masque">
+        <summary id="nbBons"></summary>
+        <ul id="listeBons" class="verifs"></ul>
+      </details>
+    </div>
+    <p><button type="button" class="discret" id="reverifier">{{t "Vérifier de nouveau" "Check again"}}</button></p>
   </section>
 </main>
 </div>
 
 <div class="barre"><div>
-  <button type="button" class="principal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
-  <button type="button" id="reparer">{{t "Réparer les frontends" "Repair frontends"}}</button>
-  <button type="button" id="terminer">{{t "Terminer" "Finish"}}</button>
+  <button type="button" class="seul-assistant" id="precedent">{{t "Précédent" "Previous"}}</button>
+  <span class="legende normal">{{t "Vos réglages sont appliqués quand vous cliquez sur « Enregistrer ». 3dssavesync garde une copie de chaque fichier qu'il modifie." "Your settings apply when you click \"Save\". 3dssavesync keeps a copy of every file it changes."}}</span>
+  <span class="espace seul-assistant"></span>
+  <button type="button" class="principal normal" id="enregistrer">{{t "Enregistrer" "Save"}}</button>
+  <button type="button" class="principal seul-assistant" id="suivant">{{t "Suivant" "Next"}}</button>
 </div></div>
 
 <script>
 const T = {
   rom: {{t "à côté de la ROM" "next to the ROM"}},
-  roms: {{t "dossier des ROM (facultatif)" "ROM folder (optional)"}},
-  inchange: {{t "inchangé" "unchanged"}},
+  roms: {{t "dossier des ROM" "ROM folder"}},
+  sdmc: {{t "dossier sdmc (obligatoire)" "sdmc folder (required)"}},
+  colSav: {{t "Sauvegardes" "Saves"}},
+  colSdmc: {{t "Sauvegardes (sdmc)" "Saves (sdmc)"}},
+  colRom: {{t "ROM (facultatif)" "ROMs (optional)"}},
   attente: {{t "Patientez…" "Please wait…"}},
   fini: {{t "Terminé." "Done."}},
-  ferme: {{t "Fermez cet onglet." "Close this tab."}},
-  arrete: {{t "Le programme 3dssavesync s'est arrêté. Relancez-le." "The 3dssavesync program has stopped. Start it again."}},
-  erreur: {{t "Erreur : " "Error: "}},
+  ferme: {{t "Vous pouvez fermer cet onglet." "You can close this tab."}},
+  arrete: {{t "3dssavesync s'est arrêté. Relancez-le pour continuer." "3dssavesync has stopped. Start it again to continue."}},
+  erreur: {{t "Erreur : " "Error: "}},
   coche: {{t "Utiliser" "Use"}},
+  configure: {{t "configuré" "set up"}},
+  ouvrir: {{t "Ouvrir" "Open"}},
+  ouvrirAide: {{t "Ouvre l'émulateur sans jeu. Vos sauvegardes sont synchronisées avant, et envoyées quand vous le fermez." "Opens the emulator without a game. Your saves are synced first and uploaded when you close it."}},
   ligne: {{t "Ligne de commande" "Command line"}},
-  reperes: {{t "{rom} = la ROM ; {sauvegardes} = le dossier des sauvegardes du système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} = the ROM; {sauvegardes} = the system save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
+  reperes: {{t "{rom} est remplacé par la ROM, {sauvegardes} par le dossier des sauvegardes du système. Exemple : --battery-dir={sauvegardes} -f {rom}" "{rom} becomes the ROM and {sauvegardes} the system's save folder. Example: --battery-dir={sauvegardes} -f {rom}"}},
   extension: {{t "Extension de la sauvegarde" "Save extension"}},
   processus: {{t "Nom du processus (facultatif)" "Process name (optional)"}},
-  processusAide: {{t "défaut : nom de l'exécutable" "default: executable name"}},
-  interne: {{t "ROM en .zip : la sauvegarde porte le nom du fichier dans le zip (sinon celui du zip)" ".zip ROM: the save is named after the file inside the zip (otherwise after the zip)"}},
+  processusAide: {{t "par défaut, le nom de l'exécutable" "defaults to the executable name"}},
+  interne: {{t "ROM en .zip : nommer la sauvegarde d'après le fichier contenu dans le zip" ".zip ROM: name the save after the file inside the zip"}},
   obligatoire: {{t "dossier des sauvegardes (obligatoire)" "save folder (required)"}},
-  enPlus: {{t "Arguments en plus (avant la ROM)" "Extra arguments (before the ROM)"}},
-  commande: {{t "Commande : " "Command: "}},
+  enPlus: {{t "Arguments supplémentaires (avant la ROM)" "Extra arguments (before the ROM)"}},
+  commande: {{t "Commande : " "Command: "}},
   manuel: {{t "ajouté à la main" "added by hand"}},
   perso: {{t "Autre émulateur (personnalisé)" "Other emulator (custom)"}},
+  aucunTrouve: {{t "Aucun émulateur trouvé sur ce PC" "No emulator found on this PC"}},
+  aucunTrouveAide: {{t "Ajoutez votre émulateur à la main ci-dessous : choisissez son profil et son exécutable." "Add your emulator by hand below: choose its profile and its executable."}},
+  aucunChoisi: {{t "Aucun émulateur choisi" "No emulator selected"}},
+  aucunChoisiAide: {{t "Activez ceux à synchroniser dans « Autres émulateurs trouvés sur ce PC »." "Turn on the ones to sync in \"Other emulators found on this PC\"."}},
   choisirJeu: {{t "Choisissez un jeu" "Choose a game"}},
+  nomInconnu: {{t "Nom inconnu" "Unknown name"}},
   aucunJeu: {{t "Aucune sauvegarde sur le serveur." "No save on the server."}},
   colonnes: [{{t "Date" "Date"}}, {{t "Appareil" "Device"}}, {{t "Taille" "Size"}}, {{t "Partie" "Play time"}}, ""],
-  sur3DS: {{t "À entrer sur la 3DS (3dssavesync, SELECT), ou à écrire sur sa carte SD plus bas" "To enter on the 3DS (3dssavesync, SELECT), or to write to its SD card below"}},
+  sur3DS: {{t "Entrez-les sur la 3DS (3dssavesync, touche SELECT), ou écrivez-les sur sa carte SD plus bas" "Enter these on the 3DS (3dssavesync, SELECT button), or write them to its SD card below"}},
   adresse: {{t "Serveur" "Server"}},
   jeton: {{t "Jeton" "Token"}},
   copier: {{t "Copier" "Copy"}},
   copie: {{t "Copié." "Copied."}},
-  autres: {{t "Autres adresses, si la 3DS ne se connecte pas" "Other addresses, if the 3DS does not connect"}},
-  secret: {{t "Gardez ce jeton secret. N'ouvrez jamais ce port sur Internet (box, routeur)." "Keep this token private. Never open this port on the Internet (router)."}},
-  introuvable: {{t "Adresse du PC introuvable : vérifiez que le PC est relié à la box." "PC address not found: check that the PC is connected to the router."}},
+  autres: {{t "Si la 3DS ne se connecte pas, essayez ces adresses" "If the 3DS can't connect, try these addresses"}},
+  secret: {{t "Gardez ce jeton pour vous. N'ouvrez jamais ce port sur Internet depuis votre box." "Keep this token private. Never open this port to the Internet on your router."}},
+  introuvable: {{t "Impossible de trouver l'adresse du PC sur le réseau. Vérifiez que le PC est connecté à la box." "Couldn't find the PC's network address. Check that the PC is connected to the router."}},
   aucuneCarte: {{t "Aucune carte SD de 3DS trouvée" "No 3DS SD card found"}},
   actuelle: {{t "Version actuelle" "Current version"}},
   restaurer: {{t "Restaurer cette version" "Restore this version"}},
-  confirmer: {{t "Restaurer la version du %s ?" "Restore the version of %s?"}},
+  confirmer: {{t "Restaurer la version du %s ?" "Restore the version from %s?"}},
   retirer: {{t "Retirer" "Remove"}},
-  confirmerDesinstall: {{t "Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau les jeux sans synchronisation. Vos sauvegardes ne changent pas." "Uninstall 3dssavesync? LaunchBox and ES-DE will start the games without sync again. Your saves do not change."}},
-  desinstalle: {{t "3dssavesync est désinstallé. Fermez cet onglet." "3dssavesync is uninstalled. Close this tab."}},
+  confirmerDesinstall: {{t "Désinstaller 3dssavesync ? LaunchBox et ES-DE lanceront de nouveau vos jeux sans synchronisation. Vos sauvegardes restent en place." "Uninstall 3dssavesync? LaunchBox and ES-DE will start your games without syncing again. Your saves stay where they are."}},
+  desinstalle: {{t "3dssavesync est désinstallé. Vous pouvez fermer cet onglet." "3dssavesync is uninstalled. You can close this tab."}},
   pret: {{t "Prêt" "Ready"}},
   aVerifier: {{t "À vérifier" "To check"}},
   nonUtilise: {{t "Non utilisé" "Not used"}},
-  regler: {{t "Régler" "Settings"}},
+  regler: {{t "Régler" "Configure"}},
   fermer: {{t "Fermer" "Close"}},
   joignable: {{t "Joignable" "Reachable"}},
   injoignable: {{t "Injoignable" "Unreachable"}},
   pasEnregistre: {{t "Pas encore enregistré" "Not saved yet"}},
   sur: {{t "sur" "of"}},
-  retirerHack: {{t "Retirer %s ? Ce hack serait de nouveau vu comme le jeu d'origine : 3dssavesync le lancerait sans synchronisation, ou poserait une question." "Remove %s? This hack would again be seen as the original game: 3dssavesync would start it without sync, or ask a question."}},
+  retirerHack: {{t "Retirer %s ? 3dssavesync le confondra de nouveau avec le jeu d'origine." "Remove %s? 3dssavesync will mix it up with the original game again."}},
   aucunHack: {{t "Aucun ROM hack." "No ROM hack."}},
-  explication: {{t "Cette version devient la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) reçoit ensuite cette version à sa prochaine synchronisation, et fait d'abord une copie de sécurité de sa sauvegarde. Synchronisez d'abord les autres appareils : une partie pas encore envoyée peut sinon remplacer cette version, ou afficher un conflit." "This version becomes the current version on the server. No version is deleted: the current version stays in the history.\n\nEach device (3DS, PC) then gets this version at its next sync, and first makes a backup copy of its save. Sync the other devices first: otherwise a game not yet uploaded can replace this version, or show a conflict."}}
+  aucunFichier: {{t "Aucun fichier choisi" "No file chosen"}},
+  etapes: [{{t "Serveur" "Server"}}, {{t "Émulateurs et frontends" "Emulators and frontends"}}, {{t "Carte SD de la 3DS" "3DS SD card"}}, {{t "Tout est prêt" "Everything is ready"}}],
+  etape: {{t "Étape %d sur 4 : %s" "Step %d of 4: %s"}},
+  suivant: {{t "Suivant" "Next"}},
+  enregistrerSuivant: {{t "Enregistrer et continuer" "Save and continue"}},
+  passer: {{t "Passer" "Skip"}},
+  finAssistant: {{t "Terminer" "Finish"}},
+  toutBon: {{t "Tout est bon" "All good"}},
+  aFaire: {{t "%d à faire" "%d to do"}},
+  unBon: {{t "1 point est bon" "1 check is fine"}},
+  bons: {{t "%d points sont bons" "%d checks are fine"}},
+  majDispo: {{t "Version %s disponible (vous avez la %s)" "Version %s available (you have %s)"}},
+  confirmerMaj: {{t "Mettre à jour vers la version %s ? Les réglages redémarreront ensuite." "Update to version %s? The settings page restarts afterwards."}},
+  version: {{t "Réglages, version %s" "Settings, version %s"}},
+  explication: {{t "Cette version deviendra la version actuelle sur le serveur. Aucune version n'est supprimée : la version actuelle reste dans l'historique.\n\nChaque appareil (3DS, PC) la recevra à sa prochaine synchronisation, après une copie de sécurité de sa sauvegarde. Synchronisez d'abord vos autres appareils. Sinon, une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit." "This version will become the current version on the server. No version is deleted: the current one stays in the history.\n\nEach device (3DS, PC) gets it at its next sync, after backing up its save. Sync your other devices first. Otherwise a game not uploaded yet could replace this version or cause a conflict."}}
 };
 const racine = location.pathname;
 const $ = id => document.getElementById(id);
@@ -305,47 +592,75 @@ function texte(balise, contenu, classe) {
   return e;
 }
 
+// Message : la première ligne dit quoi faire, les suivantes (Détail : …) vont sur leur propre ligne, plus petites.
+function lignes(e, t) {
+  const [premiere, ...reste] = String(t).split("\n");
+  e.append(premiere, ...reste.filter(l => l).map(l => texte("span", l, "detail")));
+  return e;
+}
+function message(classe, t) { return lignes(texte("p", "", "message compact " + classe), t); }
+
+const SYS = s => texte("span", s, "sys " + (s === "3DS" ? "n3DS" : s));
+const ouvertes = new WeakSet(); // émulateurs dont les réglages sont dépliés (gardé quand la ligne est refaite)
+
 function carte(x) {
   const d = document.createElement("div");
-  d.className = "emu" + (x.Actif ? "" : " inactif");
+  d.className = "emu" + (x.Actif ? "" : " inactif") + (ouvertes.has(x) ? " ouverte" : "");
   d.emu = x;
-  const tete = document.createElement("div");
-  tete.className = "tete";
+  const tete = texte("div", "", "tete");
   const c = document.createElement("input");
-  c.type = "checkbox"; c.checked = x.Actif; c.setAttribute("aria-label", T.coche + " " + x.Nom);
-  c.onchange = () => { x.Actif = c.checked; d.classList.toggle("inactif", !c.checked); d.replaceWith(carte(x)); bandeauEmus(); };
-  tete.append(c, texte("strong", x.Nom), texte("span", "(" + x.Source + ")", "aide"));
-  const resume = document.createElement("div");
-  resume.className = "resume";
-  for (const s of x.Systemes || []) resume.append(texte("span", s.Systeme, "badge " + (s.Systeme === "3DS" ? "n3DS" : s.Systeme)));
+  c.type = "checkbox"; c.className = "interrupteur"; c.checked = x.Actif; c.setAttribute("aria-label", T.coche + " " + x.Nom);
+  c.onchange = () => { // coché dans « Autres émulateurs » : remonte dans la liste
+    x.Actif = c.checked;
+    const n = carte(x);
+    if (x.Actif && d.parentNode.id === "emulateursAutres") { d.remove(); $("emulateurs").append(n); } else d.replaceWith(n);
+    listesEmus();
+    n.querySelector(".interrupteur").focus();
+  };
+  const configure = x.Source === T.configure;
+  const nom = texte("div", "", "nom");
+  nom.append(texte("b", x.Nom), texte("span", x.Exe + (configure ? "" : " · " + x.Source), "chemin"));
+  const infos = texte("div", "", "infos");
+  infos.append(...(x.Systemes || []).map(s => SYS(s.Systeme)));
   const [classe, mot] = etatEmu(x);
-  const regler = texte("button", T.regler, "regler");
-  regler.type = "button";
-  regler.onclick = () => { regler.textContent = d.classList.toggle("ouverte") ? T.fermer : T.regler; };
-  resume.append(texte("span", mot, classe), regler);
-  d.append(tete, texte("div", x.Exe, "chemin"), resume);
-  const details = document.createElement("div");
-  details.className = "details";
-  if (x.Erreur) details.append(texte("p", x.Erreur, "erreur"));
-  const commande = texte("p", "", "aide");
+  infos.append(texte("span", mot, "pastille " + classe));
+  const actions = texte("div", "", "actions");
+  if (configure) { // émulateur de config.json : « Ouvrir » sans jeu, avec Synchronisation avant et après
+    const o = texte("button", T.ouvrir, "discret");
+    o.type = "button"; o.title = T.ouvrirAide;
+    o.onclick = () => ouvrir(x.Nom);
+    actions.append(o);
+  }
+  const regler = texte("button", ouvertes.has(x) ? T.fermer : T.regler, "regler");
+  regler.type = "button"; regler.setAttribute("aria-expanded", ouvertes.has(x));
+  regler.onclick = () => {
+    const o = d.classList.toggle("ouverte");
+    if (o) ouvertes.add(x); else ouvertes.delete(x);
+    regler.textContent = o ? T.fermer : T.regler; regler.setAttribute("aria-expanded", o);
+  };
+  actions.append(regler);
+  tete.append(c, nom, infos, actions);
+  d.append(tete);
+  const details = texte("div", "", "details");
+  if (x.Erreur) details.append(message("erreur", x.Erreur));
+  for (const p of x.Problemes || []) details.append(message("alerte", p));
+  if (x.Conseil) details.append(message("alerte", x.Conseil));
+  const commande = texte("p", "", "commande");
   const maj = () => { clearTimeout(d.minuterie); d.minuterie = setTimeout(() => apercu(x, commande), 300); };
   if (x.Personnalise) {
     details.append(champ(T.ligne, x.Commande, "-f {rom}", v => { x.Commande = v; maj(); }),
-      texte("p", T.reperes, "aide"),
+      texte("p", T.reperes, "legende"),
       champ(T.extension, x.Extension, ".sav", v => { x.Extension = v; }),
       champ(T.processus, x.Processus, T.processusAide, v => { x.Processus = v; }));
-    const interne = document.createElement("label");
-    interne.className = "choix";
+    const interne = texte("label", "", "choix");
     const ci = document.createElement("input");
-    ci.type = "checkbox"; ci.checked = x.NomInterne; ci.onchange = () => { x.NomInterne = ci.checked; };
+    ci.type = "checkbox"; ci.className = "interrupteur"; ci.checked = x.NomInterne; ci.onchange = () => { x.NomInterne = ci.checked; };
     interne.append(ci, texte("span", T.interne));
-    const systemes = document.createElement("div");
-    systemes.className = "ligne";
+    const systemes = texte("div", "", "coches");
     for (const nom of ["DS", "GB", "GBA"]) {
-      const l = document.createElement("label");
-      l.className = "choix";
+      const l = texte("label", "", "choix");
       const c = document.createElement("input");
-      c.type = "checkbox"; c.checked = (x.Systemes || []).some(s => s.Systeme === nom);
+      c.type = "checkbox"; c.className = "interrupteur"; c.checked = (x.Systemes || []).some(s => s.Systeme === nom);
       c.onchange = () => {
         x.Systemes = c.checked ? [...(x.Systemes || []), {Systeme: nom, Sauvegardes: "", Defaut: "", Roms: ""}] : x.Systemes.filter(s => s.Systeme !== nom);
         d.replaceWith(carte(x));
@@ -355,40 +670,63 @@ function carte(x) {
     }
     details.append(interne, systemes);
   }
-  for (const s of x.Systemes || []) {
-    const l = document.createElement("div");
-    l.className = "systeme";
-    const sav = document.createElement("input");
-    sav.type = "text"; sav.value = s.Sauvegardes; sav.placeholder = x.Personnalise ? T.obligatoire : (s.Defaut || T.rom);
-    sav.setAttribute("aria-label", s.Systeme + " saves");
-    sav.oninput = () => { s.Sauvegardes = sav.value.trim() || s.Defaut; maj(); };
-    const rom = document.createElement("input");
-    rom.type = "text"; rom.value = s.Roms; rom.placeholder = T.roms;
-    rom.setAttribute("aria-label", s.Systeme + " ROM");
-    rom.oninput = () => { s.Roms = rom.value.trim(); maj(); };
-    l.append(texte("span", s.Systeme), sav, rom);
-    details.append(l);
+  if ((x.Systemes || []).length) {
+    const g = texte("div", "", "dossiers");
+    g.append(texte("span", ""), texte("span", x.Systemes.some(s => s.Systeme === "3DS") ? T.colSdmc : T.colSav, "legende"), texte("span", T.colRom, "legende"));
+    for (const s of x.Systemes) {
+      const sav = document.createElement("input");
+      sav.type = "text"; sav.value = s.Sauvegardes;
+      sav.placeholder = x.Personnalise ? T.obligatoire : (s.Defaut || (s.Systeme === "3DS" ? T.sdmc : T.rom));
+      sav.setAttribute("aria-label", T.colSav + " " + s.Systeme);
+      sav.oninput = () => { s.Sauvegardes = sav.value.trim() || s.Defaut; maj(); };
+      const rom = document.createElement("input");
+      rom.type = "text"; rom.value = s.Roms; rom.placeholder = T.roms;
+      rom.setAttribute("aria-label", T.colRom + " " + s.Systeme);
+      rom.oninput = () => { s.Roms = rom.value.trim(); maj(); };
+      g.append(texte("b", s.Systeme), sav, rom);
+    }
+    details.append(g);
   }
   if (!x.Personnalise && !x.Erreur) details.append(champ(T.enPlus, x.EnPlus, "-f", v => { x.EnPlus = v; maj(); }));
-  if (x.Conseil) details.append(texte("p", x.Conseil, "aide alerte"));
   details.append(commande);
   d.append(details);
   if (x.Actif || x.Personnalise) apercu(x, commande);
   return d;
 }
 
-// État affiché sur la carte : [classe, mot].
+// État de la ligne : [classe de pastille, mot]. Problemes : les lignes à faire de Vérifications (même état partout).
 function etatEmu(x) {
-  if (!x.Actif) return ["aide", T.nonUtilise];
-  if (x.Erreur || x.Conseil) return ["alerte", T.aVerifier];
+  if (!x.Actif) return ["neutre", T.nonUtilise];
+  if (x.Erreur || x.Conseil || (x.Problemes || []).length) return ["alerte", T.aVerifier];
   return ["ok", T.pret];
 }
 
+// Toutes les lignes : émulateurs utilisés, puis les autres trouvés sur ce PC (partie repliée).
+function cartesEmus() { return [...$("emulateurs").children, ...$("emulateursAutres").children].map(d => d.emu); }
+
+// Nombre d'« autres » et état vide : aucun trouvé, ou trouvés mais aucun coché.
+function listesEmus() {
+  const autres = $("emulateursAutres").children.length;
+  $("nbAutres").textContent = autres;
+  $("autresEmus").classList.toggle("masque", !autres);
+  $("videEmus").classList.toggle("masque", $("emulateurs").children.length > 0);
+  $("videTitre").textContent = autres ? T.aucunChoisi : T.aucunTrouve;
+  $("videTexte").textContent = autres ? T.aucunChoisiAide : T.aucunTrouveAide;
+  bandeauEmus();
+}
+
 function bandeauEmus() {
-  const l = [...$("emulateurs").children].map(d => d.emu);
-  const actifs = l.filter(x => x.Actif);
-  $("etatEmus").textContent = actifs.filter(x => etatEmu(x)[1] === T.pret).length + " " + T.sur + " " + actifs.length;
-  $("menu").querySelector('[data-page="emulateurs"]').classList.toggle("attention", actifs.some(x => etatEmu(x)[1] !== T.pret));
+  const actifs = cartesEmus().filter(x => x.Actif), prets = actifs.filter(x => etatEmu(x)[0] === "ok").length;
+  $("etatEmus").textContent = prets + " " + T.sur + " " + actifs.length;
+  $("etatEmus").className = "pastille " + (actifs.length && prets === actifs.length ? "ok" : "alerte");
+}
+
+async function ouvrir(nom) {
+  $("ouvert").replaceChildren(T.attente); $("ouvert").className = "legende";
+  try {
+    const r = await api("ouvrir", {Nom: nom});
+    $("ouvert").replaceChildren(message(r.Ok ? "info" : "erreur", r.Message)); $("ouvert").className = "";
+  } catch (e) { $("ouvert").replaceChildren(message("erreur", T.erreur + e.message)); $("ouvert").className = ""; }
 }
 
 // Serveur et nombre de jeux : une lecture de la liste du serveur (api/jeux), gardée pour l'historique.
@@ -396,35 +734,42 @@ async function bandeauServeur() {
   listeJeux = null;
   $("etatJeux").textContent = "…";
   if (!etat.Existe) {
-    $("etatServeur").textContent = T.pasEnregistre; $("etatServeur").className = "aide"; $("etatJeux").textContent = "—";
+    $("etatServeur").textContent = T.pasEnregistre; $("etatServeur").className = "pastille neutre"; $("etatJeux").textContent = "—";
     return;
   }
-  $("etatServeur").textContent = "…"; $("etatServeur").className = "";
+  $("etatServeur").textContent = "…"; $("etatServeur").className = "pastille neutre";
   const r = await api("jeux").catch(e => ({Erreur: e.message}));
   const ok = !r.Erreur;
   $("etatServeur").textContent = ok ? T.joignable : T.injoignable;
-  $("etatServeur").className = ok ? "ok" : "erreur";
-  $("etatServeur").title = r.Erreur || "";
+  $("etatServeur").className = "pastille " + (ok ? "ok" : "erreur");
+  $("etatServeur").parentNode.title = r.Erreur || "";
   $("etatJeux").textContent = ok ? r.Jeux.length : "—";
-  $("menu").querySelector('[data-page="serveur"]').classList.toggle("attention", !ok);
   if (ok) listeJeux = r.Jeux;
   if (page === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
 }
 
-// Une page à la fois ; le menu montre seulement les pages qui ont une section disponible.
+// Une page à la fois ; le menu montre seulement les pages qui ont une section disponible. La barre « Enregistrer »
+// seulement sur les pages qui ont des réglages à enregistrer (et dans l'assistant).
+const AVEC_BARRE = ["serveur", "emulateurs", "frontends"];
 let page = "";
 function montrer(p) {
   page = p;
-  document.querySelectorAll("main section[data-page]").forEach(s => s.classList.toggle("cachee", s.dataset.page !== p));
-  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("actif", b.dataset.page === p));
+  const pages = etape ? ETAPES[etape - 1] : [p];
+  document.querySelectorAll("main section[data-page]").forEach(s => s.classList.toggle("cachee", !pages.includes(s.dataset.page)));
+  document.querySelectorAll("#menu button[data-page]").forEach(b => b.dataset.page === p ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  if (etape || AVEC_BARRE.includes(p)) document.body.dataset.barre = ""; else delete document.body.dataset.barre;
   if (p === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
-  if (p === "hacks") hacks().catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
+  if (p === "hacks") hacks().catch(e => statutHack(T.erreur + e.message));
+}
+function aller(p) {
+  if (document.querySelector(`#menu button[data-page="${p}"]`).classList.contains("masque")) return;
+  montrer(p); window.scrollTo(0, 0);
 }
 function menu() {
-  document.querySelectorAll("#menu button").forEach(b => b.classList.toggle("masque",
+  document.querySelectorAll("#menu button[data-page]").forEach(b => b.classList.toggle("masque",
     ![...document.querySelectorAll(`main section[data-page="${b.dataset.page}"]`)].some(s => !s.classList.contains("masque"))));
 }
-document.querySelectorAll("#menu button").forEach(b => b.onclick = () => { montrer(b.dataset.page); window.scrollTo(0, 0); });
+document.querySelectorAll("#menu button[data-page], .etat button").forEach(b => b.onclick = () => aller(b.dataset.page));
 
 function champ(etiquette, valeur, exemple, changer) {
   const l = document.createElement("label");
@@ -439,18 +784,16 @@ async function apercu(x, ligne) {
   if (!x.Systemes || !x.Systemes.length) { ligne.textContent = ""; return; }
   const r = await api("apercu", x).catch(e => ({Erreur: e.message}));
   ligne.textContent = r.Erreur || T.commande + r.Commande;
-  ligne.className = r.Erreur ? "aide erreur" : "aide";
+  ligne.className = r.Erreur ? "commande erreur" : "commande";
 }
 
 // Cadre après l'enregistrement du serveur local : adresse et jeton pour la 3DS, chacun avec « Copier ».
 function cadre3DS(r) {
-  const d = document.createElement("div");
-  d.className = "cadre";
+  const d = texte("div", "", "cadre");
   d.append(texte("h3", T.sur3DS));
   for (const [nom, valeur] of [[T.adresse, r.Adresse], [T.jeton, r.Jeton]]) {
-    const l = document.createElement("div");
-    l.className = "valeur";
-    if (!valeur) { l.append(texte("b", nom), texte("span", T.introuvable, "erreur")); d.append(l); continue; }
+    const l = texte("div", "", "valeur");
+    if (!valeur) { l.append(texte("b", nom), message("erreur", T.introuvable)); d.append(l); continue; }
     const b = texte("button", T.copier);
     b.type = "button";
     b.onclick = () => navigator.clipboard.writeText(valeur).then(() => { b.textContent = T.copie; }).catch(() => {});
@@ -459,21 +802,21 @@ function cadre3DS(r) {
   }
   if (r.Autres && r.Autres.length) {
     const autres = document.createElement("details");
-    autres.append(texte("summary", T.autres), ...r.Autres.map(a => texte("div", a, "aide")));
+    autres.append(texte("summary", T.autres), ...r.Autres.map(a => texte("div", a, "legende")));
     d.append(autres);
   }
-  d.append(texte("p", T.secret, "aide alerte"));
+  d.append(message("alerte", T.secret));
   return d;
 }
 
-function afficher(titre, lignes, erreur, cadre) {
+function afficher(titre, l, erreur, cadre) {
   const r = $("resultat");
   r.replaceChildren(texte("h2", titre));
-  if (erreur) r.append(texte("p", T.erreur + erreur, "erreur"));
+  if (erreur) r.append(message("erreur", T.erreur + erreur));
   if (cadre) r.append(cadre);
-  if (lignes && lignes.length) {
+  if (l && l.length) {
     const ul = document.createElement("ul");
-    for (const l of lignes) ul.append(texte("li", l));
+    for (const x of l) ul.append(texte("li", x));
     r.append(ul);
   }
   r.classList.remove("masque");
@@ -486,14 +829,15 @@ function choix() {
   return {
     Local: type() === "local", URL: $("url").value.trim(), Jeton: $("jeton").value, Port: +$("port").value,
     Installer: $("installer").checked,
-    Emulateurs: [...$("emulateurs").children].map(d => d.emu),
+    Emulateurs: cartesEmus(),
     LaunchBox: etat.Windows ? $("launchbox").value.trim() : "",
-    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked
+    EsDe: $("esde").checked, Raccourcis: $("raccourcis").checked, Icone: $("icone").checked, Maj: $("majAuto").checked
   };
 }
 
+const BOUTONS = ".barre button, #reparer, #desinstaller, #majBouton"; // une seule action qui écrit à la fois
 async function action(bouton, travail) {
-  const boutons = document.querySelectorAll(".barre button");
+  const boutons = document.querySelectorAll(BOUTONS);
   boutons.forEach(b => b.disabled = true);
   const avant = bouton.textContent;
   bouton.textContent = T.attente;
@@ -502,17 +846,32 @@ async function action(bouton, travail) {
   boutons.forEach(b => b.disabled = false);
 }
 
+// Assistant du premier lancement (pas encore de config.json) : 4 étapes, chacune montre des sections existantes.
+const ETAPES = [["serveur"], ["emulateurs", "frontends"], ["carte"], ["verifs"]];
+let etape = 0, premier = true; // etape : 1 à 4 ; 0 = page habituelle
+
 async function charger() {
   etat = await api("etat");
+  if (premier && !etat.Existe) etape = 1;
+  premier = false;
+  document.body.classList.toggle("assistant", etape > 0);
+  $("version").textContent = T.version.replace("%s", etat.Version);
+  $("lienCia").href = etat.Version === "dev" ? "https://github.com/programgames/3dssavesync/releases/latest" : "https://github.com/programgames/3dssavesync/releases/tag/v" + etat.Version;
+  $("majAuto").checked = etat.Maj;
   document.querySelector(`input[name=type][value=${etat.Local ? "local" : "perso"}]`).checked = true;
   $("url").value = etat.URL || "";
-  $("jeton").placeholder = etat.JetonPresent ? T.inchange : "";
+  $("jetonAide").classList.toggle("masque", !etat.JetonPresent);
   $("port").value = etat.Port;
   $("installe").textContent = etat.Installe;
   const enPlace = etat.Courant.toLowerCase() === etat.Installe.toLowerCase();
   $("sectionProgramme").classList.toggle("masque", enPlace);
   $("installer").checked = !enPlace;
-  $("emulateurs").replaceChildren(...(etat.Emulateurs || []).map(carte));
+  const emus = etat.Emulateurs || [], actifs = emus.filter(x => x.Actif); // trouvés, pas cochés : repliés sous la liste
+  $("emulateurs").replaceChildren(...actifs.map(carte));
+  $("emulateursAutres").replaceChildren(...emus.filter(x => !x.Actif).map(carte));
+  $("autresEmus").open = !actifs.length;
+  $("ajoutEmu").open = !emus.length;
+  listesEmus();
   const perso = texte("option", T.perso);
   perso.value = "";
   $("profil").replaceChildren(...etat.Profils.map(p => texte("option", p)), perso);
@@ -522,33 +881,125 @@ async function charger() {
   $("esdeChemin").textContent = etat.EsDe || "";
   $("esde").checked = etat.EsDeActif;
   $("raccourcis").checked = !etat.Existe;
-  $("sectionOuvrir").classList.toggle("masque", !(etat.Configures || []).length);
-  $("ouvrir").replaceChildren(...(etat.Configures || []).map(nom => {
-    const b = texte("button", nom);
-    b.type = "button";
-    b.onclick = async () => {
-      $("ouvert").textContent = T.attente; $("ouvert").className = "";
-      try {
-        const r = await api("ouvrir", {Nom: nom});
-        $("ouvert").textContent = r.Message; $("ouvert").className = r.Ok ? "ok" : "erreur";
-      } catch (e) { $("ouvert").textContent = T.erreur + e.message; $("ouvert").className = "erreur"; }
-    };
-    return b;
-  }));
+  $("icone").checked = etat.Icone;
+  $("iconeLigne").classList.toggle("masque", !etat.IconeDisponible);
+  $("ouvert").replaceChildren();
   basculer();
   $("sectionHistorique").classList.toggle("masque", !etat.Existe);
   $("sectionHacks").classList.toggle("masque", !etat.Existe);
   $("sectionDesinstaller").classList.toggle("masque", !etat.Existe);
   const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
   $("sectionCarte").classList.toggle("masque", !sd);
+  $("carteImpossible").classList.toggle("masque", sd || !etat.Existe);
+  $("sectionVerifs").classList.toggle("masque", !etat.Existe);
   $("adresseCarte").textContent = etat.Adresse3DS || "";
   $("carteChemin").placeholder = etat.Windows ? "E:\\" : "/media/…";
   menu();
   montrer(page && !document.querySelector(`#menu button[data-page="${page}"]`).classList.contains("masque") ? page : (etat.Existe ? "emulateurs" : "serveur"));
-  bandeauEmus();
   bandeauServeur();
+  if (etat.Existe && etape === 0) verifs();
+  if (etape) boutonsEtape();
   if (sd) await cartes();
 }
+
+function boutonsEtape() {
+  $("progression").textContent = T.etape.replace("%d", etape).replace("%s", T.etapes[etape - 1]);
+  document.querySelectorAll("#etapes li").forEach((li, i) => {
+    li.classList.toggle("faite", i + 1 < etape);
+    if (i + 1 === etape) li.setAttribute("aria-current", "step"); else li.removeAttribute("aria-current");
+  });
+  $("precedent").disabled = etape === 1;
+  $("suivant").textContent = [T.suivant, T.enregistrerSuivant, T.passer, T.finAssistant][etape - 1];
+  $("suivant").classList.toggle("principal", etape !== 3); // étape 3 : « Préparer la carte SD » est l'action principale
+}
+function allerA(n) {
+  etape = n;
+  document.body.classList.toggle("assistant", etape > 0);
+  if (!etape) { charger().catch(e => afficher("3dssavesync", [], e.message)); window.scrollTo(0, 0); return; }
+  boutonsEtape();
+  montrer(ETAPES[n - 1][0]);
+  if (n === 4) verifs();
+  window.scrollTo(0, 0);
+}
+$("precedent").onclick = () => allerA(etape - 1);
+$("suivant").onclick = e => {
+  if (etape !== 2) return allerA(etape === 4 ? 0 : etape + 1);
+  action(e.target, async () => { // « Enregistrer et continuer » : le même enregistrement que le bouton « Enregistrer »
+    const r = await api("appliquer", choix());
+    afficher(r.Erreur ? T.erreur.trim() : T.fini, r.Lignes, r.Erreur, r.Jeton ? cadre3DS(r) : null);
+    if (r.Erreur) return;
+    $("jeton").value = "";
+    await charger();
+    allerA(3);
+  });
+};
+
+// Compteur d'une entrée du menu : nombre de lignes à faire de Vérifications (et le même nombre en texte, lu à voix haute).
+function compte(b, n) {
+  b.querySelectorAll(".compte, .sr").forEach(e => e.remove());
+  if (!n) return;
+  const c = texte("span", n, "compte");
+  c.setAttribute("aria-hidden", "true");
+  b.append(c, texte("span", T.aFaire.replace("%d", n), "sr"));
+}
+
+// Une ligne de Vérifications ; à faire : un bouton ouvre la page où le faire.
+function ligneVerif(v) {
+  const li = texte("li", "", v.Ok ? "bon" : "afaire");
+  li.append(texte("span", v.Ok ? "✓" : "!", "icone"), lignes(texte("span", ""), v.Texte));
+  const b = document.querySelector(`#menu button[data-page="${v.Page}"]`);
+  if (!v.Ok && b && v.Page !== "verifs" && !b.classList.contains("masque")) {
+    const a = texte("button", b.firstElementChild.textContent, "normal");
+    a.type = "button"; a.onclick = () => aller(v.Page);
+    li.append(a);
+  }
+  return li;
+}
+
+// Liste « Tout est prêt » (api/verifications, sur le réseau) : à faire d'abord, compteurs du menu, mise à jour.
+async function verifs() {
+  $("verifsEtat").textContent = T.attente; $("verifsEtat").className = "statut legende";
+  $("etatVerifs").textContent = "…"; $("etatVerifs").className = "pastille neutre";
+  let r;
+  try { r = await api("verifications"); } catch (e) {
+    $("verifsEtat").textContent = T.erreur + e.message; $("verifsEtat").className = "statut erreur"; $("etatVerifs").textContent = "—";
+    return;
+  }
+  const l = r.Liste || [], afaire = l.filter(v => !v.Ok), bons = l.filter(v => v.Ok);
+  $("verifsEtat").textContent = "";
+  $("listeVerifs").replaceChildren(...afaire.map(ligneVerif));
+  $("listeBons").replaceChildren(...bons.map(ligneVerif));
+  $("bons").classList.toggle("masque", !bons.length);
+  $("bons").open = !afaire.length;
+  $("nbBons").textContent = bons.length === 1 ? T.unBon : T.bons.replace("%d", bons.length);
+  $("etatVerifs").textContent = afaire.length ? T.aFaire.replace("%d", afaire.length) : T.toutBon;
+  $("etatVerifs").className = "pastille " + (afaire.length ? "alerte" : "ok");
+  document.querySelectorAll("#menu button[data-page]").forEach(b =>
+    compte(b, b.dataset.page === "verifs" ? afaire.length : afaire.filter(v => v.Page === b.dataset.page).length));
+  const lb = afaire.filter(v => v.Page === "frontends" && v.Texte.startsWith("LaunchBox")); // aussi sous le champ
+  $("lbVerif").replaceChildren();
+  lb.forEach((v, i) => { if (i) $("lbVerif").append(document.createElement("br")); lignes($("lbVerif"), v.Texte); });
+  $("lbVerif").classList.toggle("masque", !lb.length);
+  $("maj").classList.toggle("masque", !r.Maj);
+  if (r.Maj) {
+    $("majTitre").textContent = T.majDispo.replace("%s", r.Maj.Version).replace("%s", etat.Version);
+    $("majPage").href = r.Maj.Page;
+    $("majBouton").dataset.version = r.Maj.Version;
+  }
+}
+$("reverifier").onclick = verifs;
+$("majBouton").onclick = async () => {
+  if (!confirm(T.confirmerMaj.replace("%s", $("majBouton").dataset.version))) return;
+  const boutons = document.querySelectorAll(BOUTONS); // rien d'autre pendant la mise à jour
+  boutons.forEach(b => b.disabled = true);
+  $("majEtat").textContent = T.attente; $("majEtat").className = "statut";
+  try {
+    const r = await api("mettreajour");
+    $("majEtat").textContent = r.Message; $("majEtat").className = "statut " + (r.Ok ? "ok" : "erreur");
+    if (r.Ok) { document.querySelector(".barre").remove(); return; } // ce programme s'arrête, le nouveau ouvre un onglet
+  } catch (e) { $("majEtat").textContent = T.erreur + e.message; $("majEtat").className = "statut erreur"; }
+  boutons.forEach(b => b.disabled = false);
+};
 
 // Cartes SD de 3DS branchées sur le PC (racine avec un dossier « Nintendo 3DS »).
 async function cartes() {
@@ -558,9 +1009,10 @@ async function cartes() {
   $("carte").disabled = !l.length;
 }
 
-function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = classe || ""; }
+function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("histoEtat").className = "statut " + (classe || ""); }
 
 // Historique : les jeux du serveur (lus une fois avec le bandeau), filtrés par la recherche, puis les versions du jeu choisi.
+const consoleDe = cle => /^GBA-/.test(cle) ? "GBA" : /^GB-/.test(cle) ? "GB" : /^3DS-/.test(cle) ? "3DS" : "DS";
 let listeJeux = null, jeuChoisi = "";
 async function jeux() {
   if (!listeJeux) {
@@ -572,43 +1024,56 @@ async function jeux() {
   if (!listeJeux.length) return statut(T.aucunJeu);
   if ($("histoEtat").textContent === T.attente) statut("");
   filtrer();
+  if (!jeuChoisi) $("versions").replaceChildren(texte("p", T.choisirJeu, "doux"));
 }
 function filtrer() {
   const q = $("chercheJeu").value.trim().toLowerCase();
   $("listeJeux").replaceChildren(...(listeJeux || []).filter(j => (j.Nom + " " + j.Cle).toLowerCase().includes(q)).map(j => {
-    const b = texte("button", j.Nom || j.Cle, j.Cle === jeuChoisi ? "actif" : ""); // la Clé seulement si aucun nom n'est connu
+    const b = document.createElement("button");
     b.type = "button";
+    if (j.Cle === jeuChoisi) b.setAttribute("aria-current", "true");
+    const nom = texte("span", j.Nom || j.Cle); // la Clé seulement si aucun nom n'est connu
+    nom.append(texte("span", j.Nom ? j.Cle : T.nomInconnu, "cle"));
+    b.append(SYS(consoleDe(j.Cle)), nom);
     b.onclick = () => { jeuChoisi = j.Cle; filtrer(); versions(j.Cle).catch(e => statut(T.erreur + e.message, "erreur")); };
-    return b;
+    const li = document.createElement("li");
+    li.append(b);
+    return li;
   }));
 }
 $("chercheJeu").oninput = filtrer;
 
+const APPAREILS = {"3ds": "3DS", "pc": "PC"};
 async function versions(cle, message, classe) {
-  $("versions").replaceChildren();
   if (!cle) return statut("");
   statut(T.attente);
   const r = await api("versions", {Cle: cle});
   if (r.Erreur) return statut(T.erreur + r.Erreur, "erreur");
+  const j = (listeJeux || []).find(j => j.Cle === cle);
+  const partie = r.Versions.some(v => v.Partie); // colonne « Partie » seulement si une version en a une
   const table = document.createElement("table");
   const tete = document.createElement("tr");
-  tete.append(...T.colonnes.map(c => texte("th", c)));
-  table.append(tete);
+  tete.append(...T.colonnes.filter((c, i) => partie || i !== 3).map(c => texte("th", c)));
+  const thead = document.createElement("thead"), tbody = document.createElement("tbody");
+  thead.append(tete);
   for (const v of r.Versions) {
     const ligne = document.createElement("tr");
-    ligne.append(texte("td", v.Date), texte("td", v.Client), texte("td", v.Taille), texte("td", v.Partie));
+    if (v.Courante) ligne.className = "actuelle";
+    ligne.append(texte("td", v.Date), texte("td", APPAREILS[v.Client] || v.Client), texte("td", v.Taille));
+    if (partie) ligne.append(texte("td", v.Partie));
     const action = document.createElement("td");
-    if (v.Courante) action.append(texte("span", T.actuelle, "ok"));
+    if (v.Courante) action.append(texte("span", T.actuelle, "pastille ok"));
     else {
-      const b = texte("button", T.restaurer);
+      const b = texte("button", T.restaurer, "discret");
       b.type = "button";
       b.onclick = () => restaurer(cle, v, r.Versions[0].Hash).catch(e => statut(T.erreur + e.message, "erreur"));
       action.append(b);
     }
     ligne.append(action);
-    table.append(ligne);
+    tbody.append(ligne);
   }
-  $("versions").append(table);
+  table.append(thead, tbody);
+  $("versions").replaceChildren(texte("h3", j ? j.Nom || j.Cle : cle), table);
   statut(message || "", classe);
 }
 
@@ -626,56 +1091,65 @@ function basculer() {
 
 document.querySelectorAll("input[name=type]").forEach(r => r.onchange = basculer);
 $("tester").onclick = async () => {
-  $("test").textContent = T.attente; $("test").className = "";
+  const t = (classe, contenu) => { $("test").className = classe; $("test").replaceChildren(); lignes($("test"), contenu); };
+  t("legende", T.attente);
   try {
     const r = await api("tester", choix());
-    $("test").textContent = r.Message; $("test").className = r.Ok ? "ok" : "erreur";
-  } catch (e) { $("test").textContent = T.erreur + e.message; $("test").className = "erreur"; }
+    t(r.Ok ? "pastille ok" : "message erreur compact", r.Message);
+  } catch (e) { t("message erreur compact", T.erreur + e.message); }
 };
-$("chercher").onclick = () => cartes().catch(e => { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; });
+$("chercher").onclick = () => cartes().catch(e => $("carteEtat").replaceChildren(texte("li", T.erreur + e.message, "erreur")));
 $("preparer").onclick = async () => {
-  $("carteEtat").textContent = T.attente; $("carteEtat").className = "";
+  // Échec : seule la dernière ligne (l'erreur) en rouge ; les lignes d'avant disent ce qui est déjà écrit.
+  const etatCarte = (l, ok) => $("carteEtat").replaceChildren(...l.map((x, i) => texte("li", x, ok || i < l.length - 1 ? "" : "erreur")));
+  etatCarte([T.attente], true);
+  $("preparer").disabled = true;
   try {
     const r = await api("preparer", {Racine: $("carteChemin").value.trim() || ($("carte").disabled ? "" : $("carte").value)});
-    $("carteEtat").textContent = r.Message; $("carteEtat").className = r.Ok ? "ok" : "erreur";
-  } catch (e) { $("carteEtat").textContent = T.erreur + e.message; $("carteEtat").className = "erreur"; }
+    etatCarte(r.Lignes || [], r.Ok);
+    if (r.Ok && etape === 0) verifs();
+  } catch (e) { etatCarte([T.erreur + e.message], false); }
+  $("preparer").disabled = false;
 };
+
 // ROM hacks : la liste, puis un ajout ou un retrait (api/alias).
+function statutHack(t, classe) { $("hackEtat").textContent = t; $("hackEtat").className = "statut " + (classe || "erreur"); }
 async function hacks(corps) {
   const r = await api("alias", corps);
-  $("hackEtat").textContent = r.Erreur ? T.erreur + r.Erreur : ""; $("hackEtat").className = r.Erreur ? "erreur" : "";
+  statutHack(r.Erreur ? T.erreur + r.Erreur : "");
   $("listeHacks").replaceChildren(...(r.Noms || []).map(nom => {
-    const d = texte("div", nom + " ");
-    const b = texte("button", T.retirer);
+    const d = texte("div", "", "hack");
+    const b = texte("button", T.retirer, "discret");
     b.type = "button";
-    b.onclick = () => confirm(T.retirerHack.replace("%s", nom)) && hacks({Nom: nom, Retirer: true}).catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
-    d.append(b);
+    b.onclick = () => confirm(T.retirerHack.replace("%s", nom)) && hacks({Nom: nom, Retirer: true}).catch(e => statutHack(T.erreur + e.message));
+    const cle = (r.Cles || {})[nom] || "";
+    d.append(texte("b", nom), cle ? SYS(consoleDe(cle.trim().toUpperCase())) : texte("span", ""), b);
     return d;
   }));
-  if (!(r.Noms || []).length) $("listeHacks").append(texte("p", T.aucunHack, "aide"));
+  if (!(r.Noms || []).length) $("listeHacks").append(texte("p", T.aucunHack, "doux"));
 }
 $("hackRom").onchange = () => {
   const f = $("hackRom").files[0];
+  $("hackNom").textContent = f ? f.name : T.aucunFichier;
   const s = f && {gba: "GBA", gb: "GB", gbc: "GB", nds: "DS"}[f.name.split(".").pop().toLowerCase()];
   if (s) $("hackSysteme").value = s;
 };
 $("hackAjouter").onclick = () => {
   const f = $("hackRom").files[0];
   if (!f) return;
-  hacks({Nom: f.name.replace(/\.[^.]*$/, ""), Systeme: $("hackSysteme").value}).catch(e => { $("hackEtat").textContent = T.erreur + e.message; });
-  $("hackRom").value = "";
+  hacks({Nom: f.name.replace(/\.[^.]*$/, ""), Systeme: $("hackSysteme").value}).catch(e => statutHack(T.erreur + e.message));
+  $("hackRom").value = ""; $("hackNom").textContent = T.aucunFichier;
 };
-$("profil").onchange =() => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
+$("profil").onchange = () => $("nomPerso").classList.toggle("masque", $("profil").value !== "");
 $("ajouter").onclick = async () => {
   const exe = $("exe").value.trim(), nom = $("nom").value.trim().toLowerCase();
   if (!exe || ($("profil").value === "" && !nom)) return;
   const x = $("profil").value === ""
     ? {Nom: nom, Profil: nom, Exe: exe, Source: T.manuel, Actif: true, Personnalise: true, Commande: "{rom}", Extension: ".sav", Systemes: []}
     : await api("emulateur", {Profil: $("profil").value, Exe: exe});
-  const nouvelle = carte(x);
-  nouvelle.classList.add("ouverte");
-  $("emulateurs").append(nouvelle);
-  bandeauEmus();
+  ouvertes.add(x);
+  $("emulateurs").append(carte(x));
+  listesEmus();
   $("exe").value = ""; $("nom").value = "";
 };
 $("enregistrer").onclick = e => action(e.target, async () => {
@@ -695,9 +1169,13 @@ $("desinstaller").onclick = e => {
     if (!r.Erreur) document.querySelector(".barre").remove(); // le programme s'arrête
   });
 };
+// « Fermer les réglages » : le programme des réglages s'arrête ; l'onglet dit qu'on peut le fermer.
 $("terminer").onclick = async () => {
   await api("terminer").catch(() => {});
-  document.querySelector("main").replaceChildren(texte("h1", T.fini), texte("p", T.ferme, "sous"));
+  const m = document.createElement("main");
+  m.append(texte("h1", T.fini), texte("p", T.ferme, "doux"));
+  document.body.className = "fin";
+  document.querySelector(".app").replaceChildren(m);
   document.querySelector(".barre").remove();
 };
 setInterval(() => api("ping").catch(() => {}), 20000);

@@ -1,0 +1,16 @@
+name: Feature request
+description: An emulator, a frontend, a game or a feature you'd like supported.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want to do?
+      description: Describe the situation, not only the solution. For example "I play on a Steam Deck with RetroDECK and want my GBA saves synced".
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Emulator or frontend version, where it stores its saves, links to its documentation. Anything that helps.

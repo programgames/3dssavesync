@@ -113,7 +113,7 @@ static int francais;  /* replaces "anglais" */
 #define T(fr, en) (francais ? (fr) : traduire(en))
 ```
 
-`traduire(en)` returns the catalog value for `en`, or `en` itself. With no catalog loaded it returns `en`, so English users see exactly what they see today. Call sites that pass struct fields (`T(l[i].nom, l[i].nom_en)` in the settings screen) work unchanged: the lookup uses the English text at run time, not at compile time.
+`traduire(en)` returns the catalog value for `en`, or `en` itself. With no catalog loaded it returns `en`, so English users see exactly what they see today. Call sites that pass struct fields (`T(l[i].name, l[i].name_en)` in the settings screen) work unchanged: the lookup uses the English text at run time, not at compile time.
 
 ### New module `3ds/source/langue.c` (no libctru, tested on the host)
 
@@ -155,7 +155,7 @@ ZH=6 → zh-CN              KO=7 → ko    NL=8 → nl    PT=9 → pt    RU=10 �
 
 The override file **replaces** the embedded catalog; it does not merge with it. The behavior is predictable for a translator. After a release ships the translation, the translator deletes the override file.
 
-The `langue=` key lets a translator test a language without changing the console language. `ecrire_config()` writes all keys back, so it must also write `langue=` (one more `%s` in its `fprintf`). Value empty = console language.
+The `langue=` key lets a translator test a language without changing the console language. `write_config()` writes all keys back, so it must also write `langue=` (one more `%s` in its `fprintf`). Value empty = console language.
 
 ### Fonts
 
@@ -163,7 +163,7 @@ The app draws with the system font (`fontEnsureMapped`). The 3DS lets a user pic
 
 ### Screen width
 
-`ecran.c` already shrinks or wraps long text. Translations are often 20–30 % longer than English. The validator warns (does not fail) when a 3DS translation is more than 1.5 times the length of its key, so the translator can check that screen on the console.
+`screen.c` already shrinks or wraps long text. Translations are often 20–30 % longer than English. The validator warns (does not fail) when a 3DS translation is more than 1.5 times the length of its key, so the translator can check that screen on the console.
 
 ## 7. PC side (Go)
 
@@ -187,13 +187,13 @@ func tr(fr, en string) string {
 }
 ```
 
-- `catalogue` is loaded in the same package-level initialization that sets `anglais`. Go orders package initialization by dependency, so a package-level `var x = tr(...)` still sees the catalog.
+- `catalogue` is loaded in the same package-level initialization that sets `english`. Go orders package initialization by dependency, so a package-level `var x = tr(...)` still sees the catalog.
 - Loading: `json.Unmarshal` into `map[string]string`, then delete entries with a placeholder mismatch (same function as the validator, section 9). A parse error → `catalogue = nil` and one line in the journal (in French, like every journal line).
-- Existing tests set `anglais = true/false` and read French or English text. They keep working because `catalogue` stays `nil` in tests.
+- Existing tests set `english = true/false` and read French or English text. They keep working because `catalogue` stays `nil` in tests.
 
 ### Language detection
 
-Today `langueSysteme()` returns `"fr"` or `"en"` on Windows, and the raw locale string elsewhere. New contract: return a language tag, then normalize it.
+Today `systemLanguage()` returns `"fr"` or `"en"` on Windows, and the raw locale string elsewhere. New contract: return a language tag, then normalize it.
 
 - Windows: `GetUserDefaultUILanguage` (already called), then `LCIDToLocaleName` (kernel32, Vista+) → `es-ES`. The current `id & 0x3FF == 0x0C` test goes away.
 - Linux: `LANGUAGE` (colon list, take each entry in order), `LC_ALL`, `LC_MESSAGES`, `LANG` (already the case).
@@ -221,13 +221,13 @@ Two small fixes:
 
 ### Strings with behavior
 
-`Questions.oui` prints `tr("[O/n]", "[Y/n]")` and accepts only `o`, `oui`, `y`, `yes`. A Spanish translation `[S/n]` would make the answer `s` mean "no". Fix: also accept the first letter of the translated hint, in lowercase. Until then, the validator flags any translation of `[Y/n]` / `[y/N]` that changes the letters.
+`Questions.yes` prints `tr("[O/n]", "[Y/n]")` and accepts only `o`, `oui`, `y`, `yes`. A Spanish translation `[S/n]` would make the answer `s` mean "no". Fix: also accept the first letter of the translated hint, in lowercase. Until then, the validator flags any translation of `[Y/n]` / `[y/N]` that changes the letters.
 
-Dialog buttons: `demander` returns the clicked label and the code compares it with the same `tr(...)` value. That stays correct in every language.
+Dialog buttons: `ask` returns the clicked label and the code compares it with the same `tr(...)` value. That stays correct in every language.
 
 ## 8. Extraction (`go generate`)
 
-One stdlib-only tool for both sides: `client/outils/traductions/main.go`. `client/langue.go` gets:
+One stdlib-only tool for both sides: `client/outils/traductions/main.go`. `client/language.go` gets:
 
 ```go
 //go:generate go run ./outils/traductions
@@ -301,7 +301,7 @@ Each step is one small pull request and keeps the app working. Effort: S = under
 
 | # | Step | Effort |
 |---|---|---|
-| 1 | ADR "English text as translation key; French and English built in". Go: `catalogue`, new `tr`, tag normalization, override + `embed.FS` loading, placeholder filter, active code for `<html lang>`. Tests in `langue_test.go` (normalization table, fallback order, dropped bad entry). No catalog shipped yet: no visible change. | S |
+| 1 | ADR "English text as translation key; French and English built in". Go: `catalogue`, new `tr`, tag normalization, override + `embed.FS` loading, placeholder filter, active code for `<html lang>`. Tests in `language_test.go` (normalization table, fallback order, dropped bad entry). No catalog shipped yet: no visible change. | S |
 | 2 | Windows `LCIDToLocaleName`; `LANGUAGE` override on all systems. | S |
 | 3 | `outils/traductions`: extract + generate `en.json` templates + `-verifier`; CI step; fix the 3 key collisions; `PAIRE()` in the settings table. | M |
 | 4 | 3DS: `langue.c` + `test_langue.c` + CI line; `T` → `traduire`; CFG table; RomFS in Makefile, `app.rsf` and `main.c`; SD override; `langue=` in `config.ini`. Test on a real console in French, English and with an override file. | M |

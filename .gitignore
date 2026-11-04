@@ -1,11 +1,8 @@
-# Secrets : le jeton est dans ces trois fichiers
+# Secrets: these files hold the token
 server/.env
-pc/sync.config.json
 3ds/config.ini
 
 # État local du Lanceur
-pc/base.json
-pc/ndssync.log
 client/config.json
 client/*.exe
 client/3dssavesync
@@ -22,3 +19,6 @@ tools/
 e2e/
 
 __pycache__/
+
+# .cia inclus dans le programme PC par le job release (ADR 0023)
+client/embarque/3dssavesync.cia

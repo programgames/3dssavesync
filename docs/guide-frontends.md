@@ -1,6 +1,6 @@
 # Frontend guide
 
-The settings page sets up **LaunchBox**, **ES-DE** and the **shortcuts** by itself. For the other frontends, follow this page. Sources and details (French): [research-v3-frontends.md](research-v3-frontends.md).
+The settings page sets up **LaunchBox**, **ES-DE** and the **shortcuts** by itself. For the other frontends, follow this page. Sources and details (French): [notes/research-v3-frontends.md](notes/research-v3-frontends.md).
 
 Common rules:
 

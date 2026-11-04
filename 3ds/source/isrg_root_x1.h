@@ -1,5 +1,5 @@
-/* ISRG Root X1 (Let's Encrypt), exportée du magasin Windows. Valable jusqu'au 2035-06-04.
- * SHA-256 : 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6 (ADR 0003) */
+/* ISRG Root X1 (Let's Encrypt), exported from the Windows store. Valid until 2035-06-04.
+ * SHA-256: 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6 (ADR 0003) */
 static const char ISRG_ROOT_X1[] =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"

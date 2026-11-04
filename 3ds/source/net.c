@@ -1,125 +1,167 @@
 #include <3ds.h>
 #include <curl/curl.h>
 #include <malloc.h>
+#include <mbedtls/sha256.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "github_roots.h"
 #include "isrg_root_x1.h"
 #include "net.h"
 
-#define SOC_TAILLE 0x100000
+void hash_hex(const unsigned char *bytes, size_t size, char out[65])
+{
+    unsigned char h[32];
+    int i;
+    mbedtls_sha256_ret(bytes, size, h, 0);
+    for (i = 0; i < 32; i++) sprintf(out + 2 * i, "%02x", h[i]);
+}
 
-static u32 *soc_tampon;
-static CURL *c; /* un seul handle : curl garde la connexion TLS ouverte entre les requêtes */
+#define SOC_SIZE 0x100000
+
+static u32 *soc_buffer;
+static CURL *c; /* a single handle: curl keeps the TLS connection open between requests */
 
 int net_init(void)
 {
-    soc_tampon = memalign(0x1000, SOC_TAILLE);
-    if (!soc_tampon || R_FAILED(socInit(soc_tampon, SOC_TAILLE))) return -1;
+    soc_buffer = memalign(0x1000, SOC_SIZE);
+    if (!soc_buffer || R_FAILED(socInit(soc_buffer, SOC_SIZE))) return -1;
     if (R_FAILED(sslcInit(0))) return -2;
-    acInit(); /* état du Wi-Fi (net_wifi) ; sans lui, le Wi-Fi est supposé présent */
+    acInit(); /* Wi-Fi state (net_wifi); without it, Wi-Fi is assumed present */
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return -3;
     return (c = curl_easy_init()) ? 0 : -4;
 }
 
-void net_fin(void)
+void net_exit(void)
 {
     curl_easy_cleanup(c);
     curl_global_cleanup();
     acExit();
     sslcExit();
     socExit();
-    free(soc_tampon);
+    free(soc_buffer);
 }
 
 typedef struct {
-    char *octets;
-    size_t taille;
-} tampon_t;
+    char *bytes;
+    size_t size;
+} buffer_t;
 
-static size_t recevoir(char *morceau, size_t t, size_t n, void *u)
+static size_t receive(char *chunk, size_t t, size_t n, void *u)
 {
-    tampon_t *b = u;
-    char *nouveau = realloc(b->octets, b->taille + t * n + 1);
-    if (!nouveau) return 0;
-    memcpy(nouveau + b->taille, morceau, t * n);
-    b->octets = nouveau;
-    b->taille += t * n;
-    b->octets[b->taille] = '\0';
+    buffer_t *b = u;
+    char *new_data = realloc(b->bytes, b->size + t * n + 1);
+    if (!new_data) return 0;
+    memcpy(new_data + b->size, chunk, t * n);
+    b->bytes = new_data;
+    b->size += t * n;
+    b->bytes[b->size] = '\0';
     return t * n;
 }
 
-/* Une requête. envoi != NULL => PUT de ce corps. */
-static long requete(const char *url, const char *jeton, const char *condition,
-                    const void *envoi, size_t taille_envoi, tampon_t *recu)
+static void (*on_progress)(size_t, size_t); /* net_github: download of a release file in progress */
+
+static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_total, curl_off_t ul_now)
+{
+    on_progress((size_t)done, (size_t)total);
+    return 0;
+}
+
+/* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). */
+static long request(const char *url, const char *token, const char *condition,
+                    const void *upload, size_t upload_size, buffer_t *received)
 {
     char auth[320];
-    struct curl_slist *entetes;
+    struct curl_slist *headers = NULL;
+    static char github_cas[sizeof ISRG_ROOT_X1 + sizeof GITHUB_ROOTS]; /* built on the first call */
     struct curl_blob ca = { (void *)ISRG_ROOT_X1, sizeof ISRG_ROOT_X1 - 1, CURL_BLOB_NOCOPY };
     CURLcode r;
-    long statut;
+    long status;
 
-    curl_easy_reset(c); /* remet les options à zéro, garde la connexion ouverte */
-    snprintf(auth, sizeof auth, "Authorization: Bearer %s", jeton);
-    entetes = curl_slist_append(NULL, auth);
-    entetes = curl_slist_append(entetes, "X-Client: 3ds");
-    if (envoi) {
-        if (condition) entetes = curl_slist_append(entetes, condition);
-        entetes = curl_slist_append(entetes, "Content-Type: application/octet-stream");
-        entetes = curl_slist_append(entetes, "Expect:");
+    curl_easy_reset(c); /* resets the options, keeps the connection open */
+    if (token) { /* Server: ISRG only (ADR 0003) */
+        snprintf(auth, sizeof auth, "Authorization: Bearer %s", token);
+        headers = curl_slist_append(NULL, auth);
+        headers = curl_slist_append(headers, "X-Client: 3ds");
+    } else { /* GitHub: no token, ISRG + Sectigo (ADR 0021) */
+        if (!github_cas[0]) snprintf(github_cas, sizeof github_cas, "%s%s", ISRG_ROOT_X1, GITHUB_ROOTS);
+        ca.data = github_cas;
+        ca.len = strlen(github_cas);
+    }
+    if (upload) {
+        if (condition) headers = curl_slist_append(headers, condition);
+        headers = curl_slist_append(headers, "Content-Type: application/octet-stream");
+        headers = curl_slist_append(headers, "Expect:");
         curl_easy_setopt(c, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)taille_envoi);
-        curl_easy_setopt(c, CURLOPT_POSTFIELDS, envoi);
+        curl_easy_setopt(c, CURLOPT_POSTFIELDSIZE_LARGE, (curl_off_t)upload_size);
+        curl_easy_setopt(c, CURLOPT_POSTFIELDS, upload);
     }
 
     curl_easy_setopt(c, CURLOPT_URL, url);
-    curl_easy_setopt(c, CURLOPT_HTTPHEADER, entetes);
+    curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(c, CURLOPT_CAINFO_BLOB, &ca);
-    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, recevoir);
-    curl_easy_setopt(c, CURLOPT_WRITEDATA, recu);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, receive);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, received);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(c, CURLOPT_TIMEOUT, 60L);
-    curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds");
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, on_progress ? 300L : 60L);
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* required by the GitHub API */
+    if (on_progress) { /* github.com redirects to release-assets.githubusercontent.com */
+        curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
+        curl_easy_setopt(c, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)NET_MAX_FILE);
+        curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferinfo);
+        curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    }
 
     r = curl_easy_perform(c);
-    statut = -(long)r;
-    if (r == CURLE_OK) curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &statut);
-    curl_slist_free_all(entetes);
-    return statut;
+    status = -(long)r;
+    if (r == CURLE_OK) curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    curl_slist_free_all(headers);
+    return status;
 }
 
-long net_get(const char *url, const char *jeton, char **corps, size_t *taille)
+long net_get(const char *url, const char *token, char **body, size_t *size)
 {
-    tampon_t b = { NULL, 0 };
-    long statut = requete(url, jeton, NULL, NULL, 0, &b);
+    buffer_t b = { NULL, 0 };
+    long status = request(url, token, NULL, NULL, 0, &b);
 
-    if (statut <= 0) {
-        free(b.octets);
-        b.octets = NULL;
-        b.taille = 0;
-    } else if (!b.octets) {
-        b.octets = calloc(1, 1);
+    if (status <= 0) {
+        free(b.bytes);
+        b.bytes = NULL;
+        b.size = 0;
+    } else if (!b.bytes) {
+        b.bytes = calloc(1, 1);
     }
-    *corps = b.octets;
-    *taille = b.taille;
-    return statut;
+    *body = b.bytes;
+    *size = b.size;
+    return status;
 }
 
-long net_put(const char *url, const char *jeton, const char *condition, const void *octets, size_t taille)
+long net_github(const char *url, void (*file_progress)(size_t, size_t), char **body, size_t *size)
 {
-    tampon_t b = { NULL, 0 };
-    long statut = requete(url, jeton, condition, octets, taille, &b);
-    free(b.octets);
-    return statut;
+    long status;
+    on_progress = file_progress;
+    status = net_get(url, NULL, body, size);
+    on_progress = NULL;
+    return status;
 }
 
-/* erreurs.c lit les codes curl sans curl.h : mêmes valeurs. */
+long net_put(const char *url, const char *token, const char *condition, const void *bytes, size_t size)
+{
+    buffer_t b = { NULL, 0 };
+    long status = request(url, token, condition, bytes, size, &b);
+    free(b.bytes);
+    return status;
+}
+
+/* errors.c reads curl codes without curl.h: same values. */
 _Static_assert(CURLE_COULDNT_RESOLVE_HOST == 6 && CURLE_COULDNT_CONNECT == 7 && CURLE_OPERATION_TIMEDOUT == 28 &&
-               CURLE_SSL_CONNECT_ERROR == 35 && CURLE_PEER_FAILED_VERIFICATION == 60 && CURLE_RECV_ERROR == 56,
-               "codes curl de erreurs.c");
+               CURLE_SSL_CONNECT_ERROR == 35 && CURLE_PEER_FAILED_VERIFICATION == 60 && CURLE_RECV_ERROR == 56 &&
+               CURLE_PARTIAL_FILE == 18 && CURLE_FILESIZE_EXCEEDED == 63,
+               "codes curl de errors.c");
 
 int net_wifi(void)
 {
-    u32 statut;
-    return R_FAILED(ACU_GetStatus(&statut)) || statut != 1; /* 1 : aucun point d'accès */
+    u32 status;
+    return R_FAILED(ACU_GetStatus(&status)) || status != 1; /* 1: no access point */
 }
