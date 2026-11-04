@@ -72,9 +72,11 @@ The folder picker cannot choose the root of the internal storage or the `Downloa
 
 When you change a folder, a core, an extension, the systems or **Saves next to the ROMs** of an emulator, the app forgets the last sync of its games. The record of the old folders must not decide for the new ones: each game that the server also has then shows **In sync** or **Conflict**, never **To upload**. Open each Conflict and choose. A new name keeps the record. Removing an emulator also deletes its record (never its saves or the backup copies).
 
+**Two entries of one emulator.** You can add the same emulator twice, for example melonDS for two ROM folders. The lists then show the first folder of each entry after its name, for example `melonDS (roms/nds)`, so the same game in both entries can be told apart. To show a shorter name, open the entry and change **Name in the lists**.
+
 ## Games
 
-Each line shows the short name of the game, as on the 3DS ("Mario Kart DS", without "(Europe) (En,Fr,De,Es,It)"), then its state and its system. The full file name is in the game details. Pull the list down to read the folders and the server again (TalkBack: the **Refresh** action of the list). The states are the same words as on the 3DS:
+Each line shows the short name of the game, as on the 3DS ("Mario Kart DS", without "(Europe) (En,Fr,De,Es,It)"), then its state and its system. The full file name is in the game details. Pull the list down to read the folders and the server again (TalkBack: the **Refresh** action of the list). With TalkBack, each line is one stop that reads the name, the system, the emulator and the state. The states are the same words as on the 3DS:
 
 | State | Meaning | Action |
 |---|---|---|
@@ -90,11 +92,11 @@ Games with no save anywhere are hidden; a line at the end of the list counts the
 
 When the server can't be read, one banner says why, with **Retry**. The games that have no save on this phone are hidden until the server answers: the app can't tell if the server has one. Every error shows the same way: what happened and what to do, **Retry** when it helps, and the technical detail (exception, address, HTTP code) behind **Show details**, to report a problem.
 
-**Sync all** is greyed out with its reason next to it: **Nothing to sync** (no game to upload or download) or **Server unreachable**. It syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
+**Sync all** is greyed out with its reason next to it: **Nothing to sync** (no game to upload or download) or **Server unreachable**. It syncs every game that has a state. Before a save of the phone is replaced, it lists those games and asks first: tap **Replace and sync** to go on. It replaces only the saves of that list: a save that changed after the list was shown stays as it is, and the summary names it. Conflicts are never resolved by Sync all: the summary lists them, open each one to choose. The summary also lists each failure with what to do and its technical detail. Sync all stops at the first failure of the server, of the network or of a write on the phone: the next games are not tried.
 
 **Close the emulator before you sync.** Android gives no way to see if an emulator is running. An open emulator keeps the save in memory and writes it back later: RetroArch does it every few seconds while a game runs. It would write the old progress back over a downloaded save. So the app protects the saves it writes (Download, **Use the server save**, the downloads of Sync all):
 
-- Before the first of these actions, or the first Sync all, since the app started, it shows a reminder to close the emulator. Tick **Don't show again** to skip it from then on. Sync all shows it once for the whole pass.
+- Before the first of these actions, or the first Sync all, since the app started, it shows a reminder to close the emulator: swipe it away from the recent apps, then tap **The emulator is closed**. Tick **Don't show again** to skip it from then on. Sync all shows it once for the whole pass.
 - It refuses to replace a save that changed less than 30 seconds ago: the emulator may still be open. The message says to close it, then sync again. Sync all goes on with the next games and lists the refused ones in its summary. Some folders give no date for their files: there, the app relies on the reminder only.
 - It remembers the save that each download replaced. If that exact save comes back later, the emulator was probably still open and wrote it back. The game then shows **Conflict** with this reason, never **To upload**, and the background upload does not send it. Open the game and choose: **Use the server save** writes the downloaded save again, **Keep this phone's save** uploads the old one. The app stops this check for a game after its next upload.
 
@@ -120,7 +122,7 @@ The app never uploads a cut file and never offers to keep it. If the backup copy
 
 ## History and Restore
 
-The server keeps the older versions of every save. To get one back, open the game, then tap **History** (it shows when the server has a version of this game).
+The server keeps the older versions of every save. To get one back, open the game, then tap **Show the history** (it shows when the server has a version of this game).
 
 1. The list shows the versions on the server, newest first: number, age, device (3DS, PC, Android, or Restore for a version put back), size. **Current** marks the version that the devices download.
 2. Tap a version. For a Pokémon game, the app downloads this version only and shows its play time and trainer name.
@@ -142,7 +144,7 @@ If the Restore fails, nothing changes on the server, and the message says why, w
 A ROM hack often keeps the code of its original game: Pokémon Radical Red keeps the code of Pokémon FireRed. The app then sees one game in two ROMs and shows **Duplicate**: neither is synced. Give the hack its own save in one of two ways:
 
 - Open the **Duplicate** line, then tap **Give this ROM its own save** under the hack ROM. The list is read again and shows the two games.
-- In **Settings**, tap **ROM hacks**, then **Choose the ROM**. Choose the hack ROM file. The console comes from the extension (choose it for a `.zip`). Tap **Add**.
+- In **Settings**, tap **Open the ROM hacks**, then **Choose the ROM**. Choose the hack ROM file. The console comes from the extension (choose it for a `.zip`). Tap **Add this ROM hack**.
 
 The hack then syncs under its own key on the server. The app makes this key from the ROM file name, with the same rule as the PC program: for example `Radical Red (4.10).gba` always gives `GBA-0EE3`. So the same ROM file name gives the same save on the PC, the 3DS and this phone. To sync the hack with them:
 
@@ -186,9 +188,13 @@ What it never does:
 - It never writes a save or a backup copy on this phone. The only thing it changes on the phone is its record of the last sync, after the server has accepted an upload.
 - It never uploads a save that changed in the last 30 seconds: the emulator may still be writing it. That save waits for the next run.
 
-On Android 13 and later, the app asks for the permission to show notifications when you turn the setting on. A conflict or a failure then shows as one notification, which is not shown again while the same problems stay. If you refuse the permission, the background upload still works: the problems show only in **Settings**. **Settings** always shows the last run: its time, the number of saves uploaded and the problems.
+On Android 13 and later, the app asks for the permission to show notifications when you turn the setting on. A conflict or a failure then shows as one notification, which is not shown again while the same problems stay. If you refuse the permission, the background upload still works: the problems show only in **Settings**, with **Turn on notifications**, which opens the notification settings of the app. **Settings** always shows the last run: its time, the number of saves uploaded and the problems.
 
 Battery and data: each run reads the save folders and the server list, and uploads only the saves that changed. Android may run it later than every 15 minutes, for example in battery saver mode or when the app is rarely used. Turn the setting off to stop it.
+
+## Look
+
+On Android 12 and later, the app takes the colours of your wallpaper; before, it uses the standard Material colours. It follows the dark theme of the phone. The state colours stay the same everywhere and keep a readable contrast in both themes. On a tablet or an open foldable, the screens keep a phone width, centred.
 
 ## Not in this version
 

@@ -82,6 +82,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.semantics.contentDescription
+import android.content.Intent
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableIntStateOf
 import kotlinx.coroutines.launch
@@ -110,48 +117,66 @@ fun Root() {
     var setup by rememberSaveable { mutableStateOf(!App.configured() && !App.settings.setupDone) }
     val o = App.entries.find { it.id == open }
     val ed = editing
-    when {
-        setup -> SetupScreen {
-            App.settings.setupDone = true
-            setup = false
-            tab = Tab.GAMES
-        }
-        o != null -> {
-            val close = {
-                open = null
-                App.message = null
-            }
-            BackHandler(onBack = close)
-            DetailsScreen(o, close)
-        }
-        ed != null && App.emulators.any { it.id == ed } -> {
-            BackHandler { editing = null }
-            EmulatorScreen(ed) { editing = null }
-        }
-        hacks -> {
-            BackHandler { hacks = false }
-            HacksScreen { hacks = false }
-        }
-        else -> Scaffold(
-            bottomBar = {
-                NavigationBar {
-                    for ((t, icon, label) in listOf(
-                        Triple(Tab.GAMES, Icons.Filled.PlayArrow, R.string.tab_games),
-                        Triple(Tab.EMULATORS, Icons.Filled.Build, R.string.tab_emulators),
-                        Triple(Tab.SETTINGS, Icons.Filled.Settings, R.string.tab_settings),
-                    )) {
-                        NavigationBarItem(selected = tab == t, onClick = { tab = t }, icon = { Icon(icon, null) }, label = { Text(stringResource(label)) })
+    // a tablet or an open foldable: the phone layout, at most 640 dp wide and centred, instead of lines across the screen
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
+                when {
+                    setup -> SetupScreen {
+                        App.settings.setupDone = true
+                        setup = false
+                        tab = Tab.GAMES
+                    }
+                    o != null -> {
+                        val close = {
+                            open = null
+                            App.message = null
+                        }
+                        BackHandler(onBack = close)
+                        DetailsScreen(o, close)
+                    }
+                    ed != null && App.emulators.any { it.id == ed } -> {
+                        BackHandler { editing = null }
+                        EmulatorScreen(ed) { editing = null }
+                    }
+                    hacks -> {
+                        BackHandler { hacks = false }
+                        HacksScreen { hacks = false }
+                    }
+                    else -> Scaffold(
+                        bottomBar = {
+                            NavigationBar {
+                                for ((t, icon, label) in listOf(
+                                    Triple(Tab.GAMES, Icons.Filled.PlayArrow, R.string.tab_games),
+                                    Triple(Tab.EMULATORS, Icons.Filled.Build, R.string.tab_emulators),
+                                    Triple(Tab.SETTINGS, Icons.Filled.Settings, R.string.tab_settings),
+                                )) {
+                                    NavigationBarItem(selected = tab == t, onClick = { tab = t }, icon = { Icon(icon, null) }, label = { Text(stringResource(label)) })
+                                }
+                            }
+                        },
+                    ) { p ->
+                        when (tab) {
+                            Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
+                            Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
+                            Tab.SETTINGS -> SettingsScreen(p, { setup = true }) { hacks = true }
+                        }
                     }
                 }
-            },
-        ) { p ->
-            when (tab) {
-                Tab.GAMES -> GamesScreen(p, { open = it.id }, { tab = Tab.SETTINGS }, { tab = Tab.EMULATORS })
-                Tab.EMULATORS -> EmulatorsScreen(p) { editing = it }
-                Tab.SETTINGS -> SettingsScreen(p, { setup = true }) { hacks = true }
             }
         }
     }
+}
+
+// screen: the padding of the Scaffold, and room for the keyboard (edge to edge, the window does not shrink for it).
+fun Modifier.screen(p: PaddingValues) = padding(p).consumeWindowInsets(p).imePadding()
+
+// named: what TalkBack says for a button that repeats on the screen ("Choose: ROM folder"); it starts with the visible
+// word, so voice control finds it too.
+@Composable
+fun Modifier.named(action: String, what: String): Modifier {
+    val d = stringResource(R.string.action_on, action, what)
+    return semantics { contentDescription = d }
 }
 
 // problemText: what happened and what to do, for each Problem.
@@ -212,7 +237,10 @@ fun ErrorBox(t: Throwable, lead: String? = null, note: String? = null, retry: ((
 }
 
 @Composable
-fun Title(text: String) = Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp))
+fun Title(text: String) = Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
+
+@Composable
+fun Section(text: String) = Text(text, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
 
 // scanQr opens Google code scanner (QR codes only, on the phone, no CAMERA permission). done: the text, null when the
 // user cancels, or the error (no Google Play services, scanner module not downloaded yet). Tests replace it.
@@ -228,20 +256,20 @@ var scanQr: (Context, (Result<String?>) -> Unit) -> Unit = { ctx, done ->
 
 @Composable
 fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
-    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.screen(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Title(stringResource(R.string.tab_settings))
-        Text(stringResource(R.string.settings_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-        ServerFields(manual = true)
+        Section(stringResource(R.string.settings_title))
+        ServerFields(manual = true, scanFirst = false)
         HorizontalDivider()
         BackgroundSection()
         HorizontalDivider()
-        Text(stringResource(R.string.backups_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Section(stringResource(R.string.backups_title))
         Text(stringResource(R.string.backups_where))
         Text(App.backupsDir.path, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         HorizontalDivider()
-        Text(stringResource(R.string.hacks_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Section(stringResource(R.string.hacks_title))
         Text(stringResource(R.string.hacks_text))
-        OutlinedButton(onHacks) { Text(stringResource(R.string.hacks_title)) }
+        OutlinedButton(onHacks) { Text(stringResource(R.string.open_hacks)) }
         HorizontalDivider()
         OutlinedButton(onSetup) { Text(stringResource(R.string.setup_again)) }
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
@@ -249,9 +277,10 @@ fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
 }
 
 // ServerFields: "Scan the PC's QR code" first, the address and token typed by hand as the other way (shown at once
-// when manual, else behind "Type the address"), and the connection test.
+// when manual, else behind "Type the address"), and the connection test. scanFirst: the scan is the main action of the
+// screen (filled button); else it is tonal, so the screen keeps one filled button at most.
 @Composable
-fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
+fun ServerFields(manual: Boolean, scanFirst: Boolean, changed: () -> Unit = {}) {
     val ctx = LocalContext.current
     var url by rememberSaveable { mutableStateOf(App.settings.url) }
     var token by rememberSaveable { mutableStateOf(App.settings.token) }
@@ -260,7 +289,7 @@ fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
     var result by remember { mutableStateOf<Result<Int>?>(null) }
     var scanned by remember { mutableStateOf<Int?>(null) } // why the last scan filled nothing
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Button({
+        val scan = {
             scanned = null
             scanQr(ctx) { r ->
                 val pairing = r.getOrNull()?.let(::parsePairing)
@@ -280,9 +309,13 @@ fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
                     App.testConnection { result = it }
                 }
             }
-        }, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
-        Text(stringResource(scanned ?: R.string.scan_help), style = MaterialTheme.typography.bodySmall,
-            color = if (scanned == null) Color.Unspecified else MaterialTheme.colorScheme.error)
+        }
+        if (scanFirst) Button(scan, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
+        else FilledTonalButton(scan, enabled = App.busy == null) { Text(stringResource(R.string.scan_qr)) }
+        Text(
+            stringResource(scanned ?: R.string.scan_help), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall,
+            color = if (scanned == null) Color.Unspecified else MaterialTheme.colorScheme.error,
+        )
         if (!typing) OutlinedButton({ typing = true }) { Text(stringResource(R.string.type_address)) }
         if (typing) OutlinedTextField(
             url, {
@@ -308,11 +341,11 @@ fun ServerFields(manual: Boolean, changed: () -> Unit = {}) {
             trailingIcon = { TextButton({ show = !show }) { Text(stringResource(if (show) R.string.hide else R.string.show)) } },
         )
         if (typing) {
-            Button({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
+            OutlinedButton({ App.testConnection { result = it } }, enabled = App.busy == null && url.isNotBlank() && token.isNotBlank()) {
                 Text(stringResource(R.string.test_connection))
             }
         }
-        App.busy?.let { Text(it) }
+        App.busy?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         result?.fold(
             { Text(pluralStringResource(R.plurals.connected, it, it), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = stateColor(Shown.IN_SYNC)) },
             { ErrorBox(it, retry = { App.testConnection { r -> result = r } }) },
@@ -334,7 +367,7 @@ fun SetupScreen(done: () -> Unit) {
         step = if (step == 4 && emulator == null) 2 else step - 1
     }
     Scaffold { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.screen(p).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             @Composable
             fun header(n: Int, title: Int) {
                 Text(stringResource(R.string.setup_step, n, 3), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -350,9 +383,11 @@ fun SetupScreen(done: () -> Unit) {
                 1 -> {
                     header(1, R.string.setup_server)
                     var configured by remember { mutableStateOf(App.configured()) } // the settings are not Compose state
-                    ServerFields(manual = false) { configured = App.configured() }
+                    // one filled button: Scan until the server is set, then Next
+                    ServerFields(manual = false, scanFirst = !configured) { configured = App.configured() }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button({ step = 2 }, enabled = configured) { Text(stringResource(R.string.next)) }
+                        if (configured) Button({ step = 2 }) { Text(stringResource(R.string.next)) }
+                        else OutlinedButton({ step = 2 }, enabled = false) { Text(stringResource(R.string.next)) }
                         TextButton({ step = 2 }) { Text(stringResource(R.string.skip)) }
                     }
                 }
@@ -390,9 +425,11 @@ private fun BackgroundSection() {
     var on by remember { mutableStateOf(App.settings.background) }
     var notifications by remember { mutableStateOf(notificationsOn()) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifications = notificationsOn() }
-    Text(stringResource(R.string.bg_title), style = MaterialTheme.typography.titleMedium)
+    // refused once, Android no longer asks: the notification settings of the app, then the state is read again
+    val open = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { notifications = notificationsOn() }
+    Section(stringResource(R.string.bg_title))
     Row(
-        Modifier.fillMaxWidth().toggleable(on, role = Role.Switch) { v ->
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(on, role = Role.Switch) { v ->
             on = v
             App.setBackground(v)
             if (v && Build.VERSION.SDK_INT >= 33 && !notificationsOn()) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -403,7 +440,17 @@ private fun BackgroundSection() {
         Switch(on, null)
     }
     Text(stringResource(R.string.bg_help), style = MaterialTheme.typography.bodySmall)
-    if (on && !notifications) Text(stringResource(R.string.bg_no_notification), style = MaterialTheme.typography.bodySmall)
+    if (on && !notifications) {
+        Text(stringResource(R.string.bg_no_notification), style = MaterialTheme.typography.bodySmall)
+        OutlinedButton({
+            val i = if (Build.VERSION.SDK_INT >= 26) {
+                Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+            } else {
+                Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${ctx.packageName}".toUri())
+            }
+            runCatching { open.launch(i) }
+        }) { Text(stringResource(R.string.notifications_on)) }
+    }
     val last = App.lastRun
     Text(if (last == null) stringResource(R.string.bg_never) else pluralStringResource(R.plurals.bg_last, last.uploaded, dateText(last.time), last.uploaded))
     if (last != null && last.problems.isNotEmpty()) Text(last.problems, color = MaterialTheme.colorScheme.error)
@@ -431,7 +478,7 @@ fun HacksScreen(onBack: () -> Unit) {
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
         })
     }) { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.screen(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.hacks_text))
             Text(stringResource(R.string.hacks_same_key), style = MaterialTheme.typography.bodySmall)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -442,7 +489,7 @@ fun HacksScreen(onBack: () -> Unit) {
                         Text(name)
                         Text(systemName(aliasSystem(key)), style = MaterialTheme.typography.bodySmall)
                     }
-                    TextButton({ removing = name }) { Text(stringResource(R.string.remove)) }
+                    TextButton({ removing = name }, Modifier.named(stringResource(R.string.remove), name)) { Text(stringResource(R.string.remove)) }
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -462,7 +509,7 @@ fun HacksScreen(onBack: () -> Unit) {
     removing?.let { name ->
         AlertDialog(
             onDismissRequest = { removing = null },
-            title = { Text(stringResource(R.string.hacks_title)) },
+            title = { Text(stringResource(R.string.hack_remove_title)) },
             text = { Text(stringResource(R.string.hack_remove_text, name)) },
             confirmButton = {
                 TextButton({
@@ -527,17 +574,26 @@ private fun StateLine(s: FolderState) {
 
 fun Emulator.title() = label.ifBlank { profile().name.ifBlank { App.text(R.string.custom_profile) } }
 
+// listName: the name of the entry in the lists. Two entries with the same name (melonDS twice, for two ROM folders) get
+// their first folder too, so that their games can be told apart; the user can also rename an entry.
+fun Emulator.listName(all: List<Emulator> = App.emulators): String {
+    val t = title()
+    if (all.none { it.id != id && it.title().equals(t, ignoreCase = true) }) return t
+    val folder = systems.toSortedMap().values.firstNotNullOfOrNull { it.roms ?: it.saves } ?: return t
+    return "$t (${folderLabel(folder.toUri())})"
+}
+
 @Composable
 fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
     var adding by remember { mutableStateOf(false) }
-    Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.screen(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Title(stringResource(R.string.emulators_title))
         if (App.emulators.isEmpty()) Text(stringResource(R.string.no_emulator))
         for (e in App.emulators) {
             val st = produceState(FolderState.CHECKING, e) { value = withContext(Dispatchers.IO) { emulatorState(e) } }.value
             Card({ onEdit(e.id) }, Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(e.title(), style = MaterialTheme.typography.titleMedium)
+                    Text(e.listName(), style = MaterialTheme.typography.titleMedium)
                     Text(e.systems.keys.joinToString(" · ") { it.label })
                     StateLine(st)
                 }
@@ -595,11 +651,16 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
     val e = App.emulators.firstOrNull { it.id == id } ?: return
     var removing by remember { mutableStateOf(false) }
     Scaffold(topBar = {
-        TopAppBar(title = { Text(e.title()) }, navigationIcon = {
+        TopAppBar(title = { Text(e.listName()) }, navigationIcon = {
             IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
         })
     }) { p ->
-        Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.screen(p).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // a new name keeps the Bases: the folders and the formats stay the same
+            OutlinedTextField(
+                e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } }, Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.name)) }, supportingText = { Text(stringResource(R.string.name_help)) }, singleLine = true,
+            )
             EmulatorBody(id)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             // at the bottom, in red, with a confirmation: never at the level of the main actions
@@ -611,7 +672,7 @@ fun EmulatorScreen(id: String, onBack: () -> Unit) {
     if (removing) {
         AlertDialog(
             onDismissRequest = { removing = false },
-            title = { Text(stringResource(R.string.remove_emulator)) },
+            title = { Text(stringResource(R.string.remove_emulator_title, e.listName())) },
             text = { Text(stringResource(R.string.remove_emulator_text)) },
             confirmButton = {
                 TextButton({
@@ -664,11 +725,8 @@ fun EmulatorBody(id: String) {
         noPicker = runCatching { picker.launch(startAt(current, usual)) }.isFailure // no folder picker on this phone
     }
     Text(stringResource(pr.hint))
-    if (custom) {
-        OutlinedTextField(e.label, { v -> App.changeEmulator(id, keepBases = true) { it.copy(label = v) } }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.name)) }, singleLine = true)
-    }
     if (pr.systems.size > 1) { // untick a system you don't play: it then asks for nothing
-        Text(stringResource(R.string.systems_used), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.systems_used), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
         FlowRow {
             for (s in pr.systems.keys) {
                 val on = s in e.systems
@@ -695,7 +753,7 @@ fun EmulatorBody(id: String) {
     }
     for ((s, f) in e.systems.toSortedMap()) {
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
-        Text(systemName(s), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
+        Section(systemName(s))
         val variants = pr.systems[s].orEmpty()
         if (variants.size > 1) {
             Text(stringResource(R.string.core))
@@ -740,7 +798,7 @@ private fun FolderRow(label: String, uri: String?, pick: () -> Unit) {
             }
             StateLine(st)
         }
-        OutlinedButton(pick) { Text(stringResource(R.string.choose)) }
+        OutlinedButton(pick, Modifier.named(stringResource(R.string.choose), label)) { Text(stringResource(R.string.choose)) }
     }
 }
 

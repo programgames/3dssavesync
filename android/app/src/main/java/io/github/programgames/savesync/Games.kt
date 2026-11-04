@@ -25,6 +25,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.lazy.LazyColumn
@@ -90,24 +95,26 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
-// Colors of the States, like the 3DS app: To upload yellow, To download cyan, Conflict red, In sync green.
-@Composable
-fun stateColor(s: Shown): Color {
-    val dark = isSystemInDarkTheme()
-    return when (s) {
-        Shown.TO_UPLOAD -> if (dark) Color(0xFFFFC94D) else Color(0xFF9A6700)
-        Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00838F)
-        Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFC62828)
-        Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant // grey with a readable contrast
-    }
+// Colors of the States, like the 3DS app: To upload yellow, To download cyan, Conflict red, In sync green. Each one
+// reads at 4.5:1 or more on the light or dark surface, inside its label too (ColorsTest). null: the grey of the theme.
+fun stateColor(s: Shown, dark: Boolean): Color? = when (s) {
+    Shown.TO_UPLOAD -> if (dark) Color(0xFFFFC94D) else Color(0xFF7D5400)
+    Shown.TO_DOWNLOAD -> if (dark) Color(0xFF4DD0E1) else Color(0xFF00666F)
+    Shown.CONFLICT, Shown.INTERRUPTED -> if (dark) Color(0xFFEF7070) else Color(0xFFB71C1C)
+    Shown.IN_SYNC -> if (dark) Color(0xFF81C784) else Color(0xFF1E6B23)
+    else -> null
 }
+
+@Composable
+fun stateColor(s: Shown): Color = stateColor(s, isSystemInDarkTheme()) ?: MaterialTheme.colorScheme.onSurfaceVariant
+
+const val LABEL_TINT = 0.14f // the background of a StatusLabel: its colour at 14 %
 
 // StatusLabel: the State as a coloured label (dot and word, never the colour alone). Not a chip: it does nothing.
 @Composable
-fun StatusLabel(s: Shown) {
+fun StatusLabel(s: Shown, modifier: Modifier = Modifier) {
     val c = stateColor(s)
-    Surface(shape = RoundedCornerShape(50), color = c.copy(alpha = 0.14f)) {
+    Surface(modifier, shape = RoundedCornerShape(50), color = c.copy(alpha = LABEL_TINT)) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(c, CircleShape))
             Text(stateWord(s), Modifier.padding(start = 6.dp), color = c, style = MaterialTheme.typography.labelLarge)
@@ -177,7 +184,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
         }
         App.busy?.let {
             LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
-            Text(it, style = MaterialTheme.typography.bodySmall)
+            Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall)
         }
         val refresh = stringResource(R.string.refresh)
         // pull down to read the folders and the server again; TalkBack and keyboards get the same as an action
@@ -220,13 +227,18 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
     confirm?.let { list ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text(stringResource(R.string.sync_all)) },
-            text = { Text(stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.short })) },
+            title = { Text(pluralStringResource(R.plurals.confirm_replace_title, list.size, list.size)) },
+            text = {
+                Text(
+                    stringResource(R.string.confirm_replace, list.joinToString("\n") { "• " + it.short + if (several) " · " + it.emulator.listName() else "" }),
+                    Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
             confirmButton = {
                 TextButton({
                     confirm = null
                     App.syncAll(list)
-                }) { Text(stringResource(R.string.sync)) }
+                }) { Text(stringResource(R.string.replace_and_sync)) }
             },
             dismissButton = { TextButton({ confirm = null }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -259,26 +271,31 @@ fun Reminder(then: () -> Unit, close: () -> Unit) {
                 App.remind(never)
                 close()
                 then()
-            }) { Text(stringResource(R.string.go_on)) }
+            }) { Text(stringResource(R.string.emulator_closed)) }
         },
         dismissButton = { TextButton(close) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
 // GameRow: the short name on the full width, then the State, the system and the emulator. One focus stop for
-// TalkBack ("Mario Kart DS, To download, DS"): clickable merges the texts of the row.
+// TalkBack ("Mario Kart DS, DS, melonDS, To download, button"): the row merges its texts, and the State is its state
+// description, not one more text.
 @Composable
 private fun GameRow(e: Entry, several: Boolean, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick).padding(vertical = 8.dp)) {
+    val state = stateWord(e.shown)
+    Column(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { stateDescription = state }
+            .clickable(onClick = onClick).padding(vertical = 8.dp),
+    ) {
         Text(e.short, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyLarge)
         FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            StatusLabel(e.shown)
+            StatusLabel(e.shown, Modifier.clearAndSetSemantics {})
             Text(
                 e.system.label,
                 Modifier.align(Alignment.CenterVertically).border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
                 style = MaterialTheme.typography.labelMedium,
             )
-            if (several) Text(e.emulator.title(), Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (several) Text(e.emulator.listName(), Modifier.align(Alignment.CenterVertically), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     HorizontalDivider()
@@ -323,7 +340,7 @@ fun playText(p: PlayInfo) =
 private fun serverLines(v: Version, play: PlayInfo?): List<String> = listOfNotNull(
     runCatching { serverDate.parse(v.date)!!.time }.getOrNull()?.let { stringResource(R.string.uploaded_on, dateText(it), ageText(v.age)) },
     stringResource(R.string.uploaded_by, clientLabel(v.client)),
-    pluralStringResource(R.plurals.size, v.size.toInt(), v.size),
+    sizeText(v.size),
     play?.let { playText(it) },
 )
 
@@ -352,7 +369,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
         Column(Modifier.padding(p).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(e.short, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
             Column {
-                Text("${systemName(e.system)} · ${e.emulator.title()}", style = MaterialTheme.typography.bodyMedium)
+                Text("${systemName(e.system)} · ${e.emulator.listName()}", style = MaterialTheme.typography.bodyMedium)
                 // the full ROM file name, with its tags; a 3DS game has no ROM file here
                 if (e.game != null && e.system != System.N3DS) Text(stringResource(R.string.file_row, e.rom), style = MaterialTheme.typography.bodySmall)
             }
@@ -375,14 +392,16 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 for (rom in e.dups) {
                     Text("• $rom")
                     OutlinedButton({
-                        App.message = App.addAlias(e.system, withoutExtension(rom))?.let { App.text(R.string.done_failed) to IllegalArgumentException(it) }
+                        App.message = App.addAlias(e.system, withoutExtension(rom))?.let { App.text(R.string.alias_failed) to IllegalArgumentException(it) }
                         if (App.message == null) onBack() // the list is read again: the two ROMs, each with its Key
-                    }, enabled = App.busy == null) { Text(stringResource(R.string.own_save)) }
+                    }, Modifier.named(stringResource(R.string.own_save), rom), enabled = App.busy == null) { Text(stringResource(R.string.own_save)) }
                 }
             }
             // a server not read: the list says it once, with Retry; here only the why line above
             e.error?.let { ErrorBox(it) }
-            App.message?.let { (text, t) -> if (t == null) Text(text, color = MaterialTheme.colorScheme.primary) else ErrorBox(t, text) }
+            App.message?.let { (text, t) ->
+                if (t == null) Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.primary) else ErrorBox(t, text)
+            }
             App.busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()) }
             if (e.game == null || st == null) return@Column // Duplicate, or nothing read: no cards
 
@@ -403,7 +422,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     }
                 }
             } else if (e.shown == Shown.CONFLICT && server != null) {
-                Text(stringResource(R.string.choose_version), style = MaterialTheme.typography.titleMedium)
+                Section(stringResource(R.string.choose_version))
                 // one card above the other: side by side, the buttons were cut on a phone 320 dp wide
                 ChoiceCard(stringResource(R.string.this_phone), phoneLines, stringResource(R.string.keep_phone), Modifier.fillMaxWidth()) { ask = true }
                 ChoiceCard(stringResource(R.string.server), serverText, stringResource(R.string.take_server), Modifier.fillMaxWidth()) {
@@ -423,7 +442,7 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                 OutlinedButton({
                     App.message = null
                     history = true
-                }, enabled = App.busy == null) { Text(stringResource(R.string.history)) }
+                }, enabled = App.busy == null) { Text(stringResource(R.string.show_history)) }
             }
         }
     }
@@ -459,13 +478,13 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
     if (download) {
         AlertDialog(
             onDismissRequest = { download = false },
-            title = { Text(stringResource(R.string.download)) },
+            title = { Text(stringResource(R.string.confirm_download_title)) },
             text = { Text(stringResource(R.string.confirm_download)) },
             confirmButton = {
                 TextButton({
                     download = false
                     App.act(e, mayReplace = true)
-                }) { Text(stringResource(R.string.download)) }
+                }) { Text(stringResource(R.string.replace)) }
             },
             dismissButton = { TextButton({ download = false }) { Text(stringResource(R.string.cancel)) } },
         )
@@ -478,7 +497,7 @@ private fun phoneLines(e: Entry): List<String> {
     val local = e.status?.local ?: return listOf(stringResource(if (e.game?.archive != null) R.string.never_started_azahar else R.string.no_local_save))
     return listOfNotNull(
         e.game?.file?.modified()?.let { stringResource(R.string.modified_on, dateText(it)) },
-        pluralStringResource(R.plurals.size, local.version.size.toInt(), local.version.size),
+        sizeText(local.version.size),
         if (local.blank) stringResource(R.string.blank_save) else null,
         pokemonPlayInfo(local.sram)?.let { playText(it) },
     )
@@ -496,7 +515,7 @@ fun clientLabel(c: String) = when (c) {
 }
 
 @Composable
-private fun sizeText(n: Long) = if (n >= 1024) stringResource(R.string.size_kib, (n + 512) / 1024) else pluralStringResource(R.plurals.size, n.toInt(), n)
+fun sizeText(n: Long) = if (n >= 1024) stringResource(R.string.size_kib, (n + 512) / 1024) else pluralStringResource(R.plurals.size, n.toInt(), n)
 
 @Composable
 private fun versionLine(v: Version) = stringResource(R.string.version_no, v.number) + " · " + ageText(v.age)
@@ -527,11 +546,11 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
     }) { p ->
         LazyColumn(Modifier.padding(p).padding(horizontal = 16.dp)) {
             item {
-                Text(e.short, style = MaterialTheme.typography.titleMedium)
+                Text(e.short, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
                 Text(stringResource(R.string.history_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
                 if (list == null) Text(stringResource(R.string.reading_history), style = MaterialTheme.typography.bodySmall)
                 if (list == null || App.busy != null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                App.busy?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                App.busy?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall) }
                 list?.exceptionOrNull()?.let { ErrorBox(it, stringResource(R.string.history_failed), retry = { load++ }) }
                 App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
                 if (list?.isSuccess == true && versions.isEmpty()) Text(stringResource(R.string.no_versions), Modifier.padding(vertical = 8.dp))
@@ -539,7 +558,7 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
             items(versions, key = { it.file }) { x ->
                 val sel = x.file == selected
                 Row(
-                    Modifier.fillMaxWidth().background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
                         .selectable(sel) {
                             selected = x.file
                             App.message = null
@@ -606,7 +625,7 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
 private fun InfoCard(title: String, lines: List<String>) {
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
             for (l in lines) Text(l, style = MaterialTheme.typography.bodySmall)
         }
     }
@@ -616,9 +635,10 @@ private fun InfoCard(title: String, lines: List<String>) {
 private fun ChoiceCard(title: String, lines: List<String>, action: String, modifier: Modifier, onClick: () -> Unit) {
     OutlinedCard(modifier) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall)
             for (l in lines) Text(l, style = MaterialTheme.typography.bodySmall)
-            Button(onClick, enabled = App.busy == null) { Text(action) }
+            // tonal: the choices weigh the same, none is the recommended one
+            FilledTonalButton(onClick, enabled = App.busy == null) { Text(action) }
         }
     }
 }
