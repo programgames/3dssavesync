@@ -449,6 +449,8 @@ object App {
                 val found = places.mapNotNull { (t, folder) ->
                     files(t, folder).let { l -> l.find { it.name == file } ?: l.find { it.name.equals(file, ignoreCase = true) } }?.let { Triple(t, folder, it) }
                 }
+                // ponytail: the newest date decides between two copies; a copy made by a file manager gets a new date.
+                // Ask (a Conflict "two files") if real phones show such copies.
                 val (tree, folder, doc) = found.maxByOrNull { it.third.modified ?: 0L } ?: places.first().let { Triple(it.first, it.second, null) }
                 val g = Game(s, key, name, SafFile(resolver, tree, folder, file, doc?.id, doc?.modified), format, e.id)
                 out += Entry(e, s, name, d.name, g) to "$tree|$folder|$file"
