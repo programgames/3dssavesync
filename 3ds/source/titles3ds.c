@@ -260,6 +260,50 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
     return R_FAILED(r) || step ? -1 : 0;
 }
 
+/* Hash table size for count entries, as save-data-copy-tool (ihaveamac, main.c get_buckets) gives FormatSaveData. */
+static u32 buckets(u32 count)
+{
+    u32 i;
+    if (count < 20) return count < 4 ? 3 : count | 1;
+    for (i = 0; i < 100; i++) {
+        u32 n = count + i;
+        if (n & 1 && n % 3 && n % 5 && n % 7 && n % 11 && n % 13 && n % 17) return n;
+    }
+    return count | 1;
+}
+
+Result create_vc_save(u64 id, const void *bytes, size_t size)
+{
+    u32 path[3] = { MEDIATYPE_SD, (u32)id, (u32)(id >> 32) }, written = 0;
+    const FS_Path p = { PATH_BINARY, sizeof path, path };
+    FS_Archive a;
+    Handle f;
+    u64 value;
+    u8 existed;
+    Result r;
+    if (R_SUCCEEDED(FSUSER_OpenArchive(&a, ARCHIVE_USER_SAVEDATA, p))) { /* never format an archive that exists: it would erase its save */
+        FSUSER_CloseArchive(a);
+        return (Result)0xFFFFFFFE;
+    }
+    /* The format of the VC Pokémon archives on a real 3DS (v3.10 rc13, FSUSER_GetFormatInfo): 1 directory, 4 files,
+     * duplicate data; 0x200 blocks and the bucket counts as save-data-copy-tool, which formats the save of a game never
+     * started. */
+    if (R_FAILED(r = FSUSER_FormatSaveData(ARCHIVE_USER_SAVEDATA, p, 0x200, 1, 4, buckets(1), buckets(4), true))) return r;
+    if (R_FAILED(r = FSUSER_OpenArchive(&a, ARCHIVE_USER_SAVEDATA, p))) return r;
+    r = FSUSER_CreateFile(a, fsMakePath(PATH_ASCII, "/sav.dat"), 0, size);
+    if (R_SUCCEEDED(r)) r = FSUSER_OpenFile(&f, a, fsMakePath(PATH_ASCII, "/sav.dat"), FS_OPEN_WRITE, 0);
+    if (R_SUCCEEDED(r)) {
+        r = FSFILE_Write(f, &written, 0, bytes, size, 0);
+        if (R_SUCCEEDED(r) && written != size) r = (Result)0xFFFFFFFD;
+        FSFILE_Close(f);
+    }
+    if (R_SUCCEEDED(r)) r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
+    FSUSER_CloseArchive(a);
+    value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
+    FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
+    return r;
+}
+
 /* DIAGNOSTIC (v3.10 rc13): format of the Save archive of title id (SD), to create one for a VC game never started. */
 void title_format_info(u64 id, char *out, size_t n)
 {

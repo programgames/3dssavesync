@@ -65,6 +65,7 @@ typedef struct {
     int has_server_progress;    /* that version is a known Pokémon game */
     char diag[160];             /* DIAGNOSTIC (v3.10 rc13): VC cartridge type, RAM size, sav.dat size, archive format */
     unsigned long raw_size;     /* DIAGNOSTIC (v3.10 rc13): size of sav.dat with its footer */
+    unsigned char vc_cart, vc_ram; /* Virtual Console: cartridge type (0x147) and RAM size (0x149) of its ROM */
     status_t status;
 } game_t;
 
@@ -433,6 +434,8 @@ static void scan_vc(void)
         make_short_name(j->name, j->short_name, sizeof j->short_name);
         j->rom_count = 1;
         j->mbc2 = read && rom_mbc2(header);
+        j->vc_cart = read ? header[0x147] : 0;
+        j->vc_ram = read ? header[0x149] : 0;
         { /* DIAGNOSTIC (v3.10 rc13): cartridge type (0x147), RAM size (0x149), archive format */
             char f[100];
             title_format_info(ids[i], f, sizeof f);
@@ -676,19 +679,68 @@ static void make_parent_dir(const char *path)
  *  - Virtual Console: received SRAM + the VC footer of the old sav.dat, rewritten like /main, then read back
  *    (ADR 0025). A VC game never started has no sav.dat, so no footer: nothing is written.
  * On failure, the Local save is intact. */
+/* SRAM size of a Virtual Console game from its ROM header (byte 0x149), 0 if none or not handled (MBC2: 0x05, 0x06). */
+static size_t vc_sram_size(const game_t *j)
+{
+    static const size_t SIZES[] = { 0, 2048, 8192, 32768, 131072, 65536 };
+    if (j->vc_cart == 0x05 || j->vc_cart == 0x06 || j->vc_ram >= sizeof SIZES / sizeof *SIZES) return 0;
+    return SIZES[j->vc_ram];
+}
+
+/* TEST (v3.10 rc14): first save of a Virtual Console game never started (no Save archive): the archive is created
+ * (create_vc_save) with /sav.dat = received SRAM + a zero footer for a clock cartridge (MBC3+TIMER 0x0F, 0x10), then
+ * read back. Nothing existed, so there is nothing to copy first. */
+static result_t create_vc_first_save(game_t *j, char *body, size_t size)
+{
+    size_t sram = vc_sram_size(j), total = sram + (j->vc_cart == 0x0F || j->vc_cart == 0x10 ? 16 : 0), back_size = 0;
+    unsigned char *data, *back = NULL;
+    char code[16];
+    Result cr;
+    result_t r;
+    if (size != sram) { /* the server SRAM must fill the cartridge RAM exactly */
+        free(body);
+        return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
+    }
+    if (!(data = calloc(1, total))) {
+        free(body);
+        return make_result(RESULT_OUT_OF_MEMORY, NULL);
+    }
+    memcpy(data, body, sram);
+    free(body);
+    cr = create_vc_save(j->title, data, total);
+    if (R_FAILED(cr)) {
+        free(data);
+        snprintf(code, sizeof code, "%08lX", (unsigned long)cr);
+        return make_result(RESULT_WRITE_FAILED, code);
+    }
+    j->media = MEDIATYPE_SD;
+    if (read_save(j, &back, &back_size) || back_size != total || memcmp(back, data, total)) {
+        free(back);
+        free(data);
+        r = make_result(RESULT_WRITTEN_DAMAGED, "sav.dat");
+        return r;
+    }
+    free(back);
+    free(data);
+    save_base(base_id(j), j->server_hash);
+    return make_result(RESULT_DOWNLOADED, NULL);
+}
+
 static result_t download_save(game_t *j)
 {
-    char tmp[610], backup[700], url[300], hash[65], date[20];
+    char tmp[610], backup[700], url[300], hash[65], date[20], names[64];
     char *body;
     unsigned char *old_data = NULL, *new_data;
     size_t size, n = 0, sram;
     long status;
-    int failed, exists = j->system == SYS_3DS || vc(j) || access(j->sav, F_OK) == 0;
+    int failed, exists = j->system == SYS_3DS || (vc(j) && j->has_local) || access(j->sav, F_OK) == 0;
     time_t t = time(NULL);
     result_t r;
 
-    /* The only local write of a Save goes through here (act, Conflict, Sync all, History). */
-    if (vc(j) && !j->has_local) return make_result(RESULT_VC_NEVER_STARTED, NULL);
+    /* The only local write of a Save goes through here (act, Conflict, Sync all, History). A VC game with an archive
+     * but no sav.dat (or an unknown RAM size) is left alone; one with no archive at all gets its first save. */
+    if (vc(j) && !j->has_local && (title_root(j->title, names, sizeof names) >= 0 || !vc_sram_size(j)))
+        return make_result(RESULT_VC_NEVER_STARTED, NULL);
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_get(url, cfg.token, &body, &size);
     if (status != 200) {
@@ -700,6 +752,7 @@ static result_t download_save(game_t *j)
         free(body);
         return make_result(RESULT_DOWNLOAD_DAMAGED, NULL);
     }
+    if (vc(j) && !j->has_local) return create_vc_first_save(j, body, size);
     /* Copy as soon as the Save exists, even if the scan could not read it: never overwrite without a copy. */
     if (exists) {
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
@@ -1061,8 +1114,8 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
     switch (j->status) {
     case STATUS_TO_UPLOAD: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
     case STATUS_TO_DOWNLOAD:
-        if (vc(j) && !j->has_local) return T("Le serveur a une version plus récente. Lancez ce jeu une fois sur la 3DS : il pourra ensuite la récupérer.",
-                                             "The server has a newer version. Start this game once on the 3DS so that it can download it.");
+        if (vc(j) && !j->has_local) return T("Ce jeu n'a pas encore de sauvegarde. \xEE\x80\x80 la crée avec la version du serveur (essai).",
+                                             "This game has no save yet. \xEE\x80\x80 creates it from the server version (test).");
         return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
                                "The server has a newer version. \xEE\x80\x80 downloads it, after a backup.");
     case STATUS_CONFLICT: return T("La sauvegarde a changé sur la 3DS et sur le serveur. \xEE\x80\x80 pour choisir laquelle garder.",
@@ -1134,7 +1187,7 @@ static void draw_bottom(const game_t *j)
         const char *b = base_of(&bases, base_id(j));
         u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
         gb = (j->system == SYS_GB || j->system == SYS_GBA) && !vc(j);
-        action = j->status == STATUS_TO_UPLOAD || (j->status == STATUS_TO_DOWNLOAD && !(vc(j) && !j->has_local)) || j->status == STATUS_CONFLICT;
+        action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
         draw_game_icon(j);
         y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
         /* System, and for GB/GBA the program whose save is synced (X changes it); title ID of a Virtual Console game. */
@@ -1714,10 +1767,6 @@ static int act(game_t *j)
         break;
     case STATUS_TO_DOWNLOAD: {
         int has_server_progress;
-        if (vc(j) && !j->has_local) { /* refused before any question */
-            r = download_save(j);
-            break;
-        }
         has_server_progress = server_progress(j, &p);
         server_text(j, srv, sizeof srv);
         local_text(j, loc, sizeof loc);
