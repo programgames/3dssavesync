@@ -63,6 +63,8 @@ typedef struct {
     progress_t server_progress; /* Pokémon: play time of the server version whose hash is progress_hash */
     char progress_hash[65];     /* server version read for server_progress; "" none */
     int has_server_progress;    /* that version is a known Pokémon game */
+    char diag[160];             /* DIAGNOSTIC (v3.10 rc13): VC cartridge type, RAM size, sav.dat size, archive format */
+    unsigned long raw_size;     /* DIAGNOSTIC (v3.10 rc13): size of sav.dat with its footer */
     status_t status;
 } game_t;
 
@@ -350,6 +352,7 @@ static void read_local(game_t *j)
         }
     }
     if (j->system != SYS_3DS) {
+        j->raw_size = size; /* DIAGNOSTIC (v3.10 rc13) */
         size = sram_size(j->system, size);
         to_server_form(j, &bytes, &size);
         j->blank = is_blank_save(j->system, bytes, size);
@@ -430,6 +433,11 @@ static void scan_vc(void)
         make_short_name(j->name, j->short_name, sizeof j->short_name);
         j->rom_count = 1;
         j->mbc2 = read && rom_mbc2(header);
+        { /* DIAGNOSTIC (v3.10 rc13): cartridge type (0x147), RAM size (0x149), archive format */
+            char f[100];
+            title_format_info(ids[i], f, sizeof f);
+            snprintf(j->diag, sizeof j->diag, "cart:%02X ram:%02X %s", read ? header[0x147] : 0xFF, read ? header[0x149] : 0xFF, f);
+        }
     }
     free(ids);
     free(medias);
@@ -1159,6 +1167,11 @@ static void draw_bottom(const game_t *j)
         }
         /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
         if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key);
+        if (vc(j)) { /* DIAGNOSTIC (v3.10 rc13) */
+            char d[200];
+            snprintf(d, sizeof d, "%s sav.dat:%lu", j->diag, j->has_local ? j->raw_size : 0);
+            y += screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 2, d);
+        }
         else if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);

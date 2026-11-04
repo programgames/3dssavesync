@@ -31,6 +31,9 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
 /* 1 if title id (SD) is a GB or GBC Virtual Console game, by its product code (vc_product). */
 int title_vc(u64 id);
 
+/* DIAGNOSTIC (v3.10 rc13): "format size:… dirs:… files:… dup:…" of the Save archive of title id (SD). */
+void title_format_info(u64 id, char *out, size_t n);
+
 /* Short name of the game (SMDH), in the given language, in UTF-8. 0 if read. */
 int title_name(u64 id, FS_MediaType media, int language, char *name, size_t n);
 

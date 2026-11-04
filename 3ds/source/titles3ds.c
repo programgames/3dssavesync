@@ -260,6 +260,16 @@ int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t 
     return R_FAILED(r) || step ? -1 : 0;
 }
 
+/* DIAGNOSTIC (v3.10 rc13): format of the Save archive of title id (SD), to create one for a VC game never started. */
+void title_format_info(u64 id, char *out, size_t n)
+{
+    u32 path[3] = { MEDIATYPE_SD, (u32)id, (u32)(id >> 32) }, size = 0, dirs = 0, files = 0;
+    bool dup = false;
+    Result r = FSUSER_GetFormatInfo(&size, &dirs, &files, &dup, ARCHIVE_USER_SAVEDATA, (FS_Path){ PATH_BINARY, sizeof path, path });
+    if (R_FAILED(r)) snprintf(out, n, "format:%08lX", (unsigned long)r);
+    else snprintf(out, n, "format size:%lu dirs:%lu files:%lu dup:%d", (unsigned long)size, (unsigned long)dirs, (unsigned long)files, dup);
+}
+
 /* Product code of the title (AM, "CTR-N-QBXA"): GB/GBC Virtual Console or not (vc_product). The last answer is kept:
  * the choices screen asks for the same title at every frame. */
 static Result title_product_code(u64 id, char *code)
