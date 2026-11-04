@@ -18,6 +18,8 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.programgames.savesync.core.Backups
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
+import io.github.programgames.savesync.core.Pending
+import io.github.programgames.savesync.core.PendingWrite
 import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.SyncException
 import io.github.programgames.savesync.core.System
@@ -25,6 +27,7 @@ import io.github.programgames.savesync.core.checkClosed
 import io.github.programgames.savesync.core.createArchive
 import io.github.programgames.savesync.core.formats3DS
 import io.github.programgames.savesync.core.replace
+import io.github.programgames.savesync.core.sha256
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -271,6 +274,21 @@ class SafTest {
             }
             if (op == "write" && left-- > 0) broken = f
         }
+    }
+
+    // The marker of a write (ADR 0026) is in place while the provider writes, under the same name for the Save file as
+    // the next scan builds it: a write cut by a kill shows as Interrupted at the next start. Gone once verified.
+    @Test
+    fun pendingMarkerDuringWrite() {
+        val old = save(1)
+        put("saves/Emeraude.sav", old)
+        val pending = Pending(File(tmp.root, "pending.json"))
+        val again = game(saf("saves", "saves", "Emeraude.sav")) // as a new scan finds it
+        var during: PendingWrite? = null
+        docs.before = { op, _ -> if (op == "write") during = pending.get(again) }
+        val copy = replace(game(saf("saves", "saves", "Emeraude.sav")), old, save(2), Backups(App.backupsDir), pending)!!
+        assertEquals(PendingWrite(copy.path, sha256(save(2))), during)
+        assertNull(pending.get(again))
     }
 
     // A write that the provider breaks: the old save is written back, the Backup copy stays.

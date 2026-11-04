@@ -707,7 +707,8 @@ open class UiTest {
         rule.onNode(hasText(s(R.string.restore_copy)) and dialog and hasClickAction()).performClick()
         waitFor(s(R.string.done_copy_restored))
         assertArrayEquals(old, f.content)
-        rule.onNodeWithText(s(R.string.keep_phone)).performScrollTo().assertExists() // a plain Conflict now: no Base
+        waitFor(s(R.string.keep_phone)) // read again: a plain Conflict now (no Base)
+        rule.onAllNodesWithText(s(R.string.restore_copy)).assertCountEquals(0)
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } })
     }
 
