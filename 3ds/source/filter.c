@@ -8,7 +8,7 @@ int in_tab(tab_t t, const row_t *r)
     case TAB_ALL: return 1;
     case TAB_TODO:
         return r->status == STATUS_TO_UPLOAD || r->status == STATUS_TO_DOWNLOAD || r->status == STATUS_CONFLICT ||
-               r->status == STATUS_DUPLICATE;
+               r->status == STATUS_DUPLICATE || r->status == STATUS_NOT_SYNCED;
     default: return r->system == (int)(t - TAB_DS); /* TAB_DS..TAB_3DS = SYS_DS..SYS_3DS */
     }
 }

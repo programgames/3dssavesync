@@ -18,13 +18,14 @@ int main(void)
     /* system: 0 DS, 1 GB, 2 GBA, 3 3DS (key.h) */
     const row_t up = { STATUS_TO_UPLOAD, 2, "Pok\xC3\xA9mon \xC3\x89meraude", 300 }, down = { STATUS_TO_DOWNLOAD, 0, "Mario Kart DS", 100 },
                 conflict = { STATUS_CONFLICT, 1, "Tetris", 0 }, dup = { STATUS_DUPLICATE, 0, "Tetris DS", 0 },
-                sync = { STATUS_IN_SYNC, 3, "pokemon X", 200 }, offline = { STATUS_OFFLINE, 0, "Zelda", 0 };
+                sync = { STATUS_IN_SYNC, 3, "pokemon X", 200 }, offline = { STATUS_OFFLINE, 0, "Zelda", 0 },
+                vc = { STATUS_NOT_SYNCED, 1, "Pokemon Red VC", 0 };
     int none[TAB_COUNT] = { 0 }, some[TAB_COUNT] = { 5, 0, 3, 0, 2, 0 };
 
     /* tabs */
     check(in_tab(TAB_ALL, &sync) && in_tab(TAB_ALL, &offline), "All: every game");
-    check(in_tab(TAB_TODO, &up) && in_tab(TAB_TODO, &down) && in_tab(TAB_TODO, &conflict) && in_tab(TAB_TODO, &dup),
-          "To do: upload, download, conflict, duplicate");
+    check(in_tab(TAB_TODO, &up) && in_tab(TAB_TODO, &down) && in_tab(TAB_TODO, &conflict) && in_tab(TAB_TODO, &dup) && in_tab(TAB_TODO, &vc),
+          "To do: upload, download, conflict, duplicate, not synced");
     check(!in_tab(TAB_TODO, &sync) && !in_tab(TAB_TODO, &offline), "To do: not in sync, not unknown");
     check(in_tab(TAB_DS, &down) && !in_tab(TAB_DS, &up) && in_tab(TAB_GB, &conflict) && in_tab(TAB_GBA, &up) && in_tab(TAB_3DS, &sync) &&
               !in_tab(TAB_3DS, &up), "system tabs");

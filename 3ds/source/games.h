@@ -11,6 +11,7 @@ typedef enum {
     STATUS_TO_DOWNLOAD = TO_DOWNLOAD,
     STATUS_CONFLICT = CONFLICT,
     STATUS_DUPLICATE, /* several ROMs for one Key (ADR 0005): not synced */
+    STATUS_NOT_SYNCED, /* Virtual Console archive with other files than sav.dat (vc.h): not synced */
     STATUS_OFFLINE,   /* server not read: State unknown ("Unknown"), no action offered */
     STATUS_HIDDEN,    /* neither Local save nor Current version: not shown */
 } status_t;
@@ -30,7 +31,8 @@ status_t game_status(const observation_t *o, const char *base, int server_read);
 /* 1 if the Base must become local_hash: In sync, and the Base is missing or another Hash (design §1). */
 int base_outdated(status_t s, const char *base, const char *local_hash);
 
-/* Display order: what needs a decision first (Conflict, To download), then To upload, Duplicate, the rest. 0 to 4. */
+/* Display order: what needs a decision first (Conflict, To download), then To upload, Duplicate and Not synced, the
+ * rest. 0 to 4. */
 int status_priority(status_t s);
 
 #endif

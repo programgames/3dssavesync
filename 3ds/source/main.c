@@ -27,6 +27,7 @@
 #include "text.h"
 #include "titles3ds.h"
 #include "update.h"
+#include "vc.h"
 #include "views.h"
 
 #define OLD_DIR "sdmc:/3ds/nds-save-sync" /* name before v3: settings and Bases taken over at first start */
@@ -41,7 +42,7 @@ typedef struct {
     char rom[600];  /* ROM (DS icon); empty for the 3DS */
     char sav[600];  /* Save file; empty for the 3DS (Save archive) */
     char sav_rom[600]; /* GB/GBA: its Save without the mGBA forwarder (saves folder) */
-    u64 title;      /* 3DS: title ID */
+    u64 title;      /* 3DS and GB Virtual Console: title ID; 0 for a ROM */
     FS_MediaType media; /* 3DS: SD or game card */
     char name[256];  /* ROM name without extension = name of the .sav */
     char short_name[48]; /* for display only: "Pokemon Diamant" */
@@ -56,7 +57,14 @@ typedef struct {
     time_t modified;   /* DS, GB, GBA: file date (3DS clock); 0 if unknown */
     int has_progress;   /* Pokémon: play time and trainer read (pokemon.h) */
     int mbc2;       /* GB: MBC2 cartridge, byte 0x147 of the ROM (ADR 0012) */
+    int unexpected; /* Virtual Console: other files than sav.dat in the archive (vc_root_ok): not synced */
+    char why[160];  /* Virtual Console with an empty key: the step where reading its ROM failed */
     progress_t progress;
+    progress_t server_progress; /* Pokémon: play time of the server version whose hash is progress_hash */
+    char progress_hash[65];     /* server version read for server_progress; "" none */
+    int has_server_progress;    /* that version is a known Pokémon game */
+    unsigned char vc_cart, vc_ram; /* Virtual Console: cartridge type (0x147) and RAM size (0x149) of its ROM */
+    int vc_archive;    /* Virtual Console with no sav.dat: 1 if it has a Save archive anyway (then never written) */
     status_t status;
 } game_t;
 
@@ -162,10 +170,25 @@ static int has_rom_extension(system_t s, const char *ext)
     }
 }
 
-/* Whole content of the Local save: the file (Clock trailer included), or /main of the 3DS Save archive. */
+/* GB/GBC Virtual Console game (scan_vc). */
+static int vc(const game_t *j) { return j->system == SYS_GB && j->title; }
+
+/* Name of the Game's Base in base.ini. A Virtual Console game is a Local save of its own next to a ROM or forwarder
+ * with the same Key (ADR 0025): each has its Base, and the server links them like two devices. "VC-" + title ID: never
+ * a Key (they start with DS-, GB-, GBA-, 3DS-). */
+static const char *base_id(const game_t *j)
+{
+    static char id[KEY_MAX];
+    if (!vc(j)) return j->key;
+    snprintf(id, sizeof id, "VC-%016llX", j->title);
+    return id;
+}
+
+/* Whole content of the Local save: the file (Clock trailer included), /main of the 3DS Save archive, or /sav.dat of
+ * the Virtual Console one (VC Clock footer included). */
 static int read_save(game_t *j, unsigned char **bytes, size_t *size)
 {
-    if (j->system == SYS_3DS) return read_title_save(j->title, &j->media, bytes, size);
+    if (j->title) return read_title_save(j->title, vc(j) ? "/sav.dat" : "/main", &j->media, bytes, size);
     return read_file(j->sav, bytes, size);
 }
 
@@ -309,24 +332,38 @@ static void read_local(game_t *j)
     unsigned char *bytes;
     size_t size;
     u64 mtime;
-    j->has_local = j->blank = j->has_progress = 0;
+    j->has_local = j->blank = j->has_progress = j->unexpected = 0;
     j->modified = 0;
     j->local_size = 0;
     j->local_hash[0] = '\0';
     if (j->system == SYS_DS) snprintf(j->sav, sizeof j->sav, "%s", j->sav_rom);
-    else if (j->system != SYS_3DS) {
+    else if (!j->title) {
         char f[600];
         snprintf(f, sizeof f, FORWARDERS "/%s.sav", j->name);
         snprintf(j->sav, sizeof j->sav, "%s", access(f, F_OK) == 0 ? f : j->sav_rom);
     }
-    if (j->rom_count != 1 || read_save(j, &bytes, &size)) return;
+    if (j->rom_count != 1 || read_save(j, &bytes, &size)) {
+        if (vc(j)) { /* no sav.dat: a game never started has no archive at all, and may get its first save */
+            char root[128];
+            j->vc_archive = title_root(j->title, root, sizeof root) >= 0;
+        }
+        return;
+    }
+    if (vc(j)) { /* a savestate (rsm*.dat) could bring an old SRAM back: such a game is not synced */
+        char root[128] = "";
+        title_root(j->title, root, sizeof root);
+        if ((j->unexpected = !vc_root_ok(root))) {
+            free(bytes);
+            return;
+        }
+    }
     if (j->system != SYS_3DS) {
         size = sram_size(j->system, size);
         to_server_form(j, &bytes, &size);
         j->blank = is_blank_save(j->system, bytes, size);
         /* stat() does not give the date on the SD. archive_getmtime converts it to UNIX time; a 0 timestamp (Azahar)
          * becomes 1 January 2000: date unknown. */
-        if (R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modified = (time_t)mtime;
+        if (!j->title && R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modified = (time_t)mtime;
     }
     j->has_progress = pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM only: without the Clock trailer */
     hash_hex(bytes, size, j->local_hash);
@@ -355,6 +392,59 @@ static void scan_3ds(void)
     }
 }
 
+/* GB/GBC Virtual Console games installed on the SD card (title_vc, by product code): a GB Game whose Key is read in the
+ * ROM of its RomFS, and whose Save is /sav.dat of its Save archive (read_save). A ROM or forwarder with the same Key is
+ * another Local save of the same game, synced on its own (base_id, ADR 0025). ROM not read: listed Not synced with an
+ * empty key and the failed step in why, never a guessed Key. */
+static void scan_vc(void)
+{
+    u64 *ids = NULL;
+    FS_MediaType *medias = NULL;
+    int n = -1, i, k;
+    if (R_SUCCEEDED(amInit())) {
+        n = installed_titles(&ids, &medias, 0);
+        amExit();
+    }
+    if (n < 0)
+        add_alert(T("Jeux Virtual Console non lus : la liste des jeux installés est illisible. Redémarrez la 3DS, puis relancez 3dssavesync.",
+                    "Virtual Console games not read: the installed games can't be listed. Restart the 3DS, then start 3dssavesync again."));
+    for (i = 0; i < n; i++) {
+        unsigned char header[0x200];
+        char key[KEY_MAX] = "", name[256], why[160];
+        game_t *j = NULL;
+        int read;
+        if (medias[i] != MEDIATYPE_SD || !title_vc(ids[i])) continue;
+        if (title_name(ids[i], MEDIATYPE_SD, language, name, sizeof name)) snprintf(name, sizeof name, "%016llX", ids[i]);
+        show_progress(0, 0, T("Lecture des jeux Virtual Console\n%s", "Reading Virtual Console games\n%s"), name);
+        read = !title_rom_header(ids[i], header, sizeof header, why, sizeof why);
+        if (read && rom_key(SYS_GB, header, key)) {
+            key[0] = '\0';
+            snprintf(why, sizeof why, "rom_key: no title");
+        }
+        for (k = 0; key[0] && k < game_count; k++)
+            if (vc(&games[k]) && !strcmp(games[k].key, key)) j = &games[k];
+        if (j) { /* two VC titles with one Key: Duplicate, as two ROMs */
+            j->rom_count++;
+            continue;
+        }
+        if (!(j = new_game())) break;
+        game_count++;
+        snprintf(j->key, sizeof j->key, "%s", key);
+        snprintf(j->why, sizeof j->why, "%s", why);
+        j->system = SYS_GB;
+        j->title = ids[i];
+        j->media = MEDIATYPE_SD;
+        snprintf(j->name, sizeof j->name, "%s", name);
+        make_short_name(j->name, j->short_name, sizeof j->short_name);
+        j->rom_count = 1;
+        j->mbc2 = read && rom_mbc2(header);
+        j->vc_cart = read ? header[0x147] : 0;
+        j->vc_ram = read ? header[0x149] : 0;
+    }
+    free(ids);
+    free(medias);
+}
+
 /* All sources, then the Hash of each Local save (SRAM only for GB/GBA, ADR 0008). */
 static void scan(void)
 {
@@ -365,6 +455,7 @@ static void scan(void)
     scan_dir(SYS_DS, cfg.roms, cfg.saves, cfg.roms, 0); /* empty saves = next to the ROM */
     scan_dir(SYS_GB, cfg.roms_gb, cfg.saves_gb, cfg.roms_gb, 0);
     scan_dir(SYS_GBA, cfg.roms_gba, cfg.saves_gba, cfg.roms_gba, 0);
+    scan_vc();
     before = game_count;
     for (i = 0; i < before; i++) {
         show_progress(i + 1, before, T("Lecture des sauvegardes\n%s", "Reading saves\n%s"), games[i].short_name);
@@ -399,15 +490,17 @@ static int read_server(void)
     read_time = osGetTime();
     /* [{"code": "IRBF", "version": "...", "hash": "...", "taille": 524288, "date": "...", "client": "pc"}, ...] (list.h) */
     for (p = body; next_server_entry(&p, &e);) {
-        for (i = 0; i < game_count && strcmp(games[i].key, e.code); i++);
-        if (i == game_count || !e.hash[0] || e.size < 0) continue; /* no local ROM: not shown */
-        strcpy(games[i].server_hash, e.hash);
-        games[i].server_size = e.size;
-        strcpy(games[i].date, e.date);
-        strcpy(games[i].client, e.client);
-        games[i].age = e.age;
-        games[i].has_server = 1;
-        games[i].has_name = e.has_name;
+        if (!e.hash[0] || e.size < 0) continue;
+        for (i = 0; i < game_count; i++) { /* every Game of the Key: a ROM or forwarder and a Virtual Console game */
+            if (strcmp(games[i].key, e.code)) continue; /* no local ROM: not shown */
+            strcpy(games[i].server_hash, e.hash);
+            games[i].server_size = e.size;
+            strcpy(games[i].date, e.date);
+            strcpy(games[i].client, e.client);
+            games[i].age = e.age;
+            games[i].has_server = 1;
+            games[i].has_name = e.has_name;
+        }
     }
     free(body);
     /* Name of each game for the History on the PC (ADR 0018), once per game. Stop at the first refusal: an older
@@ -484,8 +577,8 @@ static int compute_states(int *outdated)
         game_t *j = &games[i];
         const obs_t local = { j->local_hash, j->local_size }, server = { j->server_hash, j->server_size };
         const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL };
-        j->status = game_status(&o, base_of(&bases, j->key), server_read);
-        if (base_outdated(j->status, base_of(&bases, j->key), j->local_hash)) outdated[n++] = i;
+        j->status = j->unexpected || !j->key[0] ? STATUS_NOT_SYNCED : game_status(&o, base_of(&bases, base_id(j)), server_read);
+        if (base_outdated(j->status, base_of(&bases, base_id(j)), j->local_hash)) outdated[n++] = i;
         if (j->status != STATUS_HIDDEN) visible[visible_count++] = i;
     }
     sort_list();
@@ -496,8 +589,10 @@ static int compute_states(int *outdated)
 static void update_states(void)
 {
     int i, n = compute_states(outdated);
-    for (i = 0; i < n; i++) save_base(games[outdated[i]].key, games[outdated[i]].local_hash);
+    for (i = 0; i < n; i++) save_base(base_id(&games[outdated[i]]), games[outdated[i]].local_hash);
 }
+
+static void read_server_progresses(void);
 
 /* After an action: the Game it touched is already read again (read_local), only the server changes. */
 static void reread_server(void)
@@ -505,6 +600,7 @@ static void reread_server(void)
     show_progress(0, 0, "%s", T("Lecture du serveur…", "Reading the server…"));
     read_server();
     update_states(); /* server not read: the local games stay listed, with no action */
+    if (server_read) read_server_progresses();
     loaded = 1;
 }
 
@@ -561,7 +657,7 @@ static result_t upload_save(game_t *j)
     free(bytes);
     if (status == 412) return make_result(RESULT_UPLOAD_CONFLICT, NULL);
     if (status != 200) return network_failure(RESULT_UPLOAD_FAILED, status, url);
-    save_base(j->key, hash);
+    save_base(base_id(j), hash);
     return make_result(RESULT_UPLOADED, NULL);
 }
 
@@ -578,8 +674,57 @@ static void make_parent_dir(const char *path)
 
 /* Download (design §4): Backup copy first, then
  *  - file (DS, GB, GBA): received SRAM + local Clock trailer (ADR 0008) in a .tmp, then replace;
- *  - 3DS: rewrite /main with commit and Secure value (ADR 0009).
+ *  - 3DS: rewrite /main with commit and Secure value (ADR 0009);
+ *  - Virtual Console: received SRAM + the VC footer of the old sav.dat, rewritten like /main, then read back
+ *    (ADR 0025). A VC game never started (no archive) gets its first save: create_vc_first_save.
  * On failure, the Local save is intact. */
+/* SRAM size of a Virtual Console game from its ROM header (byte 0x149), 0 if none or not handled (MBC2: 0x05, 0x06). */
+static size_t vc_sram_size(const game_t *j)
+{
+    static const size_t SIZES[] = { 0, 2048, 8192, 32768, 131072, 65536 };
+    if (j->vc_cart == 0x05 || j->vc_cart == 0x06 || j->vc_ram >= sizeof SIZES / sizeof *SIZES) return 0;
+    return SIZES[j->vc_ram];
+}
+
+/* First save of a Virtual Console game never started (no Save archive): the archive is created
+ * (create_vc_save) with /sav.dat = received SRAM + a zero footer for a clock cartridge (MBC3+TIMER 0x0F, 0x10), then
+ * read back. Nothing existed, so there is nothing to copy first. */
+static result_t create_vc_first_save(game_t *j, char *body, size_t size)
+{
+    size_t sram = vc_sram_size(j), total = sram + (j->vc_cart == 0x0F || j->vc_cart == 0x10 ? 16 : 0), back_size = 0;
+    unsigned char *data, *back = NULL;
+    char code[16];
+    Result cr;
+    result_t r;
+    if (size != sram) { /* the server SRAM must fill the cartridge RAM exactly */
+        free(body);
+        return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
+    }
+    if (!(data = calloc(1, total))) {
+        free(body);
+        return make_result(RESULT_OUT_OF_MEMORY, NULL);
+    }
+    memcpy(data, body, sram);
+    free(body);
+    cr = create_vc_save(j->title, data, total);
+    if (R_FAILED(cr)) {
+        free(data);
+        snprintf(code, sizeof code, "%08lX", (unsigned long)cr);
+        return make_result(RESULT_WRITE_FAILED, code);
+    }
+    j->media = MEDIATYPE_SD;
+    if (read_save(j, &back, &back_size) || back_size != total || memcmp(back, data, total)) {
+        free(back);
+        free(data);
+        r = make_result(RESULT_WRITTEN_DAMAGED, "sav.dat");
+        return r;
+    }
+    free(back);
+    free(data);
+    save_base(base_id(j), j->server_hash);
+    return make_result(RESULT_DOWNLOADED, NULL);
+}
+
 static result_t download_save(game_t *j)
 {
     char tmp[610], backup[700], url[300], hash[65], date[20];
@@ -587,10 +732,14 @@ static result_t download_save(game_t *j)
     unsigned char *old_data = NULL, *new_data;
     size_t size, n = 0, sram;
     long status;
-    int failed, exists = j->system == SYS_3DS || access(j->sav, F_OK) == 0;
+    int failed, exists = j->system == SYS_3DS || (vc(j) && j->has_local) || access(j->sav, F_OK) == 0;
     time_t t = time(NULL);
     result_t r;
 
+    /* The only local write of a Save goes through here (act, Conflict, Sync all, History). A VC game with an archive
+     * but no sav.dat (or an unknown RAM size) is left alone; one with no archive at all gets its first save. */
+    if (vc(j) && !j->has_local && (j->vc_archive || !vc_sram_size(j)))
+        return make_result(RESULT_VC_NEVER_STARTED, NULL);
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_get(url, cfg.token, &body, &size);
     if (status != 200) {
@@ -602,6 +751,7 @@ static result_t download_save(game_t *j)
         free(body);
         return make_result(RESULT_DOWNLOAD_DAMAGED, NULL);
     }
+    if (vc(j) && !j->has_local) return create_vc_first_save(j, body, size);
     /* Copy as soon as the Save exists, even if the scan could not read it: never overwrite without a copy. */
     if (exists) {
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
@@ -618,9 +768,35 @@ static result_t download_save(game_t *j)
     }
 
     if (j->system == SYS_3DS) {
-        failed = write_title_save(j->title, j->media, body, size);
+        failed = write_title_save(j->title, j->media, "/main", body, size);
         free(old_data);
         free(body);
+        if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
+    } else if (vc(j)) {
+        /* Received SRAM + the VC footer of the old sav.dat (16 bytes for Gold, Silver, Crystal; none for Gen 1). */
+        unsigned char *received = (unsigned char *)body, *back = NULL;
+        size_t back_size = 0;
+        sram = sram_size(j->system, n);
+        new_data = to_file_form(j, &received, &size, sram) || size != sram ? NULL : malloc(n);
+        if (!new_data) { /* a server SRAM of another size would change the size of sav.dat: refused like /main */
+            free(old_data);
+            free(received);
+            return make_result(size != sram ? RESULT_3DS_WRITE_REFUSED : RESULT_OUT_OF_MEMORY, NULL);
+        }
+        memcpy(new_data, received, size);
+        memcpy(new_data + size, old_data + sram, n - sram);
+        free(old_data);
+        free(received);
+        failed = write_title_save(j->title, j->media, "/sav.dat", new_data, n);
+        /* read back: the commit is done, so a difference means the archive holds something else (copy kept) */
+        if (!failed && (read_save(j, &back, &back_size) || back_size != n || memcmp(back, new_data, n))) failed = 2;
+        free(back);
+        free(new_data);
+        if (failed == 2) {
+            r = make_result(RESULT_WRITTEN_DAMAGED, backup);
+            r.had_save = 1;
+            return r;
+        }
         if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
     } else {
         /* Received SRAM (file form) + local Clock trailer (what lies past the SRAM of the old file). */
@@ -648,7 +824,7 @@ static result_t download_save(game_t *j)
             return r;
         }
     }
-    save_base(j->key, j->server_hash);
+    save_base(base_id(j), j->server_hash);
     return make_result(RESULT_DOWNLOADED, NULL);
 }
 
@@ -718,20 +894,46 @@ static void server_text(const game_t *j, char *out, size_t n)
     else snprintf(out, n, T("Depuis %s", "From %s"), j->client[0] ? j->client : "?");
 }
 
-/* Play time of the server version (downloaded), only if the 3DS has a known Pokémon game. 1 if read. */
-static int server_progress(const game_t *j, progress_t *p)
+/* Play time of the server version, only for a Pokémon game (known on the 3DS, or no save there yet). Read once per
+ * server version: from another Game of the same Key (a ROM and its Virtual Console game), else downloaded. 1 if read. */
+static int server_progress(game_t *j, progress_t *p)
 {
     char url[300], *body;
     size_t size;
     long status;
-    int ok;
-    if (!j->has_server || !j->has_progress) return 0;
-    show_progress(0, 0, "%s", T("Lecture de la version du serveur…", "Reading the server version…"));
-    snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
-    status = net_get(url, cfg.token, &body, &size);
-    ok = status == 200 && pokemon_progress((unsigned char *)body, size, p) == 0;
-    if (status > 0) free(body);
-    return ok;
+    int i;
+    if (!j->has_server || (!j->has_progress && j->has_local)) return 0;
+    if (strcmp(j->progress_hash, j->server_hash)) {
+        for (i = 0; i < game_count && strcmp(games[i].progress_hash, j->server_hash); i++);
+        if (i < game_count) {
+            j->server_progress = games[i].server_progress;
+            j->has_server_progress = games[i].has_server_progress;
+        } else {
+            show_progress(0, 0, "%s\n%s", T("Lecture de la version du serveur", "Reading the server version"), j->short_name);
+            snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
+            status = net_get(url, cfg.token, &body, &size);
+            if (status != 200) { /* not kept: read again next time */
+                if (status > 0) free(body);
+                return 0;
+            }
+            j->has_server_progress = pokemon_progress((unsigned char *)body, size, &j->server_progress) == 0;
+            free(body);
+        }
+        strcpy(j->progress_hash, j->server_hash);
+    }
+    *p = j->server_progress;
+    return j->has_server_progress;
+}
+
+/* After a server read: the play time of each server version that would replace or be replaced (Pokémon only), so that
+ * the bottom screen shows both before any choice. */
+static void read_server_progresses(void)
+{
+    int i;
+    progress_t p;
+    for (i = 0; i < game_count; i++)
+        if (games[i].status == STATUS_TO_UPLOAD || games[i].status == STATUS_TO_DOWNLOAD || games[i].status == STATUS_CONFLICT)
+            server_progress(&games[i], &p);
 }
 
 /* ---------------------------------------------------------------- main screen (citro2d) */
@@ -757,6 +959,7 @@ static const char *state_label(status_t s)
     case STATUS_TO_DOWNLOAD: return T("À récupérer", "To download");
     case STATUS_CONFLICT: return T("Conflit", "Conflict");
     case STATUS_DUPLICATE: return T("Doublon", "Duplicate");
+    case STATUS_NOT_SYNCED: return T("Non synchro", "Not synced");
     case STATUS_OFFLINE: return T("Inconnu", "Unknown");
     default: return T("À jour", "In sync");
     }
@@ -778,8 +981,8 @@ static void draw_choice_card(float x, float y, u32 button, const char *action, c
 static void draw_game_icon(const game_t *j)
 {
     u16 icon[ICON_SIZE * ICON_SIZE];
-    if (j->system == SYS_3DS && title_icon(j->title, j->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f);
-    else if (j->system != SYS_3DS && read_ds_icon(j, icon) == 0) screen_icon(icon, 32, 32, ICON_X, 6, 1.5f); /* 32 x 1.5 = 48 */
+    if (j->title && title_icon(j->title, j->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f); /* 3DS, Virtual Console */
+    else if (!j->title && read_ds_icon(j, icon) == 0) screen_icon(icon, 32, 32, ICON_X, 6, 1.5f); /* 32 x 1.5 = 48 */
 }
 
 static const char *tab_label(tab_t t)
@@ -843,7 +1046,7 @@ static float draw_search_band(const char *q)
  * position in the list. */
 static void draw_list_top(void)
 {
-    static const status_t all[] = { STATUS_TO_UPLOAD, STATUS_TO_DOWNLOAD, STATUS_CONFLICT, STATUS_DUPLICATE, STATUS_OFFLINE, STATUS_IN_SYNC };
+    static const status_t all[] = { STATUS_TO_UPLOAD, STATUS_TO_DOWNLOAD, STATUS_CONFLICT, STATUS_DUPLICATE, STATUS_NOT_SYNCED, STATUS_OFFLINE, STATUS_IN_SYNC };
     const int cursor = list_cursor, lines = list_lines(query);
     int i, start = cursor < lines ? 0 : cursor - lines + 1;
     char footer[200], age[32], pos[24], empty[160];
@@ -857,10 +1060,10 @@ static void draw_list_top(void)
     top = draw_search_band(query);
 
     /* Columns measured on all State words: nothing is cut, and they do not move from one frame to the next. */
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < (int)(sizeof all / sizeof *all); i++)
         if (screen_text_width(0.42f, state_label(all[i])) > xs) xs = screen_text_width(0.42f, state_label(all[i]));
     xs = 18 + xs * WIDTH_MARGIN + 6;
-    xn = xs + screen_text_width(0.42f, "GBA") * WIDTH_MARGIN + 8;
+    xn = xs + screen_text_width(0.42f, "GB VC") * WIDTH_MARGIN + 8; /* widest system word */
     if (!shown_count) {
         if (!loaded) snprintf(empty, sizeof empty, "%s", T("Lecture en cours…", "Reading…"));
         else if (!visible_count) snprintf(empty, sizeof empty, "%s", server_read ? T("Aucun jeu à afficher.", "No game to show.")
@@ -880,7 +1083,7 @@ static void draw_list_top(void)
         }
         screen_rect(8, y + 5, 5, 5, dot_color(k->status));
         screen_text(18, y + 1, 0.42f, state_color(k->status), 0, state_label(k->status));
-        screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, SYSTEM_NAMES[k->system]);
+        screen_text(xs, y + 1, 0.42f, GREY_LIGHT, 0, vc(k) ? "GB VC" : SYSTEM_NAMES[k->system]);
         screen_text(xn, y, 0.5f, WHITE, TOP_WIDTH - xn - 8, k->short_name);
     }
     if (shown_count > lines) { /* scroll bar */
@@ -909,7 +1112,10 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
 {
     switch (j->status) {
     case STATUS_TO_UPLOAD: return T("La sauvegarde de la 3DS est plus récente. \xEE\x80\x80 l'envoie au serveur.", "The 3DS save is newer. \xEE\x80\x80 uploads it to the server.");
-    case STATUS_TO_DOWNLOAD: return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
+    case STATUS_TO_DOWNLOAD:
+        if (vc(j) && !j->has_local) return T("Ce jeu n'a pas encore de sauvegarde. \xEE\x80\x80 la crée avec la version du serveur .",
+                                             "This game has no save yet. \xEE\x80\x80 creates it from the server version.");
+        return T("Le serveur a une version plus récente. \xEE\x80\x80 la récupère, après une copie de sécurité.",
                                "The server has a newer version. \xEE\x80\x80 downloads it, after a backup.");
     case STATUS_CONFLICT: return T("La sauvegarde a changé sur la 3DS et sur le serveur. \xEE\x80\x80 pour choisir laquelle garder.",
                            "The save changed on the 3DS and on the server. \xEE\x80\x80 to choose which one to keep.");
@@ -919,6 +1125,11 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
         else snprintf(t, n, T("%d ROM contiennent ce jeu. Gardez-en une, ou ajoutez les autres aux ROM hacks sur le PC, puis préparez la carte SD.",
                               "%d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC, then prepare the SD card."), j->rom_count);
         return t;
+    case STATUS_NOT_SYNCED:
+        if (!j->key[0]) return T("La ROM de ce jeu Virtual Console est illisible : sa clé est inconnue. Ce jeu n'est pas synchronisé, rien n'y est modifié.",
+                                 "The ROM of this Virtual Console game can't be read: its Key is unknown. This game is not synced, and nothing in it is changed.");
+        return T("Ce jeu a des points de restauration : ils pourraient ramener une ancienne partie. Il n'est pas synchronisé, rien n'y est modifié.",
+                 "This game has restore points that could bring an old game back. It is not synced, and nothing in it is changed.");
     case STATUS_OFFLINE: return T("Serveur non lu : état inconnu. \xEE\x80\x83 relit le serveur.", "Server not read: state unknown. \xEE\x80\x83 reads the server again.");
     default: return T("La 3DS et le serveur ont la même sauvegarde.", "The 3DS and the server have the same save.");
     }
@@ -972,20 +1183,21 @@ static void draw_bottom(const game_t *j)
     int action = 0, gb = 0;
 
     if (j) {
-        const char *b = base_of(&bases, j->key);
+        const char *b = base_of(&bases, base_id(j));
         u32 c = j->status == STATUS_IN_SYNC ? C_GREEN : state_color(j->status);
-        gb = j->system == SYS_GB || j->system == SYS_GBA;
+        gb = (j->system == SYS_GB || j->system == SYS_GBA) && !vc(j);
         action = j->status == STATUS_TO_UPLOAD || j->status == STATUS_TO_DOWNLOAD || j->status == STATUS_CONFLICT;
         draw_game_icon(j);
         y += screen_lines(8, y, 0.6f, WHITE, ICON_X - 16, 2, j->short_name);
-        /* System, and for GB/GBA the program whose save is synced (X changes it). */
+        /* System, and for GB/GBA the program whose save is synced (X changes it); title ID of a Virtual Console game. */
         if (gb) snprintf(t, sizeof t, "%s \xC2\xB7 %s", system_label(j), forwarder(j) ? T("forwarder mGBA", "mGBA forwarder") : rom_program(j));
+        else if (vc(j)) snprintf(t, sizeof t, "GB \xC2\xB7 Virtual Console \xC2\xB7 %016llX", j->title);
         else snprintf(t, sizeof t, "%s", system_label(j));
         screen_text(8, y + 1, 0.4f, GREY_LIGHT, ICON_X - 16, t);
         y = y + 18 < UNDER_ICON ? UNDER_ICON : y + 20;
         screen_rect(8, y + 2, 3, 13, c);
         screen_text(15, y, 0.5f, c, 0, state_label(j->status));
-        { /* the server Versions of the game (history_screen): a word in a box for the stylus, like Search */
+        if (j->key[0]) { /* the server Versions of the game (history_screen): a word in a box for the stylus, like Search */
             const char *h = T("Historique", "History");
             float w = screen_text_width(0.42f, h) * WIDTH_MARGIN + 8, x = BOTTOM_WIDTH - 8 - w;
             screen_rect(x, y - 1, w, 18, CARD);
@@ -993,14 +1205,21 @@ static void draw_bottom(const game_t *j)
             touch_area(x - 4, y - 4, w + 8, 24, KEY_HISTORY);
         }
         y += 19;
-        y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : 2, state_sentence(j, t, sizeof t)) + 5;
-        if (j->status != STATUS_DUPLICATE) { /* a Duplicate has no save and no version to show */
+        y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : vc(j) ? 3 : 2, state_sentence(j, t, sizeof t)) + 5;
+        if (j->status != STATUS_DUPLICATE && j->status != STATUS_NOT_SYNCED) { /* no save and no version to show */
             local_text(j, t, sizeof t);
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
             server_text(j, t, sizeof t);
             y = detail(y, T("Sur le serveur", "On the server"), t);
-            detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
+            if (j->status != STATUS_IN_SYNC && j->has_server_progress && !strcmp(j->progress_hash, j->server_hash)) {
+                progress_text(&j->server_progress, t, sizeof t); /* Pokémon: the play time of both, before any choice */
+                y = detail(y, "", t);
+            }
+            y = detail(y, T("Dernière synchro", "Last sync"), base_label(b, j));
         }
+        /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
+        if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key);
+        else if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);
     else if (update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
@@ -1229,6 +1448,9 @@ static void choose_titles(void)
             y += screen_lines(8, y, 0.55f, WHITE, ICON_X - 16, 2, ch->name) + 4;
             y = y < UNDER_ICON ? UNDER_ICON + 4 : y + 4;
             if (ch->main_only == 1) y += screen_paragraph(8, y, 0.45f, C_GREEN, TEXT_WIDTH, T("Ce jeu peut être synchronisé.", "This game can be synced.")) + 6;
+            else if (title_vc(ch->id))
+                y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, T("Jeu Virtual Console : il est dans la liste des jeux GB, sans le cocher ici.",
+                                                                       "Virtual Console game: it is in the list of GB games, no need to tick it here.")) + 6;
             else if (ch->main_only == 0)
                 y += screen_paragraph(8, y, 0.45f, C_RED, TEXT_WIDTH, T("Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).",
                                                                        "This game can't be synced (several save files).")) + 6;
@@ -1538,7 +1760,8 @@ static int act(game_t *j)
         done = 1;
         break;
     case STATUS_TO_DOWNLOAD: {
-        int has_server_progress = server_progress(j, &p);
+        int has_server_progress;
+        has_server_progress = server_progress(j, &p);
         server_text(j, srv, sizeof srv);
         local_text(j, loc, sizeof loc);
         if (has_server_progress) progress_text(&p, t, sizeof t);
@@ -1591,6 +1814,14 @@ static int act(game_t *j)
         r = make_result(j->shares_save ? RESULT_DUPLICATE_SHARED : RESULT_DUPLICATE, NULL);
         r.count = j->rom_count;
         break;
+    case STATUS_NOT_SYNCED:
+        if (!j->key[0]) {
+            r = make_result(RESULT_VC_NO_KEY, j->why);
+            break;
+        }
+        r = make_result(RESULT_VC_UNEXPECTED, NULL);
+        title_root(j->title, r.path, sizeof r.path); /* the technical line: what the archive holds */
+        break;
     case STATUS_OFFLINE:
         r = make_result(RESULT_OFFLINE, NULL);
         break;
@@ -1614,7 +1845,7 @@ static int switch_save_file(game_t *j)
     time_t t = time(NULL);
     result_t r;
 
-    if (j->system != SYS_GB && j->system != SYS_GBA) {
+    if ((j->system != SYS_GB && j->system != SYS_GBA) || vc(j)) {
         r = make_result(RESULT_GB_GBA_ONLY, NULL);
         show_result(&r, j);
         return 0;
@@ -1650,8 +1881,31 @@ static int switch_save_file(game_t *j)
     return 1;
 }
 
-/* START: Uploads and Downloads; skips Conflicts and Duplicates; one confirmation for the overwrites. Then reads the
- * server again, and the message says what was done. */
+/* What Sync all downloads: To download, a Virtual Console game never started included (its first save is created), but
+ * not one with an archive and no sav.dat, nor one whose RAM size is not known. */
+static int to_download(const game_t *j) { return j->status == STATUS_TO_DOWNLOAD && !(vc(j) && !j->has_local && (j->vc_archive || !vc_sram_size(j))); }
+
+/* One Upload or Download of Sync all: progress, then the counts and the first failure. */
+static void sync_one(game_t *j, int upload, int done, int total, int *ok_count, int *failures, result_t *first, const char **first_game)
+{
+    result_t res;
+    int i = (int)(j - games);
+    if (index_of(shown, shown_count, i) >= 0) list_cursor = index_of(shown, shown_count, i); /* the top screen follows the current game */
+    progress_color = upload ? C_YELLOW : C_CYAN;
+    show_progress(done, total, "%s\n%s", upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
+    res = upload ? upload_save(j) : download_save(j);
+    if (result_ok(&res)) ++*ok_count;
+    else if (!(*failures)++) {
+        *first = res;
+        *first_game = j->short_name;
+    }
+    read_local(j);
+}
+
+/* START: Uploads first, then the server read again, then Downloads: a Virtual Console game and the ROM or forwarder of
+ * the same Key are two Local saves (ADR 0025), so what one uploads the other downloads in the same Sync all. Skips
+ * Conflicts, Duplicates, Not synced and the Virtual Console games never started; one confirmation for the overwrites.
+ * Then reads the server again, and the message says what was done. */
 static void sync_all(void)
 {
     char q[1200], first_text[512], first_detail[200], r[120];
@@ -1665,59 +1919,49 @@ static void sync_all(void)
         set_message(C_RED, NULL, "%s", T("Serveur non lu : appuyez sur \xEE\x80\x83 pour réessayer.", "Server not read: press \xEE\x80\x83 to try again."));
         return;
     }
+    operation = T("Tout synchroniser", "Sync all");
+    for (i = 0; i < visible_count; i++) planned_uploads += games[visible[i]].status == STATUS_TO_UPLOAD;
+    for (i = 0; i < visible_count && planned_uploads; i++) /* uploads never overwrite a 3DS save: no question */
+        if (games[visible[i]].status == STATUS_TO_UPLOAD) sync_one(&games[visible[i]], 1, ++done, planned_uploads, &uploads, &failures, &first, &first_game);
+    if (planned_uploads) reread_server(); /* the other Local saves of the uploaded Keys are now To download */
+    operation = NULL;
+
     for (i = 0; i < visible_count; i++) {
-        status_t e = games[visible[i]].status;
-        planned_uploads += e == STATUS_TO_UPLOAD;
-        planned_downloads += e == STATUS_TO_DOWNLOAD;
-        skipped += e == STATUS_CONFLICT || e == STATUS_DUPLICATE;
+        const game_t *j = &games[visible[i]];
+        planned_downloads += to_download(j);
+        skipped += j->status == STATUS_CONFLICT || j->status == STATUS_DUPLICATE || j->status == STATUS_NOT_SYNCED || (j->status == STATUS_TO_DOWNLOAD && !to_download(j));
     }
-    sync_summary(r, sizeof r, planned_uploads, planned_downloads, 0, skipped, english);
+    sync_summary(r, sizeof r, uploads, planned_downloads, 0, skipped, english);
     snprintf(q, sizeof q, "%s\n\n%s", r, T("Ces sauvegardes de la 3DS seront remplacées par celles du serveur, après une copie de sécurité :\n",
                                            "These 3DS saves will be replaced by the server's, after a backup:\n"));
     for (i = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
-        if (j->status == STATUS_TO_DOWNLOAD && j->has_local && overwrites++ < 8) {
-            char t[80] = "";
+        if (to_download(j) && j->has_local && overwrites++ < 8) {
+            char t[160] = "";
             if (j->has_progress) progress_text(&j->progress, t, sizeof t);
-            snprintf(q + strlen(q), sizeof q - strlen(q), "%.40s%s%s%s\n", j->short_name, t[0] ? " (" : "", t, t[0] ? ")" : "");
+            if (j->has_progress && j->has_server_progress && !strcmp(j->progress_hash, j->server_hash)) { /* Pokémon: 3DS -> server */
+                snprintf(t + strlen(t), sizeof t - strlen(t), T(" ; serveur ", " ; server "));
+                progress_text(&j->server_progress, t + strlen(t), sizeof t - strlen(t));
+            }
+            snprintf(q + strlen(q), sizeof q - strlen(q), "%.40s%s%s%s%s\n", j->short_name, vc(j) ? " (Virtual Console)" : "", t[0] ? " (" : "", t, t[0] ? ")" : "");
         }
     }
     if (overwrites > 8) snprintf(q + strlen(q), sizeof q - strlen(q), plural(overwrites - 8, english, T("… et %d autre\n", "… and %d more\n"), T("… et %d autres\n", "… and %d more\n")), overwrites - 8);
     if (overwrites) may_overwrite = confirm(T("Tout synchroniser", "Sync all"), NULL, q, NULL, T("Remplacer", "Replace"));
-    for (i = 0; i < visible_count; i++) {
-        game_t *j = &games[visible[i]];
-        total += j->status == STATUS_TO_UPLOAD || (j->status == STATUS_TO_DOWNLOAD && (may_overwrite || !j->has_local));
-    }
+    for (i = 0; i < visible_count; i++) total += to_download(&games[visible[i]]) && (may_overwrite || !games[visible[i]].has_local);
     operation = T("Tout synchroniser", "Sync all");
-    for (i = 0; i < visible_count; i++) {
+    for (i = 0, done = 0; i < visible_count; i++) {
         game_t *j = &games[visible[i]];
-        int do_upload = j->status == STATUS_TO_UPLOAD;
-        int do_download = j->status == STATUS_TO_DOWNLOAD && (may_overwrite || !j->has_local);
-        if (do_upload || do_download) {
-            result_t res;
-            int ok;
-            if (index_of(shown, shown_count, visible[i]) >= 0) list_cursor = index_of(shown, shown_count, visible[i]); /* the top screen follows the current game */
-            progress_color = do_upload ? C_YELLOW : C_CYAN;
-            show_progress(++done, total, "%s\n%s", do_upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
-            res = do_upload ? upload_save(j) : download_save(j);
-            ok = result_ok(&res);
-            uploads += do_upload && ok;
-            downloads += do_download && ok;
-            if (!ok && !failures++) {
-                first = res;
-                first_game = j->short_name;
-            }
-            read_local(j);
-        }
+        if (to_download(j) && (may_overwrite || !j->has_local)) sync_one(j, 0, ++done, total, &downloads, &failures, &first, &first_game);
     }
     operation = NULL;
     progress_color = C_GREEN;
     if (total) reread_server();
     /* Summary, then the first failure: the message of the last action says nothing about the others. */
     sync_summary(r, sizeof r, uploads, downloads, failures, skipped, english);
-    if (total) snprintf(r + strlen(r), sizeof r - strlen(r), " \xC2\xB7 %llu s", (osGetTime() - start) / 1000);
+    if (total || planned_uploads) snprintf(r + strlen(r), sizeof r - strlen(r), " \xC2\xB7 %llu s", (osGetTime() - start) / 1000);
     result_text(&first, first_game, english, first_text, sizeof first_text, first_detail, sizeof first_detail); /* "game: reason", and its technical line */
-    set_message(failures ? C_RED : total ? C_GREEN : WHITE, first_detail, "%s%s%s%.199s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first_text);
+    set_message(failures ? C_RED : total || planned_uploads ? C_GREEN : WHITE, first_detail, "%s%s%s%.199s", r, failures ? "\n" : "", failures > 1 ? T("Premier échec : ", "First failure: ") : "", first_text);
 }
 
 /* ---------------------------------------------------------------- History and Restore (ADR 0016) */
@@ -1857,9 +2101,9 @@ static int restore_version(const game_t *j, const entry_t *v)
     snprintf(q, sizeof q, "%s\t%s%s%s\n%s\t%s\n\n%s", T("Cette version", "This version"), when, has_progress ? "\n\t" : "", has_progress ? t : "",
              T("Sur la 3DS", "On the 3DS"), loc,
              T("Elle redevient la version actuelle du serveur. Rien n'est effacé : l'actuelle reste dans l'historique. "
-               "Ensuite, 3dssavesync propose de la récupérer sur la 3DS, après une copie de sécurité de sa sauvegarde.",
-               "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
-               "Then 3dssavesync offers to download it to the 3DS, after a backup of its save."));
+                       "Ensuite, 3dssavesync propose de la récupérer sur la 3DS, après une copie de sécurité de sa sauvegarde.",
+                       "It becomes the current version on the server again. Nothing is deleted: the current one stays in the history. "
+                       "Then 3dssavesync offers to download it to the 3DS, after a backup of its save."));
     ok = confirm(T("Restaurer cette version ?", "Restore this version?"), j->short_name, q, NULL, T("Restaurer", "Restore"));
     if (ok) {
         char condition[100];
@@ -1954,10 +2198,10 @@ static void history_screen(game_t *j)
     if (!restored) return;
     reread_server();
     /* The server changed, not the 3DS: its State says what comes next. To download: the usual question and Download. */
-    set_message(C_GREEN, NULL, "%s\n%s", done, j->status == STATUS_TO_DOWNLOAD ? T("Récupérez-la sur la 3DS avec \xEE\x80\x80, après une copie de sécurité.",
+    set_message(C_GREEN, NULL, "%s\n%s", done, to_download(j) ? T("Récupérez-la sur la 3DS avec \xEE\x80\x80, après une copie de sécurité.",
                                                                            "Download it to the 3DS with \xEE\x80\x80, after a backup.")
                                                                          : state_sentence(j, t, sizeof t));
-    if (j->status == STATUS_TO_DOWNLOAD && act(j)) reread_server();
+    if (to_download(j) && act(j)) reread_server(); /* Virtual Console: state_sentence says it comes later */
 }
 
 /* ---------------------------------------------------------------- loop */

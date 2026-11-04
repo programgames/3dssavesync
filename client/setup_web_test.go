@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http/httptest"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,6 +95,15 @@ func TestWebSetup(t *testing.T) {
 	if !state.Exists || !state.HasToken || state.URL != server.URL || strings.Contains(request("POST", "127.0.0.1:9", "/s3cret/api/etat", "{}").Body.String(), "jeton-web") {
 		t.Errorf("état après enregistrement (jamais le jeton) : %+v", state)
 	}
+	// QR code for the phone: same protection as the other api/ routes, a PNG of the saved address and token.
+	if request("GET", "127.0.0.1:9", "/s3cret/api/qr", "").Code != 405 {
+		t.Error("api/qr en GET : 405 attendu")
+	}
+	var qrRes map[string]string
+	json.Unmarshal(request("POST", "127.0.0.1:9", "/s3cret/api/qr", "{}").Body.Bytes(), &qrRes)
+	if png, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(qrRes["Image"], "data:image/png;base64,")); err != nil || !bytes.HasPrefix(png, []byte("\x89PNG")) {
+		t.Errorf("QR code PNG attendu : %v", qrRes)
+	}
 	// Save folder missing: the emulator's line says what the checks say, never "Ready".
 	if p := state.Emulators[0].Problems; len(p) != 1 || !strings.Contains(p[0], "melonds DS : dossier des sauvegardes introuvable") {
 		t.Errorf("problème de melonds attendu : %q", p)
@@ -116,6 +128,19 @@ func TestWebSetup(t *testing.T) {
 	json.Unmarshal(request("POST", "127.0.0.1:9", "/s3cret/api/ouvrir", `{"Nom":"inconnu"}`).Body.Bytes(), &opened)
 	if opened["Ok"] != false || launched != nil {
 		t.Errorf("émulateur inconnu : refus attendu, rien de lancé (%v, %q)", opened, launched)
+	}
+}
+
+// The QR code text read by the Android app (core/Pairing.kt): both values URL-encoded, read back as they were.
+func TestPhonePayload(t *testing.T) {
+	p := phonePayload("http://192.0.2.10:8765", "faux jeton&=é")
+	if p != "3dssavesync://serveur?adresse=http%3A%2F%2F192.0.2.10%3A8765&jeton=faux+jeton%26%3D%C3%A9" {
+		t.Errorf("payload : %s", p)
+	}
+	// A scheme can't start with a digit for net/url: the app reads the part after "?" (parsePairing).
+	q, err := neturl.ParseQuery(strings.TrimPrefix(p, "3dssavesync://serveur?"))
+	if err != nil || q.Get("adresse") != "http://192.0.2.10:8765" || q.Get("jeton") != "faux jeton&=é" {
+		t.Errorf("relu : %v %v", q, err)
 	}
 }
 

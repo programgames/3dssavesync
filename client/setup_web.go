@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	_ "embed"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"rsc.io/qr"
 )
 
 //go:embed assistant.html
@@ -215,6 +219,17 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			x["Jeton"] = cfg.Token
 		}
 		response = x
+	case "api/qr": // for the Android app: the saved address (LAN address for the local server) and token
+		var cfg Config
+		readJSON(a.config, &cfg)
+		address, _ := address3DS(&cfg)
+		if address == "" || cfg.Token == "" {
+			response = map[string]any{"Erreur": tr("Enregistrez d'abord le serveur.", "Save the server first.")}
+		} else if c, err := qr.Encode(phonePayload(address, cfg.Token), qr.M); err != nil {
+			response = map[string]any{"Erreur": errorText(err)}
+		} else {
+			response = map[string]any{"Image": "data:image/png;base64," + base64.StdEncoding.EncodeToString(c.PNG())}
+		}
 	case "api/cartes":
 		response = map[string]any{"Cartes": detectCards()}
 	case "api/preparer":
@@ -325,6 +340,11 @@ func (a *WebSetup) aliasWeb(name string, system System, remove bool) map[string]
 		x["Erreur"] = errorText(err)
 	}
 	return x
+}
+
+// phonePayload is the text of the QR code that the Android app scans (core/Pairing.kt, parsePairing).
+func phonePayload(address, token string) string {
+	return "3dssavesync://serveur?" + neturl.Values{"adresse": {address}, "jeton": {token}}.Encode()
 }
 
 // finish stops the program after the response; a second call (two tabs, two clicks) does nothing.

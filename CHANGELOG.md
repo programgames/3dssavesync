@@ -2,13 +2,25 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [3.9.0] - Unreleased
+## [3.10.0] - 2026-11-04
+
+### Added
+
+- **Virtual Console on the 3DS.** Game Boy and Game Boy Color games bought on the eShop are synced like your ROMs (Luma3DS needed). A Virtual Console game and the mGBA forwarder of the same game are both synced: play either one, and **Sync all** brings your progress to the other, even to a Virtual Console game you never started.
+- **Pokémon play time of the server version on the 3DS.** For a Pokémon game that is not in sync, the bottom screen shows the play time and trainer of the server version under **On the server**, and **Sync all** lists both before replacing a save.
+- **QR code for your phone.** On the **Server** step of the PC settings page, **Show the QR code** gives the server address and token to the Android app, which is coming soon. The code stays hidden until you click.
+
+## [3.9.0] - 2026-11-04
+
+Not released on its own: these changes come with 3.10.0.
 
 ### Added
 
 - **Sync without the Launcher.** The icon near the clock uploads your save when you close an emulator you opened yourself, and every 15 minutes gets new versions from the server for closed emulators, only over a save that did not change, after a backup copy. A conflict gives a notification and replaces nothing. You can turn it off in **Frontends and install**.
 
-## [3.8.0] - Unreleased
+## [3.8.0] - 2026-11-04
+
+Not released on its own: these changes come with 3.10.0.
 
 ### Added
 
@@ -22,7 +34,9 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - The 3DS app has no game limit any more (it stopped at 512 ROMs), and you can tick up to 256 3DS games (64 before).
 - In the 3DS game choice, ticked games come first.
 
-## [3.7.0] - Unreleased
+## [3.7.0] - 2026-11-04
+
+Not released on its own: these changes come with 3.10.0.
 
 ### Added
 
@@ -140,9 +154,10 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.8.0...HEAD
-[3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.7.0...v3.8.0
-[3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.7.0
+[3.10.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
+[3.9.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
+[3.8.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
+[3.7.0]: https://github.com/programgames/3dssavesync/compare/v3.6.1...v3.10.0
 [3.6.1]: https://github.com/programgames/3dssavesync/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/programgames/3dssavesync/compare/v3.5.0...v3.6.0
 [3.5.0]: https://github.com/programgames/3dssavesync/compare/v3.4.0...v3.5.0

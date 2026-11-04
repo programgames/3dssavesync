@@ -23,6 +23,9 @@ typedef enum {
     RESULT_SWITCHED,         /* program */
     RESULT_SWITCH_FAILED,    /* path: the Save file */
     RESULT_GB_GBA_ONLY,
+    RESULT_VC_NEVER_STARTED, /* Download to a Virtual Console game with no sav.dat yet: nothing written */
+    RESULT_VC_UNEXPECTED,    /* path: the files of its archive (title_root) */
+    RESULT_VC_NO_KEY,        /* ROM of a Virtual Console game unreadable; path: the step that failed */
     RESULT_CONFLICT_LEFT,
     RESULT_DUPLICATE_SHARED, /* count */
     RESULT_DUPLICATE,        /* count */

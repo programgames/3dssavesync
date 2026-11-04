@@ -58,6 +58,7 @@ int main(void)
 
     check(sram_size(SYS_GB, 32816) == 32768, "GB 32816 -> 32768 (trailer mGBA 48 o)");
     check(sram_size(SYS_GB, 32768) == 32768, "GB 32768 inchangé");
+    check(sram_size(SYS_GB, 32784) == 32768, "GB 32784 -> 32768 (sav.dat de Cristal VC : pied de 16 o)");
     check(sram_size(SYS_GBA, 131088) == 131072, "GBA 131088 -> 131072 (trailer mGBA 16 o)");
     check(sram_size(SYS_GB, 32812) == 32768, "GB 32812 -> 32768 (trailer VBA 44 o)");
     check(sram_size(SYS_GB, 512) == 512, "GB 512 inchangé (MBC2)");

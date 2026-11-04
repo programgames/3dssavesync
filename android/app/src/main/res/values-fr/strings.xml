@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Navigation -->
+    <string name="tab_games">Jeux</string>
+    <string name="tab_emulators">Émulateurs</string>
+    <string name="tab_settings">Réglages</string>
+    <string name="back">Retour</string>
+    <string name="cancel">Annuler</string>
+    <string name="ok">OK</string>
+    <string name="confirm">Confirmer</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Serveur</string>
+    <string name="server_address">Adresse du serveur</string>
+    <string name="server_address_help">L\'adresse de votre serveur 3dssavesync, avec http:// ou https:// et le port.</string>
+    <string name="address_scheme">Commencez l\'adresse par http:// ou https://.</string>
+    <string name="token">Jeton</string>
+    <string name="show">Afficher</string>
+    <string name="hide">Masquer</string>
+    <string name="scan_qr">Scanner le QR code du PC</string>
+    <string name="scan_help">Sur le PC, ouvrez les réglages de 3dssavesync, page Serveur, et cliquez sur « Afficher le QR code ». Ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_cancelled">Scan annulé. Scannez à nouveau, ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_unavailable">Le scanner de QR code n\'est pas disponible sur ce téléphone. Il a besoin des services Google Play, et la première fois, il peut être encore en cours de téléchargement. Réessayez dans une minute, ou entrez l\'adresse et le jeton ci-dessous.</string>
+    <string name="scan_not_ours">Ce n\'est pas le QR code de 3dssavesync. Scannez celui qu\'affiche le PC dans ses réglages, page Serveur.</string>
+    <string name="test_connection">Tester la connexion</string>
+    <string name="testing">Test de la connexion…</string>
+    <plurals name="connected">
+        <item quantity="one">Connexion réussie. Le serveur a %1$d jeu.</item>
+        <item quantity="other">Connexion réussie. Le serveur a %1$d jeux.</item>
+        <item quantity="many">Connexion réussie. Le serveur a %1$d jeux.</item>
+    </plurals>
+    <string name="backups_title">Copies de sécurité</string>
+    <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie ici, un dossier par émulateur. Branchez le téléphone à un ordinateur en USB pour les voir (dossier Android/data).</string>
+    <string name="version">3dssavesync pour Android %1$s</string>
+
+    <!-- Emulators -->
+    <string name="emulators_title">Émulateurs</string>
+    <string name="no_emulator">Aucun émulateur pour l\'instant. Ajoutez les émulateurs avec lesquels vous jouez, puis choisissez leurs dossiers.</string>
+    <string name="emulators_help">L\'application n\'ouvre que les dossiers que vous choisissez. Elle ne supprime jamais de fichier.</string>
+    <string name="add_emulator">Ajouter un émulateur</string>
+    <string name="custom_profile">Autre émulateur</string>
+    <string name="remove_emulator">Retirer cet émulateur</string>
+    <string name="remove_emulator_text">L\'application oublie cet émulateur et ses dossiers. Aucun fichier n\'est supprimé : vos sauvegardes et les copies de sécurité restent en place.</string>
+    <string name="remove">Retirer</string>
+    <string name="name">Nom</string>
+    <string name="core">Cœur RetroArch</string>
+    <string name="extension">Extension des sauvegardes</string>
+    <string name="rom_folder">Dossier des ROM</string>
+    <string name="save_folder">Dossier des sauvegardes</string>
+    <string name="azahar_folder">Dossier utilisateur d\'Azahar (celui qui contient sdmc)</string>
+    <string name="next_to_rom">Sauvegardes à côté des ROM</string>
+    <string name="choose">Choisir</string>
+    <string name="folder_ready">Prêt</string>
+    <string name="folder_missing">Dossier introuvable : choisissez-le de nouveau</string>
+    <string name="folder_no_permission">Accès perdu : choisissez de nouveau le dossier</string>
+    <string name="folder_not_set">Dossier pas encore choisi</string>
+    <string name="folder_checking">Vérification…</string>
+    <string name="system_ds">Nintendo DS</string>
+    <string name="system_gb">Game Boy et Game Boy Color</string>
+    <string name="system_gba">Game Boy Advance</string>
+    <string name="system_3ds">Nintendo 3DS</string>
+    <string name="hint_retroarch">RetroArch range ses sauvegardes dans RetroArch/saves, un dossier par cœur (mGBA, Gambatte…). Choisissez ce dossier du cœur comme dossier des sauvegardes. Version du Play Store : dans le sélecteur de dossier, ouvrez le menu, choisissez RetroArch, puis saves. Fermez RetroArch avant de synchroniser : il écrit la sauvegarde toutes les quelques secondes.</string>
+    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés. Pour un jeu jamais lancé dans Azahar, l\'application crée son dossier avec la sauvegarde du serveur. Fermez Azahar avant de synchroniser.</string>
+    <string name="hint_melonds">melonDS écrit la sauvegarde à côté de la ROM par défaut (réglage « Save next to ROM »). Si vous avez choisi un autre dossier de sauvegardes dans melonDS, décochez « Sauvegardes à côté des ROM » et choisissez le même dossier ici.</string>
+    <string name="hint_noods">NooDS écrit la sauvegarde à côté de la ROM par défaut. Son autre réglage (dossier saves) les range là où aucune autre application ne peut les lire : gardez le réglage par défaut.</string>
+    <string name="hint_custom">Pour DraStic, Pizza Boy, My Boy!, Linkboy et les autres : choisissez le dossier où l\'émulateur écrit ses sauvegardes et tapez leur extension (.sav, .dsv). Ces émulateurs ne sont pas encore vérifiés : essayez d\'abord avec une copie d\'une sauvegarde. Certains rangent leurs sauvegardes dans Android/data, qu\'aucune autre application ne peut ouvrir.</string>
+
+    <!-- Games -->
+    <string name="need_server">Indiquez d\'abord l\'adresse du serveur et le jeton.</string>
+    <string name="open_settings">Ouvrir les réglages</string>
+    <string name="need_emulator">Ajoutez d\'abord un émulateur et choisissez ses dossiers.</string>
+    <string name="refresh">Actualiser</string>
+    <string name="sync_all">Tout synchroniser</string>
+    <string name="sync">Synchroniser</string>
+    <string name="reading">Lecture des dossiers et du serveur…</string>
+    <string name="reading_saves">Lecture des sauvegardes : %1$d sur %2$d</string>
+    <string name="syncing">Synchronisation…</string>
+    <string name="syncing_game">Synchronisation %1$d sur %2$d : %3$s</string>
+    <string name="server_not_read">Le serveur n\'a pas été lu : les états sont inconnus.</string>
+    <string name="folder_problem">Dossier non lu : %1$s. Choisissez-le de nouveau dans Émulateurs.</string>
+    <string name="azahar_not_set_up">%1$s : aucun dossier Nintendo 3DS dans le dossier choisi, donc Azahar n\'y a jamais été configuré. Lancez Azahar une fois, ou choisissez de nouveau son dossier utilisateur dans Émulateurs.</string>
+    <string name="search">Chercher un jeu</string>
+    <string name="filter_all">Tous</string>
+    <string name="filter_todo">À faire</string>
+    <string name="no_match">Aucun jeu ne correspond à cette recherche ou à ce filtre.</string>
+    <string name="no_game">Aucun jeu trouvé. Vérifiez les dossiers des ROM dans Émulateurs.</string>
+    <plurals name="hidden_games">
+        <item quantity="one">%1$d jeu n\'a encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur : il n\'est pas affiché.</item>
+        <item quantity="other">%1$d jeux n\'ont encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur : ils ne sont pas affichés.</item>
+        <item quantity="many">%1$d jeux n\'ont encore aucune sauvegarde, ni sur ce téléphone ni sur le serveur : ils ne sont pas affichés.</item>
+    </plurals>
+    <string name="confirm_replace">La version du serveur va remplacer ces sauvegardes sur ce téléphone. Une copie de sécurité de chacune est faite avant.\n\n%1$s\n\nFermez vos émulateurs avant de continuer.</string>
+    <string name="summary_title">Synchronisation terminée</string>
+    <string name="summary_counts">Envoyées : %1$d\nRécupérées : %2$d\nDéjà à jour : %3$d</string>
+    <string name="summary_conflicts">Conflits, en attente de votre choix : %1$s. Ouvrez chaque jeu pour choisir la sauvegarde à garder.</string>
+    <string name="summary_not_replaced">Pas remplacé, car vous n\'avez pas confirmé le remplacement de la sauvegarde de ce téléphone : %1$s. Ouvrez chaque jeu pour le vérifier.</string>
+    <string name="summary_stopped">La synchronisation s\'est arrêtée : les jeux suivants n\'ont pas été essayés.</string>
+
+    <!-- States -->
+    <string name="s_to_upload">À envoyer</string>
+    <string name="s_to_download">À récupérer</string>
+    <string name="s_conflict">Conflit</string>
+    <string name="s_in_sync">À jour</string>
+    <string name="s_duplicate">Doublon</string>
+    <string name="s_unknown">Inconnu</string>
+    <string name="s_none">Pas de sauvegarde</string>
+    <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Envoyer la transmet au serveur.</string>
+    <string name="why_to_download">Le serveur a une version plus récente. Récupérer la télécharge, après une copie de sécurité de la sauvegarde du téléphone.</string>
+    <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
+    <string name="why_in_sync">Ce téléphone et le serveur ont la même sauvegarde.</string>
+    <string name="why_duplicate">%1$d ROM contiennent ce jeu : il n\'est pas synchronisé. Si l\'une d\'elles est un ROM hack, donnez-lui sa propre sauvegarde. Sinon, gardez-en une seule dans le dossier des ROM.</string>
+    <string name="why_shared_file">%1$d ROM utiliseraient le même fichier de sauvegarde : elles ne sont pas synchronisées. Renommez-en une.</string>
+    <string name="why_unknown">État inconnu : le serveur ou cette sauvegarde n\'a pas pu être lu.</string>
+    <string name="why_none">Aucune sauvegarde sur ce téléphone ni sur le serveur. Jouez et sauvegardez dans le jeu, puis actualisez.</string>
+
+    <!-- ROM hacks (ADR 0014) -->
+    <string name="hacks_title">ROM hacks</string>
+    <string name="hacks_text">Un ROM hack garde souvent le code de son jeu d\'origine, et l\'application risque de les confondre. Ajoutez ici la ROM du hack pour lui donner sa propre sauvegarde.</string>
+    <string name="hacks_same_key">La clé de la sauvegarde vient du nom du fichier de la ROM, comme sur le PC. Pour synchroniser le hack avec le PC et la 3DS, ajoutez le même fichier de ROM dans les réglages du PC (ROM hacks), puis préparez de nouveau la carte SD de la 3DS.</string>
+    <string name="no_hack">Aucun ROM hack.</string>
+    <string name="hack_choose_rom">Choisir la ROM</string>
+    <string name="hack_no_file">Aucune ROM choisie.</string>
+    <string name="hack_add">Ajouter</string>
+    <string name="hack_remove_text">Oublier le ROM hack %1$s ? L\'application le lit de nouveau comme son jeu d\'origine. Aucune sauvegarde n\'est supprimée.</string>
+    <string name="own_save">Donner sa propre sauvegarde à cette ROM</string>
+    <string name="alias_invalid">%1$s : sa clé de ROM hack (%2$s) n\'est pas valable, il n\'est pas synchronisé. Retirez-le dans Réglages, ROM hacks, puis ajoutez de nouveau la ROM.</string>
+
+    <!-- Game details -->
+    <string name="this_phone">Ce téléphone</string>
+    <string name="server">Serveur</string>
+    <string name="no_local_save">Aucune sauvegarde sur ce téléphone</string>
+    <string name="never_started_azahar">Jamais lancé dans Azahar : Récupérer crée son dossier de sauvegarde</string>
+    <string name="no_server_version">Pas encore sur le serveur</string>
+    <string name="blank_save">Sauvegarde vierge (aucune partie)</string>
+    <string name="modified_on">Modifiée le %1$s</string>
+    <plurals name="size">
+        <item quantity="one">%1$d octet</item>
+        <item quantity="other">%1$d octets</item>
+        <item quantity="many">%1$d octets</item>
+    </plurals>
+    <string name="uploaded_on">Envoyée le %1$s (%2$s)</string>
+    <string name="uploaded_by">Par : %1$s</string>
+    <string name="play_info">Temps de jeu %1$d h %2$02d · %3$s</string>
+    <string name="play_not_started">Temps de jeu %1$d h %2$02d · partie non commencée</string>
+    <string name="age_now">à l\'instant</string>
+    <string name="age_min">il y a %1$d min</string>
+    <string name="age_h">il y a %1$d h</string>
+    <string name="age_d">il y a %1$d j</string>
+    <string name="last_sync">Dernière synchronisation :</string>
+    <string name="base_never">jamais</string>
+    <string name="base_both">même version que les deux</string>
+    <string name="base_phone">même version que ce téléphone</string>
+    <string name="base_server">même version que le serveur</string>
+    <string name="base_differs">différente des deux</string>
+    <string name="upload">Envoyer</string>
+    <string name="download">Récupérer</string>
+    <string name="confirm_download">La version du serveur va remplacer la sauvegarde de ce téléphone. Une copie de sécurité est faite avant. Fermez l\'émulateur avant de continuer.</string>
+    <string name="choose_version">Quelle sauvegarde garder ?</string>
+    <string name="keep_phone">Garder celle du téléphone</string>
+    <string name="take_server">Prendre celle du serveur</string>
+    <string name="confirm_keep_phone">La sauvegarde de ce téléphone va être envoyée. Le serveur garde sa version actuelle dans son historique.</string>
+    <string name="confirm_take_server">La sauvegarde du serveur va remplacer celle de ce téléphone. Une copie de sécurité de la sauvegarde du téléphone est faite avant. Fermez l\'émulateur avant de continuer.</string>
+    <string name="nothing_lost">Rien n\'est perdu : le serveur garde chaque version dans son historique, et ce téléphone fait une copie de sécurité avant tout remplacement.</string>
+    <string name="done_uploaded">Envoyée.</string>
+    <string name="done_downloaded">Récupérée. L\'ancienne sauvegarde est dans les copies de sécurité.</string>
+    <string name="done_conflict">Le serveur a changé entre-temps : comparez de nouveau les deux sauvegardes, puis choisissez.</string>
+    <string name="done_not_replaced">Rien n\'a été remplacé : l\'état a changé entre-temps. Vérifiez-le, puis réessayez.</string>
+    <string name="done_in_sync">Déjà à jour.</string>
+    <string name="done_failed">Échec de la synchronisation.</string>
+
+    <!-- Problems -->
+    <string name="p_token">Le serveur refuse ce jeton. Recopiez le jeton exact du serveur dans les réglages.</string>
+    <string name="p_not_server">Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la dans les réglages.</string>
+    <string name="p_too_large">Sauvegarde trop grosse pour le serveur. Augmentez la taille maximale acceptée par le serveur ou par son proxy.</string>
+    <string name="p_rejected">Le serveur a refusé cette sauvegarde (vide, trop grosse ou envoi interrompu). Réessayez.</string>
+    <string name="p_server_error">Le serveur a rencontré une erreur. Réessayez plus tard. Si le problème continue, consultez le journal du serveur.</string>
+    <string name="p_unexpected">Le serveur a répondu de façon inattendue. Vérifiez son adresse dans les réglages.</string>
+    <string name="p_certificate">Le certificat du serveur n\'est pas valide. Vérifiez l\'adresse (https://) et la date du téléphone.</string>
+    <string name="p_no_host">Serveur introuvable. Vérifiez la connexion Wi-Fi et l\'adresse du serveur.</string>
+    <string name="p_refused">Le serveur refuse la connexion. Il est peut-être arrêté, ou le port est incorrect : démarrez le serveur ou vérifiez l\'adresse.</string>
+    <string name="p_no_response">Le serveur ne répond pas. Vérifiez la connexion Wi-Fi et l\'adresse du serveur.</string>
+    <string name="p_damaged">La sauvegarde reçue du serveur est incomplète : la vôtre n\'a pas été remplacée. Réessayez.</string>
+    <string name="p_busy">Un autre appareil envoie cette sauvegarde en même temps. Réessayez dans un moment.</string>
+    <string name="p_backup">La copie de sécurité n\'a pas pu être faite : rien n\'a été remplacé. Vérifiez la place libre sur le téléphone.</string>
+    <string name="p_write">La nouvelle sauvegarde n\'a pas pu être écrite correctement : l\'ancienne a été remise en place. Vérifiez le dossier dans Émulateurs, puis réessayez.</string>
+    <string name="p_restore">La sauvegarde n\'a pas pu être écrite, et l\'ancienne n\'a pas pu être remise en place. Ne jouez pas à ce jeu : recopiez la copie de sécurité indiquée ci-dessous dans le dossier des sauvegardes.</string>
+    <string name="p_not_written">La nouvelle sauvegarde n\'a pas pu être écrite. Ce téléphone n\'avait pas de sauvegarde pour ce jeu : rien n\'est perdu. Si un fichier de sauvegarde de ce jeu est maintenant dans le dossier, supprimez-le avant de jouer. Vérifiez ensuite le dossier dans Émulateurs, puis réessayez.</string>
+    <string name="p_partial">La sauvegarde n\'a pas pu être écrite, et l\'application n\'a pas pu retirer le dossier qu\'elle a créé pour ce jeu dans Azahar. Azahar y verrait une sauvegarde abîmée : avant de lancer ce jeu, supprimez le dossier indiqué ci-dessous avec un gestionnaire de fichiers. Réessayez ensuite.</string>
+    <string name="p_not_started">Ce jeu n\'a jamais été lancé dans Azahar, mais son dossier contient déjà un fichier 00000001.metadata : l\'application ne crée donc pas sa sauvegarde. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
+    <string name="p_changed">La sauvegarde de ce téléphone a changé pendant la synchronisation : elle n\'a pas été remplacée. Fermez l\'émulateur, puis réessayez.</string>
+    <string name="p_format">Ce fichier de sauvegarde a un format inattendu : il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
+    <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
+    <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
+    <string name="p_open">La sauvegarde vient de changer : l\'émulateur est peut-être encore ouvert. Fermez-le, puis synchronisez de nouveau.</string>
+    <string name="reminder_title">Fermez l\'émulateur</string>
+    <string name="reminder_text">Fermez l\'émulateur avant de synchroniser : s\'il reste ouvert, il écrasera la sauvegarde reçue.</string>
+    <string name="dont_show_again">Ne plus afficher</string>
+
+    <!-- History and Restore (ADR 0016) -->
+    <string name="history">Historique</string>
+    <string name="history_help">Les versions de ce jeu sur le serveur, de la plus récente à la plus ancienne. Touchez-en une pour la voir.</string>
+    <string name="reading_history">Lecture de l\'historique…</string>
+    <string name="history_failed">L\'historique n\'a pas pu être lu.</string>
+    <string name="no_versions">Aucune version de ce jeu sur le serveur.</string>
+    <string name="version_no">n° %1$d</string>
+    <string name="current">Actuelle</string>
+    <string name="client_restore">Restauration</string>
+    <string name="size_kib">%1$d Kio</string>
+    <string name="version_current_help">La version que les appareils récupèrent. Choisissez une version plus ancienne pour la restaurer.</string>
+    <string name="version_same">Même contenu que la version actuelle : rien à restaurer.</string>
+    <string name="version_restore_help">Restaurer la remet en version actuelle sur le serveur. Ensuite, l\'app propose de la récupérer sur ce téléphone, après une copie de sécurité.</string>
+    <string name="restore">Restaurer</string>
+    <string name="restore_title">Restaurer cette version ?</string>
+    <string name="this_version">Cette version</string>
+    <string name="restore_explain">Elle redevient la version actuelle du serveur. Rien n\'est effacé : l\'actuelle reste dans l\'historique. Ensuite, l\'app propose de la récupérer sur ce téléphone, après une copie de sécurité de sa sauvegarde. Synchronisez d\'abord vos autres appareils : une partie pas encore envoyée pourrait remplacer cette version ou provoquer un conflit.</string>
+    <string name="restoring">Restauration…</string>
+    <string name="restored">Version restaurée sur le serveur : n° %1$d.</string>
+    <string name="restore_failed">Restauration impossible. Rien n\'a changé.</string>
+    <string name="p_version_gone">Cette version n\'est plus sur le serveur. Choisissez-en une autre.</string>
+    <string name="p_version_damaged">La version reçue du serveur est abîmée. Réessayez.</string>
+    <string name="p_server_changed">La sauvegarde vient de changer sur le serveur : un appareil l\'a envoyée entre-temps. La liste est de nouveau à jour : choisissez de nouveau.</string>
+
+    <!-- Background upload -->
+    <string name="bg_title">Envoi en arrière-plan</string>
+    <string name="bg_switch">Envoyer les sauvegardes en arrière-plan</string>
+    <string name="bg_help">Environ toutes les 15 minutes, avec un réseau et une batterie qui n\'est pas faible, l\'app envoie les sauvegardes jouées sur ce téléphone. Elle ne récupère jamais rien et ne remplace jamais une sauvegarde de ce téléphone : utilisez Tout synchroniser pour cela. Une sauvegarde modifiée dans les 30 dernières secondes attend le passage suivant. Chaque passage consomme un peu de batterie et de données.</string>
+    <string name="bg_no_notification">Les notifications sont désactivées : les problèmes s\'affichent seulement ici.</string>
+    <string name="bg_never">Aucun passage en arrière-plan pour l\'instant.</string>
+    <plurals name="bg_last">
+        <item quantity="one">Dernier passage : %1$s. %2$d sauvegarde envoyée.</item>
+        <item quantity="other">Dernier passage : %1$s. %2$d sauvegardes envoyées.</item>
+        <item quantity="many">Dernier passage : %1$s. %2$d sauvegardes envoyées.</item>
+    </plurals>
+    <string name="bg_problems_title">Envoi en arrière-plan : problèmes</string>
+    <string name="bg_conflict">%1$s : conflit. Ouvrez le jeu pour choisir la sauvegarde à garder.</string>
+</resources>

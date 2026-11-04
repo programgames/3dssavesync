@@ -74,8 +74,22 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : changement impossible, rien n'est perdu.", "%s: switch failed, nothing lost."), game);
         return KIND_FAILURE;
     case RESULT_GB_GBA_ONLY:
-        snprintf(text, n, "%s", T("X : seulement pour les jeux GB et GBA.", "X: GB and GBA games only."));
+        snprintf(text, n, "%s", T("X : seulement pour les ROM GB et GBA de la carte SD.", "X: GB and GBA ROMs on the SD card only."));
         return KIND_INFO;
+    case RESULT_VC_NEVER_STARTED:
+        snprintf(text, n, T("%s : ce jeu Virtual Console n'a pas encore de sauvegarde. Lancez-le une fois sur la 3DS, puis synchronisez. Rien n'a été modifié.",
+                            "%s: this Virtual Console game has no save yet. Start it once on the 3DS, then sync. Nothing was changed."), game);
+        return KIND_INFO;
+    case RESULT_VC_UNEXPECTED:
+        if (r->path[0]) snprintf(detail, dn, T("Fichiers : %s", "Files: %s"), r->path);
+        snprintf(text, n, T("%s : ce jeu a des points de restauration (ou d'autres fichiers que sav.dat), qui pourraient ramener une ancienne partie. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
+                            "%s: this game has restore points (or other files than sav.dat) that could bring an old game back. It is not synced, and its save is not changed."), game);
+        return KIND_FAILURE;
+    case RESULT_VC_NO_KEY:
+        if (r->path[0]) snprintf(detail, dn, "ROM : %s", r->path);
+        snprintf(text, n, T("%s : la ROM de ce jeu Virtual Console est illisible, sa clé est inconnue. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
+                            "%s: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line."), game);
+        return KIND_FAILURE;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);
         return KIND_INFO;

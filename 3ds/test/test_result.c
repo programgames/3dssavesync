@@ -79,7 +79,22 @@ int main(void)
     r.program = "open_agb_firm";
     expect(r, 1, KIND_SUCCESS, "Zelda: now played with open_agb_firm.", "");
     expect(make(RESULT_SWITCH_FAILED, SAV), 0, KIND_FAILURE, "Zelda : changement impossible, rien n'est perdu.", SAV);
-    expect(make(RESULT_GB_GBA_ONLY, ""), 0, KIND_INFO, "X : seulement pour les jeux GB et GBA.", "");
+    expect(make(RESULT_GB_GBA_ONLY, ""), 0, KIND_INFO, "X : seulement pour les ROM GB et GBA de la carte SD.", "");
+    expect(make(RESULT_VC_NEVER_STARTED, ""), 0, KIND_INFO,
+           "Zelda : ce jeu Virtual Console n'a pas encore de sauvegarde. Lancez-le une fois sur la 3DS, puis synchronisez. Rien n'a été modifié.", "");
+    expect(make(RESULT_VC_NEVER_STARTED, ""), 1, KIND_INFO,
+           "Zelda: this Virtual Console game has no save yet. Start it once on the 3DS, then sync. Nothing was changed.", "");
+    expect(make(RESULT_VC_UNEXPECTED, "sav.dat, SecureValue, rsm2.dat"), 1, KIND_FAILURE,
+           "Zelda: this game has restore points (or other files than sav.dat) that could bring an old game back. It is not synced, and its save is not changed.",
+           "Files: sav.dat, SecureValue, rsm2.dat");
+    expect(make(RESULT_VC_UNEXPECTED, ""), 0, KIND_FAILURE, /* archive no longer readable: no empty technical line */
+           "Zelda : ce jeu a des points de restauration (ou d'autres fichiers que sav.dat), qui pourraient ramener une ancienne partie. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.", "");
+    expect(make(RESULT_VC_NO_KEY, "1:D9004676 2:D9004676"), 1, KIND_FAILURE,
+           "Zelda: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line.",
+           "ROM : 1:D9004676 2:D9004676");
+    expect(make(RESULT_VC_NO_KEY, "1:D9004676"), 0, KIND_FAILURE,
+           "Zelda : la ROM de ce jeu Virtual Console est illisible, sa clé est inconnue. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
+           "ROM : 1:D9004676");
     expect(make(RESULT_CONFLICT_LEFT, ""), 0, KIND_INFO, "Zelda : conflit laissé tel quel.", "");
     r = make(RESULT_DUPLICATE_SHARED, "");
     r.count = 2;
