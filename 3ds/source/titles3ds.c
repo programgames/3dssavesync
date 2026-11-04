@@ -1,4 +1,5 @@
 /* Same order of operations as Checkpoint (io.cpp: write, commit, secure value), code written here (ADR 0009). */
+#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -136,11 +137,32 @@ static int luma(void)
     return R_SUCCEEDED(svcGetSystemInfo(&version, 0x10000, 0)); /* Luma3DS's own SystemInfo type; error on stock */
 }
 
+/* Result and byte count of the last read, for the diagnostic line. */
+static Result pxi_result;
+static u32 pxi_got;
+static unsigned long long pxi_size;
+
+/* FSPXI reads go to Process9 through a PXI buffer: the bytes are read in whole 0x200-byte media units into a page-aligned
+ * buffer, then copied (rc4: a 0x60-byte read at 0 into the stack failed). */
 static Result pxi_read(Handle h, FSPXI_File f, u64 offset, void *buffer, u32 size)
 {
-    u32 got = 0;
-    Result r = FSPXI_ReadFile(h, f, &got, offset, buffer, size);
-    return R_SUCCEEDED(r) && got != size ? (Result)-1 : r;
+    u64 start = offset & ~0x1FFULL;
+    u32 length = (u32)((offset + size - start + 0x1FF) & ~0x1FFULL);
+    unsigned char *bounce = memalign(0x1000, length);
+    pxi_got = 0;
+    pxi_result = bounce ? FSPXI_ReadFile(h, f, &pxi_got, start, bounce, length) : (Result)-2;
+    if (R_SUCCEEDED(pxi_result) && pxi_got >= offset + size - start) memcpy(buffer, bounce + (offset - start), size);
+    else if (R_SUCCEEDED(pxi_result)) pxi_result = -1;
+    free(bounce);
+    return pxi_result;
+}
+
+/* "step(result,bytes read,file size)" of the last read, for the diagnostic line. */
+static const char *read_failed(const char *step)
+{
+    static char text[64];
+    snprintf(text, sizeof text, "%s(%08lX,%lu,%llu)", step, (unsigned long)pxi_result, (unsigned long)pxi_got, pxi_size);
+    return text;
 }
 
 static u32 le32(const unsigned char *p)
@@ -158,29 +180,32 @@ static const char *rom_from_romfs(Handle h, FSPXI_File f, unsigned char *header,
     unsigned char b[0x60];
     u64 level3 = 0;
     u32 dir_meta, file_meta, file_data, d;
-    if (R_FAILED(pxi_read(h, f, 0, b, 0x60))) return "ivfc";
+    u64 size = 0;
+    FSPXI_GetFileSize(h, f, &size);
+    pxi_size = size;
+    if (R_FAILED(pxi_read(h, f, 0, b, 0x60))) return read_failed("ivfc");
     if (!memcmp(b, "IVFC", 4)) {
         u64 block = 1ULL << (le32(b + 0x4C) & 31);
         level3 = (0x60 + le32(b + 0x08) + block - 1) / block * block;
     }
-    if (R_FAILED(pxi_read(h, f, level3, b, 0x28))) return "level3";
+    if (R_FAILED(pxi_read(h, f, level3, b, 0x28))) return read_failed("level3");
     dir_meta = le32(b + 0x0C), file_meta = le32(b + 0x1C), file_data = le32(b + 0x24);
-    if (R_FAILED(pxi_read(h, f, level3 + dir_meta, b, 0x18))) return "root";
+    if (R_FAILED(pxi_read(h, f, level3 + dir_meta, b, 0x18))) return read_failed("root");
     for (d = le32(b + 0x08); d != 0xFFFFFFFF; d = le32(b + 0x04)) { /* root's child directories */
-        if (R_FAILED(pxi_read(h, f, level3 + dir_meta + d, b, 0x20))) return "dir";
+        if (R_FAILED(pxi_read(h, f, level3 + dir_meta + d, b, 0x20))) return read_failed("dir");
         if (le32(b + 0x14) == 6 && !memcmp(b + 0x18, "r\0o\0m\0", 6)) break;
     }
     if (d == 0xFFFFFFFF) return "no rom/";
     if ((d = le32(b + 0x0C)) == 0xFFFFFFFF) return "no ROM";
-    if (R_FAILED(pxi_read(h, f, level3 + file_meta + d, b, 0x20))) return "file";
+    if (R_FAILED(pxi_read(h, f, level3 + file_meta + d, b, 0x20))) return read_failed("file");
     if (!le32(b + 0x14) && le32(b + 0x10) < n) return "small ROM";
-    if (R_FAILED(pxi_read(h, f, level3 + file_data + (le32(b + 0x08) | (u64)le32(b + 0x0C) << 32), header, n))) return "data";
+    if (R_FAILED(pxi_read(h, f, level3 + file_data + (le32(b + 0x08) | (u64)le32(b + 0x0C) << 32), header, n))) return read_failed("data");
     return NULL;
 }
 
 int title_rom_header(u64 id, unsigned char *header, size_t n, char *why, size_t wn)
 {
-    /* DIAGNOSTIC (v3.10 rc4): archive path {low, high, media, 0}. File path = 3dbrew Title Access path: title access 0,
+    /* DIAGNOSTIC (v3.10 rc5): archive path {low, high, media, 0}. File path = 3dbrew Title Access path: title access 0,
      * content 0, NCCH section 0 = RomFS, u64 mask of allowed content types, then a 16-byte seed (zero). fs itself sends
      * 0x24 bytes with a mask computed from the title's contents (decompiled fs, handler 0x10e798); rc3's zero mask
      * allowed nothing. Tries: 1 = 0x24 bytes, all six types; 2 = 0x24, "unspecified" only; 3 = 0x14 bytes, all six. */
