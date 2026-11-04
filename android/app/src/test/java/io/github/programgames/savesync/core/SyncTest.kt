@@ -740,3 +740,14 @@ class MemoryUseTest {
         }
     }
 }
+
+// A 404 on the list: not a 3dssavesync server, for every game; on one game: only that save is gone from the server.
+class ProblemTest {
+    @Test
+    fun notFound() {
+        assertEquals(Problem.NOT_SERVER, problem(HttpException("GET /saves", 404)))
+        assertTrue(isGlobal(Problem.NOT_SERVER))
+        assertEquals(Problem.SAVE_GONE, problem(HttpException("GET /saves/AMCE", 404)))
+        assertFalse(isGlobal(Problem.SAVE_GONE))
+    }
+}

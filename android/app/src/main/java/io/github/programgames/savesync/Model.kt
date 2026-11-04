@@ -11,7 +11,9 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.Uploads
+import io.github.programgames.savesync.core.isGlobal
 import io.github.programgames.savesync.core.problem
 import androidx.compose.runtime.getValue
 import androidx.core.net.toUri
@@ -140,20 +142,27 @@ object App {
         record(u, scanned)
     }
 
-    // record keeps the result of a background pass for the settings screen, and notifies its problems once: the same
-    // problems are not notified again while they stay. ponytail: the text is the dedupe key, so a new language notifies again.
+    // record keeps the result of a background pass for the settings screen, and notifies only a new problem: one that
+    // the last pass did not have (by kind: a Conflict of a game, a Problem, a folder line). A server out of reach (away
+    // from home, Wi-Fi off) is never notified: the settings screen shows it, and such a pass says nothing of the other
+    // problems, so the known ones stay known. A problem that goes away is notified again if it comes back.
     internal fun record(u: Uploads, scanned: List<String>, now: Long = java.lang.System.currentTimeMillis()) {
-        val problems = (
-            u.conflicts.map { text(R.string.bg_conflict, it) } +
-                u.failures.map { (name, t) -> "$name: " + text(problemText(problem(t))) } + scanned
-            ).joinToString("\n")
-        val run = LastRun(now, u.uploaded, problems)
+        val lines = u.conflicts.map { text(R.string.bg_conflict, it) } + u.failures.map { (name, t) ->
+            val p = problem(t)
+            if (isGlobal(p)) text(problemText(p)) else "$name: " + text(problemText(p)) // the server, not this game
+        } + scanned
+        val run = LastRun(now, u.uploaded, lines.joinToString("\n"))
         settings.lastRun = run
         lastRun = run
-        if (problems == settings.notified) return
-        settings.notified = problems
-        if (problems.isNotEmpty()) notifyProblems(problems)
+        if (u.failures.any { problem(it.second) in unreachable }) return
+        val kinds = u.conflicts.map { "conflict $it" } + u.failures.map { problem(it.second).name } + scanned
+        val known = settings.notified.split('\n').toSet()
+        settings.notified = kinds.joinToString("\n")
+        if (kinds.any { it !in known }) notifyProblems(run.problems)
     }
+
+    // unreachable: the server can't be reached, which is normal away from home with a server on the home network.
+    private val unreachable = setOf(Problem.NO_HOST, Problem.REFUSED, Problem.NO_RESPONSE)
 
     // notifyProblems shows one notification; without the permission (Android 13+), the settings screen only.
     private fun notifyProblems(problems: String) {

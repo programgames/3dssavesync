@@ -194,6 +194,7 @@ fun problemText(p: Problem) = when (p) {
     Problem.VERSION_GONE -> R.string.p_version_gone
     Problem.VERSION_DAMAGED -> R.string.p_version_damaged
     Problem.SERVER_CHANGED -> R.string.p_server_changed
+    Problem.SAVE_GONE -> R.string.p_save_gone
     Problem.DAMAGED -> R.string.p_damaged
     Problem.BUSY -> R.string.p_busy
     Problem.BACKUP -> R.string.p_backup

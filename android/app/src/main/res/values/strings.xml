@@ -231,7 +231,7 @@
     <string name="p_rejected">The server rejected this save (empty, too large or cut off). Try again.</string>
     <string name="p_server_error">The server ran into an error. Try again later. If it keeps happening, check the server log.</string>
     <string name="p_unexpected">The server sent an unexpected response. Check its address in Settings: it may need https://.</string>
-    <string name="p_certificate">The server\'s certificate isn\'t valid. Check the address (https://) and the date of the phone.</string>
+    <string name="p_certificate">This phone doesn\'t trust the server\'s certificate. For a home server, install its certificate in the Android settings (Security, Encryption and credentials), or use its http:// address on your home network. Also check the date of the phone.</string>
     <string name="p_no_host">Can\'t find the server. Check the Wi-Fi connection and the server address.</string>
     <string name="p_refused">The server refused the connection. Check that it\'s running and that the address and port are right.</string>
     <string name="p_no_response">The server isn\'t responding. Check the Wi-Fi connection and the server address.</string>
@@ -275,6 +275,7 @@
     <string name="restored">Version restored on the server: #%1$d.</string>
     <string name="restore_failed">Restore failed. Nothing changed.</string>
     <string name="p_version_gone">This version is no longer on the server. Choose another one.</string>
+    <string name="p_save_gone">The server no longer has this save. Refresh the list, then try again.</string>
     <string name="p_version_damaged">The version from the server arrived damaged. Try again.</string>
     <string name="p_server_changed">The save just changed on the server: a device uploaded it meanwhile. The list is up to date again: choose again.</string>
 

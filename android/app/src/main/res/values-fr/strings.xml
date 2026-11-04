@@ -233,7 +233,7 @@
     <string name="p_rejected">Le serveur a refusé cette sauvegarde (vide, trop grosse ou envoi interrompu). Réessayez.</string>
     <string name="p_server_error">Le serveur a rencontré une erreur. Réessayez plus tard. Si le problème continue, consultez le journal du serveur.</string>
     <string name="p_unexpected">Le serveur a répondu de façon inattendue. Vérifiez son adresse dans Réglages&#160;: elle demande peut-être https://.</string>
-    <string name="p_certificate">Le certificat du serveur n\'est pas valide. Vérifiez l\'adresse (https://) et la date du téléphone.</string>
+    <string name="p_certificate">Ce téléphone ne fait pas confiance au certificat du serveur. Pour un serveur à la maison, installez son certificat dans les paramètres Android (Sécurité, Chiffrement et identifiants), ou utilisez son adresse http:// sur votre réseau domestique. Vérifiez aussi la date du téléphone.</string>
     <string name="p_no_host">Serveur introuvable. Vérifiez la connexion Wi-Fi et l\'adresse du serveur.</string>
     <string name="p_refused">Le serveur refuse la connexion. Vérifiez qu\'il est démarré, et que l\'adresse et le port sont justes.</string>
     <string name="p_no_response">Le serveur ne répond pas. Vérifiez la connexion Wi-Fi et l\'adresse du serveur.</string>
@@ -277,6 +277,7 @@
     <string name="restored">Version restaurée sur le serveur&#160;: n° %1$d.</string>
     <string name="restore_failed">Restauration impossible. Rien n\'a changé.</string>
     <string name="p_version_gone">Cette version n\'est plus sur le serveur. Choisissez-en une autre.</string>
+    <string name="p_save_gone">Le serveur n\'a plus cette sauvegarde. Actualisez la liste, puis réessayez.</string>
     <string name="p_version_damaged">La version reçue du serveur est abîmée. Réessayez.</string>
     <string name="p_server_changed">La sauvegarde vient de changer sur le serveur&#160;: un appareil l\'a envoyée entre-temps. La liste est de nouveau à jour&#160;: choisissez de nouveau.</string>
 

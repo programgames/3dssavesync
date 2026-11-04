@@ -11,7 +11,11 @@ import androidx.work.WorkManager
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
+import io.github.programgames.savesync.core.HttpException
+import io.github.programgames.savesync.core.NetworkException
+import io.github.programgames.savesync.core.Problem
 import io.github.programgames.savesync.core.Uploads
+import io.github.programgames.savesync.core.problem
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -79,5 +83,31 @@ class BackgroundTest {
         assertEquals("", App.lastRun!!.problems)
         App.record(conflict, emptyList())
         assertEquals(1, shown()) // back after a run without problems: notified again
+    }
+
+    // Away from home, the server can't be reached: never notified, only shown in the settings, and the problems already
+    // notified stay known. A refused token is a real problem: notified once.
+    @Test
+    fun unreachableServerNotNotified() {
+        val nm = ctx.getSystemService(NotificationManager::class.java)
+        val shown = { shadowOf(nm).allNotifications.size.also { nm.cancelAll() } }
+        val conflict = Uploads(0, emptyList(), listOf("Pokemon Emeraude"), emptyList())
+        App.record(conflict, emptyList())
+        assertEquals(1, shown())
+        for (cause in listOf(java.net.ConnectException("refused"), java.net.SocketTimeoutException("timeout"), java.net.UnknownHostException("nas"))) {
+            App.record(Uploads(0, emptyList(), emptyList(), listOf("Zelda" to NetworkException(cause))), emptyList())
+            assertEquals(0, shown())
+        }
+        assertEquals(ctx.getString(R.string.p_no_host), App.lastRun!!.problems) // the server, not "Zelda: …"
+        App.record(conflict, emptyList())
+        assertEquals(0, shown()) // back home: the same conflict, already notified
+        val token = Uploads(0, emptyList(), listOf("Pokemon Emeraude"), listOf("Zelda" to HttpException("GET /saves", 401)))
+        App.record(token, emptyList())
+        assertEquals(1, shown())
+        App.record(token, emptyList())
+        assertEquals(0, shown())
+        App.record(Uploads(0, emptyList(), listOf("Pokemon Emeraude", "Zelda"), emptyList()), emptyList())
+        assertEquals(1, shown()) // a new conflict
+        assertEquals(Problem.NO_HOST, problem(NetworkException(java.net.UnknownHostException("nas"))))
     }
 }

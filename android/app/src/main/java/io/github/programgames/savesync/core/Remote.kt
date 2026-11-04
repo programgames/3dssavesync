@@ -123,7 +123,7 @@ fun restoreVersion(remote: Remote, key: String, v: Version, current: Version) {
 enum class Problem {
     TOKEN, NOT_SERVER, TOO_LARGE, REJECTED, SERVER_ERROR, UNEXPECTED, // HTTP status
     CERTIFICATE, NO_HOST, REFUSED, NO_RESPONSE, // network
-    VERSION_GONE, VERSION_DAMAGED, SERVER_CHANGED, // History and Restore
+    VERSION_GONE, VERSION_DAMAGED, SERVER_CHANGED, SAVE_GONE, // History and Restore; one save gone from the server
     DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, PARTIAL, NOT_STARTED, CHANGED, OPEN, FORMAT, PERMISSION, NO_COPY, OTHER, // this phone
 }
 
@@ -131,7 +131,8 @@ enum class Problem {
 fun problem(e: Throwable): Problem = when (e) {
     is HttpException -> when {
         e.code == 401 -> Problem.TOKEN
-        e.code == 404 -> Problem.NOT_SERVER
+        // 404 on the list: not a 3dssavesync server; on one game: that save was removed from the server since the list
+        e.code == 404 -> if (e.request == "GET /saves") Problem.NOT_SERVER else Problem.SAVE_GONE
         e.code == 413 -> Problem.TOO_LARGE
         e.code == 400 -> Problem.REJECTED
         e.code >= 500 -> Problem.SERVER_ERROR
