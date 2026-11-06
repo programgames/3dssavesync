@@ -904,4 +904,17 @@ func TestSyncAll(t *testing.T) {
 		t.Errorf("émulateur ouvert : %q", text)
 	}
 	running = 0
+
+	// A games folder not set is a setting, not a failure: Sync all says it, the automatic pass stays silent (the
+	// games started from a frontend sync anyway; the settings page lists it).
+	var cfg Config
+	readJSON(config, &cfg)
+	cfg.Emulators["sameboy"] = &Emulator{Exe: "inutilise.exe", Saves: map[System]string{"GB": saves}}
+	writeJSON(config, &cfg, true)
+	if text := syncAll(config); !strings.Contains(text, "dossier de jeux GB inconnu") {
+		t.Errorf("Tout synchroniser sans dossier de jeux : %q", text)
+	}
+	if r := syncEmulators(config, nil); len(r.noFolder) != 1 || strings.Contains(autoSyncText(r), "dossier de jeux") { // the Conflict stays
+		t.Errorf("synchro automatique sans dossier de jeux : %+v %q", r, autoSyncText(r))
+	}
 }
