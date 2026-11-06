@@ -18,7 +18,7 @@ The Android app syncs the saves of the emulators on your phone or tablet with yo
 
 Every release APK is signed with the same key, so each one installs over the previous one. A development build (the `android-debug-apk` artifact, or one you built) has another key: Android refuses to install a release over it. Only then do you have to uninstall once. Back up the copies first (see below).
 
-To keep the backup copies on a computer, at any time:
+To keep one copy, use **Save elsewhere…** in the history of the game (see [Backup copies](#backup-copies)). To keep all the backup copies on a computer, at any time:
 
 1. Connect the phone to the computer over USB and choose **File transfer** on the phone.
 2. Copy the folder `Android/data/io.github.programgames.savesync/files/copies/` to the computer. The Android Files app may hide `Android/data`: use the computer.
@@ -128,7 +128,7 @@ The app never uploads a cut file and never offers to keep it. If the backup copy
 
 ## History and Restore
 
-The server keeps the older versions of every save. To get one back, open the game, then tap **Show the history** (it shows when the server has a version of this game).
+The server keeps the older versions of every save. To get one back, open the game, then tap **Show the history**. The screen shows the versions on the server first, then the backup copies on this phone (see [Backup copies](#backup-copies)).
 
 1. The list shows the versions on the server, newest first: number, age, device (3DS, PC, Android, or Restore for a version put back), size. **Current** marks the version that the devices download.
 2. Tap a version. For a Pokémon game, the app downloads this version only and shows its play time and trainer name.
@@ -179,7 +179,12 @@ Before any save is replaced, the app writes a copy, reads it back and compares i
 
 `Android/data/io.github.programgames.savesync/files/copies/<emulator>/<game>-<date>.<ext>`
 
-Connect the phone to a computer over USB to see them (the Android Files app may hide `Android/data`). To restore one, copy it into the emulator's save folder with the name of the save file (for example `Pokemon Emerald.srm`), then open the game in the app: it shows **To upload** or **Conflict**. Older versions of every save are also on the server: see [History and Restore](#history-and-restore).
+Since Android 11, file managers on the phone cannot open `Android/data`. Use the app instead: open the game, tap **Show the history**, then look under **This phone**. It lists the copies of this game, newest first, with their date and size. Tap a copy:
+
+- **Put back**: the copy replaces the save on this phone, after a backup copy of the current save, with the usual confirmation and the protection against an open emulator. The game then shows **To upload**: upload it to get this copy on your other devices too.
+- **Save elsewhere…**: Android's file picker opens. Choose a folder you can open, for example **Downloads**. The app writes the copy there; the copy in the app folder stays.
+
+A computer connected over USB can also see the folder. Older versions of every save are also on the server: see [History and Restore](#history-and-restore).
 
 Removing an emulator from the app, or uninstalling the app, deletes nothing in your save folders. **Uninstalling the app deletes its backup copies**: to update, install the new APK over the old one (see [Update](#update)), and copy the backups to a computer if you want to keep them.
 

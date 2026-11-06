@@ -31,7 +31,7 @@
         <item quantity="many">Connexion réussie. Le serveur a %1$d jeux.</item>
     </plurals>
     <string name="backups_title">Copies de sécurité</string>
-    <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie ici, un dossier par émulateur. Branchez le téléphone à un ordinateur en USB pour les voir (dossier Android/data). Désinstaller l\'application supprime ces copies : pour la mettre à jour, installez le nouvel APK par-dessus l\'ancien.</string>
+    <string name="backups_where">Avant de remplacer une sauvegarde, l\'application en garde une copie. Pour les retrouver, ouvrez un jeu, puis Voir l\'historique&#160;: ses copies sont en bas, prêtes à être remises en place ou enregistrées dans le dossier de votre choix. Désinstaller l\'application supprime ces copies : pour la mettre à jour, installez le nouvel APK par-dessus l\'ancien.</string>
     <string name="version">3dssavesync pour Android %1$s</string>
 
     <string name="type_address">Saisir l\'adresse</string>
@@ -229,6 +229,17 @@
     <string name="restore_copy">Remettre la copie de sécurité</string>
     <string name="confirm_restore_copy">La copie de sécurité faite avant l\'écriture interrompue va remplacer le fichier de ce téléphone. Une copie de sécurité du fichier actuel est faite avant. Fermez l\'émulateur avant de continuer.</string>
     <string name="done_copy_restored">La copie de sécurité est de nouveau en place.</string>
+    <string name="copies_help">Les copies gardées par l\'application avant qu\'elle remplace cette sauvegarde, de la plus récente à la plus ancienne. Touchez-en une pour la remettre en place ou l\'enregistrer ailleurs.</string>
+    <string name="no_copies">Aucune copie de sécurité de ce jeu sur ce téléphone pour l\'instant.</string>
+    <string name="copy_of">Copie du %1$s</string>
+    <string name="this_copy">Cette copie</string>
+    <string name="put_back">Remettre en place</string>
+    <string name="save_copy">Enregistrer ailleurs…</string>
+    <string name="confirm_put_back">Cette copie va remplacer la sauvegarde de ce téléphone. Une copie de sécurité de la sauvegarde actuelle est faite avant. Le jeu passe ensuite à «&#160;À envoyer&#160;»&#160;: envoyez-le pour retrouver cette copie sur vos autres appareils. Fermez l\'émulateur avant de continuer.</string>
+    <string name="done_put_back">La copie est de nouveau en place. Envoyez-la pour la retrouver sur vos autres appareils.</string>
+    <string name="saving_copy">Enregistrement de la copie…</string>
+    <string name="done_copy_saved">Copie enregistrée.</string>
+    <string name="copy_not_saved">L\'application n\'a pas pu enregistrer la copie.</string>
     <string name="done_failed">Échec de la synchronisation.</string>
 
     <!-- Problems -->

@@ -172,7 +172,19 @@ class Backups(val root: File) {
         }
         throw SyncException(Problem.BACKUP, "$dir: 10 copies of $base already")
     }
+
+    // of: the Backup copies of one Game, newest first (History screen). Only "<name>-<date>[-n]<ext>": the copies of
+    // "Pokemon Red" are not those of "Pokemon Red 2".
+    fun of(g: Game): List<File> {
+        val re = Regex(Regex.escape(g.name) + """-(\d{8}-\d{6})(?:-(\d))?""" + Regex.escape(backupExt(g)))
+        // the date of the name, then its number: two copies of the same second are numbered in order
+        return File(root, g.emulator).listFiles().orEmpty().mapNotNull { f -> re.matchEntire(f.name)?.takeIf { f.isFile }?.let { f to it } }
+            .sortedWith(compareByDescending<Pair<File, MatchResult>> { it.second.groupValues[1] }.thenByDescending { it.second.groupValues[2] })
+            .map { it.first }
+    }
 }
+
+fun backupExt(g: Game) = "." + g.file.name.substringAfterLast('.', "sav")
 
 // Status of a Game for the list and the details. state null: nothing to sync (no save on either side). cameBack: a
 // Conflict because the save came back to the one a Download replaced; interrupted: a write of this file did not
@@ -406,6 +418,14 @@ class Syncer(
         return true
     }
 
+    // putBack writes a Backup copy the user chose in the History back, through replace (a Backup copy of the file as it
+    // is now first). The Base does not change, so the save is then To upload; the rule "came back" ends: the user chose it.
+    fun putBack(g: Game, copy: File) {
+        checkClosed(g.file, clock(), reminded())
+        replace(g, g.file.read(), copy.readBytes(), backups, pending)
+        bases.setReplaced(g.emulator, g.key, null)
+    }
+
     private fun upload(g: Game, l: Local, srv: Version?): Boolean {
         if (!remote.put(g.key, l.sram, srv)) return false
         if (srv == null) nameOnServer(g) // first Upload: the server does not have the name yet
@@ -440,7 +460,7 @@ class Syncer(
 // pending: a PendingWrite marker is written before the file is touched and removed once the file is verified (ADR 0026).
 // A marker left by an earlier interrupted write keeps its Backup copy: that one holds the save from before it.
 fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups, pending: Pending? = null): File? {
-    val copy = old?.let { backups.copy(g.emulator, g.name, "." + g.file.name.substringAfterLast('.', "sav"), it) }
+    val copy = old?.let { backups.copy(g.emulator, g.name, backupExt(g), it) }
     val now = g.file.read()
     if (if (old == null) now != null else now?.contentEquals(old) != true) {
         throw SyncException(Problem.CHANGED, "${g.file.location}: changed since it was read (${old?.size} bytes, now ${now?.size})")

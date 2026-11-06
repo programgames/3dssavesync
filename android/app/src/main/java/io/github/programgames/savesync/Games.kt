@@ -3,6 +3,8 @@
 package io.github.programgames.savesync
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -422,12 +424,11 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     else -> {}
                 }
             }
-            if (server != null) {
-                OutlinedButton({
-                    App.message = null
-                    history = true
-                }, enabled = App.busy == null) { Text(stringResource(R.string.show_history)) }
-            }
+            // the server Versions and the Backup copies of this phone: shown even without a server version
+            OutlinedButton({
+                App.message = null
+                history = true
+            }, enabled = App.busy == null) { Text(stringResource(R.string.show_history)) }
         }
     }
     reminder?.let { Reminder(it) { reminder = null } }
@@ -477,14 +478,26 @@ private fun versionLine(v: Version) = stringResource(R.string.version_no, v.numb
 
 // HistoryScreen: the server Versions of a Game, newest first. Restore makes an old one the Current version again, on the
 // server only: this phone then gets it through the usual Download, with its Backup copy and its checks (ADR 0016).
+// Below, the Backup copies of this phone: the app folder is out of reach of the file managers (Android 11+), so a copy
+// is put back or saved to a folder the user picks from here.
 @Composable
 fun HistoryScreen(e: Entry, onBack: () -> Unit) {
     var load by remember { mutableIntStateOf(0) } // the list is read again after a 412
+    val hasServer = e.status?.server != null
     val list = produceState<Result<List<Version>>?>(null, load) {
         value = null
-        value = runCatching { App.history(e) }
+        value = if (hasServer) runCatching { App.history(e) } else Result.success(emptyList())
     }.value
+    val copies = produceState(emptyList<File>(), App.busy) { if (App.busy == null) value = App.copies(e) }.value
     var selected by rememberSaveable { mutableStateOf<String?>(null) } // server name of the selected Version
+    var selectedCopy by rememberSaveable { mutableStateOf<String?>(null) } // path of the selected Backup copy
+    var askCopy by remember { mutableStateOf<File?>(null) }
+    var reminder by remember { mutableStateOf<(() -> Unit)?>(null) } // action to run after the reminder
+    var toSave by remember { mutableStateOf<File?>(null) }
+    val saver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val f = toSave
+        if (uri != null && f != null) App.saveCopy(f, uri)
+    }
     var ask by remember { mutableStateOf(false) }
     val versions = list?.getOrNull().orEmpty()
     val current = versions.firstOrNull()
@@ -502,12 +515,15 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
         LazyColumn(Modifier.padding(p).padding(horizontal = 16.dp)) {
             item {
                 Text(e.short, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.history_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
-                if (list == null) Text(stringResource(R.string.reading_history), style = MaterialTheme.typography.bodySmall)
                 if (list == null || App.busy != null) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
                 App.busy?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall) }
+                App.message?.let { (text, t) ->
+                    if (t == null) Text(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.primary) else ErrorBox(t, text)
+                }
+                Section(stringResource(R.string.server))
+                Text(stringResource(R.string.history_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+                if (list == null) Text(stringResource(R.string.reading_history), style = MaterialTheme.typography.bodySmall)
                 list?.exceptionOrNull()?.let { ErrorBox(it, stringResource(R.string.history_failed), retry = { load++ }) }
-                App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }
                 if (list?.isSuccess == true && versions.isEmpty()) Text(stringResource(R.string.no_versions), Modifier.padding(vertical = 8.dp))
             }
             items(versions, key = { it.file }) { x ->
@@ -541,6 +557,45 @@ fun HistoryScreen(e: Entry, onBack: () -> Unit) {
                 }
                 HorizontalDivider()
             }
+            item {
+                Section(stringResource(R.string.this_phone))
+                Text(stringResource(if (copies.isEmpty()) R.string.no_copies else R.string.copies_help), Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodySmall)
+            }
+            items(copies, key = { it.path }) { f ->
+                val sel = f.path == selectedCopy
+                Column(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).background(if (sel) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+                        .selectable(sel) {
+                            selectedCopy = f.path
+                            App.message = null
+                        }.padding(8.dp),
+                ) {
+                    Text(stringResource(R.string.copy_of, dateText(f.lastModified())))
+                    Text(sizeText(f.length()), style = MaterialTheme.typography.bodySmall)
+                }
+                if (sel) {
+                    FlowRow(Modifier.padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button({ beforeWrite({ reminder = it }) { askCopy = f } }, enabled = App.busy == null) { Text(stringResource(R.string.put_back)) }
+                        OutlinedButton({
+                            toSave = f
+                            saver.launch(f.name)
+                        }, enabled = App.busy == null) { Text(stringResource(R.string.save_copy)) }
+                    }
+                }
+                HorizontalDivider()
+            }
+        }
+    }
+    reminder?.let { Reminder(it) { reminder = null } }
+    askCopy?.let { f ->
+        Confirm(stringResource(R.string.put_back), stringResource(R.string.replace), {
+            App.putBack(e, f) { t -> if (t == null) onBack() } // the details show the new State: To upload
+        }, { askCopy = null }) {
+            Text(stringResource(R.string.this_copy), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.copy_of, dateText(f.lastModified())) + " · " + sizeText(f.length()))
+            Text(stringResource(R.string.this_phone), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleSmall)
+            for (l in phoneLines(e)) Text(l)
+            Text(stringResource(R.string.confirm_put_back), Modifier.padding(top = 8.dp))
         }
     }
     if (ask && v != null && current != null) {
