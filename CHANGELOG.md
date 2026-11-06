@@ -8,6 +8,10 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 - **Android: the backup copies are in the history of each game.** Open a game, tap **Show the history**, and look under **This phone**: put a copy back, or save it to a folder you can open (Downloads, for example). Before, the copies were in a folder that file managers on the phone cannot open.
 
+### Fixed
+
+- **PC: no more "unknown games folder" notification after each Windows start.** If you start your games from a frontend such as LaunchBox, you don't need a games folder: these games sync anyway. The settings page now says which games folders are not set, and **Sync all** still lists them.
+
 ## [3.11.1] - 2026-11-04
 
 ### Fixed
