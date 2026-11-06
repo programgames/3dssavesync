@@ -144,6 +144,17 @@ func emulatorChecks(cfg *Config) []Check {
 				add(false, "emulateurs", tr("%s %s : dossier des sauvegardes introuvable (%s). Lancez un jeu une fois dans l'émulateur, ou indiquez le bon dossier dans Émulateurs, bouton « Régler ».",
 					"%s %s: save folder not found (%s). Start a game once in the emulator, or set the right folder in Emulators with the \"Configure\" button."), n, s, d)
 			}
+			// The games folder: only the automatic sync and Sync all need it (a frontend gives the ROM at each start),
+			// so a folder not set is not a warning.
+			switch r := e.Roms[s]; {
+			case s == "3DS":
+			case r == "":
+				add(true, "emulateurs", tr("%s %s : pas de dossier de jeux. Les jeux lancés depuis votre frontend se synchronisent quand même. Pour les inclure dans la synchro automatique et « Tout synchroniser », indiquez ce dossier dans Émulateurs, bouton « Régler ».",
+					"%s %s: no games folder. Games you start from your frontend still sync. To include them in automatic sync and \"Sync all\", set this folder in Emulators with the \"Configure\" button."), n, s)
+			case !exists(r):
+				add(false, "emulateurs", tr("%s %s : dossier de jeux introuvable (%s). Indiquez le bon dossier dans Émulateurs, bouton « Régler ».",
+					"%s %s: games folder not found (%s). Set the right folder in Emulators with the \"Configure\" button."), n, s, r)
+			}
 		}
 	}
 	return l

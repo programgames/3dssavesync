@@ -398,7 +398,7 @@ func cmdLaunch(config, name string) (int, error) {
 // text for the user, problems first (a notification is cut at 255 characters).
 func syncAll(config string) string {
 	r := syncEmulators(config, nil)
-	text := r.problems
+	text := append(r.problems, r.noFolder...)
 	if len(r.open) > 0 {
 		text = append(text, fmt.Sprintf(tr("Jeux laissés de côté, car l'émulateur est ouvert : %s. Fermez-le, puis recommencez.",
 			"Games skipped because the emulator is open: %s. Close it, then try again."), strings.Join(r.open, ", ")))
@@ -411,10 +411,12 @@ func syncAll(config string) string {
 }
 
 // syncReport is the outcome of syncEmulators. problems: for the user, most important first; open: the programs of the
-// emulators skipped because they run (or a Launcher of theirs is in progress).
+// emulators skipped because they run (or a Launcher of theirs is in progress). noFolder: the systems without a games
+// folder, a setting rather than a failure: Sync all shows them, the automatic pass does not notify them (the games
+// started from a frontend sync anyway; the settings page lists them).
 type syncReport struct {
 	syncCount
-	problems, open []string
+	problems, open, noFolder []string
 }
 
 func (r *syncReport) counts() string {
@@ -459,7 +461,7 @@ emulators:
 		games, refusal, noRoms := c.gamesOf(e, p)
 		refused = append(refused, refusal...)
 		if len(noRoms) > 0 {
-			refused = append(refused, fmt.Sprintf(tr("%s : dossier de jeux %s inconnu. Ajoutez-le dans les réglages.",
+			r.noFolder = append(r.noFolder, fmt.Sprintf(tr("%s : dossier de jeux %s inconnu. Ajoutez-le dans les réglages.",
 				"%s: unknown %s games folder. Add it in the settings."), name, strings.Join(noRoms, ", ")))
 		}
 		for _, j := range games {
@@ -480,7 +482,7 @@ emulators:
 		r.problems = append(r.problems, failures...)
 	}
 	r.problems = append(r.problems, refused...)
-	s.log("synchro groupée " + strings.Join(only, ",") + " : " + strings.Join(append(r.problems, r.counts()), " | "))
+	s.log("synchro groupée " + strings.Join(only, ",") + " : " + strings.Join(append(append(r.problems, r.noFolder...), r.counts()), " | "))
 	return r
 }
 

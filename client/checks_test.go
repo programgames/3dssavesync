@@ -56,7 +56,8 @@ func TestChecks(t *testing.T) {
 	esde := filepath.Join(m, "ES-DE")
 	cfg := Config{URL: server.URL, Token: "faux", Emulators: map[string]*Emulator{
 		"melonds": {Exe: filepath.Join(m, "melonDS.exe"), Saves: map[System]string{"DS": saves}},
-		"mgba":    {Exe: filepath.Join(m, "mGBA.exe"), Saves: map[System]string{"GB": filepath.Join(m, "absent"), "GBA": saves}},
+		"mgba": {Exe: filepath.Join(m, "mGBA.exe"), Saves: map[System]string{"GB": filepath.Join(m, "absent"), "GBA": saves},
+			Roms: map[System]string{"GBA": filepath.Join(m, "absent-roms")}},
 	}, Frontends: map[string]string{"esde": esde}}
 	writeJSON(config, &cfg, true)
 	l, _ := checks(config)
@@ -67,18 +68,20 @@ func TestChecks(t *testing.T) {
 		}
 	}
 	for _, expected := range []string{"serveur:Serveur injoignable : Le serveur refuse ce jeton", "emulateurs:mgba GB\u00a0: dossier des sauvegardes introuvable (" + filepath.Join(m, "absent"),
-		"frontends:ES-DE n'est pas encore configuré", "carte:La carte SD de la 3DS n'a pas encore été préparée"} {
+		"frontends:ES-DE n'est pas encore configuré", "carte:La carte SD de la 3DS n'a pas encore été préparée",
+		"dossier de jeux introuvable (" + filepath.Join(m, "absent-roms")} {
 		if !strings.Contains(todo, expected) {
 			t.Errorf("à faire : %q absent de\n%s", expected, todo)
 		}
 	}
 	if !strings.Contains(ok, "melonds DS : dossier des sauvegardes trouvé") || !strings.Contains(ok, "mgba GBA : dossier des sauvegardes trouvé") ||
-		!strings.Contains(ok, "Version de développement") {
+		!strings.Contains(ok, "Version de développement") || !strings.Contains(ok, "pas de dossier de jeux. Les jeux lancés depuis votre frontend") {
 		t.Errorf("bons : %s", ok)
 	}
 
 	cfg.Token, cfg.PreparedCard = "j", "2026-11-03 14:05"
 	cfg.Emulators["mgba"].Saves["GB"] = saves
+	cfg.Emulators["mgba"].Roms["GBA"] = saves
 	writeJSON(config, &cfg, true)
 	repair(&cfg, launcherOf(&cfg))
 	ok, todo = texts(func() []Check { l, _ := checks(config); return l }())
