@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -92,5 +95,31 @@ func TestChecks(t *testing.T) {
 	}
 	if trayAvailable && !strings.Contains(todo, "frontends:L'icône près de l'horloge n'est pas lancée") || !trayAvailable && todo != "" {
 		t.Errorf("seule l'icône (pas lancée en test) reste à faire : %s", todo)
+	}
+
+	// A 3DS set up without the button (FTP, FBI): its card is ready as soon as a current version comes from it.
+	cfg.PreparedCard = ""
+	writeJSON(config, &cfg, true)
+	card := func() string {
+		l, _ := checks(config)
+		for _, v := range l {
+			if v.Page == "carte" {
+				return fmt.Sprint(v.Ok, " ", v.Text)
+			}
+		}
+		return ""
+	}
+	if c := card(); !strings.HasPrefix(c, "false La carte SD de la 3DS n'a pas encore été préparée") {
+		t.Errorf("rien de la 3DS : %q", c)
+	}
+	req, _ := http.NewRequest("PUT", server.URL+"/saves/IRBF", bytes.NewReader(make([]byte, 0x8000)))
+	req.Header.Set("Authorization", "Bearer j")
+	req.Header.Set("X-Client", "3ds")
+	req.Header.Set("If-None-Match", "*")
+	if rep, err := http.DefaultClient.Do(req); err != nil || rep.StatusCode != 200 {
+		t.Fatalf("envoi de la 3DS : %v %v", rep, err)
+	}
+	if c := card(); c != "true La 3DS synchronise déjà avec ce serveur." {
+		t.Errorf("une version de la 3DS : %q", c)
 	}
 }

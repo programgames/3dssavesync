@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -33,7 +34,8 @@ func checks(config string) ([]Check, map[string]string) {
 	}
 	detail := tr("Détail : ", "Detail: ")
 
-	if err := testServer(&cfg); err != nil {
+	list, err := serverList(&cfg)
+	if err != nil {
 		add(false, "serveur", "%s%s\n%s%v", tr("Serveur injoignable : ", "Server unreachable: "), errorText(err), detail, err)
 	} else {
 		add(true, "serveur", "%s", tr("Serveur joignable, jeton accepté.", "Server reachable, token accepted."))
@@ -69,9 +71,14 @@ func checks(config string) ([]Check, map[string]string) {
 		}
 	}
 
-	if cfg.PreparedCard != "" {
+	// A 3DS set up another way (FTP, FBI, its own update) is ready too: a current version on the server comes from it.
+	from3DS := slices.ContainsFunc(list, func(v Version) bool { return v.Client == "3ds" })
+	switch {
+	case cfg.PreparedCard != "":
 		add(true, "carte", tr("Carte SD de la 3DS préparée le %s.", "3DS SD card prepared on %s."), cfg.PreparedCard)
-	} else {
+	case from3DS:
+		add(true, "carte", "%s", tr("La 3DS synchronise déjà avec ce serveur.", "The 3DS already syncs with this server."))
+	default:
 		add(false, "carte", "%s", tr("La carte SD de la 3DS n'a pas encore été préparée depuis ce PC. Mettez-la dans le PC et cliquez sur « Préparer la carte SD de la 3DS ».",
 			"The 3DS SD card hasn't been prepared from this PC yet. Put it in the PC and click \"Prepare the 3DS SD card\"."))
 	}

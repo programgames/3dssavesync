@@ -389,16 +389,28 @@ func serverStep(q *Questions, cfg *Config) error {
 }
 
 func testServer(cfg *Config) error {
+	_, err := serverList(cfg)
+	return err
+}
+
+// serverList tests the server, like testServer, and returns its GET /saves list. A 200 that is not a list (an older
+// server) gives no list and no error: the server answers.
+func serverList(cfg *Config) ([]Version, error) {
 	r := &remote{cfg: cfg, http: &http.Client{Timeout: 15 * time.Second, Transport: transport}}
 	if !strings.HasPrefix(cfg.URL, "http://") && !strings.HasPrefix(cfg.URL, "https://") {
-		return errors.New(tr("Entrez l'adresse du serveur, avec https:// (ou http:// pour le serveur local).",
+		return nil, errors.New(tr("Entrez l'adresse du serveur, avec https:// (ou http:// pour le serveur local).",
 			"Enter the server address, with https:// (or http:// for the local server)."))
 	}
-	st, _, err := r.request("setup", "GET", "/saves", nil, nil)
+	st, o, err := r.request("setup", "GET", "/saves", nil, nil)
 	if err == nil && st != 200 {
 		err = &httpError{"GET /saves", st}
 	}
-	return err
+	if err != nil {
+		return nil, err
+	}
+	var list []Version
+	json.Unmarshal(o, &list)
+	return list, nil
 }
 
 // installStep copies the exe to the fixed location (otherwise a downloaded exe stays where it is).
