@@ -2,6 +2,12 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [3.11.3] - 2026-11-07
+
+### Fixed
+
+- **PC settings page: no false "SD card not prepared" warning.** If you installed the 3DS homebrew another way (FTP, FBI), the "all ready" list now sees that your 3DS already syncs with the server.
+
 ## [3.11.2] - 2026-11-06
 
 ### Added
@@ -187,6 +193,7 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
+[3.11.3]: https://github.com/programgames/3dssavesync/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/programgames/3dssavesync/compare/v3.11.1...v3.11.2
 [3.11.1]: https://github.com/programgames/3dssavesync/compare/v3.11.0...v3.11.1
 [3.11.0]: https://github.com/programgames/3dssavesync/compare/v3.10.0...v3.11.0
