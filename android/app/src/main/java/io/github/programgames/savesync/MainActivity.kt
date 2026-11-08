@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         App.init(this)
+        if (savedInstanceState == null) App.checkUpdate() // not again when the phone rotates
         setContent {
             // Android 12+: the colours of the wallpaper; before: the Material colours. The State colours stay fixed.
             val dark = isSystemInDarkTheme()

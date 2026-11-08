@@ -14,7 +14,17 @@ The Android app syncs the saves of the emulators on your phone or tablet with yo
 
 ## Update
 
-**Never uninstall the app to update it: uninstalling deletes the backup copies**, the record of the last sync of each game and the settings. Install the new `3dssavesync-android.apk` over the old one: open it, then tap **Update**. Android keeps the app's data.
+**Never uninstall the app to update it: uninstalling deletes the backup copies**, the record of the last sync of each game and the settings. Android keeps the app's data when a new version installs over the old one.
+
+From version 3.12, the app updates itself:
+
+1. When a new version is out, a card shows at the top of **Games** and in **Settings**: "Version … is available". **What's new** opens its release page.
+2. Tap **Update**. The app downloads `3dssavesync-android.apk` from GitHub and checks it against `SHA256SUMS`. A damaged download is never installed.
+3. Android asks you to confirm: tap **Update**. The first time, Android first asks you to allow 3dssavesync to install apps: allow it, then go back.
+
+The app asks GitHub for its latest version at most once a day, when you open it. Nothing about you or your saves is sent. To turn it off: **Settings**, **Updates**, **Check for updates**.
+
+By hand, or from an older version: get the new `3dssavesync-android.apk` from the release, open it, then tap **Update**.
 
 Every release APK is signed with the same key, so each one installs over the previous one. A development build (the `android-debug-apk` artifact, or one you built) has another key: Android refuses to install a release over it. Only then do you have to uninstall once. Back up the copies first (see below).
 

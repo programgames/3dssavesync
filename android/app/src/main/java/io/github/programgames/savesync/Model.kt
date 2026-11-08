@@ -26,8 +26,18 @@ import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Outcome
 import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PlayInfo
+import io.github.programgames.savesync.core.RELEASE_URL
 import io.github.programgames.savesync.core.RESTORE_CLIENT
+import io.github.programgames.savesync.core.Release
 import io.github.programgames.savesync.core.Remote
+import io.github.programgames.savesync.core.downloadUpdate
+import io.github.programgames.savesync.core.fetchUrl
+import io.github.programgames.savesync.core.newer
+import io.github.programgames.savesync.core.parseRelease
+import androidx.core.content.FileProvider
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import io.github.programgames.savesync.core.RomKeys
 import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
@@ -56,6 +66,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
+
+// installApk opens Android's installer on a downloaded APK (through FileProvider: Android 7+ refuses file://
+// addresses). The first time, Android asks to allow this app to install apps.
+fun installApk(ctx: Context, f: File) {
+    val uri = FileProvider.getUriForFile(ctx, ctx.packageName + ".update", f)
+    ctx.startActivity(
+        Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+}
 
 // Shown is what the list shows for a Game: its State, or why it has none. INTERRUPTED: a write of its save on this
 // phone did not finish (a Conflict with only two choices, ADR 0026).
@@ -115,6 +135,13 @@ object App {
     var loaded by mutableStateOf(false)
     var reminded = false // the reminder to close the emulator was shown since the app started
     var lastRun by mutableStateOf<LastRun?>(null) // the last background pass
+    var update by mutableStateOf<Release?>(null) // a newer version of the app (checkUpdate)
+    var updating by mutableStateOf(false) // its download runs
+    var updateError by mutableStateOf<Throwable?>(null) // its download or its check failed
+
+    // Tests replace them: never GitHub, never Android's installer.
+    var fetch: (String, Int) -> ByteArray = ::fetchUrl
+    var install: (Context, File) -> Unit = ::installApk
 
     fun init(c: Context) {
         if (::context.isInitialized && context === c.applicationContext) return // a new Application: the UI tests
@@ -182,6 +209,41 @@ object App {
             .setAutoCancel(true)
             .build()
         nm.notify(1, n)
+    }
+
+    // checkUpdate offers the latest GitHub release if it is newer than this app. GitHub is read at most once a day (the
+    // release of the day is kept); a failure offers nothing, and the next start reads again. Off the io thread: a slow
+    // GitHub never holds up a sync. A build of a developer ("dev") never asks.
+    fun checkUpdate(current: String = BuildConfig.VERSION_NAME) {
+        if (!settings.checkUpdates || current == "dev") return
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { latestRelease() }.getOrNull() }
+            update = r?.takeIf { it.apk != null && it.sums != null && newer(current, it.tag) }
+        }
+    }
+
+    private fun latestRelease(): Release {
+        val day = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(Date())
+        if (settings.updateDay == day && settings.updateRelease.isNotEmpty()) return parseRelease(settings.updateRelease)
+        val json = String(fetch(RELEASE_URL, 1 shl 22), Charsets.UTF_8)
+        val r = parseRelease(json) // an unreadable answer is not kept
+        settings.updateRelease = json
+        settings.updateDay = day
+        return r
+    }
+
+    // installUpdate downloads and checks the APK of the offered release, then opens Android's installer on it. ctx: the
+    // screen, for the installer.
+    fun installUpdate(ctx: Context) {
+        val r = update ?: return
+        if (updating) return
+        updating = true
+        updateError = null
+        scope.launch {
+            val f = withContext(Dispatchers.IO) { runCatching { downloadUpdate(r, File(context.cacheDir, "update"), fetch) } }
+            updating = false
+            f.fold({ runCatching { install(ctx, it) }.onFailure { e -> updateError = e } }, { updateError = it })
+        }
     }
 
     val resolver: ContentResolver get() = context.contentResolver

@@ -49,6 +49,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -293,7 +294,55 @@ fun SettingsScreen(p: PaddingValues, onSetup: () -> Unit, onHacks: () -> Unit) {
         OutlinedButton(onHacks) { Text(stringResource(R.string.open_hacks)) }
         HorizontalDivider()
         OutlinedButton(onSetup) { Text(stringResource(R.string.setup_again)) }
+        HorizontalDivider()
+        UpdateSection()
         Text(stringResource(R.string.version, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// UpdateSection: the switch of the update check (on by default), and the offered version.
+@Composable
+private fun UpdateSection() {
+    var on by remember { mutableStateOf(App.settings.checkUpdates) }
+    Section(stringResource(R.string.update_title))
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(on, role = Role.Switch) { v ->
+            on = v
+            App.settings.checkUpdates = v
+            if (v) App.checkUpdate() else App.update = null
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.update_switch), Modifier.weight(1f).padding(end = 8.dp))
+        Switch(on, null)
+    }
+    Text(stringResource(R.string.update_switch_help), style = MaterialTheme.typography.bodySmall)
+    UpdateCard()
+}
+
+// UpdateCard: a newer version of the app (App.checkUpdate), on the games list and in Settings; nothing without one.
+// Update downloads and checks it, then Android's installer asks to confirm.
+@Composable
+fun UpdateCard() {
+    val r = App.update ?: return
+    val ctx = LocalContext.current
+    OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.update_available, r.version, BuildConfig.VERSION_NAME), fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.update_help), style = MaterialTheme.typography.bodySmall)
+            if (App.updating) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text(stringResource(R.string.update_downloading, r.version), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall)
+            }
+            App.updateError?.let {
+                Text(stringResource(R.string.update_failed), Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = MaterialTheme.colorScheme.error)
+                SelectionContainer { Text(it.message ?: it.toString(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button({ App.installUpdate(ctx) }, enabled = !App.updating) { Text(stringResource(R.string.update_button)) }
+                if (r.page.isNotEmpty()) TextButton({ runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, r.page.toUri())) } }) { Text(stringResource(R.string.update_news)) }
+            }
+        }
     }
 }
 

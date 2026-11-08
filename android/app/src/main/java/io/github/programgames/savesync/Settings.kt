@@ -65,6 +65,20 @@ class Settings(context: Context) {
         get() = p.getBoolean("background", false)
         set(v) = p.edit { putBoolean("background", v) }
 
+    // checkUpdates: look for a new version of the app on GitHub, at most once a day (App.checkUpdate). On by default,
+    // like the PC. updateDay, updateRelease: the day of the last read and the release read then.
+    var checkUpdates: Boolean
+        get() = p.getBoolean("checkUpdates", true)
+        set(v) = p.edit { putBoolean("checkUpdates", v) }
+
+    var updateDay: String
+        get() = p.getString("updateDay", "") ?: ""
+        set(v) = p.edit { putString("updateDay", v) }
+
+    var updateRelease: String
+        get() = p.getString("updateRelease", "") ?: ""
+        set(v) = p.edit { putString("updateRelease", v) }
+
     // lastRun: the last background pass. notified: the kinds of problem of the last pass that reached the server, one
     // per line, so the same ones are not notified again (App.record).
     var lastRun: LastRun?

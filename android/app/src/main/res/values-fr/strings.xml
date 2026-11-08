@@ -313,4 +313,14 @@
     </plurals>
     <string name="bg_problems_title">Envoi en arrière-plan&#160;: problèmes</string>
     <string name="bg_conflict">%1$s&#160;: conflit. Ouvrez le jeu pour choisir la sauvegarde à garder.</string>
+    <!-- update of the app from GitHub (UpdateCard, UpdateSection) -->
+    <string name="update_title">Mises à jour</string>
+    <string name="update_available">La version %1$s est disponible. Vous avez la %2$s.</string>
+    <string name="update_help">L\'application la télécharge depuis GitHub et la vérifie, puis Android vous demande de confirmer. La première fois, Android vous demande aussi d\'autoriser 3dssavesync à installer des applications. Vos réglages, vos sauvegardes et vos copies de secours restent.</string>
+    <string name="update_button">Mettre à jour</string>
+    <string name="update_news">Nouveautés</string>
+    <string name="update_downloading">Téléchargement de la version %1$s…</string>
+    <string name="update_failed">La mise à jour n\'a pas pu être téléchargée, ou le téléchargement est abîmé. Rien n\'a été installé. Réessayez plus tard.</string>
+    <string name="update_switch">Rechercher les mises à jour</string>
+    <string name="update_switch_help">Une fois par jour au plus, l\'application demande à GitHub sa dernière version. Rien sur vous ni sur vos sauvegardes n\'est envoyé.</string>
 </resources>

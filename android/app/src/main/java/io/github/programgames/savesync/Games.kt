@@ -204,6 +204,7 @@ fun GamesScreen(p: PaddingValues, onOpen: (Entry) -> Unit, goSettings: () -> Uni
             LazyColumn(Modifier.fillMaxSize()) {
                 // the banners, search and chips scroll with the games: with a large font they would leave no room
                 item {
+                    UpdateCard()
                     val offline = App.entries.count { it.noLocal }
                     App.serverError?.let { ErrorBox(it, note = if (offline > 0) stringResource(R.string.hidden_offline) else null, retry = { App.refresh() }) }
                     App.message?.let { (text, t) -> if (t != null) ErrorBox(t, text) }

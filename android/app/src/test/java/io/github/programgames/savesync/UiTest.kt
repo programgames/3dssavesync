@@ -37,6 +37,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.isRoot
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import android.app.Activity
@@ -53,6 +54,7 @@ import io.github.programgames.savesync.core.NetworkException
 import io.github.programgames.savesync.core.Pending
 import io.github.programgames.savesync.core.PendingWrite
 import io.github.programgames.savesync.core.Problem
+import io.github.programgames.savesync.core.RELEASE_URL
 import io.github.programgames.savesync.core.RESTORE_CLIENT
 import io.github.programgames.savesync.core.SaveFile
 import io.github.programgames.savesync.core.State
@@ -146,6 +148,8 @@ open class UiTest {
         App.busy = null
         App.summary = null
         App.message = null
+        App.update = null
+        App.updateError = null
         return ActivityScenario.launch(MainActivity::class.java).also { scenario = it }
     }
 
@@ -970,6 +974,64 @@ open class UiTest {
         assertTrue(key.startsWith("GB-ALIAS-"))
         assertEquals(1, App.settings.aliases.size)
         rule.onAllNodesWithContentDescription(s(R.string.back)).assertCountEquals(0) // back on the list, read again
+    }
+
+    // A newer release on GitHub: the card offers it; Update installs the APK only when SHA256SUMS matches. The switch
+    // off: no card, no read of GitHub.
+    @Test
+    fun updateFromGitHub() {
+        val (fetch, install) = App.fetch to App.install
+        try {
+            val apk = "new apk".toByteArray()
+            var sums = sha256(apk) + "  3dssavesync-android.apk\n"
+            val read = mutableListOf<String>()
+            App.fetch = { url, _ ->
+                read += url
+                when (url) {
+                    RELEASE_URL -> """{"tag_name":"v9.0.0","html_url":"https://x/page","assets":[
+                        {"name":"3dssavesync-android.apk","browser_download_url":"https://x/apk"},
+                        {"name":"SHA256SUMS","browser_download_url":"https://x/sums"}]}""".toByteArray()
+                    "https://x/sums" -> sums.toByteArray()
+                    else -> apk
+                }
+            }
+            var installed: ByteArray? = null
+            App.install = { _, f -> installed = f.readBytes() }
+            start()
+            App.settings.updateDay = ""
+            App.checkUpdate("3.11.4")
+            val offer = s(R.string.update_available, "9.0.0", BuildConfig.VERSION_NAME)
+            waitFor(offer)
+            fits(s(R.string.update_button))
+            rule.onNodeWithText(s(R.string.update_button)).performScrollTo().performClick()
+            rule.waitUntil(15_000) { rule.onAllNodes(isRoot()).fetchSemanticsNodes(); installed != null || App.updateError != null } // the fetch runs the main looper
+            assertEquals(null, App.updateError?.stackTraceToString())
+            assertArrayEquals(apk, installed)
+
+            // a damaged download: an error, nothing installed
+            installed = null
+            sums = "0".repeat(64) + "  3dssavesync-android.apk\n"
+            rule.onNodeWithText(s(R.string.update_button)).performScrollTo().performClick()
+            waitFor(s(R.string.update_failed))
+            assertEquals(null, installed)
+
+            // the same day, GitHub is not read again
+            read.clear()
+            App.checkUpdate("3.11.4")
+            rule.waitForIdle()
+            assertFalse(read.contains(RELEASE_URL))
+
+            rule.onNodeWithText(s(R.string.update_switch)).performScrollTo().performClick()
+            rule.onAllNodesWithText(offer).assertCountEquals(0)
+            assertFalse(App.settings.checkUpdates)
+            App.checkUpdate("3.11.4")
+            rule.waitForIdle()
+            assertEquals(null, App.update)
+        } finally {
+            App.fetch = fetch
+            App.install = install
+            App.settings.checkUpdates = true
+        }
     }
 }
 
