@@ -110,6 +110,21 @@ static void test_ini_files(void)
                   !strcmp(base_of(&b, "K0599"), H1) && !strcmp(base_of(&b, "K0512"), H2), "bases: 600 Games kept");
     }
 
+    /* Reinstalled game (ADR 0027): its install date in base.ini; a new date removes its Base, a first date keeps it */
+    write_text("test.ini", "3DS-0004000000055D00=" H1 "\nVC-0004000000172000=" H2 "\n");
+    read_bases("test.ini", &b);
+    check(note_install(&b, 0x0004000000055D00ULL, 0, "3DS-0004000000055D00") == 0 && b.n == 2, "install: unknown date, nothing changes");
+    check(note_install(&b, 0x0004000000055D00ULL, 0x1234, "3DS-0004000000055D00") == 1 &&
+              !strcmp(base_of(&b, "3DS-0004000000055D00"), H1), "install: first date, Base kept");
+    check(note_install(&b, 0x0004000000055D00ULL, 0x1234, "3DS-0004000000055D00") == 0, "install: same date, nothing changes");
+    check(write_bases("test.ini", &b) == 0 && read_bases("test.ini", &b) == 0 &&
+              !strcmp(base_of(&b, "INSTALL-0004000000055D00"), "0000000000000000000000000000000000000000000000000000000000001234"),
+          "install: date written as 64 characters and read back");
+    check(note_install(&b, 0x0004000000055D00ULL, 0x5678, "3DS-0004000000055D00") == 2 && !base_of(&b, "3DS-0004000000055D00") &&
+              !strcmp(base_of(&b, "VC-0004000000172000"), H2) && b.n == 2, "install: new date, Base removed, other Bases kept");
+    check(note_install(&b, 0x0004000000172000ULL, 0x9, "VC-0004000000172000") == 1 && note_install(&b, 0x0004000000172000ULL, 0xA, "VC-0004000000172000") == 2 &&
+              !base_of(&b, "VC-0004000000172000"), "install: Virtual Console game, Base of its base_id removed");
+
     write_text("test.ini", "Pokemon Radical Red = GBA-0RAD\nHack=GBA-0HAK\n=GBA-VIDE\n   =GBA-ESPACES\n");
     read_aliases("test.ini", &a);
     check(a.n == 2 && !strcmp(alias_of(&a, "Pokemon Radical Red"), " GBA-0RAD") && !strcmp(alias_of(&a, "Hack"), "GBA-0HAK") &&

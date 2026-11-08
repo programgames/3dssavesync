@@ -1,8 +1,10 @@
 /* Same order of operations as Checkpoint (io.cpp: write, commit, secure value), code written here (ADR 0009). */
+#include <dirent.h>
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "titles3ds.h"
 #include "vc.h"
 
@@ -400,4 +402,29 @@ int installed_titles(u64 **ids, FS_MediaType **medias, int extra)
     *ids = NULL;
     *medias = NULL;
     return -1;
+}
+
+unsigned long long title_install_time(u64 id)
+{
+    u16 root[0x40] = { 0 };
+    char dir[160], path[300];
+    unsigned long long newest = 0;
+    struct dirent *e;
+    DIR *d;
+    int i, n;
+    if (R_FAILED(FSUSER_GetSdmcCtrRootPath((u8 *)root, sizeof root - 2))) return 0;
+    n = snprintf(dir, sizeof dir, "sdmc:");
+    for (i = 0; root[i] && n < (int)sizeof dir - 1; i++) dir[n++] = root[i] < 0x80 ? (char)root[i] : '?'; /* "/Nintendo 3DS/<id0>/<id1>" */
+    dir[n] = '\0';
+    snprintf(dir + n, sizeof dir - n, "/title/%08lx/%08lx/content", (unsigned long)(id >> 32), (unsigned long)(u32)id);
+    if (!(d = opendir(dir))) return 0;
+    while ((e = readdir(d))) {
+        size_t l = strlen(e->d_name);
+        u64 t = 0;
+        if (l < 4 || strcasecmp(e->d_name + l - 4, ".tmd")) continue;
+        snprintf(path, sizeof path, "%s/%s", dir, e->d_name);
+        if (R_SUCCEEDED(archive_getmtime(path, &t)) && t > newest) newest = t;
+    }
+    closedir(d);
+    return newest;
 }

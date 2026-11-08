@@ -43,6 +43,16 @@ const char *base_of(const bases_t *b, const char *key);
  * of memory), or if the read was incomplete. */
 int set_base(const char *path, bases_t *b, const char *key, const char *hash);
 
+/* Writes path with the Bases of b. 0 if written; -1 if not written, or if the read was incomplete. */
+int write_bases(const char *path, bases_t *b);
+
+/* Install date (stamp, 0 = unknown: nothing changes) of the 3DS title id, kept in b as "INSTALL-<title ID>" (ADR 0027).
+ * When b holds another date, the game was reinstalled: its save was deleted with it, so the Base of key (base_id) is
+ * removed, and a save that differs from the server's becomes a Conflict instead of an Upload. A first date keeps the
+ * Base. Memory only: write_bases afterwards. 2 if the Base was removed, 1 if only the date was set, 0 if nothing changed,
+ * -1 if out of memory. */
+int note_install(bases_t *b, unsigned long long id, unsigned long long stamp, const char *key);
+
 /* alias.ini (ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
 #define MAX_ALIAS 64
 typedef struct {

@@ -110,19 +110,53 @@ const char *base_of(const bases_t *b, const char *key)
     return NULL;
 }
 
-int set_base(const char *path, bases_t *b, const char *key, const char *hash)
+/* Sets the Base of key in memory. 0 if set, -1 if out of memory. */
+static int put_base(bases_t *b, const char *key, const char *hash)
 {
-    const size_t line = KEY_MAX + 66; /* "KEY=" + hash + "\n" at most */
-    char *t;
-    size_t n = 0;
-    int i, failed;
+    int i;
     for (i = 0; i < b->n && strcmp(b->e[i].key, key); i++);
     if (i == b->n) {
         if (grow_bases(b)) return -1;
         snprintf(b->e[b->n++].key, KEY_MAX, "%s", key);
     }
     snprintf(b->e[i].hash, 65, "%s", hash);
-    if (b->incomplete || !(t = malloc(b->n * line))) return -1;
+    return 0;
+}
+
+int set_base(const char *path, bases_t *b, const char *key, const char *hash)
+{
+    if (put_base(b, key, hash)) return -1;
+    return write_bases(path, b);
+}
+
+int note_install(bases_t *b, unsigned long long id, unsigned long long stamp, const char *key)
+{
+    char name[KEY_MAX], value[65];
+    const char *old;
+    int i, forgot = 0;
+    if (!stamp) return 0;
+    snprintf(name, sizeof name, "INSTALL-%016llX", id);
+    snprintf(value, sizeof value, "%064llX", stamp); /* 64 characters, like a Hash: older versions keep the line */
+    old = base_of(b, name);
+    if (old && !strcmp(old, value)) return 0;
+    if (old) /* another date: the game was reinstalled, its Base belongs to the save that was deleted */
+        for (i = 0; i < b->n; i++)
+            if (!strcmp(b->e[i].key, key)) {
+                b->e[i] = b->e[--b->n];
+                forgot = 1;
+                break;
+            }
+    if (put_base(b, name, value)) return -1;
+    return forgot ? 2 : 1;
+}
+
+int write_bases(const char *path, bases_t *b)
+{
+    const size_t line = KEY_MAX + 66; /* "KEY=" + hash + "\n" at most */
+    char *t;
+    size_t n = 0;
+    int i, failed;
+    if (b->incomplete || !(t = malloc(b->n * line + 1))) return -1;
     for (i = 0; i < b->n; i++) n += snprintf(t + n, b->n * line - n, "%s=%s\n", b->e[i].key, b->e[i].hash);
     failed = replace_file(path, t, n);
     free(t);

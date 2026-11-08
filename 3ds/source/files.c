@@ -32,6 +32,25 @@ int write_file(const char *path, const void *bytes, size_t size)
     return (fclose(f) == 0 && ok) ? 0 : -1;
 }
 
+int append_log(const char *path, const char *line, long max)
+{
+    char old[620];
+    FILE *f = fopen(path, "rb");
+    long size = 0;
+    int ok;
+    if (f) {
+        if (!fseek(f, 0, SEEK_END)) size = ftell(f);
+        fclose(f);
+    }
+    if (size > max && snprintf(old, sizeof old, "%s.1", path) < (int)sizeof old) { /* one older file kept, the oldest lines go */
+        remove(old);
+        rename(path, old);
+    }
+    if (!(f = fopen(path, "ab"))) return -1;
+    ok = fputs(line, f) >= 0 && fputc('\n', f) != EOF;
+    return (fclose(f) == 0 && ok) ? 0 : -1;
+}
+
 /* 1 if path holds exactly these bytes. */
 static int same_content(const char *path, const unsigned char *bytes, size_t size)
 {
