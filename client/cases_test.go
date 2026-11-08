@@ -67,7 +67,7 @@ func TestRomHackAndAlias(t *testing.T) {
 	run := func(rom string) int { return realMain([]string{"run", "--config", config, rom}) }
 	rf, rr := filepath.Join(roms, "Pokemon Rouge Feu.gba"), filepath.Join(roms, "Pokemon Radical Red.gba")
 	write(t, rf, gbaHeader("BPRE"))
-	write(t, rr, gbaHeader("BPRE"))
+	write(t, rr, append(gbaHeader("BPRE"), 'h')) // a ROM hack: same Key, other content
 	savRF, savRR := filepath.Join(gba, "Pokemon Rouge Feu.sav"), filepath.Join(gba, "Pokemon Radical Red.sav")
 	f1, r1, r2 := random(131072, 1), random(131072, 2), random(131072, 3)
 	write(t, savRF, f1)
@@ -83,6 +83,14 @@ func TestRomHackAndAlias(t *testing.T) {
 	run(rf)
 	if sha256Hex(current("GBA-BPRE")) != sha256Hex(f1) || kept() != rf {
 		t.Fatalf("serveur ou ROM retenue faux : %q", kept())
+	}
+
+	t.Log("Une copie identique ailleurs (archive extraite par le frontend dans un autre dossier) : même jeu, sans question")
+	extracted := filepath.Join(tmp, "7-Zip", "Temp", "2", "Pokemon Rouge Feu.gba")
+	write(t, extracted, read(rf))
+	reset()
+	if run(extracted) != 0 || !played || len(questions) != 0 || len(notifications) != 0 || kept() != extracted {
+		t.Errorf("questions %q, notifications %q, ROM retenue %q", questions, notifications, kept())
 	}
 
 	t.Log("Le hack (même Clé, autre fichier qui existe), Jouer sans synchroniser : une question, puis une notification")
@@ -324,7 +332,7 @@ func TestGlobalKeptRom(t *testing.T) {
 	}
 	rf, rr := filepath.Join(roms, "Pokemon Rouge Feu.gba"), filepath.Join(roms, "Pokemon Radical Red.gba")
 	write(t, rf, gbaHeader("BPRE"))
-	write(t, rr, gbaHeader("BPRE"))
+	write(t, rr, append(gbaHeader("BPRE"), 'h')) // a ROM hack: same Key, other content
 	f1 := random(131072, 1)
 	write(t, filepath.Join(gba, "Pokemon Rouge Feu.sav"), f1)
 	reset()
@@ -482,5 +490,23 @@ func TestAddAlias(t *testing.T) {
 	}
 	if _, err := addAlias(&Config{}, "3DS", "Hack"); err == nil {
 		t.Error("alias 3DS accepté")
+	}
+}
+
+// A ROM hack that differs only after the first read block is still another ROM.
+func TestSameContent(t *testing.T) {
+	d := t.TempDir()
+	o := random(3<<20+5, 7)
+	pa, pb, pc := filepath.Join(d, "a"), filepath.Join(d, "b"), filepath.Join(d, "c")
+	write(t, pa, o)
+	write(t, pb, o)
+	write(t, pc, append(append([]byte{}, o[:len(o)-1]...), o[len(o)-1]^1))
+	same := func(x, y string) bool {
+		a, _ := os.Stat(x)
+		b, _ := os.Stat(y)
+		return sameContent(x, y, a, b)
+	}
+	if !same(pa, pb) || same(pa, pc) {
+		t.Error("même contenu : oui ; dernier octet différent : non")
 	}
 }
