@@ -309,4 +309,14 @@
     </plurals>
     <string name="bg_problems_title">Background upload: problems</string>
     <string name="bg_conflict">%1$s: conflict. Open the game to choose which save to keep.</string>
+    <!-- update of the app from GitHub (UpdateCard, UpdateSection) -->
+    <string name="update_title">Updates</string>
+    <string name="update_available">Version %1$s is available. You have %2$s.</string>
+    <string name="update_help">The app downloads it from GitHub and checks it, then Android asks you to confirm. The first time, Android also asks you to allow 3dssavesync to install apps. Your settings, saves and backup copies stay.</string>
+    <string name="update_button">Update</string>
+    <string name="update_news">What\'s new</string>
+    <string name="update_downloading">Downloading version %1$s…</string>
+    <string name="update_failed">The update couldn\'t be downloaded, or the download was damaged. Nothing was installed. Try again later.</string>
+    <string name="update_switch">Check for updates</string>
+    <string name="update_switch_help">Once a day at most, the app asks GitHub for its latest version. Nothing about you or your saves is sent.</string>
 </resources>
