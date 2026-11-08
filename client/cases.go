@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -68,8 +70,9 @@ func (s *Session) knownBase(key string) bool {
 
 // romRefusal returns the refusal text if this ROM must not sync under the Key of j, otherwise "" and the ROM is kept
 // for the next Base (setBase). Refusals:
-//   - another ROM, which still exists, is already synced under this Key (ROM hack that keeps the Key of the original
-//     game). A kept ROM that no longer exists (renamed, moved, extracted to a temporary folder) gives way;
+//   - another ROM, which still exists and has other content, is already synced under this Key (ROM hack that keeps the
+//     Key of the original game). A kept ROM that no longer exists (renamed, moved, extracted to a temporary folder),
+//     or a copy with the same bytes, gives way;
 //   - no kept ROM, but a Base of this Key on this PC (synced before ROMs were kept), and no save for this ROM: the
 //     Download would give a possible ROM hack the playthrough of the original game, and its next Upload would replace
 //     it.
@@ -86,7 +89,7 @@ func (c *Client) romRefusal(j *Game, rom string, question bool) string {
 	choice := ""
 	m, _ := c.keptRoms()
 	if a, err := os.Stat(m[j.Key]); err == nil {
-		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) {
+		if b, err := os.Stat(rom); err == nil && !os.SameFile(a, b) && !sameContent(m[j.Key], rom, a, b) {
 			c.log(fmt.Sprintf("même Clé %s que %s : %s", j.Key, m[j.Key], rom))
 			text := fmt.Sprintf(tr("%s ressemble à %s, déjà synchronisé. C'est sans doute un ROM hack.",
 				"%s looks like %s, which is already synced. It's probably a ROM hack."), filepath.Base(rom), filepath.Base(m[j.Key]))
@@ -134,6 +137,36 @@ func (c *Client) romRefusal(j *Game, rom string, question bool) string {
 	}
 	c.romOf[j.Key] = rom
 	return ""
+}
+
+// sameContent reports whether two ROM files hold the same bytes: the same game, copied or extracted again by a
+// frontend into another folder (LaunchBox extracts an archive to Temp\<id>\2, then \3). A ROM hack differs. Read
+// only when the sizes match; an unreadable file is not the same.
+func sameContent(pa, pb string, a, b fs.FileInfo) bool {
+	if a.Size() != b.Size() {
+		return false
+	}
+	fa, err := os.Open(pa)
+	if err != nil {
+		return false
+	}
+	defer fa.Close()
+	fb, err := os.Open(pb)
+	if err != nil {
+		return false
+	}
+	defer fb.Close()
+	ba, bb := make([]byte, 1<<20), make([]byte, 1<<20)
+	for {
+		na, ea := io.ReadFull(fa, ba)
+		nb, eb := io.ReadFull(fb, bb)
+		if na != nb || !bytes.Equal(ba[:na], bb[:nb]) {
+			return false
+		}
+		if ea != nil || eb != nil {
+			return (ea == io.EOF || ea == io.ErrUnexpectedEOF) && (eb == io.EOF || eb == io.ErrUnexpectedEOF)
+		}
+	}
 }
 
 // createAlias returns the Alias of the ROM name, created if missing and written to config.json (dated copy first).
