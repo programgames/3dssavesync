@@ -7,6 +7,8 @@ import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import java.io.File
 import android.provider.DocumentsContract.Document
+import io.github.programgames.savesync.core.ArchiveFile
+import io.github.programgames.savesync.core.ArchiveFolder
 import io.github.programgames.savesync.core.NewArchive
 import io.github.programgames.savesync.core.SaveFile
 import java.io.FileNotFoundException
@@ -124,6 +126,54 @@ class SafFile(
     // modifiedNow lists the folder again: the date of the listing may be old (checkClosed).
     override fun modifiedNow(): Long? {
         find()
+        return known
+    }
+}
+
+// SafFolder is the Azahar folder of a 3DS save archive (ArchiveFolder, ADR 0028). dir: its document id, null when the
+// game was never started (no folder: never created). path: where it is, for the messages. It writes only the files of
+// a version, each with "wt" then read back, and never deletes anything.
+class SafFolder(private val r: ContentResolver, private val tree: Uri, private val dir: String?, private val path: String) : ArchiveFolder {
+    private var known: Long? = null
+
+    override val location get() = dir?.substringAfter(':') ?: path
+
+    // walk lists every file below the folder, with its path from it; null: no folder.
+    private fun walk(): List<Pair<String, Doc>>? {
+        val top = try {
+            children(r, tree, dir ?: return null)
+        } catch (_: FileNotFoundException) { // removed since the scan
+            return null
+        }
+        val out = mutableListOf<Pair<String, Doc>>()
+        fun add(list: List<Doc>, prefix: String) {
+            for (d in list) if (d.folder) add(children(r, tree, d.id), prefix + d.name + "/") else out += prefix + d.name to d
+        }
+        add(top, "")
+        known = out.mapNotNull { it.second.modified }.maxOrNull()
+        return out
+    }
+
+    private fun read(doc: String) = r.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, doc))!!.use { it.readBytes() }
+
+    override fun files() = walk()?.map { (p, d) -> ArchiveFile(p, read(d.id)) }
+
+    override fun write(path: String, content: ByteArray) {
+        val parts = path.split('/')
+        var parent = dir ?: throw FileNotFoundException("$location: no folder")
+        for (n in parts.dropLast(1)) {
+            parent = children(r, tree, parent).find { it.folder && it.name == n }?.id ?: make(r, tree, parent, Document.MIME_TYPE_DIR, n) {}
+        }
+        val name = parts.last()
+        val doc = children(r, tree, parent).find { !it.folder && it.name == name }?.id ?: make(r, tree, parent, "application/octet-stream", name) {}
+        writeDoc(r, DocumentsContract.buildDocumentUriUsingTree(tree, doc), content)
+        if (!read(doc).contentEquals(content)) throw IOException("$location/$path: the written file doesn't match")
+    }
+
+    override fun modified() = known
+
+    override fun modifiedNow(): Long? {
+        walk()
         return known
     }
 }

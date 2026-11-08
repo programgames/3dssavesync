@@ -91,6 +91,11 @@ class Settings(context: Context) {
         get() = p.getString("notified", "") ?: ""
         set(v) = p.edit { putString("notified", v) }
 
+    // off3DS: the title IDs of the 3DS games the user turned off (ADR 0028, titres_3ds_off on the PC). A new game is on.
+    var off3DS: Set<String>
+        get() = (p.getString("off3DS", "") ?: "").split(',').filter { it.isNotEmpty() }.toSet()
+        set(v) = p.edit { putString("off3DS", v.sorted().joinToString(",")) }
+
     // aliases: ROM name without extension -> Key of its own save (ADR 0014), as "alias" in the PC config.json.
     var aliases: Map<String, String>
         get() = JSONObject(p.getString("aliases", "{}") ?: "{}").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }

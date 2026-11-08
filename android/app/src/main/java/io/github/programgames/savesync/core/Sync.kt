@@ -403,7 +403,9 @@ class Syncer(
     }
 
     // nameOnServer gives the game name to the server once per pass (ADR 0018); a failure never blocks the Sync.
+    // A 3DSA game has no name on this phone (no ROM, its title ID only): the 3DS or the PC gives it.
     private fun nameOnServer(g: Game) {
+        if (g.key.startsWith(ARCHIVE_KEY)) return
         if (named.add(g.key)) runCatching { remote.setName(g.key, g.name) }
     }
 
@@ -459,7 +461,9 @@ class Syncer(
 // null if there was none; a file that differs now (the emulator wrote it) is not touched: no copy holds it.
 // pending: a PendingWrite marker is written before the file is touched and removed once the file is verified (ADR 0026).
 // A marker left by an earlier interrupted write keeps its Backup copy: that one holds the save from before it.
+// A 3DSA game (ArchiveSave): its version is checked first, before the Backup copy (ADR 0028).
 fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups, pending: Pending? = null): File? {
+    (g.file as? ArchiveSave)?.check(content)
     val copy = old?.let { backups.copy(g.emulator, g.name, backupExt(g), it) }
     val now = g.file.read()
     if (if (old == null) now != null else now?.contentEquals(old) != true) {

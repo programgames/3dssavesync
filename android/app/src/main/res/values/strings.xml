@@ -86,7 +86,7 @@
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
     <string name="hint_retroarch">Choose the ROM folder of each system. If RetroArch keeps its saves in RetroArch/saves (the default), also choose that folder once: the app finds the folder of each core in it. Play Store version: in the folder picker, open the menu and choose RetroArch. Close RetroArch before you sync.</string>
-    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Only the 8 Pokémon games of the 3DS are synced. Close Azahar before you sync.</string>
+    <string name="hint_azahar">Choose the user folder you chose in Azahar at its first start (it contains the sdmc folder). Every 3DS game with a save is synced: to leave one out, turn it off in its details. Close Azahar before you sync.</string>
     <string name="hint_melonds">melonDS saves next to the ROM by default: choose the ROM folder. If you set another save folder in melonDS, untick \"Saves next to the ROMs\" and choose that folder.</string>
     <string name="hint_drastic">DraStic keeps its saves in DraStic/backup (.dsv files). Choose the ROM folder, then that backup folder. Close DraStic before you sync.</string>
     <string name="hint_noods">NooDS saves next to the ROM by default: choose the ROM folder. Keep that setting: its other save folder is closed to other apps.</string>
@@ -161,6 +161,11 @@
     <string name="s_unknown">Unknown</string>
     <string name="s_none">No save</string>
     <string name="s_interrupted">Interrupted</string>
+    <string name="s_not_synced">Not synced</string>
+    <string name="why_off">Sync is off for this game: the app doesn\'t upload or download its save. Turn on Sync this game to sync it again.</string>
+    <string name="why_not_started">This game was never started in Azahar, so it has no save folder yet, and the app doesn\'t create one. Start the game once in Azahar and save in it, then refresh.</string>
+    <string name="sync_this_game">Sync this game</string>
+    <string name="sync_this_game_help">Off: the app leaves this game alone, on this phone and on the server. New games are on.</string>
     <string name="why_to_upload">The save on this phone is newer. Tap Upload to send it to the server.</string>
     <string name="why_to_download">The server has a newer save. Tap Download to get it: the app first keeps a backup copy of the save on this phone.</string>
     <string name="why_conflict">The save changed on this phone and on the server since the last sync. Choose which one to keep.</string>
@@ -262,6 +267,9 @@
     <string name="p_format">This save file has an unexpected format, so it wasn\'t synced. Check the emulator and its core in Emulators.</string>
     <string name="p_permission">The app can no longer open this folder or file. Choose the folder again in Emulators.</string>
     <string name="p_no_copy">The backup copy is no longer in the app\'s folder. Use the server save instead.</string>
+    <string name="p_never_started">This game has no save folder in Azahar, and the app doesn\'t create one. Start the game once in Azahar and save in it, then refresh.</string>
+    <string name="p_extra_files">The save folder of this game on the phone has files that the server version doesn\'t have, so nothing was replaced. The app never deletes a file of your saves. Show details names these files: move them out of the save folder with a file manager, then try again.</string>
+    <string name="p_archive_path">A file in the save folder of this game has a name the app can\'t sync (a path longer than 100 characters), so this game isn\'t synced. Show details names the file.</string>
     <string name="p_other">Something went wrong. Try again. If it happens again, report the detail below.</string>
     <string name="p_open">This save changed a few seconds ago, so the emulator may still be open. Swipe it away from the recent apps, then try again.</string>
     <string name="reminder_title">Close the emulator</string>

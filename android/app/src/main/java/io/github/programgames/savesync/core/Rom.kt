@@ -23,6 +23,9 @@ val titles3DS = mapOf(
     "00040000001B5000" to "Pokemon Ultra-Soleil", "00040000001B5100" to "Pokemon Ultra-Lune",
 )
 
+// skip3DS: 3DS games whose save is tied to one console, never synced (ADR 0028, titres-ignores): Super Mario Maker.
+val skip3DS = setOf("00040000001A0300", "00040000001A0400", "00040000001A0500", "00040000001BB800")
+
 // extensions maps a ROM extension to its System.
 val extensions = mapOf(".nds" to System.DS, ".gb" to System.GB, ".gbc" to System.GB, ".gba" to System.GBA)
 
