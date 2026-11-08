@@ -218,7 +218,7 @@ object App {
         if (!settings.checkUpdates || current == "dev") return
         scope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { latestRelease() }.getOrNull() }
-            update = r?.takeIf { it.apk != null && it.sums != null && newer(current, it.tag) }
+            update = r?.takeIf { settings.checkUpdates && it.apk != null && it.sums != null && newer(current, it.tag) } // the switch may be off by now
         }
     }
 

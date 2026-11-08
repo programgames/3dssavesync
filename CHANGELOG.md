@@ -4,6 +4,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+## [3.12.0] - 2026-11-08
+
 ### Added
 
 - **Android: the app updates itself.** When a new version is out, a card at the top of **Games** offers it. **Update** downloads it from GitHub, checks it, and Android asks you to confirm. Your settings, saves and backup copies stay. You can turn the check off in **Settings**. Install this version by hand one last time.
@@ -205,7 +207,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.11.4...HEAD
+[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.12.0...HEAD
+[3.12.0]: https://github.com/programgames/3dssavesync/compare/v3.11.4...v3.12.0
 [3.11.4]: https://github.com/programgames/3dssavesync/compare/v3.11.3...v3.11.4
 [3.11.3]: https://github.com/programgames/3dssavesync/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/programgames/3dssavesync/compare/v3.11.1...v3.11.2
