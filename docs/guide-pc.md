@@ -86,7 +86,8 @@ Another place: option `--config <file>`. Example: [`client/config.example.json`]
 | `icone_horloge` | `false` only when the icon near the clock is turned off. Absent: the icon is shown. |
 | `verifier_maj` | `false` only when the update check is turned off. Absent: once a day (see [Updates](#updates)). |
 | `carte_preparee` | Date of the last successful **Prepare the 3DS SD card**, for the **Checks** list. |
-| `titres_3ds` | Optional: 3DS games to sync in addition to the 8 Pokémon games, `{"<title ID>": "<name>"}`. Same list as the **3DS games** screen of the 3DS. Only games with a single save file `main`. |
+| `titres_3ds` | Optional: names of 3DS games, `{"<title ID>": "<name>"}`, shown in messages and backup copy names. Older versions synced only these 3DS games; now every 3DS game syncs (see [3DS games](#3ds-games-azahar)), and this list only gives names. |
+| `titres_3ds_off` | Optional: 3DS games that never sync, `["<title ID>", …]` (16 hexadecimal digits, as in the Azahar folder `title/00040000/<last 8 digits>`). See [3DS games](#3ds-games-azahar). |
 | `alias` | Optional: `{"<ROM file name without extension>": "<key>"}`, for a ROM hack that keeps the key of its original game. See [ROM hacks](#rom-hacks). |
 | `emulateurs.<name>.exe` | The emulator executable. |
 | `emulateurs.<name>.profil` | Optional: the profile (table below). Default: the name of the entry. Useful for two installs of the same emulator. |
@@ -105,7 +106,7 @@ Without `sauvegardes`, 3dssavesync reads the save folder from the emulator setti
 |---|---|---|---|---|
 | `melonds` | DS | `melonDS.toml`: `SaveFilePath` | `<ROM>.sav`; ROM in a zip: name of the file inside | — |
 | `mgba` | GB, GBA | `config.ini`: `savegamePath` | `<ROM or zip>.sav` | `autoload` (on by default) |
-| `azahar` | 3DS | `qt-config.ini`: `sdmc_directory`, else `user/sdmc` | `sdmc/Nintendo 3DS/…/main` | — |
+| `azahar` | 3DS | `qt-config.ini`: `sdmc_directory`, else `user/sdmc` | `sdmc/Nintendo 3DS/…/data/00000001/` (`main` for the Pokémon games, the whole folder for the others) | — |
 | `retroarch` | the ones of `coeurs` | `retroarch.cfg`: `savefile_directory` and the sort options | `<ROM or zip>.srm` | `savestate_auto_load` |
 | `vbam` | GB, GBA | `vbam.ini`: `BatteryDir` | `<ROM or zip>.sav` | `AutoLoadLastState` |
 | `sameboy` | GB | (always next to the ROM) | `<ROM>.sav` | — |
@@ -136,6 +137,22 @@ Without `sauvegardes`, 3dssavesync reads the save folder from the emulator setti
 **GBA EEPROM and GB MBC2**: these saves have a different file in each emulator. 3dssavesync converts them, so that the 3DS and every PC emulator see the same save ([ADR 0012](adr/0012-eeprom-et-mbc2-forme-du-serveur.md)). Backup copies always keep the original bytes.
 
 **State reloaded at start**: an emulator that reloads a save state can replace a version that just came from the server with an older game. After a download, 3dssavesync asks **Play anyway** or **Don't play**, and names the setting to change. Without a download, it only writes a warning in the log.
+
+### 3DS games (Azahar)
+
+Every 3DS game that has a save in Azahar syncs, not only the Pokémon games ([ADR 0028](adr/0028-archives-3ds-completes.md)):
+
+- The 8 Pokémon games (X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon) sync their `main` file, under the key `3DS-<title ID>`, as before.
+- Every other game syncs all the files of its save folder `sdmc/Nintendo 3DS/…/title/00040000/<id>/data/00000001/`, subfolders included, as one archive under the key `3DSA-<title ID>`.
+- Super Mario Maker never syncs: its save works only on the console that made it.
+
+A game you never started in Azahar has no save folder. 3dssavesync doesn't create one: start the game once in Azahar, save in the game, then start it again through 3dssavesync. The Pokémon games are the exception: 3dssavesync can create their folder, as before.
+
+On a download, 3dssavesync first makes a backup copy of the whole folder (a `.tar` file in the backup folder). A file that the new version doesn't have is moved to a folder with the same name as the `.tar` file, never deleted. Each file is written through a checked temporary file, then the folder is read back and compared with the server version. A damaged server version is refused, and nothing is written.
+
+**Turn a game off**: add its title ID to `titres_3ds_off` in `config.json`, for example `"titres_3ds_off": ["0004000000033500"]`. The title ID is `00040000` followed by the name of the game's folder in `sdmc/Nintendo 3DS/…/title/00040000/`. The game then starts without sync, and the automatic sync skips it. Remove the line to turn it on again. The 3DS has its own list (**3DS games** screen).
+
+Games that an older version synced through `titres_3ds` now use the new key `3DSA-`: their first sync uploads the whole folder, and the old key stays on the server with its history. Update the program on every PC, and the 3DS and Android apps, at the same time: an older version keeps using the old key.
 
 ### Custom profile
 
@@ -176,7 +193,7 @@ The French flag names of older versions (`--texte`, `--sans-navigateur`, `--oui`
 
 - **`run <rom>`**: one game. For frontends (LaunchBox, Playnite, ES-DE…). `--emulator` is required only when two emulators handle the same system.
 - **`run --rom <rom> -- <command>`**: syncs the ROM, then runs the given command as is. For frontends that go through their own launcher (RetroBat) or a command prefix (Lutris).
-- **`launch <name>`**: without a frontend. Syncs all games of the emulator (the ROMs of its `roms` folders, and the 3DS Pokémon games, even if never started in Azahar), starts the emulator without a game, then syncs everything when it closes. This is what the **3dssavesync &lt;emulator&gt;** shortcuts do. mGBA gets its save folder only if GB and GBA share the same folder.
+- **`launch <name>`**: without a frontend. Syncs all games of the emulator (the ROMs of its `roms` folders, and the 3DS games that have a save in Azahar, plus the Pokémon games even if never started), starts the emulator without a game, then syncs everything when it closes. This is what the **3dssavesync &lt;emulator&gt;** shortcuts do. mGBA gets its save folder only if GB and GBA share the same folder.
 - **`restore`**: see [Restore an old version](#restore-an-old-version).
 
 A frontend that stops the program during the game (stop signal on Linux and macOS) does not prevent the upload: the program waits for the emulator to end. A forced stop (`SIGKILL`, "End task") cuts the upload; it goes out at the next launch.
@@ -190,7 +207,7 @@ The upload after a game failed (network cut, server off)? The save is written in
 The server keeps every version of every save. To make an old version the current one again:
 
 1. Open **3dssavesync settings**, part **Games**.
-2. Choose the game. The page lists its last 30 versions: date, device, size, and play time and trainer for a Pokémon game.
+2. Choose the game. The page lists its last 30 versions: date, device, size, and play time and trainer for a Pokémon game. A 3DS game other than the Pokémon games has no play time.
 3. Click **Restore this version**, then confirm.
 
 In a terminal: `3dssavesync restore` lists the games of the server and their key. `3dssavesync restore <key>` lists the last 30 versions, with a number. `3dssavesync restore <key> <number>` restores that version after a confirmation (`--yes`: no question). On Windows, the command opens its own console, like `repair`.

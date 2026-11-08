@@ -112,7 +112,7 @@ func TestArchiveRefusesDamage(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, err := UnpackArchive(append(func() []byte { b, _ := PackArchive(nil); return b }())); err != nil {
+	if _, err := UnpackArchive(func() []byte { b, _ := PackArchive(nil); return b }()); err != nil {
 		t.Errorf("empty archive (no files): %v", err)
 	}
 }
