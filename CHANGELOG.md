@@ -2,7 +2,7 @@
 
 What changed in each release, for people who use 3dssavesync. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.11.4] - 2026-11-08
 
 ### Fixed
 
@@ -199,7 +199,7 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.11.3...HEAD
+[3.11.4]: https://github.com/programgames/3dssavesync/compare/v3.11.3...v3.11.4
 [3.11.3]: https://github.com/programgames/3dssavesync/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/programgames/3dssavesync/compare/v3.11.1...v3.11.2
 [3.11.1]: https://github.com/programgames/3dssavesync/compare/v3.11.0...v3.11.1
