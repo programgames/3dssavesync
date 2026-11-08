@@ -1,4 +1,4 @@
-/* Settings on the SD card: config.ini, base.ini, alias.ini, titres.ini and maj.ini (their names and keys stay French,
+/* Settings on the SD card: config.ini, base.ini, alias.ini, titres.ini, titres-off.ini and maj.ini (their names and keys stay French,
  * CONTRIBUTING.md), and the takeover of the old folder. Every file is read by read_ini (with its .tmp fallback) and
  * written by replace_file (files.h): a power cut never empties one.
  * No libctru dependency: tested on the PC (test/test_settings.c). */
@@ -88,7 +88,7 @@ typedef struct {
 /* The 8 3DS Pokémon games (ADR 0009): the list when titres.ini does not exist. */
 int default_titles(title_t *t, int max);
 
-/* titres.ini: one line "0004000000055D00=Pokemon X" per game. File missing (and its .tmp): default_titles. Returns the
+/* titres.ini (before ADR 0028, read once to fill titres-off.ini): one line "0004000000055D00=Pokemon X" per game. File missing (and its .tmp): default_titles. Returns the
  * number of games. */
 int read_titles(const char *path, title_t *t, int max);
 
@@ -97,6 +97,16 @@ int write_titles(const char *path, const title_t *t, int n);
 
 /* Index of id in t, or -1. */
 int title_index(const title_t *t, int n, unsigned long long id);
+
+/* titres-off.ini (ADR 0028): the 3DS games turned off, one title ID (16 hex digits) per line. Every other 3DS game
+ * with a save is synced. */
+#define MAX_OFF 1024
+
+/* Title IDs of path (or its .tmp) in ids, at most max, each once. Number read; 0 if no file. */
+int read_off_titles(const char *path, unsigned long long *ids, int max);
+
+/* 0 if written (replace_file). */
+int write_off_titles(const char *path, const unsigned long long *ids, int n);
 
 /* Takeover of an install under the old name: if the new folder has no config.ini, base.ini or titres.ini (nor their
  * .tmp) and old_dir/config.ini exists, copies config.ini, base.ini and titres.ini (the old folder stays intact). 1 if copied, 0 if nothing to do, -1 on failure. */

@@ -1,5 +1,5 @@
 /* 3dssavesync 3DS: syncs the Saves with the Server (docs/design.md §4):
- * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) and the 3DS games of titres.ini (ADR 0007 to 0009).
+ * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) and every 3DS game with a save (ADR 0007 to 0009, 0028).
  * Top: list of the Games and their State. Bottom: details, messages, buttons. */
 #include <3ds.h>
 #include <dirent.h>
@@ -81,8 +81,8 @@ static void make_short_name(const char *name, char *out, size_t n)
 }
 
 static config_t cfg;
-static title_t titles[MAX_TITLES]; /* synced 3DS games (titres.ini) */
-static int title_count;
+static unsigned long long off[MAX_OFF]; /* 3DS games turned off (titres-off.ini, ADR 0028) */
+static int off_count;
 /* No limit on the number of Games: games and the lists of indexes grow on the heap together (new_game). */
 static game_t *games;
 static int game_count, game_cap;
@@ -186,6 +186,9 @@ static int has_rom_extension(system_t s, const char *ext)
 /* GB/GBC Virtual Console game (scan_vc). */
 static int vc(const game_t *j) { return j->system == SYS_GB && j->title; }
 
+/* 3DS game synced as its whole save archive, Key 3DSA- (ADR 0028): every 3DS game but the 8 Pokémon (/main, 3DS-). */
+static int whole_archive(const game_t *j) { return j->system == SYS_3DS && !pokemon_3ds(j->title); }
+
 /* Name of the Game's Base in base.ini. A Virtual Console game is a Local save of its own next to a ROM or forwarder
  * with the same Key (ADR 0025): each has its Base, and the server links them like two devices. "VC-" + title ID: never
  * a Key (they start with DS-, GB-, GBA-, 3DS-). */
@@ -197,10 +200,12 @@ static const char *base_id(const game_t *j)
     return id;
 }
 
-/* Whole content of the Local save: the file (Clock trailer included), /main of the 3DS Save archive, or /sav.dat of
- * the Virtual Console one (VC Clock footer included). */
+/* Whole content of the Local save: the file (Clock trailer included), /main of a 3DS Pokémon Save archive, the whole
+ * archive of another 3DS game (archive.h; -2 if it can't be synced: why), or /sav.dat of the Virtual Console one (VC
+ * Clock footer included). 0 if read. */
 static int read_save(game_t *j, unsigned char **bytes, size_t *size)
 {
+    if (whole_archive(j)) return read_title_archive(j->title, &j->media, bytes, size, j->why, sizeof j->why);
     if (j->title) return read_title_save(j->title, vc(j) ? "/sav.dat" : "/main", &j->media, bytes, size);
     return read_file(j->sav, bytes, size);
 }
@@ -345,6 +350,7 @@ static void read_local(game_t *j)
     unsigned char *bytes;
     size_t size;
     u64 mtime;
+    int r = 0;
     j->has_local = j->blank = j->has_progress = j->unexpected = 0;
     j->modified = 0;
     j->local_size = 0;
@@ -355,7 +361,8 @@ static void read_local(game_t *j)
         snprintf(f, sizeof f, FORWARDERS "/%s.sav", j->name);
         snprintf(j->sav, sizeof j->sav, "%s", access(f, F_OK) == 0 ? f : j->sav_rom);
     }
-    if (j->rom_count != 1 || read_save(j, &bytes, &size)) {
+    if (j->rom_count != 1 || (r = read_save(j, &bytes, &size))) {
+        j->unexpected = whole_archive(j) && r == -2; /* listed Not synced, with why */
         if (vc(j)) { /* no sav.dat: a game never started has no archive at all, and may get its first save */
             char root[128];
             j->vc_archive = title_root(j->title, root, sizeof root) >= 0;
@@ -378,31 +385,93 @@ static void read_local(game_t *j)
          * becomes 1 January 2000: date unknown. */
         if (!j->title && R_SUCCEEDED(archive_getmtime(j->sav, &mtime)) && mtime > 946684800) j->modified = (time_t)mtime;
     }
-    j->has_progress = pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM only: without the Clock trailer */
+    j->has_progress = !whole_archive(j) && pokemon_progress(bytes, size, &j->progress) == 0; /* SRAM only: without the Clock trailer */
     hash_hex(bytes, size, j->local_hash);
     j->local_size = size;
     j->has_local = 1;
     free(bytes);
 }
 
-/* The 3DS games of titres.ini whose Save archive exists (game installed or card inserted, ADR 0009). */
-static void scan_3ds(void)
+static int is_off(u64 id)
 {
     int i;
-    for (i = 0; i < title_count; i++) {
-        game_t *j = new_game();
-        if (!j) break;
-        show_progress(i + 1, title_count, T("Lecture des sauvegardes 3DS\n%s", "Reading 3DS saves\n%s"), titles[i].name);
-        j->title = titles[i].id;
+    for (i = 0; i < off_count && off[i] != id; i++);
+    return i < off_count;
+}
+
+/* titres-off.ini written. 0 if done. */
+static int save_off(void)
+{
+    mkdir(APP_DIR, 0777);
+    return write_off_titles(APP_DIR "/titres-off.ini", off, off_count);
+}
+
+/* path or its .tmp exists (read_ini reads the .tmp after a power cut). */
+static int ini_exists(const char *path)
+{
+    char tmp[300];
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
+    return access(path, F_OK) == 0 || access(tmp, F_OK) == 0;
+}
+
+/* A 3DS application that the sync may take (ADR 0028): not a GB/GBC Virtual Console game (scan_vc), not in the skip list. */
+static int syncable_title(u64 id, FS_MediaType media) { return !skipped_3ds(id) && !(media == MEDIATYPE_SD && title_vc(id)); }
+
+/* titres.ini (the allow-list before ADR 0028) read once: the games found (with a Save archive) that it does not list
+ * are turned off, so that the old choice stays. Then titres-off.ini exists, and titres.ini is no longer read. */
+static void migrate_titles(const u64 *ids, const FS_MediaType *medias, int n)
+{
+    static title_t old[MAX_TITLES];
+    char root[16];
+    int count, i, before = off_count;
+    if (n < 0 || !ini_exists(APP_DIR "/titres.ini") || ini_exists(APP_DIR "/titres-off.ini")) return; /* games not listed: next time */
+    count = read_titles(APP_DIR "/titres.ini", old, MAX_TITLES);
+    for (i = 0; i < n && off_count < MAX_OFF; i++)
+        if (syncable_title(ids[i], medias[i]) && title_index(old, count, ids[i]) < 0 && !is_off(ids[i]) && title_root(ids[i], root, sizeof root) >= 0)
+            off[off_count++] = ids[i];
+    if (save_off()) /* the games stay off for this session; titres.ini is read again next time */
+        add_alert(T("Liste des jeux 3DS désactivés non enregistrée. Vérifiez la carte SD.", "List of turned-off 3DS games not saved. Check the SD card."));
+    else log_event("titres.ini read once: %d 3DS games turned off", off_count - before);
+}
+
+/* The 3DS games (ADR 0028): every application with a Save archive, installed or on the inserted game card, but the
+ * Virtual Console games, the skip list and the games turned off. The 8 Pokémon games: /main, Key 3DS-; every other
+ * game: its whole archive, Key 3DSA-. A game never started has no archive: not listed. */
+static void scan_3ds(void)
+{
+    u64 *ids = NULL;
+    FS_MediaType *medias = NULL;
+    int n = -1, i, k;
+    if (R_SUCCEEDED(amInit())) {
+        n = installed_titles(&ids, &medias, 0);
+        amExit();
+    }
+    if (n < 0)
+        add_alert(T("Jeux 3DS non lus : la liste des jeux installés est illisible. Redémarrez la 3DS, puis relancez 3dssavesync.",
+                    "3DS games not read: the installed games can't be listed. Restart the 3DS, then start 3dssavesync again."));
+    migrate_titles(ids, medias, n);
+    for (i = 0; i < n; i++) {
+        char name[256];
+        game_t *j;
+        if (is_off(ids[i]) || !syncable_title(ids[i], medias[i])) continue;
+        for (k = 0; k < game_count && !(games[k].system == SYS_3DS && games[k].title == ids[i]); k++);
+        if (k < game_count) continue; /* installed and on the game card: one game (read_save reads the SD card first) */
+        if (!(j = new_game())) break;
+        if (title_name(ids[i], medias[i], language, name, sizeof name)) snprintf(name, sizeof name, "%016llX", ids[i]);
+        show_progress(i + 1, n, T("Lecture des sauvegardes 3DS\n%s", "Reading 3DS saves\n%s"), name);
+        j->title = ids[i];
         j->system = SYS_3DS;
         j->rom_count = 1;
         read_local(j); /* Hash, and play time of a Pokémon */
-        if (!j->has_local) continue; /* never started or absent */
-        key_3ds(j->title, j->key);
-        snprintf(j->name, sizeof j->name, "%s", titles[i].name);
-        snprintf(j->short_name, sizeof j->short_name, "%.47s", titles[i].name);
+        if (!j->has_local && !j->unexpected) continue; /* never started */
+        if (pokemon_3ds(j->title)) key_3ds(j->title, j->key);
+        else key_3dsa(j->title, j->key);
+        snprintf(j->name, sizeof j->name, "%s", name);
+        snprintf(j->short_name, sizeof j->short_name, "%.47s", name);
         game_count++;
     }
+    free(ids);
+    free(medias);
 }
 
 /* GB/GBC Virtual Console games installed on the SD card (title_vc, by product code): a GB Game whose Key is read in the
@@ -711,7 +780,8 @@ static void make_parent_dir(const char *path)
 
 /* Download (design §4): Backup copy first, then
  *  - file (DS, GB, GBA): received SRAM + local Clock trailer (ADR 0008) in a .tmp, then replace;
- *  - 3DS: rewrite /main with commit and Secure value (ADR 0009);
+ *  - 3DS: rewrite /main with commit and Secure value (ADR 0009); other 3DS games: the whole archive, commit, Secure
+ *    value, then read back (write_title_archive, ADR 0028);
  *  - Virtual Console: received SRAM + the VC footer of the old sav.dat, rewritten like /main, then read back
  *    (ADR 0025). A VC game never started (no archive) gets its first save: create_vc_first_save.
  * On failure, the Local save is intact. */
@@ -762,9 +832,18 @@ static result_t create_vc_first_save(game_t *j, char *body, size_t size)
     return make_result(RESULT_DOWNLOADED, NULL);
 }
 
+/* name for a file of copies/: the characters the SD card refuses (\ / : * ? " < > |) become '_' ("Zelda: ..." from
+ * the SMDH of a 3DS game). */
+static void file_name(const char *name, char *out, size_t n)
+{
+    size_t i;
+    for (i = 0; name[i] && i < n - 1; i++) out[i] = strchr("\\/:*?\"<>|", name[i]) ? '_' : name[i];
+    out[i] = '\0';
+}
+
 static result_t download_save(game_t *j)
 {
-    char tmp[610], backup[700], url[300], hash[65], date[20];
+    char tmp[610], backup[700], url[300], hash[65], date[20], name[256];
     char *body;
     unsigned char *old_data = NULL, *new_data;
     size_t size, n = 0, sram;
@@ -794,7 +873,8 @@ static result_t download_save(game_t *j)
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(APP_DIR "/copies", 0777);
         /* same ROM name in two subfolders, the same second: -1, -2… (a copy is never overwritten) */
-        failed = backup_path(APP_DIR "/copies", j->name, date, j->system == SYS_3DS ? "main" : "sav", backup, sizeof backup);
+        file_name(j->name, name, sizeof name);
+        failed = backup_path(APP_DIR "/copies", name, date, whole_archive(j) ? "tar" : j->system == SYS_3DS ? "main" : "sav", backup, sizeof backup);
         if (!failed) failed = read_save(j, &old_data, &n);
         if (!failed) failed = write_verified(backup, old_data, n); /* read back: a damaged copy protects nothing */
         if (failed) {
@@ -804,7 +884,19 @@ static result_t download_save(game_t *j)
         }
     }
 
-    if (j->system == SYS_3DS) {
+    if (whole_archive(j)) {
+        char why[160];
+        free(old_data); /* copied: its memory goes to the read back */
+        failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why);
+        free(body);
+        if (failed) log_event("write %016llX: %s", j->title, why);
+        if (failed == -2) {
+            r = make_result(RESULT_WRITTEN_DAMAGED, backup);
+            r.had_save = 1;
+            return r;
+        }
+        if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, why);
+    } else if (j->system == SYS_3DS) {
         failed = write_title_save(j->title, j->media, "/main", body, size);
         free(old_data);
         free(body);
@@ -939,7 +1031,7 @@ static int server_progress(game_t *j, progress_t *p)
     size_t size;
     long status;
     int i;
-    if (!j->has_server || (!j->has_progress && j->has_local)) return 0;
+    if (!j->has_server || whole_archive(j) || (!j->has_progress && j->has_local)) return 0;
     if (strcmp(j->progress_hash, j->server_hash)) {
         for (i = 0; i < game_count && strcmp(games[i].progress_hash, j->server_hash); i++);
         if (i < game_count) {
@@ -1163,6 +1255,8 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
                               "%d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC, then prepare the SD card."), j->rom_count);
         return t;
     case STATUS_NOT_SYNCED:
+        if (whole_archive(j)) return T("La sauvegarde de ce jeu ne peut pas être copiée en entier (détail ci-dessous). Ce jeu n'est pas synchronisé, rien n'y est modifié.",
+                                       "This game's save can't be copied whole (details below). This game is not synced, and nothing in it is changed.");
         if (!j->key[0]) return T("La ROM de ce jeu Virtual Console est illisible : sa clé est inconnue. Ce jeu n'est pas synchronisé, rien n'y est modifié.",
                                  "The ROM of this Virtual Console game can't be read: its Key is unknown. This game is not synced, and nothing in it is changed.");
         return T("Ce jeu a des points de restauration : ils pourraient ramener une ancienne partie. Il n'est pas synchronisé, rien n'y est modifié.",
@@ -1242,7 +1336,7 @@ static void draw_bottom(const game_t *j)
             touch_area(x - 4, y - 4, w + 8, 24, KEY_HISTORY);
         }
         y += 19;
-        y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : vc(j) ? 3 : 2, state_sentence(j, t, sizeof t)) + 5;
+        y += screen_lines(8, y, 0.42f, WHITE, TEXT_WIDTH, j->status == STATUS_DUPLICATE ? 4 : vc(j) || j->unexpected ? 3 : 2, state_sentence(j, t, sizeof t)) + 5;
         if (j->status != STATUS_DUPLICATE && j->status != STATUS_NOT_SYNCED) { /* no save and no version to show */
             local_text(j, t, sizeof t);
             y = detail(y, T("Sur la 3DS", "On the 3DS"), t);
@@ -1256,7 +1350,7 @@ static void draw_bottom(const game_t *j)
         }
         /* the Key, to compare with the one the PC shows under the game name; ROM not read: the failed step */
         if (vc(j) && j->key[0]) y = detail(y, T("Clé", "Key"), j->key);
-        else if (vc(j)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
+        else if (vc(j) || (whole_archive(j) && j->unexpected)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);
     else if (update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
@@ -1345,21 +1439,18 @@ static int test_connection(void)
     return 0;
 }
 
-/* Synced 3DS games: installed applications and game card, ticked if they are in titres.ini.
- * Only a game whose Save archive holds only /main can be ticked (title_main_only): the sync copies
- * only this file. The games of titres.ini absent from the console stay listed (to untick them). */
+/* On/off of the 3DS games (ADR 0028): every installed application and game card game with a Save archive, ticked when
+ * it is synced (not in titres-off.ini). A new game is ticked. A turned-off game absent from the console stays off. */
 typedef struct {
     u64 id;
     FS_MediaType media;
     char name[48];
-    int main_only, ticked;
+    int ticked;
 } title_choice_t;
 
-/* Ticked games first, then by name. */
 static int compare_choices(const void *a, const void *b)
 {
-    const title_choice_t *x = a, *y = b;
-    return x->ticked != y->ticked ? y->ticked - x->ticked : compare_names(x->name, y->name);
+    return compare_names(((const title_choice_t *)a)->name, ((const title_choice_t *)b)->name);
 }
 
 static title_choice_t *choices; /* all the games of the choice (heap) */
@@ -1377,14 +1468,14 @@ static int filter_choices(int cursor)
     return cursor < 0 ? 0 : cursor;
 }
 
-/* Top screen of the choice: a check box per game. */
+/* Top screen of the choice: a check box per game, ticked when synced. */
 static void draw_choices_top(void)
 {
     const int cursor = choice_cursor, lines = list_lines(choice_query), start = cursor < lines ? 0 : cursor - lines + 1;
     int i;
     float top;
     screen_top();
-    screen_text(6, 4, 0.55f, WHITE, 0, T("Jeux 3DS à synchroniser", "3DS games to sync"));
+    screen_text(6, 4, 0.55f, WHITE, 0, T("Jeux 3DS synchronisés", "Synced 3DS games"));
     screen_rect(0, 23, TOP_WIDTH, 1, GREY_DARK);
     top = draw_search_band(choice_query);
     if (!choice_shown_count && choice_query[0]) {
@@ -1399,83 +1490,87 @@ static void draw_choices_top(void)
             screen_rect(0, ly - 1, TOP_WIDTH, 15, SEL);
             screen_rect(0, ly - 1, 2, 15, ACCENT);
         }
-        screen_rect(9, ly + 2, 10, 10, c->ticked || c->main_only == 1 ? GREY_LIGHT : GREY_DARK); /* box: border, background, tick */
+        screen_rect(9, ly + 2, 10, 10, GREY_LIGHT); /* box: border, background, tick */
         screen_rect(10, ly + 3, 8, 8, i == cursor ? SEL : BOX);
         if (c->ticked) screen_rect(11, ly + 4, 6, 6, C_GREEN);
-        screen_text(26, ly, 0.5f, c->ticked || c->main_only == 1 ? WHITE : GREY_DARK, TOP_WIDTH - 40, c->name);
+        screen_text(26, ly, 0.5f, c->ticked ? WHITE : GREY_LIGHT, TOP_WIDTH - 40, c->name);
     }
     if (start > 0) screen_text(TOP_WIDTH - 12, top - 1, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xB2");
     if (start + lines < choice_shown_count) screen_text(TOP_WIDTH - 12, FOOTER_Y, 0.4f, GREY_LIGHT, 0, "\xE2\x96\xBC");
 }
 
-static void choose_titles(void)
+/* The games of the choice in choices: the syncable applications with a Save archive (a game never started and the
+ * forwarders have none), each once. 0 if listed; otherwise the message says why. */
+static int list_choices(void)
 {
-    title_choice_t *c;
-    u64 *ids;
-    FS_MediaType *medias;
-    int n, i, ticked = title_count, changed = 0;
-
+    u64 *ids = NULL;
+    FS_MediaType *medias = NULL;
+    char root[16];
+    int n = -1, i, k, m = 0;
     show_progress(0, 0, "%s", T("Lecture des jeux installés…", "Reading installed games…"));
-    if (R_FAILED(amInit())) {
-        set_message(C_RED, NULL, "%s", T("Impossible de lire la liste des jeux. Redémarrez la 3DS et réessayez.", "Can't read the installed games. Restart the 3DS and try again."));
-        return;
+    if (R_SUCCEEDED(amInit())) {
+        n = installed_titles(&ids, &medias, 0);
+        amExit();
     }
-    n = installed_titles(&ids, &medias, title_count); /* room for the games of titres.ini absent from the console */
-    amExit();
-    c = choices = n < 0 ? NULL : malloc((n + title_count + 1) * sizeof *c);
-    choice_shown = c ? malloc((n + title_count + 1) * sizeof *choice_shown) : NULL;
+    choices = n < 0 ? NULL : malloc((n + 1) * sizeof *choices);
+    choice_shown = choices ? malloc((n + 1) * sizeof *choice_shown) : NULL;
     if (!choice_shown) {
-        set_message(C_RED, T("malloc impossible", "malloc failed"), "%s", T("Mémoire insuffisante pour lister les jeux. Redémarrez la 3DS et réessayez.", "Not enough memory to list the games. Restart the 3DS and try again."));
+        if (n < 0) set_message(C_RED, NULL, "%s", T("Impossible de lire la liste des jeux. Redémarrez la 3DS et réessayez.", "Can't read the installed games. Restart the 3DS and try again."));
+        else set_message(C_RED, T("malloc impossible", "malloc failed"), "%s", T("Mémoire insuffisante pour lister les jeux. Redémarrez la 3DS et réessayez.", "Not enough memory to list the games. Restart the 3DS and try again."));
         free(ids);
         free(medias);
         free(choices);
         choices = NULL;
-        return;
+        return -1;
     }
-    for (i = 0; i < title_count; i++) {
-        int k;
-        for (k = 0; k < n && ids[k] != titles[i].id; k++);
-        if (k == n) {
-            ids[n] = titles[i].id;
-            medias[n++] = MEDIATYPE_SD;
-        }
-    }
-    {   /* no Save archive and not ticked: hidden (mGBA or DS forwarders, game never started) */
-        int m = 0;
-        for (i = 0; i < n; i++) {
-            int t = title_index(titles, title_count, ids[i]), main_only;
-            show_progress(i + 1, n, "%s", T("Lecture des jeux", "Reading games"));
-            main_only = title_main_only(ids[i]);
-            if (main_only < 0 && t < 0) continue;
-            c[m].id = ids[i];
-            c[m].media = medias[i];
-            c[m].ticked = t >= 0;
-            c[m].main_only = main_only;
-            if (title_name(ids[i], medias[i], language, c[m].name, sizeof c[m].name)) {
-                if (t >= 0) snprintf(c[m].name, sizeof c[m].name, "%s", titles[t].name);
-                else snprintf(c[m].name, sizeof c[m].name, "%016llX", ids[i]);
-            }
-            m++;
-        }
-        n = m;
+    for (i = 0; i < n; i++) {
+        show_progress(i + 1, n, "%s", T("Lecture des jeux", "Reading games"));
+        for (k = 0; k < m && choices[k].id != ids[i]; k++);
+        if (k < m || !syncable_title(ids[i], medias[i]) || title_root(ids[i], root, sizeof root) < 0) continue;
+        choices[m].id = ids[i];
+        choices[m].media = medias[i];
+        choices[m].ticked = !is_off(ids[i]);
+        if (title_name(ids[i], medias[i], language, choices[m].name, sizeof choices[m].name)) snprintf(choices[m].name, sizeof choices[m].name, "%016llX", ids[i]);
+        m++;
     }
     free(ids);
     free(medias);
-    qsort(c, n, sizeof *c, compare_choices);
+    qsort(choices, m, sizeof *choices, compare_choices);
+    choice_count = m;
+    return 0;
+}
+
+/* off from the choice: the unticked games, and the turned-off games the choice does not show (absent from the console). */
+static void apply_choices(void)
+{
+    static unsigned long long kept[MAX_OFF];
+    int n = 0, i, k;
+    for (i = 0; i < off_count; i++) {
+        for (k = 0; k < choice_count && choices[k].id != off[i]; k++);
+        if (k == choice_count) kept[n++] = off[i];
+    }
+    for (i = 0; i < choice_count && n < MAX_OFF; i++)
+        if (!choices[i].ticked) kept[n++] = choices[i].id;
+    memcpy(off, kept, n * sizeof *off);
+    off_count = n;
+}
+
+static void choose_titles(void)
+{
+    int changed = 0;
+    if (list_choices()) return;
     clear_message();
-    choice_count = n;
     choice_query[0] = '\0';
     choice_shown_count = 0;
     choice_cursor = filter_choices(0);
 
     while (aptMainLoop()) {
         const int cursor = choice_cursor;
-        title_choice_t *ch = choice_shown_count ? &c[choice_shown[cursor]] : NULL;
-        int tickable = ch && (ch->ticked || ch->main_only == 1);
+        title_choice_t *ch = choice_shown_count ? &choices[choice_shown[cursor]] : NULL;
         u16 icon[ICON_SIZE * ICON_SIZE];
         float y = 6;
         u32 k;
-        button_t t[3] = { { KEY_A, ch && ch->ticked ? T("Décocher", "Untick") : T("Cocher", "Tick"), tickable },
+        button_t t[3] = { { KEY_A, ch && ch->ticked ? T("Désactiver", "Turn off") : T("Activer", "Turn on"), ch != NULL },
                           { KEY_TOUCH, T("Chercher", "Search"), 1 },
                           { KEY_B, choice_query[0] ? T("Effacer la recherche", "Clear the search") : T("Enregistrer et revenir", "Save and go back"), 1 } };
 
@@ -1484,16 +1579,12 @@ static void choose_titles(void)
             if (title_icon(ch->id, ch->media, icon) == 0) screen_icon(icon, ICON_SIZE, ICON_SIZE, ICON_X, 6, 1.0f);
             y += screen_lines(8, y, 0.55f, WHITE, ICON_X - 16, 2, ch->name) + 4;
             y = y < UNDER_ICON ? UNDER_ICON + 4 : y + 4;
-            if (ch->main_only == 1) y += screen_paragraph(8, y, 0.45f, C_GREEN, TEXT_WIDTH, T("Ce jeu peut être synchronisé.", "This game can be synced.")) + 6;
-            else if (title_vc(ch->id))
-                y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, T("Jeu Virtual Console : il est dans la liste des jeux GB, sans le cocher ici.",
-                                                                       "Virtual Console game: it is in the list of GB games, no need to tick it here.")) + 6;
-            else if (ch->main_only == 0)
-                y += screen_paragraph(8, y, 0.45f, C_RED, TEXT_WIDTH, T("Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).",
-                                                                       "This game can't be synced (several save files).")) + 6;
+            if (ch->ticked)
+                y += screen_paragraph(8, y, 0.45f, C_GREEN, TEXT_WIDTH, T("Synchronisé : sa sauvegarde est envoyée et récupérée comme celle des autres jeux.",
+                                                                         "Synced: its save is uploaded and downloaded like the other games' saves.")) + 6;
             else
-                y += screen_paragraph(8, y, 0.45f, GREY_LIGHT, TEXT_WIDTH, T("Pas encore de sauvegarde : lancez le jeu une fois et sauvegardez.",
-                                                                            "No save yet: start the game once and save.")) + 6;
+                y += screen_paragraph(8, y, 0.45f, GREY_LIGHT, TEXT_WIDTH, T("Désactivé : 3dssavesync ne lit pas sa sauvegarde et ne la modifie pas.",
+                                                                            "Turned off: 3dssavesync doesn't read or change its save.")) + 6;
         } else {
             y += screen_paragraph(8, y, 0.5f, GREY_LIGHT, TEXT_WIDTH, choice_query[0] ? T("Aucun jeu ne correspond à la recherche.", "No game matches the search.")
                                                                                      : T("Aucun jeu trouvé.", "No game found.")) + 6;
@@ -1516,28 +1607,14 @@ static void choose_titles(void)
         }
         if (k & KEY_A && ch) {
             clear_message();
-            if (!tickable) {
-                set_message(C_RED, NULL, "%s", T("Ce jeu ne peut pas être coché.", "This game cannot be ticked."));
-            } else if (!ch->ticked && ticked >= MAX_TITLES) {
-                set_message(C_RED, NULL, T("%d jeux 3DS au plus. Décochez-en un d'abord.", "%d 3DS games at most. Untick one first."), MAX_TITLES);
-            } else {
-                ch->ticked = !ch->ticked;
-                ticked += ch->ticked ? 1 : -1;
-                changed = 1;
-            }
+            ch->ticked = !ch->ticked;
+            changed = 1;
         }
     }
     clear_message();
     if (changed) {
-        title_count = 0;
-        for (i = 0; i < n && title_count < MAX_TITLES; i++)
-            if (c[i].ticked) {
-                titles[title_count].id = c[i].id;
-                snprintf(titles[title_count++].name, sizeof titles[0].name, "%s", c[i].name);
-            }
-        mkdir(APP_DIR, 0777);
-        if (write_titles(APP_DIR "/titres.ini", titles, title_count))
-            set_message(C_RED, APP_DIR "/titres.ini", "%s", T("Liste des jeux 3DS non enregistrée. Vérifiez la carte SD.", "3DS game list not saved. Check the SD card."));
+        apply_choices();
+        if (save_off()) set_message(C_RED, APP_DIR "/titres-off.ini", "%s", T("Liste des jeux 3DS non enregistrée. Vérifiez la carte SD.", "3DS game list not saved. Check the SD card."));
         else set_message(C_GREEN, NULL, "%s", T("Liste des jeux 3DS enregistrée.", "3DS game list saved."));
     }
     free(choices);
@@ -1658,8 +1735,8 @@ static void draw_settings_top(void)
                 c = GREY_LIGHT;
             }
         } else if (i == LINE_TITLES) {
-            if (title_count) snprintf(v, sizeof v, plural(title_count, english, T("%d jeu", "%d game"), T("%d jeux", "%d games")), title_count);
-            else snprintf(v, sizeof v, "%s", T("Aucun", "None"));
+            if (off_count) snprintf(v, sizeof v, plural(off_count, english, T("%d désactivé", "%d turned off"), T("%d désactivés", "%d turned off")), off_count);
+            else snprintf(v, sizeof v, "%s", T("Tous", "All"));
         } else if (i == LINE_ORDER) {
             value = order_label(cfg.order);
         } else if (i == LINE_TEST) {
@@ -1689,12 +1766,12 @@ static int settings_screen(int first)
 {
     const int count = SETTING_COUNT;
     int changed, order_changed;
-    static title_t before_titles[MAX_TITLES];
-    int before_count = title_count;
+    static unsigned long long before_off[MAX_OFF];
+    int before_count = off_count;
     config_t before;
 
     memcpy(&before, &cfg, sizeof cfg);
-    memcpy(before_titles, titles, sizeof titles);
+    memcpy(before_off, off, sizeof off);
     selected_setting = 0;
     draw_current_top = draw_settings_top; /* progress and questions: the settings stay on top */
     clear_message();
@@ -1727,7 +1804,8 @@ static int settings_screen(int first)
         } else {
             y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, setting_label(c)) + 6;
             y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
-                                                         : c == LINE_TITLES ? T("Les jeux 3DS à synchroniser. Par défaut, les 8 Pokémon 3DS.", "3DS games to sync. Default: the 8 Pokémon 3DS games.")
+                                                         : c == LINE_TITLES ? T("Tous les jeux 3DS qui ont une sauvegarde sont synchronisés. Désactivez ici ceux à laisser de côté.",
+                                                                                "Every 3DS game with a save is synced. Turn off here the ones to leave out.")
                                                          : c == LINE_ORDER ? T("Ordre des jeux dans la liste. À faire d'abord : les conflits, puis ce qu'il faut récupérer "
                                                                                "ou envoyer. Dernière partie : la sauvegarde la plus récente de la 3DS en premier ; "
                                                                                "les jeux sans date (dont les jeux 3DS) vont à la fin.",
@@ -1779,7 +1857,7 @@ static int settings_screen(int first)
     if (!first) clear_message(); /* first start: the result of the test stays shown */
     order_changed = before.order != cfg.order;
     before.order = cfg.order; /* the order only sorts the list again (sort_list): no new read */
-    changed = memcmp(&before, &cfg, sizeof cfg) || before_count != title_count || memcmp(before_titles, titles, sizeof titles);
+    changed = memcmp(&before, &cfg, sizeof cfg) || before_count != off_count || memcmp(before_off, off, sizeof off);
     if (order_changed || memcmp(&before, &cfg, sizeof cfg)) save_config();
     return changed;
 }
@@ -1881,6 +1959,10 @@ static int act(game_t *j)
         r.count = j->rom_count;
         break;
     case STATUS_NOT_SYNCED:
+        if (whole_archive(j)) {
+            r = make_result(RESULT_3DS_NOT_SYNCED, j->why);
+            break;
+        }
         if (!j->key[0]) {
             r = make_result(RESULT_VC_NO_KEY, j->why);
             break;
@@ -2302,7 +2384,7 @@ int main(int argc, char **argv)
                     "Not enough memory to read the sync state: it will not be saved. Restart the 3DS, then start 3dssavesync again."));
         snprintf(alert_detail, sizeof alert_detail, "%s (%d)", APP_DIR "/base.ini", bases.n);
     }
-    title_count = read_titles(APP_DIR "/titres.ini", titles, MAX_TITLES);
+    off_count = read_off_titles(APP_DIR "/titres-off.ini", off, MAX_OFF);
     update_start(argc > 0 ? argv[0] : NULL);
 
     if (net_init()) {

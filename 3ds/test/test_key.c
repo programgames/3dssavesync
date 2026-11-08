@@ -1,4 +1,4 @@
-/* Checks rom_key, key_3ds, sram_size, EEPROM and MBC2 (ADR 0007, 0008, 0010, 0012). Same Keys as the PC program (client/).
+/* Checks rom_key, key_3ds, key_3dsa, pokemon_3ds, skipped_3ds, sram_size, EEPROM and MBC2 (ADR 0007, 0008, 0010, 0012). Same Keys as the PC program (client/).
  * Built on the PC: gcc -I source source/key.c test/test_key.c -o test_key && ./test_key */
 #include <stdio.h>
 #include <string.h>
@@ -42,6 +42,12 @@ int main(void)
 
     key_3ds(0x00040000001B5000ULL, key);
     check(!strcmp(key, "3DS-00040000001B5000"), "3DS-00040000001B5000");
+    key_3dsa(0x0004000000030800ULL, key);
+    check(!strcmp(key, "3DSA-0004000000030800"), "3DSA-0004000000030800");
+    check(pokemon_3ds(0x0004000000055D00ULL) && pokemon_3ds(0x00040000001B5100ULL), "Pokémon X et Ultra-Lune : Clé 3DS-");
+    check(!pokemon_3ds(0x0004000000030800ULL) && !pokemon_3ds(0x0004000000055D01ULL), "autre jeu : Clé 3DSA-");
+    check(skipped_3ds(0x00040000001A0300ULL) && skipped_3ds(0x00040000001BB800ULL), "Super Mario Maker : jamais synchronisé");
+    check(!skipped_3ds(0x0004000000055D00ULL), "Pokémon X : synchronisé");
 
     /* Alias (ADR 0014): same cases as TestAliasKey in client/cases_test.go */
     check(alias_key(SYS_DS, "0rad", key) == 0 && !strcmp(key, "0RAD"), "alias DS 0rad -> 0RAD");

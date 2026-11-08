@@ -41,6 +41,7 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : copie de sécurité impossible, rien n'est écrit. Vérifiez la carte SD.", "%s: backup copy failed, nothing written. Check the SD card."), game);
         return KIND_FAILURE;
     case RESULT_3DS_WRITE_REFUSED:
+        snprintf(detail, dn, "%s", r->path);
         snprintf(text, n, T("%s : écriture 3DS refusée, sauvegarde intacte.", "%s: 3DS write refused, save intact."), game);
         return KIND_FAILURE;
     case RESULT_OUT_OF_MEMORY:
@@ -89,6 +90,11 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         if (r->path[0]) snprintf(detail, dn, "ROM : %s", r->path);
         snprintf(text, n, T("%s : la ROM de ce jeu Virtual Console est illisible, sa clé est inconnue. Ce jeu n'est pas synchronisé, sa sauvegarde n'est pas modifiée. Signalez la ligne technique.",
                             "%s: the ROM of this Virtual Console game can't be read, so its Key is unknown. This game is not synced, and its save is not changed. Report the technical line."), game);
+        return KIND_FAILURE;
+    case RESULT_3DS_NOT_SYNCED:
+        snprintf(detail, dn, "%s", r->path);
+        snprintf(text, n, T("%s : la sauvegarde de ce jeu ne peut pas être copiée en entier. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
+                            "%s: this game's save can't be copied whole. It is not synced, and its save is not changed."), game);
         return KIND_FAILURE;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);

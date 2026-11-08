@@ -261,6 +261,38 @@ int title_index(const title_t *t, int n, unsigned long long id)
     return -1;
 }
 
+int read_off_titles(const char *path, unsigned long long *ids, int max)
+{
+    FILE *f = fopen(path, "r");
+    char line[64];
+    int n = 0, i;
+    if (!f) { /* power cut between the removal of the old file and the rename (replace_file): the .tmp is complete */
+        snprintf(line, sizeof line, "%s.tmp", path);
+        f = fopen(line, "r");
+    }
+    while (f && n < max && fgets(line, sizeof line, f)) {
+        unsigned long long id;
+        char *end;
+        line[strcspn(line, "\r\n")] = '\0';
+        id = strtoull(line, &end, 16);
+        if (strlen(line) != 16 || *end) continue; /* not a title ID: skipped */
+        for (i = 0; i < n && ids[i] != id; i++);
+        if (i == n) ids[n++] = id;
+    }
+    if (f) fclose(f);
+    return n;
+}
+
+int write_off_titles(const char *path, const unsigned long long *ids, int n)
+{
+    static char text[MAX_OFF * 17]; /* 16 digits and a newline per game; static: 17 KiB */
+    size_t l = 0;
+    int i;
+    if (n > MAX_OFF) return -1;
+    for (i = 0; i < n; i++) l += snprintf(text + l, sizeof text - l, "%016llX\n", ids[i]);
+    return replace_file(path, text, l) ? -1 : 0;
+}
+
 static int exists(const char *path)
 {
     FILE *f = fopen(path, "rb");

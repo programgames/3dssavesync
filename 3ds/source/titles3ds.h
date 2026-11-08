@@ -1,4 +1,4 @@
-/* Native 3DS Save archives (ADR 0009): the /main file of ARCHIVE_USER_SAVEDATA. */
+/* Native 3DS Save archives: the /main file of ARCHIVE_USER_SAVEDATA (ADR 0009), or all of its files (ADR 0028). */
 #ifndef TITLES3DS_H
 #define TITLES3DS_H
 
@@ -15,9 +15,19 @@ int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char
  * save. */
 int write_title_save(u64 id, FS_MediaType media, const char *file, const void *bytes, size_t size);
 
-/* 1 if the archive holds only the /main file (the only case the sync can copy without loss),
- * 0 if it holds something else, -1 if the game has no archive (never started). */
-int title_main_only(u64 id);
+/* Whole save archive of the other 3DS games (ADR 0028): every file, as one 3dssavesync archive (archive.h). */
+#define ARCHIVE_MAX (16 * 1024 * 1024) /* bytes of files at most: beyond, the game is Not synced (memory of an Old 3DS) */
+
+/* Every file of the archive (SD card, else game card), packed in *bytes (to free), *media = medium found.
+ * 0 if read; -1 if the game has no archive (never started); -2 if it can't be synced or read: why says why (English,
+ * the technical line: a path over 100 bytes, a name that is not ASCII, over ARCHIVE_MAX, a read error). */
+int read_title_archive(u64 id, FS_MediaType *media, unsigned char **bytes, size_t *size, char *why, size_t wn);
+
+/* Writes the version tar (unpack_archive: a damaged one is refused) into the existing archive: files absent from it
+ * deleted, the others created or resized and written, commit, secure value removed, then read back and compared. An
+ * archive is never created or formatted. 0 if done; -1 if nothing was committed (old save intact); -2 if committed but
+ * the read back differs. why: the technical line. */
+int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn);
 
 /* Names at the root of the archive in names, joined by ", ", a folder ending with '/' ("sav.dat, SecureValue"), cut if
  * longer than n. Number of entries, -1 if the game has no archive. */

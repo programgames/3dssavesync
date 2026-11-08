@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include "archive.h"
 #include "titles3ds.h"
 #include "vc.h"
 
@@ -45,13 +46,20 @@ int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char
     return -1;
 }
 
+/* Otherwise the game refuses a restored save; it writes a new one at its next save. */
+static void remove_secure_value(u64 id)
+{
+    u64 value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
+    u8 existed;
+    FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
+}
+
 int write_title_save(u64 id, FS_MediaType media, const char *file, const void *bytes, size_t size)
 {
     FS_Archive a;
     Handle f;
-    u64 t = 0, value;
+    u64 t = 0;
     u32 written = 0;
-    u8 existed;
     Result r;
 
     if (R_FAILED(open_save_archive(id, media, &a))) return -1;
@@ -66,11 +74,248 @@ int write_title_save(u64 id, FS_MediaType media, const char *file, const void *b
     if (R_SUCCEEDED(r)) r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
     FSUSER_CloseArchive(a);
     if (R_FAILED(r)) return -1;
-
-    /* Otherwise the game refuses a restored save; it writes a new one at its next save. */
-    value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
-    FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
+    remove_secure_value(id);
     return 0;
+}
+
+/* ---------------------------------------------------------------- whole save archive (ADR 0028) */
+
+/* Files of a save archive: path and size (data NULL), on the heap. */
+typedef struct {
+    archive_file_t *f;
+    int n, cap;
+} file_list_t;
+
+static int add_file(file_list_t *l, const char *path, u64 size)
+{
+    if (l->n == l->cap) {
+        archive_file_t *p = realloc(l->f, (l->cap = l->cap ? l->cap * 2 : 16) * sizeof *p);
+        if (!p) return -1;
+        l->f = p;
+    }
+    memset(&l->f[l->n], 0, sizeof *l->f);
+    snprintf(l->f[l->n].path, sizeof l->f[0].path, "%s", path);
+    l->f[l->n++].size = (size_t)size;
+    return 0;
+}
+
+/* Name of a directory entry, printable ASCII only (ponytail: other names refused; UTF-16 <-> UTF-8 if a game needs it).
+ * 0 if converted. */
+static int ascii_name(const u16 *src, char *name, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n - 1 && src[i]; i++) {
+        if (src[i] < 0x20 || src[i] > 0x7E || src[i] == '\\') return -1;
+        name[i] = (char)src[i];
+    }
+    name[i] = '\0';
+    return src[i] ? -1 : 0;
+}
+
+/* Files of dir ("/" or "/a/b/") and its folders in l, as "a/b/file"; *total counts their bytes. why on failure. */
+static int list_dir(FS_Archive a, const char *dir, int depth, file_list_t *l, unsigned long long *total, char *why, size_t wn)
+{
+    FS_DirectoryEntry e;
+    Handle d;
+    u32 got = 0;
+    int failed = 0;
+    Result r;
+    if (depth > 8) {
+        snprintf(why, wn, "folders deeper than 8: %.60s", dir);
+        return -1;
+    }
+    if (R_FAILED(r = FSUSER_OpenDirectory(&d, a, fsMakePath(PATH_ASCII, dir)))) {
+        snprintf(why, wn, "OpenDirectory %.60s: %08lX", dir, (unsigned long)r);
+        return -1;
+    }
+    while (!failed && R_SUCCEEDED(r = FSDIR_Read(d, &got, 1, &e)) && got == 1) {
+        char name[ARCHIVE_PATH_MAX], path[ARCHIVE_PATH_MAX];
+        const int folder = (e.attributes & FS_ATTRIBUTE_DIRECTORY) != 0;
+        failed = -1;
+        if (ascii_name(e.name, name, sizeof name)) snprintf(why, wn, "file name not supported in %.60s", dir);
+        else if (snprintf(path, sizeof path, "%s%s%s", dir, name, folder ? "/" : "") >= (int)sizeof path) snprintf(why, wn, "path too long: %.60s", path);
+        else if (folder) failed = list_dir(a, path, depth + 1, l, total, why, wn);
+        else if ((*total += e.fileSize) > ARCHIVE_MAX) snprintf(why, wn, "save larger than %d MiB", ARCHIVE_MAX >> 20);
+        else if (add_file(l, path + 1, e.fileSize)) snprintf(why, wn, "out of memory (%d files)", l->n);
+        else failed = 0;
+    }
+    FSDIR_Close(d);
+    if (!failed && R_FAILED(r)) {
+        snprintf(why, wn, "FSDIR_Read %.60s: %08lX", dir, (unsigned long)r);
+        failed = -1;
+    }
+    return failed;
+}
+
+/* The f->size bytes of file f into out. why on failure. */
+static int read_whole(FS_Archive a, const archive_file_t *f, unsigned char *out, char *why, size_t wn)
+{
+    char path[ARCHIVE_PATH_MAX + 1];
+    Handle h;
+    u64 t = 0;
+    u32 got = 0;
+    Result r;
+    snprintf(path, sizeof path, "/%s", f->path);
+    if (R_SUCCEEDED(r = FSUSER_OpenFile(&h, a, fsMakePath(PATH_ASCII, path), FS_OPEN_READ, 0))) {
+        r = FSFILE_GetSize(h, &t);
+        if (R_SUCCEEDED(r) && t != f->size) r = -2; /* changed since the listing */
+        if (R_SUCCEEDED(r) && t) r = FSFILE_Read(h, &got, 0, out, (u32)t);
+        if (R_SUCCEEDED(r) && got != t) r = -3;
+        FSFILE_Close(h);
+    }
+    if (R_SUCCEEDED(r)) return 0;
+    snprintf(why, wn, "read %.60s: %08lX", f->path, (unsigned long)r);
+    return -1;
+}
+
+/* Every file of the opened archive a, packed (archive.h): each file read straight into its place. */
+static int read_open_archive(FS_Archive a, unsigned char **bytes, size_t *size, char *why, size_t wn)
+{
+    file_list_t l = { NULL, 0, 0 };
+    unsigned long long total = 0;
+    int bad = 0, i, r = list_dir(a, "/", 0, &l, &total, why, wn);
+    if (!r && (r = pack_archive(l.f, l.n, bytes, size, &bad))) {
+        if (r == -1) snprintf(why, wn, "path longer than 100 bytes: %.60s", l.f[bad].path);
+        else snprintf(why, wn, "out of memory (%llu bytes)", total);
+    }
+    for (i = 0; !r && i < l.n; i++)
+        if ((r = read_whole(a, &l.f[i], *bytes + l.f[i].offset, why, wn))) free(*bytes);
+    free(l.f);
+    return r ? -1 : 0;
+}
+
+int read_title_archive(u64 id, FS_MediaType *media, unsigned char **bytes, size_t *size, char *why, size_t wn)
+{
+    static const FS_MediaType media_types[2] = { MEDIATYPE_SD, MEDIATYPE_GAME_CARD };
+    int i, r;
+    why[0] = '\0';
+    for (i = 0; i < 2; i++) {
+        FS_Archive a;
+        if (R_FAILED(open_save_archive(id, media_types[i], &a))) continue;
+        r = read_open_archive(a, bytes, size, why, wn);
+        FSUSER_CloseArchive(a);
+        if (r) return -2;
+        *media = media_types[i];
+        return 0;
+    }
+    return -1;
+}
+
+/* Index of path in files[0..n), -1 if absent. */
+static int find_file(const archive_file_t *files, int n, const char *path)
+{
+    int i;
+    for (i = 0; i < n; i++)
+        if (!strcmp(files[i].path, path)) return i;
+    return -1;
+}
+
+/* Folders of path ("a/b/file": "/a", "/a/b"), created if missing (an error is seen when the file is created). */
+static void make_folders(FS_Archive a, const char *path)
+{
+    char dir[ARCHIVE_PATH_MAX + 1];
+    const char *s;
+    for (s = strchr(path, '/'); s; s = strchr(s + 1, '/')) {
+        snprintf(dir, sizeof dir, "/%.*s", (int)(s - path), path);
+        FSUSER_CreateDirectory(a, fsMakePath(PATH_ASCII, dir), 0);
+    }
+}
+
+/* Writes file f of the version: created at its size, or resized if it exists (old: 1), then its bytes. */
+/* old_size: size of the file already in the archive, -1 if none. A save archive file keeps the size it was created with,
+ * so a file of another size is deleted and created again at the new size, as Checkpoint restores (no SetSize). */
+static Result write_one(FS_Archive a, const archive_file_t *f, long long old_size)
+{
+    char path[ARCHIVE_PATH_MAX + 1];
+    Handle h;
+    u32 written = 0;
+    Result r = 0;
+    snprintf(path, sizeof path, "/%s", f->path);
+    if (old_size >= 0 && old_size != (long long)f->size) {
+        r = FSUSER_DeleteFile(a, fsMakePath(PATH_ASCII, path));
+        old_size = -1;
+    }
+    if (R_SUCCEEDED(r) && old_size < 0) {
+        make_folders(a, f->path);
+        r = FSUSER_CreateFile(a, fsMakePath(PATH_ASCII, path), 0, f->size);
+    }
+    if (R_SUCCEEDED(r)) r = FSUSER_OpenFile(&h, a, fsMakePath(PATH_ASCII, path), FS_OPEN_WRITE, 0);
+    if (R_FAILED(r)) return r;
+    if (f->size) r = FSFILE_Write(h, &written, 0, f->data, (u32)f->size, 0);
+    if (R_SUCCEEDED(r) && written != f->size) r = -3;
+    FSFILE_Close(h);
+    return r;
+}
+
+/* The version files in the opened archive a, then the commit: files absent from it deleted, the others created or
+ * resized and written. Nothing is committed on a failure: the archive keeps its old content. */
+static Result write_open_archive(FS_Archive a, const archive_file_t *files, int n, char *why, size_t wn)
+{
+    file_list_t old = { NULL, 0, 0 };
+    unsigned long long total = 0;
+    char path[ARCHIVE_PATH_MAX + 1];
+    Result r = 0;
+    int i;
+    if (list_dir(a, "/", 0, &old, &total, why, wn)) return -4;
+    for (i = 0; R_SUCCEEDED(r) && i < old.n; i++)
+        if (find_file(files, n, old.f[i].path) < 0) {
+            snprintf(path, sizeof path, "/%s", old.f[i].path);
+            if (R_FAILED(r = FSUSER_DeleteFile(a, fsMakePath(PATH_ASCII, path)))) snprintf(why, wn, "delete %.60s: %08lX", old.f[i].path, (unsigned long)r);
+        }
+    for (i = 0; R_SUCCEEDED(r) && i < n; i++) {
+        int k = find_file(old.f, old.n, files[i].path);
+        if (R_FAILED(r = write_one(a, &files[i], k >= 0 ? (long long)old.f[k].size : -1)))
+            snprintf(why, wn, "write %.60s: %08lX", files[i].path, (unsigned long)r);
+    }
+    free(old.f);
+    if (R_SUCCEEDED(r) && R_FAILED(r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0)))
+        snprintf(why, wn, "commit: %08lX", (unsigned long)r);
+    return r;
+}
+
+int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn)
+{
+    archive_file_t *files = NULL;
+    unsigned char *back = NULL;
+    unsigned long long total = 0;
+    size_t back_size = 0;
+    FS_Archive a;
+    Result r;
+    int n = 0, i, same;
+    why[0] = '\0';
+    if (unpack_archive(tar, size, &files, &n)) {
+        snprintf(why, wn, "server version is not a 3dssavesync archive");
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        const char *p;
+        for (p = files[i].path; *p > 0x1F && *p < 0x7F; p++);
+        if (*p) snprintf(why, wn, "file name not supported: %.60s", files[i].path); /* as list_dir: printable ASCII only */
+        total += files[i].size;
+    }
+    if (!why[0] && total > ARCHIVE_MAX) snprintf(why, wn, "save larger than %d MiB", ARCHIVE_MAX >> 20);
+    if (why[0] || R_FAILED(r = open_save_archive(id, media, &a))) { /* never created: a game never started is skipped */
+        if (!why[0]) snprintf(why, wn, "OpenArchive: %08lX", (unsigned long)r);
+        free(files);
+        return -1;
+    }
+    r = write_open_archive(a, files, n, why, wn);
+    FSUSER_CloseArchive(a);
+    free(files);
+    if (R_FAILED(r)) return -1;
+    remove_secure_value(id);
+
+    /* read back: the commit is done, so a difference means the archive holds something else (the copy is kept) */
+    if (R_FAILED(open_save_archive(id, media, &a))) {
+        snprintf(why, wn, "read back: OpenArchive");
+        return -2;
+    }
+    i = read_open_archive(a, &back, &back_size, why, wn);
+    FSUSER_CloseArchive(a);
+    same = !i && back_size == size && !memcmp(back, tar, size);
+    if (!i) free(back);
+    if (!same && !why[0]) snprintf(why, wn, "read back differs (%lu bytes, expected %lu)", (unsigned long)back_size, (unsigned long)size);
+    return same ? 0 : -2;
 }
 
 /* UTF-16 (Basic Multilingual Plane) -> UTF-8, without cutting a character; line break -> space. */
@@ -116,12 +361,6 @@ int title_root(u64 id, char *names, size_t n)
         return count;
     }
     return -1;
-}
-
-int title_main_only(u64 id)
-{
-    char names[64];
-    return title_root(id, names, sizeof names) < 0 ? -1 : !strcmp(names, "main");
 }
 
 /* fs:USER never gives the RomFS of an SD application: 0xD9004676 on every path (v3.10 rc2 on a real 3DS; libctru issue
@@ -280,8 +519,6 @@ Result create_vc_save(u64 id, const void *bytes, size_t size)
     const FS_Path p = { PATH_BINARY, sizeof path, path };
     FS_Archive a;
     Handle f;
-    u64 value;
-    u8 existed;
     Result r;
     if (R_SUCCEEDED(FSUSER_OpenArchive(&a, ARCHIVE_USER_SAVEDATA, p))) { /* never format an archive that exists: it would erase its save */
         FSUSER_CloseArchive(a);
@@ -301,8 +538,7 @@ Result create_vc_save(u64 id, const void *bytes, size_t size)
     }
     if (R_SUCCEEDED(r)) r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0);
     FSUSER_CloseArchive(a);
-    value = ((u64)SECUREVALUE_SLOT_SD << 32) | ((((u32)id >> 8) & 0xFFFFF) << 8);
-    FSUSER_ControlSecureSave(SECURESAVE_ACTION_DELETE, &value, sizeof value, &existed, 1);
+    remove_secure_value(id);
     return r;
 }
 

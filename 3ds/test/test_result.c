@@ -62,6 +62,10 @@ int main(void)
     expect(make(RESULT_BACKUP_FAILED, "sdmc:/3ds/3dssavesync/copies/Zelda-20260101-120000.sav"), 0, KIND_FAILURE,
            "Zelda : copie de sécurité impossible, rien n'est écrit. Vérifiez la carte SD.", "sdmc:/3ds/3dssavesync/copies/Zelda-20260101-120000.sav");
     expect(make(RESULT_3DS_WRITE_REFUSED, ""), 0, KIND_FAILURE, "Zelda : écriture 3DS refusée, sauvegarde intacte.", "");
+    expect(make(RESULT_3DS_WRITE_REFUSED, "write data/a.bin: C86044BE"), 1, KIND_FAILURE, "Zelda: 3DS write refused, save intact.", "write data/a.bin: C86044BE");
+    expect(make(RESULT_3DS_NOT_SYNCED, "path longer than 100 bytes: d/x"), 0, KIND_FAILURE,
+           "Zelda : la sauvegarde de ce jeu ne peut pas être copiée en entier. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
+           "path longer than 100 bytes: d/x");
     expect(make(RESULT_OUT_OF_MEMORY, ""), 1, KIND_FAILURE, "Zelda: out of memory, nothing written.", "");
     expect(make(RESULT_WRITE_FAILED, SAV), 0, KIND_FAILURE, "Zelda : écriture impossible, sauvegarde de la 3DS intacte.", SAV);
     r = make(RESULT_WRITTEN_DAMAGED, SAV);
