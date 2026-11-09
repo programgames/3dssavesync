@@ -12,6 +12,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - **3DS: your own HTTPS certificates.** A server with a private CA or a self-signed certificate now works: put its certificate in `sdmc:/config/ssl/cacert.pem`, as for other homebrew.
 - **3DS: the QR code for the Android app.** Settings > **Phone** > **A** shows the same QR code as the PC settings page, so a phone can connect to a Docker server without the PC.
 - **3DS: a note when the server is slow.** After 5 seconds without an answer, the screen says that the server is slow to answer.
+- **3DS: turn off the daily update check.** Settings > **Version** > **Y** (`verifier_maj=0` in `config.ini`): the app no longer contacts GitHub at start. **A** on **Version** still checks when you ask.
 
 ### Changed
 

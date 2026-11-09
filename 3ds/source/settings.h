@@ -14,10 +14,12 @@
  * file and the rename, replace_file: the .tmp is complete). 0 if a file was read, -1 if neither exists. */
 int read_ini(const char *path, void (*entry)(void *ctx, const char *key, const char *value), void *ctx);
 
-/* config.ini: server, token, ROM and Save folders, order of the list ("tri": etat, nom or date; absent: etat). */
+/* config.ini: server, token, ROM and Save folders, order of the list ("tri": etat, nom or date; absent: etat), daily
+ * update check at start ("verifier_maj": 0 = off; absent: on, ADR 0021). */
 typedef struct {
     char url[256], token[256], roms[256], saves[256], roms_gb[256], saves_gb[256], roms_gba[256], saves_gba[256];
-    int order; /* order_t (filter.h) */
+    int order;        /* order_t (filter.h) */
+    int check_update; /* 0: no call to GitHub unless the user asks (A on the Version line) */
 } config_t;
 
 /* Defaults (TWiLight Menu++, open_agb_firm), then the lines of path. */

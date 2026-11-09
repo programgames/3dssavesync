@@ -67,10 +67,10 @@ static void test_ini_files(void)
               !strcmp(c.roms, "sdmc:/roms/nds"), "config: read over the defaults");
     check(write_config("test.ini", &c) == 0 &&
               contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\nsaves_gb=\n"
-                                   "roms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\n"), "config: format");
+                                   "roms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\nverifier_maj=1\n"), "config: format");
     mkdir("test.ini.tmp", 0777);
     check(write_config("test.ini", &c) != 0 && contains("test.ini", "url=https://x\njeton=j=k\nroms=sdmc:/roms/nds\nsaves=\nroms_gb=sdmc:/roms/gb\n"
-                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\n"),
+                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=sdmc:/agb\ntri=etat\nverifier_maj=1\n"),
           "config: write failed, old file intact");
     remove("test.ini.tmp");
     check(c.order == 0, "config: no tri line (older file): to do first");
@@ -84,6 +84,18 @@ static void test_ini_files(void)
     write_text("test.ini", "tri=inconnu\n");
     read_config("test.ini", &c);
     check(c.order == 0, "config: unknown tri value: default");
+    check(c.check_update == 1, "config: no verifier_maj line (older file): daily check on");
+    write_text("test.ini", "url=https://x\nverifier_maj=0\n");
+    read_config("test.ini", &c);
+    check(c.check_update == 0, "config: verifier_maj=0: daily check off");
+    check(write_config("test.ini", &c) == 0 && contains("test.ini", "url=https://x\njeton=\nroms=sdmc:/roms/nds\nsaves=sdmc:/roms/nds/saves\nroms_gb=sdmc:/roms/gb\n"
+                                                                     "saves_gb=\nroms_gba=sdmc:/roms/gba\nsaves_gba=\ntri=etat\nverifier_maj=0\n"),
+          "config: written with verifier_maj=0");
+    read_config("test.ini", &c);
+    check(c.check_update == 0, "config: verifier_maj=0 read back");
+    write_text("test.ini", "verifier_maj=1\n");
+    read_config("test.ini", &c);
+    check(c.check_update == 1, "config: verifier_maj=1: daily check on");
 
     write_text("test.ini", "IRBF=" H1 "\nABC=" H1 "\nGBA-BPEF=" H2 "x\nGB-POKEMON-1234=" H2 "\n");
     read_bases("test.ini", &b);
