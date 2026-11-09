@@ -920,9 +920,57 @@ static void file_name(const char *name, char *out, size_t n)
     out[i] = '\0';
 }
 
+/* Start of the name of the Backup copies of j in copies/: "<name>-<Key>". The Key tells apart two games with the same
+ * name (two subfolders, or names that differ only by a character the SD card refuses). Without a Key: "<name>", as
+ * before, and 0 (the copies are never removed). 1 otherwise. */
+static int copy_prefix(const game_t *j, char *out, size_t n)
+{
+    char name[256];
+    file_name(j->name, name, sizeof name);
+    snprintf(out, n, j->key[0] ? "%s-%s" : "%s", name, j->key);
+    return j->key[0] != '\0';
+}
+
+#define COPIES_KEPT 10
+
+/* After the Backup copy backup of j is written and read back: removes the oldest copies of j beyond COPIES_KEPT, backup
+ * included in the count (old_copies). Only the files named as copies of j by copy_prefix; a copy that can't be removed
+ * is logged, and the sync goes on. */
+static void remove_old_copies(const game_t *j, const char *backup)
+{
+    char prefix[300], path[700], **names = NULL, **more, *del = NULL;
+    const char *made = strrchr(backup, '/') + 1;
+    int count = 0, i;
+    size_t l;
+    DIR *d;
+    struct dirent *e;
+    struct stat st;
+
+    if (!copy_prefix(j, prefix, sizeof prefix) || !(d = opendir(APP_DIR "/copies"))) return;
+    l = strlen(prefix);
+    while ((e = readdir(d))) {
+        if (strncmp(e->d_name, prefix, l)) continue; /* the copies of other games: not kept in memory */
+        if (!(more = realloc(names, (count + 1) * sizeof *names))) break;
+        names = more;
+        if (!(names[count] = malloc(strlen(e->d_name) + 1))) break;
+        strcpy(names[count++], e->d_name);
+    }
+    closedir(d);
+    if (!e && (del = malloc(count + 1)) && old_copies(prefix, made, names, count, COPIES_KEPT, del)) /* e: out of memory */
+        for (i = 0; i < count; i++) {
+            if (!del[i]) continue;
+            snprintf(path, sizeof path, APP_DIR "/copies/%s", names[i]);
+            if (!stat(path, &st) && S_ISREG(st.st_mode) && !remove(path)) log_event("copies: removed %s", names[i]);
+            else log_event("copies: could not remove %s", names[i]);
+        }
+    for (i = 0; i < count; i++) free(names[i]);
+    free(names);
+    free(del);
+}
+
 static result_t download_save(game_t *j)
 {
-    char tmp[610], backup[700], url[300], hash[65], date[20], name[256];
+    char tmp[610], backup[700], url[300], hash[65], date[20], name[300];
     char *body;
     unsigned char *old_data = NULL, *new_data;
     size_t size, n = 0, sram;
@@ -953,8 +1001,8 @@ static result_t download_save(game_t *j)
     if (exists) {
         strftime(date, sizeof date, "%Y%m%d-%H%M%S", localtime(&t));
         mkdir(APP_DIR "/copies", 0777);
-        /* same ROM name in two subfolders, the same second: -1, -2… (a copy is never overwritten) */
-        file_name(j->name, name, sizeof name);
+        /* same ROM name and Key in two subfolders, the same second: -1, -2… (a copy is never overwritten) */
+        copy_prefix(j, name, sizeof name);
         failed = backup_path(APP_DIR "/copies", name, date, whole_archive(j) ? "tar" : j->system == SYS_3DS ? "main" : "sav", backup, sizeof backup);
         if (!failed) failed = read_save(j, &old_data, &n);
         if (!failed) failed = write_verified(backup, old_data, n); /* read back: a damaged copy protects nothing */
@@ -963,6 +1011,7 @@ static result_t download_save(game_t *j)
             free(body);
             return make_result(RESULT_BACKUP_FAILED, backup);
         }
+        remove_old_copies(j, backup);
     }
 
     if (whole_archive(j)) {
@@ -2149,7 +2198,7 @@ static int act(game_t *j)
  * is enough to go back to the ROM side. Backup copy of the replaced file (files.h). */
 static int switch_save_file(game_t *j)
 {
-    char fwd[600], backup[700], date[20], q[700], warning_text[200], action[64];
+    char fwd[600], backup[700], date[20], q[700], warning_text[200], action[64], prefix[300];
     const char *other = rom_program(j);
     int to_rom;
     time_t t = time(NULL);
@@ -2179,10 +2228,12 @@ static int switch_save_file(game_t *j)
     mkdir("sdmc:/mGBA", 0777);
     mkdir(FORWARDERS, 0777);
     make_parent_dir(j->sav_rom);
-    if (backup_path(APP_DIR "/copies", j->name, date, "sav", backup, sizeof backup) ||
+    copy_prefix(j, prefix, sizeof prefix);
+    if (backup_path(APP_DIR "/copies", prefix, date, "sav", backup, sizeof backup) ||
         move_save(j->sav, to_rom ? j->sav_rom : fwd, backup, to_rom)) {
         r = make_result(RESULT_SWITCH_FAILED, j->sav);
     } else {
+        if (!access(backup, F_OK)) remove_old_copies(j, backup); /* made only if the other file existed, then read back */
         r = make_result(RESULT_SWITCHED, NULL);
         r.program = to_rom ? other : NULL; /* NULL: the mGBA forwarder */
     }

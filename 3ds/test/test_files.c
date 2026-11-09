@@ -170,6 +170,33 @@ int main(void)
                  "copies existantes intactes");
         remove("test-copies/Pokemon-20261103-101500.sav"), remove("test-copies/Pokemon-20261103-101500-1.sav"), remove("test-copies");
     }
+    { /* old_copies: the 10 newest copies of one game stay, the copy just made included; nothing else is chosen */
+        char *n[40], d[40], buf[40][64];
+        int i, c = 0;
+        for (i = 1; i <= 12; i++) { /* 12 copies of the game, 20261101..20261112 */
+            snprintf(buf[c], sizeof buf[c], "Pokemon X-3DS-0004000000055D00-202611%02d-101500.main", i);
+            n[c] = buf[c], c++;
+        }
+        n[c++] = "Pokemon X Hack-3DS-0004000000055D00-20260101-101500.main"; /* another game, older */
+        n[c++] = "Pokemon X-20260101-101500.main";                           /* old naming: no Key */
+        n[c++] = "Pokemon X-3DS-0004000000055D00-20260101-101500.main.tmp";  /* not a copy */
+        n[c++] = "Pokemon X-3DS-0004000000055D00-2026010-1101500.main";      /* bad date */
+        n[c++] = "Pokemon X-3DS-0004000000055D00-20260101-101500.txt";       /* other extension */
+        n[c++] = "Pokemon X-3DS-0004000000055D00-20260101-101500-.main";     /* bad number */
+        check(old_copies("Pokemon X-3DS-0004000000055D00", buf[11], n, c, 10, d) == 2 && d[0] && d[1], "copies : 12, les 2 plus vieilles partent");
+        for (i = 2; i < c; i++) check(!d[i], "copies : le reste reste");
+        check(old_copies("Pokemon X-3DS-0004000000055D00", buf[0], n, c, 10, d) == 2 && !d[0] && d[1] && d[2] && !d[3],
+              "copies : l'horloge est revenue en arrière, la copie faite reste");
+        check(old_copies("Pokemon X-3DS-0004000000055D00", "absente.main", n, c, 10, d) == 0, "copies : copie faite absente, rien");
+        check(old_copies("Pokemon X-3DS-0004000000055D00", n[12], n, c, 10, d) == 0, "copies : copie faite d'un autre jeu, rien");
+        check(old_copies("Pokemon X-3DS-0004000000055D00", buf[9], n, 10, 10, d) == 0, "copies : 10, rien");
+        c = 0; /* same second: the number decides, -2 is newer than -1, newer than none */
+        n[c++] = "Zelda-GBA-AZLE-20261101-101500-2.sav";
+        n[c++] = "Zelda-GBA-AZLE-20261101-101500.sav";
+        n[c++] = "Zelda-GBA-AZLE-20261101-101500-10.sav";
+        n[c++] = "Zelda-GBA-AZLE-20261101-101500-1.sav";
+        check(old_copies("Zelda-GBA-AZLE", n[2], n, c, 2, d) == 2 && !d[0] && d[1] && !d[2] && d[3], "copies : même seconde, le numéro décide");
+    }
     { /* custom CA certificates (ADR 0029) */
         char *cas = NULL;
         size_t n = 0;

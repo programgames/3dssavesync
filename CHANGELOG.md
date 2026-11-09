@@ -20,6 +20,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ### Changed
 
+- **3DS: old backup copies are removed.** The 3DS now keeps the last 10 backup copies of each game in `copies/`, and removes the older ones after it makes a new copy. Before, the copies stayed until you removed them, and a full SD card blocked the next download. Copies made by an older version keep their old name and are never removed.
 - **3DS: large saves need less memory.** A download of a big save or extra data now holds two copies in memory at most, not three. If the console still lacks memory, the app says so before it changes anything.
 - **Another server or token asks first.** When you point a device at another server, or change its token, it forgets what it synced before. A game that differs from the new server then asks which save to keep, instead of being replaced. Games that are the same on both sides stay in sync.
 - **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.

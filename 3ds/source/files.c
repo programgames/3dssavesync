@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -174,6 +175,51 @@ int backup_path(const char *dir, const char *name, const char *date, const char 
         fclose(f);
     }
     return -1;
+}
+
+/* n of a Backup copy of prefix (0 without -n); -1 if name is not prefix-YYYYMMDD-HHMMSS[-n].ext (ext sav, main, tar). */
+static long copy_number(const char *name, const char *prefix)
+{
+    size_t l = strlen(prefix), i;
+    const char *p = name + l + 1;
+    char *end;
+    long n = 0;
+    if (strncmp(name, prefix, l) || name[l] != '-') return -1;
+    for (i = 0; i < 15; i++)
+        if (i == 8 ? p[i] != '-' : !isdigit((unsigned char)p[i])) return -1;
+    p += 15;
+    if (*p == '-') {
+        if (!isdigit((unsigned char)p[1])) return -1;
+        n = strtol(p + 1, &end, 10);
+        p = end;
+    }
+    return *p == '.' && (!strcmp(p + 1, "sav") || !strcmp(p + 1, "main") || !strcmp(p + 1, "tar")) ? n : -1;
+}
+
+int old_copies(const char *prefix, const char *made, char **names, int count, int keep, char *del)
+{
+    size_t l = strlen(prefix) + 1; /* the date starts after "prefix-" */
+    int i, k, newer, found = 0, removed = 0;
+    long ni, nk;
+    for (i = 0; i < count; i++) {
+        del[i] = 0;
+        found |= !strcmp(names[i], made);
+    }
+    if (!found || copy_number(made, prefix) < 0) return 0;
+    for (i = 0; i < count; i++) {
+        if (!strcmp(names[i], made) || (ni = copy_number(names[i], prefix)) < 0) continue;
+        for (newer = 1, k = 0; k < count; k++) { /* 1: made */
+            int c;
+            if (k == i || !strcmp(names[k], made) || (nk = copy_number(names[k], prefix)) < 0) continue;
+            c = strncmp(names[k] + l, names[i] + l, 15);
+            newer += c > 0 || (c == 0 && nk > ni);
+        }
+        if (newer >= keep) {
+            del[i] = 1;
+            removed++;
+        }
+    }
+    return removed;
 }
 
 int save_path(const char *roms, const char *saves, const char *dir, const char *name, char *out, size_t n)

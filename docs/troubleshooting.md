@@ -682,7 +682,7 @@ Load the list again and choose again.
 ### Where are the backup copies?
 
 - **PC**: `copies/` in the settings folder (`%APPDATA%\3dssavesync` on Windows, `~/.config/3dssavesync` on Linux, `~/Library/Application Support/3dssavesync` on macOS).
-- **3DS**: `sdmc:/3ds/3dssavesync/copies/`.
+- **3DS**: `sdmc:/3ds/3dssavesync/copies/`. The last 10 copies of each game are kept, older ones are removed.
 - **Server**: `data/<game key>/`, every version.
 
 ## Report a bug
