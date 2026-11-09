@@ -191,6 +191,7 @@ Ideas are welcome in [Discussions](https://github.com/programgames/3dssavesync/d
 - The 3DS app is built with [devkitPro](https://devkitpro.org/) (devkitARM, libctru, citro2d) and its portlibs [curl](https://curl.se/) and [mbedTLS](https://www.trustedfirmware.org/projects/mbed-tls/) for HTTPS.
 - 3dssavesync syncs the saves of [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu), [open_agb_firm](https://github.com/profi200/open_agb_firm), [mGBA](https://mgba.io/) and [Azahar](https://azahar-emu.org/), and of the other emulators listed in [Supported](#supported).
 - [Checkpoint](https://github.com/BernardoGiordano/Checkpoint) inspired the way the 3DS app reads and writes save archives.
+- [DaeMoon](https://github.com/mirusu400/DaeMoon) showed the 3DS network setup (curl with mbedTLS, the embedded root certificate) and how to read the game code in a ROM.
 - [cloudpoint](https://github.com/dwalker109/cloudpoint) gave ideas for whole-archive 3DS saves, reinstalled games and this README.
 
 ## License
