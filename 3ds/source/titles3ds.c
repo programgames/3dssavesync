@@ -7,6 +7,7 @@
 #include <strings.h>
 #include "archive.h"
 #include "key.h"
+#include "net.h"
 #include "titles3ds.h"
 #include "vc.h"
 
@@ -342,19 +343,17 @@ static Result write_open_archive(FS_Archive a, int extdata, const archive_file_t
     return r;
 }
 
-/* write_title_archive (extdata 0) and write_extdata. */
-static int write_archive(u64 id, FS_MediaType media, u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
+/* Writes tar (write_archive, before the read back). 0 if done, else as write_archive. */
+static int write_tar(u64 id, FS_MediaType media, u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
 {
     archive_file_t *files = NULL;
-    unsigned char *back = NULL;
     unsigned long long total = 0;
-    size_t back_size = 0;
     FS_Archive a;
     Result r;
-    int n = 0, i, same;
-    why[0] = '\0';
-    if (unpack_archive(tar, size, &files, &n)) {
-        snprintf(why, wn, "server version is not a 3dssavesync archive");
+    int n = 0, i;
+    if ((i = unpack_archive(tar, size, &files, &n))) {
+        if (i == -2) snprintf(why, wn, "out of memory (%lu bytes)", (unsigned long)size);
+        else snprintf(why, wn, "server version is not a 3dssavesync archive");
         return -1;
     }
     for (i = 0; i < n; i++) {
@@ -373,6 +372,23 @@ static int write_archive(u64 id, FS_MediaType media, u32 extdata, unsigned char 
     FSUSER_CloseArchive(a);
     free(files);
     if (R_FAILED(r)) return extdata && r != UNCHANGED_LIST && r != UNCHANGED_EMPTY ? -2 : -1;
+    return 0;
+}
+
+/* write_title_archive (extdata 0) and write_extdata. tar is freed once written: the read back takes its memory, and is
+ * compared with it by SHA-256 (as the server checks a Version), so the archive is never twice in memory. */
+static int write_archive(u64 id, FS_MediaType media, u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
+{
+    unsigned char *back = NULL;
+    size_t back_size = 0;
+    char hash[65], back_hash[65] = "";
+    FS_Archive a;
+    int i, same;
+    why[0] = '\0';
+    hash_hex(tar, size, hash);
+    i = write_tar(id, media, extdata, tar, size, why, wn);
+    free(tar);
+    if (i) return i;
     if (!extdata) remove_secure_value(id); /* extdata has no secure value */
 
     /* read back: the commit is done, so a difference means the archive holds something else (the copy is kept) */
@@ -382,8 +398,11 @@ static int write_archive(u64 id, FS_MediaType media, u32 extdata, unsigned char 
     }
     i = read_open_archive(a, extdata != 0, &back, &back_size, why, wn);
     FSUSER_CloseArchive(a);
-    same = !i && back_size == size && !memcmp(back, tar, size);
-    if (!i) free(back);
+    if (!i) {
+        hash_hex(back, back_size, back_hash);
+        free(back);
+    }
+    same = !i && back_size == size && !strcmp(back_hash, hash);
     if (!same && !why[0]) snprintf(why, wn, "read back differs (%lu bytes, expected %lu)", (unsigned long)back_size, (unsigned long)size);
     return same ? 0 : -2;
 }

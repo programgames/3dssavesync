@@ -4,6 +4,7 @@
  * Top: list of the Games and their State. Bottom: details, messages, buttons. */
 #include <3ds.h>
 #include <dirent.h>
+#include <malloc.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -780,6 +781,22 @@ static void show_result(const result_t *r, const game_t *j)
     message_color = COLORS[result_text(r, j->short_name, english, message, sizeof message, message_detail, sizeof message_detail)];
 }
 
+extern char *fake_heap_end; /* libctru: end of the heap malloc grows into (sbrk) */
+
+/* 1 if need bytes, and a margin for the network (curl, TLS), don't fit in the free heap: about 30 MiB on any 3DS for
+ * the .cia (app.rsf: 64 MB mode, Legacy on a New 3DS too; libctru allocateHeaps.c keeps 32 MiB for the linear heap).
+ * The action is refused before it starts, and logged. Every malloc is checked anyway: this says why first. */
+static int memory_short(const game_t *j, const char *action, unsigned long need, result_t *r)
+{
+    struct mallinfo m = mallinfo();
+    unsigned long heap = (unsigned long)(fake_heap_end - (char *)sbrk(0)) + m.fordblks;
+    if (heap >= need + 1024 * 1024) return 0;
+    *r = make_result(RESULT_OUT_OF_MEMORY, NULL);
+    snprintf(r->path, sizeof r->path, "%s: need %lu KiB, %lu KiB free", action, need >> 10, heap >> 10);
+    log_event("%s %s: out of memory, need %lu KiB, %lu KiB free", action, j->key, need >> 10, heap >> 10);
+    return 1;
+}
+
 /* Conditional Upload: If-Match = Current version seen by this Client (ADR 0001).
  * GB/GBA: only the SRAM goes, the Clock trailer stays on the 3DS (ADR 0008). */
 static result_t upload_save(game_t *j)
@@ -788,7 +805,9 @@ static result_t upload_save(game_t *j)
     unsigned char *bytes;
     size_t size;
     long status;
+    result_t r;
 
+    if (memory_short(j, "upload", j->local_size, &r)) return r; /* the save, read whole (an archive: packed once) */
     if (read_save(j, &bytes, &size)) return make_result(RESULT_UPLOAD_UNREADABLE, NULL);
     size = sram_size(j->system, size);
     to_server_form(j, &bytes, &size);
@@ -893,6 +912,8 @@ static result_t download_save(game_t *j)
      * but no sav.dat (or an unknown RAM size) is left alone; one with no archive at all gets its first save. */
     if (vc(j) && !j->has_local && (j->vc_archive || !vc_sram_size(j)))
         return make_result(RESULT_VC_NEVER_STARTED, NULL);
+    /* most at once: the received version and the old save during its Backup copy */
+    if (memory_short(j, "download", j->server_size + (exists ? j->local_size : 0), &r)) return r;
     snprintf(url, sizeof url, "%s/saves/%s", cfg.url, j->key);
     status = net_get(url, cfg.token, &body, &size);
     if (status != 200) {
@@ -925,8 +946,7 @@ static result_t download_save(game_t *j)
         char why[160];
         free(old_data); /* copied: its memory goes to the read back */
         if (j->extdata) failed = write_extdata(j->extdata, (unsigned char *)body, size, why, sizeof why);
-        else failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why);
-        free(body);
+        else failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why); /* body freed */
         if (failed) log_event("write %s: %s", j->key, why);
         if (failed == -2) {
             r = make_result(RESULT_WRITTEN_DAMAGED, backup);

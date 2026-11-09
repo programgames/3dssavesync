@@ -51,15 +51,19 @@ int append_log(const char *path, const char *line, long max)
     return (fclose(f) == 0 && ok) ? 0 : -1;
 }
 
-/* 1 if path holds exactly these bytes. */
+/* 1 if path holds exactly these bytes. Read in pieces: a second copy of a 16 MiB archive does not fit an Old 3DS. */
 static int same_content(const char *path, const unsigned char *bytes, size_t size)
 {
-    unsigned char *data;
-    size_t n;
-    int ok;
-    if (read_file(path, &data, &n)) return 0;
-    ok = n == size && !memcmp(data, bytes, n);
-    free(data);
+    static unsigned char piece[0x10000]; /* not on the stack (32 KiB on the 3DS) */
+    FILE *f = fopen(path, "rb");
+    size_t done = 0, got;
+    int ok = f != NULL;
+    while (ok && (got = fread(piece, 1, sizeof piece, f)) > 0) {
+        ok = got <= size - done && !memcmp(piece, bytes + done, got);
+        done += got;
+    }
+    ok = ok && done == size && !ferror(f);
+    if (f) fclose(f);
     return ok;
 }
 

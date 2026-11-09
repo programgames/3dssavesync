@@ -46,16 +46,26 @@ void net_exit(void)
 
 typedef struct {
     char *bytes;
-    size_t size;
+    size_t size, cap;
 } buffer_t;
 
+/* The whole body is allocated once, at its Content-Length: growing it chunk by chunk may copy it (old and new block at
+ * once) and split the heap, which an Old 3DS can't afford for a 16 MiB archive. Without one, as the chunks come. */
 static size_t receive(char *chunk, size_t t, size_t n, void *u)
 {
     buffer_t *b = u;
-    char *new_data = realloc(b->bytes, b->size + t * n + 1);
-    if (!new_data) return 0;
-    memcpy(new_data + b->size, chunk, t * n);
-    b->bytes = new_data;
+    if (b->size + t * n + 1 > b->cap) {
+        size_t cap = b->size + t * n + 1;
+        curl_off_t length = -1;
+        char *new_data;
+        if (!b->size && curl_easy_getinfo(c, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length) == CURLE_OK && length >= (curl_off_t)cap &&
+            (unsigned long long)length < (size_t)-1)
+            cap = (size_t)length + 1;
+        if (!(new_data = realloc(b->bytes, cap))) return 0; /* curl stops: CURLE_WRITE_ERROR, *body freed by net_get */
+        b->bytes = new_data;
+        b->cap = cap;
+    }
+    memcpy(b->bytes + b->size, chunk, t * n);
     b->size += t * n;
     b->bytes[b->size] = '\0';
     return t * n;
@@ -135,7 +145,7 @@ static long request(const char *url, const char *token, const char *client, cons
 
 long net_get(const char *url, const char *token, char **body, size_t *size)
 {
-    buffer_t b = { NULL, 0 };
+    buffer_t b = { NULL, 0, 0 };
     long status = request(url, token, "3ds", NULL, NULL, 0, &b);
 
     if (status <= 0) {
@@ -161,7 +171,7 @@ long net_github(const char *url, void (*file_progress)(size_t, size_t), char **b
 
 long net_put(const char *url, const char *token, const char *client, const char *condition, const void *bytes, size_t size)
 {
-    buffer_t b = { NULL, 0 };
+    buffer_t b = { NULL, 0, 0 };
     long status = request(url, token, client, condition, bytes, size, &b);
     free(b.bytes);
     return status;

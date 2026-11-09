@@ -45,6 +45,11 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : écriture 3DS refusée, sauvegarde intacte.", "%s: 3DS write refused, save intact."), game);
         return KIND_FAILURE;
     case RESULT_OUT_OF_MEMORY:
+        if (r->path[0]) { /* refused before it started (memory_short): what it needs, what is free */
+            snprintf(detail, dn, "%s", r->path);
+            snprintf(text, n, T("%s : pas assez de mémoire pour cette sauvegarde. Rien n'a été modifié.", "%s: not enough memory for this save. Nothing was changed."), game);
+            return KIND_FAILURE;
+        }
         snprintf(text, n, T("%s : mémoire insuffisante, rien n'est écrit.", "%s: out of memory, nothing written."), game);
         return KIND_FAILURE;
     case RESULT_WRITE_FAILED:

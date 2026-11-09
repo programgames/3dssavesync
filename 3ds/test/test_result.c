@@ -69,6 +69,8 @@ int main(void)
     expect(make(RESULT_EXTDATA_NOT_SYNCED, "larger than 16 MiB"), 1, KIND_FAILURE,
            "Zelda: this extra data can't be copied whole. It is not synced, and it is not changed.", "larger than 16 MiB");
     expect(make(RESULT_OUT_OF_MEMORY, ""), 1, KIND_FAILURE, "Zelda: out of memory, nothing written.", "");
+    expect(make(RESULT_OUT_OF_MEMORY, "download: need 33792 KiB, 27000 KiB free"), 0, KIND_FAILURE,
+           "Zelda : pas assez de mémoire pour cette sauvegarde. Rien n'a été modifié.", "download: need 33792 KiB, 27000 KiB free");
     expect(make(RESULT_WRITE_FAILED, SAV), 0, KIND_FAILURE, "Zelda : écriture impossible, sauvegarde de la 3DS intacte.", SAV);
     r = make(RESULT_WRITTEN_DAMAGED, SAV);
     expect(r, 0, KIND_FAILURE, "Zelda : sauvegarde écrite abîmée. Vérifiez la carte SD, puis récupérez de nouveau.", SAV);

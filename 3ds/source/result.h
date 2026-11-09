@@ -16,7 +16,7 @@ typedef enum {
     RESULT_DOWNLOAD_DAMAGED, /* received Hash differs */
     RESULT_BACKUP_FAILED,    /* path: the Backup copy */
     RESULT_3DS_WRITE_REFUSED, /* path: the technical reason, or "" */
-    RESULT_OUT_OF_MEMORY,
+    RESULT_OUT_OF_MEMORY,    /* path: "" during the action, or why it was refused before it started */
     RESULT_WRITE_FAILED,     /* path: the Save file, intact */
     RESULT_WRITTEN_DAMAGED,  /* path: the Save file; had_save */
     RESULT_RENAME_FAILED,    /* path: the Save file (the .tmp stays); had_save */
