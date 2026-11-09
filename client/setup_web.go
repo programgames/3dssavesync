@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -271,6 +272,13 @@ func (a *WebSetup) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewDecoder(r.Body).Decode(&x)
 		response = a.aliasWeb(x.Name, x.System, x.Remove)
+	case "api/jeux3ds":
+		var x struct {
+			ID     string `json:"Id"`
+			Synced bool   `json:"Synchro"`
+		}
+		json.NewDecoder(r.Body).Decode(&x)
+		response = a.games3DSWeb(x.ID, x.Synced)
 	case "api/jeux", "api/versions", "api/restaurer", "api/verifications", "api/mettreajour", "api/synchro", "api/parties":
 		var x struct {
 			Key     string `json:"Cle"`
@@ -340,6 +348,62 @@ func (a *WebSetup) aliasWeb(name string, system System, remove bool) map[string]
 		x["Erreur"] = errorText(err)
 	}
 	return x
+}
+
+// Web3DS is a 3DS game of the "3DS games" page: Synced = not in titres_3ds_off (ADR 0028).
+type Web3DS struct {
+	ID     string `json:"Id"`
+	Name   string `json:"Nom"`
+	Synced bool   `json:"Synchro"`
+}
+
+// games3DSWeb lists the 3DS games of the Azahar folders in config.json, turned-off ones too. A title ID: turns that
+// game on or off on this PC (titres_3ds_off, sorted, written with a dated copy). Never writes to the Azahar folders.
+func (a *WebSetup) games3DSWeb(id string, synced bool) map[string]any {
+	s, err := newSession(a.config) // also reads the titres_3ds names
+	if err != nil {
+		return map[string]any{"Erreur": errorText(err)}
+	}
+	cfg := s.cfg
+	if id = strings.ToUpper(strings.TrimSpace(id)); id != "" {
+		if key3DS(id) == "" {
+			return map[string]any{"Erreur": fmt.Sprintf(tr("Jeu 3DS inconnu : %s", "Unknown 3DS game: %s"), id)}
+		}
+		var off []string
+		for _, o := range cfg.Off3DS {
+			if o = strings.ToUpper(strings.TrimSpace(o)); o != "" && o != id {
+				off = append(off, o)
+			}
+		}
+		if !synced {
+			off = append(off, id)
+		}
+		slices.Sort(off)
+		if off = slices.Compact(off); !slices.Equal(off, cfg.Off3DS) {
+			cfg.Off3DS = off
+			if err := writeConfigCopy(a.config, cfg); err != nil {
+				return map[string]any{"Erreur": errorText(err)}
+			}
+		}
+	}
+	all := *cfg
+	all.Off3DS = nil // games3DS skips the turned-off games: the page shows them too
+	c := (&Session{cfg: &all}).client("")
+	games, seen := []Web3DS{}, map[string]bool{}
+	for name, e := range cfg.Emulators {
+		p, err := e.profile(name)
+		if err != nil || !e.handles(p, N3DS) {
+			continue
+		}
+		for _, j := range c.games3DS(e.dir(p, N3DS, ""), e.Roms[N3DS]) {
+			if id := j.Key[strings.IndexByte(j.Key, '-')+1:]; !seen[id] {
+				seen[id] = true
+				games = append(games, Web3DS{id, j.Name, !cfg.off3DS(j.Key)})
+			}
+		}
+	}
+	sort.Slice(games, func(i, j int) bool { return strings.ToLower(games[i].Name) < strings.ToLower(games[j].Name) })
+	return map[string]any{"Jeux": games}
 }
 
 // phonePayload is the text of the QR code that the Android app scans (core/Pairing.kt, parsePairing).

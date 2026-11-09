@@ -214,7 +214,7 @@ details.sans-lecteur > div { padding: 0 var(--e4) var(--e4); display: grid; gap:
 .fichier input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .fichier:focus-within .bouton { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hack { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--e3); align-items: center; padding: var(--e2) var(--e4); min-height: 48px; border-top: 1px solid var(--bord); }
-#hackEtat:not(:empty), #listeHacks > p { padding: 0 var(--e4) var(--e4); }
+#hackEtat:not(:empty), #listeHacks > p, #etat3DS:not(:empty), #liste3DS > p { padding: 0 var(--e4) var(--e4); }
 
 .groupe.danger { border-color: var(--erreur); }
 
@@ -296,6 +296,7 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
   <button type="button" data-page="carte"><span>{{t "Carte SD 3DS" "3DS SD card"}}</span></button>
   <button type="button" data-page="frontends"><span>{{t "Frontends et installation" "Frontends and install"}}</span></button>
   <button type="button" data-page="historique"><span>{{t "Jeux" "Games"}}</span></button>
+  <button type="button" data-page="jeux3ds"><span>{{t "Jeux 3DS" "3DS games"}}</span></button>
   <button type="button" data-page="hacks"><span>{{t "ROM hacks" "ROM hacks"}}</span></button>
   <button type="button" data-page="verifs"><span>{{t "Vérifications" "Checks"}}</span></button>
   <div class="pied"><button type="button" id="terminer">{{t "Fermer les réglages" "Close settings"}}</button></div>
@@ -484,6 +485,15 @@ body.assistant .barre .seul-assistant { display: inline-flex !important; }
     </div>
   </section>
 
+  <section id="sectionJeux3DS" class="masque" data-page="jeux3ds">
+    <div class="entete"><h1>{{t "Jeux 3DS" "3DS games"}}</h1>
+      <p>{{t "Tous les jeux 3DS qui ont une sauvegarde dans Azahar se synchronisent. Décochez un jeu pour ne plus le synchroniser sur ce PC. Vos autres appareils gardent leur propre choix." "Every 3DS game with a save in Azahar syncs. Untick a game to stop syncing it on this PC. Your other devices keep their own choice."}}</p></div>
+    <div class="groupe">
+      <p id="etat3DS" class="statut erreur" role="status"></p>
+      <div id="liste3DS"></div>
+    </div>
+  </section>
+
   <section id="sectionHacks" class="masque" data-page="hacks">
     <div class="entete"><h1>{{t "ROM hacks" "ROM hacks"}}</h1>
       <p>{{t "Un ROM hack garde souvent le code du jeu d'origine, et 3dssavesync risque de les confondre. Ajoutez ici la ROM du hack pour lui donner sa propre sauvegarde. Pour la 3DS, préparez ensuite de nouveau la carte SD." "A ROM hack often keeps the original game's code, so 3dssavesync could mix them up. Add the hack ROM here to give it its own save. For the 3DS, prepare the SD card again afterwards."}}</p></div>
@@ -589,6 +599,8 @@ const T = {
   sur: {{t "sur" "of"}},
   retirerHack: {{t "Retirer %s ? 3dssavesync le confondra de nouveau avec le jeu d'origine." "Remove %s? 3dssavesync will mix it up with the original game again."}},
   aucunHack: {{t "Aucun ROM hack." "No ROM hack."}},
+  synchroJeu3DS: {{t "Synchroniser %s" "Sync %s"}},
+  aucun3DS: {{t "Aucun jeu 3DS trouvé dans les dossiers d'Azahar." "No 3DS game found in the Azahar folders."}},
   aucunFichier: {{t "Aucun fichier choisi" "No file chosen"}},
   etapes: [{{t "Serveur" "Server"}}, {{t "Émulateurs et frontends" "Emulators and frontends"}}, {{t "Carte SD de la 3DS" "3DS SD card"}}, {{t "Tout est prêt" "Everything is ready"}}],
   etape: {{t "Étape %d sur 4 : %s" "Step %d of 4: %s"}},
@@ -793,6 +805,7 @@ function montrer(p) {
   if (etape || AVEC_BARRE.includes(p)) document.body.dataset.barre = ""; else delete document.body.dataset.barre;
   if (p === "historique") jeux().catch(e => statut(T.erreur + e.message, "erreur"));
   if (p === "hacks") hacks().catch(e => statutHack(T.erreur + e.message));
+  if (p === "jeux3ds") jeux3DS().catch(e => { $("etat3DS").textContent = T.erreur + e.message; });
 }
 function aller(p) {
   if (document.querySelector(`#menu button[data-page="${p}"]`).classList.contains("masque")) return;
@@ -922,6 +935,7 @@ async function charger() {
   basculer();
   $("sectionHistorique").classList.toggle("masque", !etat.Existe);
   $("sectionHacks").classList.toggle("masque", !etat.Existe);
+  $("sectionJeux3DS").classList.toggle("masque", !etat.Existe);
   $("sectionDesinstaller").classList.toggle("masque", !etat.Existe);
   const sd = etat.Existe && etat.JetonPresent && etat.Adresse3DS;
   $("sectionCarte").classList.toggle("masque", !sd);
@@ -1216,6 +1230,21 @@ async function hacks(corps) {
     return d;
   }));
   if (!(r.Noms || []).length) $("listeHacks").append(texte("p", T.aucunHack, "doux"));
+}
+// Jeux 3DS : les jeux des dossiers Azahar, puis un jeu activé ou désactivé sur ce PC (api/jeux3ds, titres_3ds_off).
+async function jeux3DS(corps) {
+  const r = await api("jeux3ds", corps);
+  $("etat3DS").textContent = r.Erreur ? T.erreur + r.Erreur : "";
+  $("liste3DS").replaceChildren(...(r.Jeux || []).map(j => {
+    const d = texte("div", "", "reglage"), t = texte("div", "", "texte"), c = document.createElement("input");
+    t.append(texte("b", j.Nom), texte("span", j.Nom === j.Id ? "" : j.Id, "legende"));
+    c.type = "checkbox"; c.className = "interrupteur"; c.checked = j.Synchro;
+    c.setAttribute("aria-label", T.synchroJeu3DS.replace("%s", j.Nom));
+    c.onchange = () => jeux3DS({Id: j.Id, Synchro: c.checked}).catch(e => { $("etat3DS").textContent = T.erreur + e.message; });
+    d.append(t, c);
+    return d;
+  }));
+  if (!r.Erreur && !(r.Jeux || []).length) $("liste3DS").append(texte("p", T.aucun3DS, "doux"));
 }
 $("hackRom").onchange = () => {
   const f = $("hackRom").files[0];
