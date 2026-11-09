@@ -155,6 +155,27 @@ int forget_base(bases_t *b, const char *key)
     return 0;
 }
 
+void server_identity(const char *url, const char *token, char *out, size_t n)
+{
+    size_t a = strspn(url, " \t"), z = strlen(url);
+    while (z > a && strchr(" \t/", url[z - 1])) z--;
+    snprintf(out, n, "%.*s\n%s", (int)(z - a), url + a, token);
+}
+
+int check_server(bases_t *b, const char *fingerprint)
+{
+    const char *old = base_of(b, "SERVEUR");
+    int i, n = 0;
+    if (old && !strcmp(old, fingerprint)) return 0;
+    if (old) { /* another server or token: its Bases say nothing about this one */
+        for (i = 0; i < b->n; i++)
+            if (!strncmp(b->e[i].key, "INSTALL-", 8) || !strcmp(b->e[i].key, "SERVEUR")) b->e[n++] = b->e[i];
+        b->n = n;
+    }
+    if (put_base(b, "SERVEUR", fingerprint)) return -1; /* 64 characters, like a Hash: older versions keep the line */
+    return old ? 2 : 1;
+}
+
 int write_bases(const char *path, bases_t *b)
 {
     const size_t line = KEY_MAX + 66; /* "KEY=" + hash + "\n" at most */

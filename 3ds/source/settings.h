@@ -26,7 +26,8 @@ void read_config(const char *path, config_t *c);
 /* 0 if written. */
 int write_config(const char *path, const config_t *c);
 
-/* base.ini: "KEY=hash", the Base of each Game. No limit: e grows on the heap. */
+/* base.ini: "KEY=hash", the Base of each Game, with the INSTALL- dates and the SERVEUR line (ADR 0027, 0032). No limit:
+ * e grows on the heap. */
 typedef struct {
     struct base_entry { char key[KEY_MAX], hash[65]; } *e;
     int n, cap;
@@ -55,6 +56,15 @@ int note_install(bases_t *b, unsigned long long id, unsigned long long stamp, co
 
 /* Removes the Base of key from b (memory only: write_bases afterwards). 1 if it had one, 0 otherwise. */
 int forget_base(bases_t *b, const char *key);
+
+/* The server of the Bases (ADR 0032): "<address>\n<token>" in out, the address without spaces around it nor a final
+ * "/". Its SHA-256 is the fingerprint given to check_server (the token itself is never written). */
+void server_identity(const char *url, const char *token, char *out, size_t n);
+
+/* Compares fingerprint (64 lowercase hex) with the line "SERVEUR" of b: same, nothing changes (0); none, it is stored
+ * and the Bases are kept (1); another one, every Base is removed (the "INSTALL-" dates stay) and the new fingerprint is
+ * stored (2). Memory only: write_bases afterwards. -1 if out of memory. */
+int check_server(bases_t *b, const char *fingerprint);
 
 /* alias.ini (ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
 #define MAX_ALIAS 64
