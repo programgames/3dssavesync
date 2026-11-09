@@ -96,6 +96,11 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : la sauvegarde de ce jeu ne peut pas être copiée en entier. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
                             "%s: this game's save can't be copied whole. It is not synced, and its save is not changed."), game);
         return KIND_FAILURE;
+    case RESULT_EXTDATA_NOT_SYNCED:
+        snprintf(detail, dn, "%s", r->path);
+        snprintf(text, n, T("%s : ces données additionnelles ne peuvent pas être copiées en entier. Elles ne sont pas synchronisées ni modifiées.",
+                            "%s: this extra data can't be copied whole. It is not synced, and it is not changed."), game);
+        return KIND_FAILURE;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);
         return KIND_INFO;
