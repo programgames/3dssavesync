@@ -42,9 +42,12 @@ type Server struct {
 }
 
 func (s *Server) versions(key string) []string {
-	f, _ := filepath.Glob(filepath.Join(s.data, key, "*.sav"))
-	for i := range f {
-		f[i] = filepath.Base(f[i])
+	entries, _ := os.ReadDir(filepath.Join(s.data, key))
+	var f []string
+	for _, e := range entries {
+		if reVersion.MatchString(e.Name()) { // history.go, as server.py VERSION: anything else is never listed
+			f = append(f, e.Name())
+		}
 	}
 	sort.Strings(f)
 	return f
@@ -87,7 +90,7 @@ func answer(w http.ResponseWriter, status int, body []byte, etag string) {
 }
 
 func (s *Server) allowed(w http.ResponseWriter, r *http.Request) bool {
-	if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+s.token)) == 1 {
+	if s.token != "" && subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+s.token)) == 1 {
 		return true
 	}
 	answer(w, 401, nil, "")
@@ -295,6 +298,10 @@ func cmdServe(config string) (int, error) {
 	if cfg.LocalServer == nil {
 		return 1, fmt.Errorf("%s", tr("aucun serveur local n'est configuré. Choisissez « Serveur local sur ce PC » dans les réglages.",
 			"no local server is set up. Choose \"Local server on this PC\" in the settings."))
+	}
+	if strings.TrimSpace(cfg.Token) == "" { // "Bearer " would open every save to the network
+		return 1, fmt.Errorf("%s", tr("aucun jeton dans config.json : le serveur local ne démarre pas. Enregistrez de nouveau la page Serveur des réglages.",
+			"no token in config.json, so the local server doesn't start. Save the Server page of the settings again."))
 	}
 	data := cfg.LocalServer.Data
 	if data == "" {

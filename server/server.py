@@ -23,8 +23,15 @@ SAVE = re.compile(rf"^/saves/{KEY}$")
 HISTORY = re.compile(rf"^/saves/{KEY}/history(/.*)?$")
 NAME = re.compile(rf"^/saves/{KEY}/name$")
 CLIENT = re.compile(r"^[a-z0-9]{1,16}$")
+# File name of a Version. Anything else in a game's folder (a copy left by hand, "x.sav") is not a Version: never listed.
+VERSION = re.compile(r"^[0-9]{6}-[0-9]{8}T[0-9]{6}Z-[a-z0-9]{1,16}-[0-9a-f]{64}\.sav$")
 MAX_SIZE = 64 * 1024 * 1024  # largest known DS save memory
 LOCK = threading.Lock()  # ponytail: global lock, enough for 2 Clients
+
+
+def version_files(names):
+    """The Version file names among names, oldest first."""
+    return sorted(f for f in names if VERSION.match(f))
 
 
 def hash_of(version):
@@ -61,7 +68,7 @@ def verify(data):
         folder = os.path.join(data, code)
         if not os.path.isdir(folder):
             continue
-        for version in sorted(f for f in os.listdir(folder) if f.endswith(".sav")):
+        for version in version_files(os.listdir(folder)):
             count += 1
             try:
                 with open(os.path.join(folder, version), "rb") as f:
@@ -82,7 +89,7 @@ def report(data):
             continue
         files = os.listdir(folder)
         leftovers += sum(f.endswith(".tmp") for f in files)  # a write cut before its os.replace
-        versions = sorted(f for f in files if f.endswith(".sav"))
+        versions = version_files(files)
         if not versions:
             continue
         sizes = [os.path.getsize(os.path.join(folder, v)) for v in versions]
@@ -99,11 +106,13 @@ def report(data):
 
 
 def creer(address, data, token):
+    if not token.strip():  # "Bearer " would open every save to anyone
+        raise SystemExit("NDSSYNC_TOKEN is empty: put a long random token in .env, then start the server again")
     def versions(code):
         folder = os.path.join(data, code)
         if not os.path.isdir(folder):
             return []
-        return sorted(f for f in os.listdir(folder) if f.endswith(".sav"))
+        return version_files(os.listdir(folder))
 
     def current(code):
         v = versions(code)
@@ -123,7 +132,7 @@ def creer(address, data, token):
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
             received = self.headers.get("Authorization", "")
-            if hmac.compare_digest(received.encode(), f"Bearer {token}".encode()):
+            if token and hmac.compare_digest(received.encode(), f"Bearer {token}".encode()):
                 return True
             self.respond(401)
             return False
@@ -241,4 +250,4 @@ elif __name__ == "__main__" and sys.argv[1:2] == ["report"]:
 elif __name__ == "__main__":
     creer(("0.0.0.0", int(os.environ.get("NDSSYNC_PORT", "8080"))),
           os.environ.get("NDSSYNC_DATA", "/data"),
-          os.environ["NDSSYNC_TOKEN"]).serve_forever()
+          os.environ.get("NDSSYNC_TOKEN", "")).serve_forever()
