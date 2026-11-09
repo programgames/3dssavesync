@@ -39,8 +39,8 @@ With `adb`: `adb pull /sdcard/Android/data/io.github.programgames.savesync/files
 
 The first start opens a guided setup: a welcome screen, then three steps. Each step has **Skip** or **Later**; **Settings** > **Start the guided setup** opens it again.
 
-1. **Connect to your server**: on the PC, open the settings page, **Server**, and click **Show the QR code**. On the phone, tap **Scan the PC's QR code** and point the phone at it. The app fills in the address and token, saves them and tests the connection. The scanner comes from Google Play services: no camera permission, nothing leaves the phone.
-   No QR code (no Google Play services, or no PC settings page at hand)? Tap **Type the address** and type the server address with its port, for example `192.168.1.20:8080` (the app adds `http://`; type `https://` yourself if your server uses it), and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`. Then tap **Test the connection**.
+1. **Connect to your server**: on the PC, open the settings page, **Server**, and click **Show the QR code**. On the phone, tap **Scan the PC's QR code** and point the phone at it. No PC settings page at hand (Docker server)? The 3DS shows the same QR code: **SELECT** > **Phone** > **A**. The app fills in the address and token, saves them and tests the connection. The scanner comes from Google Play services: no camera permission, nothing leaves the phone.
+   No QR code (no Google Play services)? Tap **Type the address** and type the server address with its port, for example `192.168.1.20:8080` (the app adds `http://`; type `https://` yourself if your server uses it), and the token. Both are on the PC settings page (**Server** step), or in your Docker `.env`. Then tap **Test the connection**.
 2. **Choose your emulator**: the emulators installed on the phone come first, under **Installed on this phone**.
 3. **Choose its folders**: the same screen as in **Emulators** (see below).
 

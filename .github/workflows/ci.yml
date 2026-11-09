@@ -37,6 +37,7 @@ jobs:
           gcc -std=c99 -Wall -Wextra -Werror -I source source/pokemon.c test/test_pokemon.c -o /tmp/p && /tmp/p
           gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c test/test_errors.c -o /tmp/e && /tmp/e
           gcc -std=c99 -Wall -Wextra -Werror -I source source/text.c test/test_text.c -o /tmp/x && /tmp/x
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/pairing.c test/test_pairing.c -o /tmp/q && /tmp/q
           gcc -std=c99 -Wall -Wextra -Werror -I source source/errors.c source/text.c source/result.c test/test_result.c -o /tmp/s && /tmp/s
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json
