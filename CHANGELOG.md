@@ -4,6 +4,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+## [3.13.0] - 2026-11-09
+
 ### Added
 
 - **3DS: a game you install again asks first.** Deleting a 3DS game deletes its save. Before, after you installed it again, its new save was uploaded over your progress on the server. Now the app sees that the game was installed again, and you choose which save to keep.
@@ -233,7 +235,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.12.0...HEAD
+[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.13.0...HEAD
+[3.13.0]: https://github.com/programgames/3dssavesync/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/programgames/3dssavesync/compare/v3.11.4...v3.12.0
 [3.11.4]: https://github.com/programgames/3dssavesync/compare/v3.11.3...v3.11.4
 [3.11.3]: https://github.com/programgames/3dssavesync/compare/v3.11.2...v3.11.3

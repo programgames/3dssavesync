@@ -176,8 +176,6 @@ The apps speak English and French. Most code identifiers and comments are still 
 
 ## Roadmap
 
-In the next release: a setting to turn off the daily update check on the 3DS; sync of 3DS extra data (extdata); the last 10 backup copies of each game on the 3DS; a storage report on the server.
-
 Planned:
 
 - A listing on Universal Updater, later.
