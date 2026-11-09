@@ -13,7 +13,7 @@ Double-click the program, or the **3dssavesync settings** shortcut. A settings p
 At the top, four badges show the state at a glance: server reachable or not, emulators ready, games on the server, and **Checks** ("All good" or "2 to do"). Click one to open its part. The menu on the left opens one part at a time; a number next to a part counts the lines of **Checks** left to do there. **Close settings**, at the bottom of the menu, stops the settings program. The parts:
 
 1. **Server**: **Local server on this PC** (the default) or **Personal server** (address and token, button **Test the connection**). See the [server guide](guide-server.md).
-2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. The page also copies `cias/3dssavesync.cia`, of the same version as the PC program (an older different file is copied first, with the date in its name). On the 3DS, open FBI, then **SD** > **cias** > **3dssavesync.cia** > **Install and delete CIA**. The page warns when FBI is not on the card ([FBI](https://github.com/nh-server/FBI-NH/releases/latest)). No card reader? Open **No SD card reader?**, then **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`.
+2. **3DS SD card** (after the server is saved): put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. The address and token go into `3ds/3dssavesync/config.ini` on the card. The old file is copied first, and its other settings are kept. The page also copies `cias/3dssavesync.cia`, of the same version as the PC program (an older different file is copied first, with the date in its name). On the 3DS, open FBI, then **SD** > **cias** > **3dssavesync.cia** > **Install and delete CIA**. The page warns when FBI is not on the card ([FBI](https://github.com/nh-server/FBI-NH/releases/latest)). No card reader? Copy [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) to the 3DS by FTP and install it with FBI. Then open **No SD card reader?**, click **Download config.ini** and copy it by FTP to `sdmc:/3ds/3dssavesync/`, or press **SELECT** in the 3DS app and enter the **Server** and **Token** that the page shows.
 3. **Program**: copies the program to a fixed place, so that frontends and shortcuts always find it: `%LOCALAPPDATA%\Programs\3dssavesync` (Windows), `~/.local/bin` (Linux), `~/Applications/3dssavesync` (macOS). Portable version: this part is hidden, the program stays where it is.
 4. **Emulators**: one line per emulator of your settings, with a switch, its consoles, its state (**Ready**, **To check** with the same reason as in **Checks**, or **Not used**), **Open** (starts it without a game, with a sync before and after) and **Configure** (its save and ROM folders). Emulators found on the PC but not in your settings (PATH, usual folders, Flatpak, EmuDeck AppImages, `/Applications`, LaunchBox emulators) are off, under **Other emulators found on this PC**: turn on the ones to sync. **Add an emulator by hand** adds another one.
 5. **Frontends and install**: LaunchBox (Windows), ES-DE, **Repair frontends**, one shortcut per emulator that has a ROM folder (**3dssavesync &lt;emulator&gt;**), the **3dssavesync settings** shortcut, and **Show the icon near the clock** (see [The icon near the clock](#the-icon-near-the-clock)).
@@ -31,6 +31,16 @@ No browser (SSH, Steam Deck in Game mode): `3dssavesync setup --no-browser` prin
 **Repair frontends**: after a frontend update or reset (EmuDeck rewrites the ES-DE files), close the frontend, open **3dssavesync settings** and click **Repair frontends**. What is already in place does not change. Same in a terminal: `3dssavesync repair`.
 
 Frontends to set up by hand (Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode): [frontend guide](guide-frontends.md).
+
+## Portable version
+
+Keep everything in one folder, for example `LaunchBox\ThirdParty\3dssavesync`, a USB drive or the SD card of a Steam Deck:
+
+1. Download [3dssavesync-windows-amd64-portable.zip](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-windows-amd64-portable.zip) or [3dssavesync-linux-amd64-portable.tar.gz](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-linux-amd64-portable.tar.gz).
+2. Extract it to a folder where you can write (not `Program Files`, not a read-only drive).
+3. Start `3dssavesync` from this folder (Linux: `./3dssavesync setup`), then follow the settings page as in the [Quick start](../README.md#3ds-and-pc-at-home), from step 2.
+
+The `portable.txt` file next to the program is what makes it portable: settings, log, backups and local server data all stay in this folder, and LaunchBox, ES-DE and the shortcuts start the program from here. Delete `portable.txt` to switch back to the normal install. See [ADR 0020](adr/0020-version-portable.md).
 
 ## Updates
 

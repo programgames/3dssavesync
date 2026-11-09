@@ -1,9 +1,11 @@
 # 3dssavesync
 
-**Play the same game on your 3DS and on your PC. Your save follows you.**
-
 [![Latest release](https://img.shields.io/github/v/release/programgames/3dssavesync)](https://github.com/programgames/3dssavesync/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/programgames/3dssavesync/total)](https://github.com/programgames/3dssavesync/releases)
+[![ci](https://github.com/programgames/3dssavesync/actions/workflows/ci.yml/badge.svg)](https://github.com/programgames/3dssavesync/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/programgames/3dssavesync)](LICENSE)
+
+**3dssavesync keeps the saves of your DS, Game Boy, Game Boy Color, GBA and 3DS games the same on a modded 3DS, the emulators of your PC and an Android phone, through a server at home or your own.**
 
 *[Version française (résumé)](README.fr.md)*
 
@@ -15,20 +17,38 @@
 
 ![PC settings page: server status, emulators and their consoles](docs/images/settings-en.png)
 
-- **DS, Game Boy, Game Boy Color, GBA** and native **3DS** games (the 8 Pokémon games by default, X to Ultra Moon).
-- **On the PC**, your game starts as usual from LaunchBox, ES-DE or a shortcut. 3dssavesync gets the newest save first, then sends it back when you quit.
-- **On the 3DS**, open the 3dssavesync app and press START: every game is synced.
-- **Nothing is ever lost.** The server keeps every version of every save. A backup copy is made before any save is replaced. When both sides changed, you choose, with the play time and trainer name of each version (Pokémon games).
+## Features
+
+- **Three kinds of devices**: a 3DS app (Luma3DS), a PC program for Windows, Linux and macOS, and an Android app (first version).
+- **DS, Game Boy, Game Boy Color, GBA and 3DS games.** Every native 3DS game with a save syncs, and Game Boy and Game Boy Color Virtual Console games too. You can turn a 3DS game off on each device.
+- **On the 3DS**: TWiLight Menu++, open_agb_firm and mGBA forwarders. Open the app and press START: every game is synced.
+- **On the PC**: melonDS, mGBA, Azahar, RetroArch and [more](#supported). Your game starts as usual from LaunchBox, ES-DE or a shortcut: 3dssavesync gets the newest save first, then sends it back when you quit.
+- **Frontends set up for you**: LaunchBox / BigBox, ES-DE and desktop shortcuts. Guides for Steam ROM Manager, EmuDeck, RetroDECK, Playnite and others.
+- **Every version is kept** on the server. Restore an old one from the PC settings page or the Android app.
+- **Conflicts**: when both sides changed, you choose. Each version shows its date, and for the Pokémon games its play time and trainer name.
+- **A backup copy before every replace**: each device copies a save before it writes over it.
+- **ROM hacks** (Radical Red and others) can get their own save, apart from the original game.
+- **Portable version**: everything in one folder, for example on a USB drive or a Steam Deck.
+- **English and French**, chosen from the system language.
+- **Updates**: each app checks GitHub once a day, installs only when you click **Update**, and checks the file against the SHA-256 of the release first.
+- **Your server, your saves**: a local server built into the PC program, or your own Docker server with HTTPS. No account, no cloud service.
+
+> [!IMPORTANT]
+> **Good practice**
+> - Keep your own backups too, for example with Checkpoint or JKSM on the 3DS.
+> - Sync before and after you play: open 3dssavesync on the 3DS before you start a game, and again when you stop.
+> - Use the same version of a game (the same update) on every device.
+> - Take care after you reinstall a 3DS game or format the SD card. The 3DS app then asks before a new save replaces the one on the server ([ADR 0027](docs/adr/0027-jeu-3ds-reinstalle.md)): keep the server save if you want your old progress.
 
 Requires a modded 3DS (Luma3DS).
 
-## Install
+## Quick start
+
+### 3DS and PC, at home
 
 About 10 minutes. Do the PC first: it prepares the 3DS for you.
 
-### 1. The PC
-
-1. Download the program for your computer:
+1. **Download the PC program and start it.**
 
    | System | File |
    |---|---|
@@ -38,53 +58,38 @@ About 10 minutes. Do the PC first: it prepares the 3DS for you.
    | macOS (Apple silicon) | [3dssavesync-darwin-arm64](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-darwin-arm64) |
    | macOS (Intel) | [3dssavesync-darwin-amd64](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-darwin-amd64) |
 
-2. Start it:
    - **Windows**: double-click it. If Windows shows "Windows protected your PC", [here's what to do](docs/troubleshooting.md#windows-protected-your-pc).
    - **macOS**: the program is not signed. In a terminal, run `xattr -d com.apple.quarantine <file>` once, then double-click it.
    - **Linux**: run `chmod +x 3dssavesync-linux-amd64`, then `./3dssavesync-linux-amd64 setup`.
-3. A settings page opens in your browser and walks you through 4 steps. On **Server**, keep **Local server on this PC**: it's the default and needs nothing else. On **Emulators and frontends**, check the emulators it found and your frontends (LaunchBox, ES-DE, shortcuts), then click **Save and continue**.
-4. If Windows asks about the firewall, allow **private networks**. Otherwise the 3DS can't reach the PC.
-5. On **3DS SD card**, put the 3DS SD card in the PC and click **Prepare the 3DS SD card**. This writes the server address and token to the card and copies the 3DS app (`3dssavesync.cia`) to its `cias` folder. Nothing else on the card changes.
-6. On **Everything is ready**, each line shows ✓ or tells you what's left to do.
+2. **Follow the 4 steps of the settings page** that opens in your browser. On **Server**, keep **Local server on this PC** (the default). On **Emulators and frontends**, check the emulators it found and your frontends, then click **Save and continue**. If Windows asks about the firewall, allow **private networks**: otherwise the 3DS can't reach the PC.
+3. **Prepare the 3DS.** Put the 3DS SD card in the PC and click **Prepare the 3DS SD card**: it writes the server address and token, and copies `3dssavesync.cia` to the `cias` folder. Put the card back in the 3DS. Open FBI and go to **SD** > **cias** > **3dssavesync.cia** > **Install and delete CIA**. No FBI? Get [FBI.3dsx](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder of the card and open it from the Homebrew Launcher. No SD card reader? See the [PC guide](docs/guide-pc.md#the-settings-page).
+4. **Check that it works.** Start **3dssavesync** from the HOME Menu: it connects to the PC on its own and lists your games. Press **START** to sync them all. On the PC, start one of these games from your frontend or from the **3dssavesync &lt;emulator&gt;** shortcut: you pick up where you left off. Save, quit, then open 3dssavesync on the 3DS: the game shows **Download**. Press **A** to get your save.
 
-### 2. The 3DS
+On **Everything is ready**, the settings page shows ✓ on each line, or what's left to do. Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
 
-1. Put the SD card back in the 3DS. Open FBI and go to **SD** > **cias** > **3dssavesync.cia** > **Install and delete CIA**. Don't have FBI? Get [FBI.3dsx](https://github.com/nh-server/FBI-NH/releases/latest), copy it to the `3ds` folder on the card and open it from the Homebrew Launcher.
-2. Start **3dssavesync** from the HOME Menu. It connects to the PC on its own, with nothing to type.
+### Two 3DS consoles
 
-No SD card reader? Copy [3dssavesync.cia](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync.cia) to the 3DS by FTP and install it with FBI. Then press SELECT on the 3DS and enter the **Server** and **Token** that the PC page shows, or click **Download config.ini** on the PC page and copy it to `sdmc:/3ds/3dssavesync/` by FTP.
+Set up the PC once (steps 1 and 2), then do steps 3 and 4 for each console: **Prepare the 3DS SD card** writes the same server and token to each card. Both consoles then sync the same saves. Sync on one console before you play on the other, or you get a conflict ([FAQ](docs/faq.md#can-i-use-two-3ds-consoles)).
 
-### 3. Check that it works
+### 3DS and Android
 
-1. On the 3DS, 3dssavesync lists your games. Press **START** to sync them all.
-2. On the PC, start one of these games from your frontend (LaunchBox, ES-DE) or from the **3dssavesync &lt;emulator&gt;** shortcut. You pick up where you left off on the 3DS.
-3. Save in the game and quit. Back on the 3DS, open 3dssavesync: the game now shows **Download**. Press **A** to get your save.
+1. Set up the PC and the 3DS first: the phone uses the same server.
+2. Install `3dssavesync-android.apk` from the [latest release](https://github.com/programgames/3dssavesync/releases/latest).
+3. On the PC settings page, open **Server** and click **Show the QR code**. In the app, tap **Scan the PC's QR code**, then choose your emulator and its folders.
 
-Something does not work? Read [Troubleshooting](docs/troubleshooting.md).
+The Android app is a first version and not tested on many phones yet: start with a copy of one save. See the [Android guide](docs/guide-android.md).
 
-### Your own server (optional)
+### Sync away from home
 
-The local server syncs at home, when the PC is on. To sync from anywhere, run the server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. See the [server guide](docs/guide-server.md).
+The local server works only on your home network, while the PC is on. To sync from anywhere, run your own server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. The 3DS needs a Let's Encrypt certificate. Then choose **Personal server** on the PC settings page and prepare the 3DS SD card again. See the [server guide](docs/guide-server.md).
 
-### Android (first version)
-
-An Android app syncs RetroArch, Azahar, melonDS and NooDS saves with the same server. It is new and not tested on many phones yet: start with a copy of one save. See the [Android guide](docs/guide-android.md).
-
-### Portable version
-
-Keep everything in one folder, for example `LaunchBox\ThirdParty\3dssavesync`, a USB drive or the SD card of a Steam Deck:
-
-1. Download [3dssavesync-windows-amd64-portable.zip](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-windows-amd64-portable.zip) or [3dssavesync-linux-amd64-portable.tar.gz](https://github.com/programgames/3dssavesync/releases/latest/download/3dssavesync-linux-amd64-portable.tar.gz).
-2. Extract it to a folder where you can write (not `Program Files`, not a read-only drive).
-3. Start `3dssavesync` from this folder (Linux: `./3dssavesync setup`), then continue at step 3 of [The PC](#1-the-pc).
-
-The `portable.txt` file next to the program is what makes it portable: settings, log, backups and local server data all stay in this folder, and LaunchBox, ES-DE and the shortcuts start the program from here. Delete `portable.txt` to switch back to the normal install. See [ADR 0020](docs/adr/0020-version-portable.md).
+**Portable version** (everything in one folder: `LaunchBox\ThirdParty\3dssavesync`, a USB drive, the SD card of a Steam Deck): see the [PC guide](docs/guide-pc.md#portable-version).
 
 ## Everyday use
 
 - **PC**: start your games from your frontend or the shortcuts, as before. Your save is uploaded when you close the emulator.
 - **3DS**: open 3dssavesync before and after you play. Press **START** to sync everything, or **A** on one game.
-- **Conflict** (you played on both sides): you choose which save to keep. Nothing is lost: the other one stays in the server history or in a backup.
+- **Conflict** (you played on both sides): you choose which save to keep. The other one stays in the server history or in a backup copy.
 - **Get back an old version**: open the **3dssavesync settings** shortcut, go to **Games**, pick the game and the version, and click **Restore this version** (or run `3dssavesync restore`). Each device gets it at its next sync, after a backup.
 - **No network after a game on the PC**: the save stays on the PC and is uploaded the next time you start any game.
 - **Icon near the clock** (Windows, Linux KDE): right-click it to open the settings, upload pending saves now or see the local server address. More in the [PC guide](docs/guide-pc.md#the-icon-near-the-clock).
@@ -93,24 +98,33 @@ The `portable.txt` file next to the program is what makes it portable: settings,
 - **ROM hacks** (Radical Red and others) use the same game code as the original. 3dssavesync won't mix them up and offers to give the hack [its own save](docs/troubleshooting.md#a-rom-hack-is-not-synced).
 - **ROMs in subfolders** on the 3DS are found, up to 4 levels deep. Each save goes where your 3DS app expects it.
 - **More PC settings** (emulators, frontends, commands): [PC guide](docs/guide-pc.md). **3DS settings**: [3DS guide](docs/guide-3ds.md).
+- **Questions and ideas**: read the [FAQ](docs/faq.md), or ask in [Discussions](https://github.com/programgames/3dssavesync/discussions).
 
 ## Supported
 
 | | |
 |---|---|
-| **3DS apps** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), mGBA forwarders (GB/GBC/GBA), native 3DS games (any game with a single save file; default: the 8 Pokémon) |
+| **3DS apps** | TWiLight Menu++ (DS, GB/GBC), open_agb_firm (GBA), mGBA forwarders (GB/GBC/GBA), Game Boy and Game Boy Color Virtual Console games, native 3DS games: every game with a save ([details](docs/guide-3ds.md#native-3ds-games)) |
 | **PC emulators** | melonDS, mGBA, Azahar, RetroArch (cores melonDS DS, mGBA, Gambatte, SameBoy, VBA-M, gpSP, Beetle GBA), VBA-M, SameBoy, DeSmuME, SkyEmu, NanoBoyAdvance, BGB, and any emulator with a custom command line |
-| **Android emulators** (first version) | RetroArch, Azahar (3DS Pokémon), melonDS, NooDS, and other emulators by folder: [Android guide](docs/guide-android.md) |
+| **Android emulators** (first version) | RetroArch, Azahar (3DS), melonDS, NooDS, and other emulators by folder: [Android guide](docs/guide-android.md) |
 | **Set up automatically** | LaunchBox / BigBox, ES-DE, desktop shortcuts |
 | **Guides** | [Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode](docs/guide-frontends.md); [HOME menu icons (forwarders)](docs/guide-forwarders.md) |
 | **PC systems** | Windows, Linux, macOS (amd64 and arm64) |
 | **Languages** | English, French (follows the system language) |
 
+Native 3DS games: the 8 Pokémon games (X to Ultra Moon) sync their raw `main` file, as before. Every other game syncs all the files of its save as one archive. Super Mario Maker is never synced.
+
 **Tested on real hardware**: New 3DS XL (Luma3DS, TWiLight Menu++, open_agb_firm, mGBA forwarders) with the local server and with a Docker server; Windows 11 with LaunchBox, melonDS, mGBA and Azahar.
 **Not tested on a device yet**: Linux, macOS, Steam Deck (EmuDeck, RetroDECK, Game mode), RetroArch, VBA-M, SameBoy, DeSmuME, SkyEmu, NanoBoyAdvance, BGB, ES-DE, the Android app. Reports are welcome.
 
-## Good to know
+## Limits and good to know
 
+- **No background sync on the 3DS.** The 3DS app syncs only while it is open, when you press **START** or **A**.
+- **PC**: a game syncs when it starts through 3dssavesync and when its emulator closes. With the [icon near the clock](docs/guide-pc.md#the-icon-near-the-clock) (Windows, Linux), the PC also syncs when you close an emulator you opened yourself, and every 15 minutes. macOS has no icon yet.
+- **Android**: the app syncs when you open it and tap **Sync all**, or a game's action. It can upload in the background (off by default), but it never downloads in the background ([Android guide](docs/guide-android.md#background-upload)).
+- **The local server on the PC works only on your home network**, while the PC is on. To sync from anywhere, run [your own server](docs/guide-server.md).
+- **Large 3DS saves**: on the 3DS, a 3DS game save larger than 16 MB, or with a file path longer than 100 characters, stays **Not synced**, with the reason under the game.
+- **Games never synced**: Super Mario Maker (its save works only on the console that made it), the games you turned off, and Virtual Console games with restore points.
 - **Save states**: loading a state brings back an older save. mGBA reloads a state at start by default (`autoload`). 3dssavesync warns you when this setting (or the one of RetroArch or VBA-M) is on.
 - **Blank save** (only `0x00` or `0xFF`): counted as no save, never sent.
 - **Gold / Silver / Crystal clock**: each machine keeps its own clock. The game progress is the same.
@@ -159,6 +173,25 @@ cd 3ds && make cia                                   # devkitPro, makerom and ba
 C tests (gcc on the PC): see `.github/workflows/ci.yml`. GitHub Actions runs every test (Go on Windows, Linux and macOS) and builds the `.cia`. A `v*` tag publishes a release with the PC programs and the server image.
 
 The apps speak English and French. Most code identifiers and comments are still French and are being moved to English. See [CONTRIBUTING.md](CONTRIBUTING.md) for the build steps, the rules every change follows, and how AI tools are used here. Release notes: [CHANGELOG.md](CHANGELOG.md).
+
+## Roadmap
+
+Planned:
+
+- A setting to turn off the daily update check on the 3DS.
+- Sync of 3DS extra data (extdata).
+- A listing on Universal Updater, later.
+
+Set aside (not planned): GBA Virtual Console saves; a public hosted server.
+
+Ideas are welcome in [Discussions](https://github.com/programgames/3dssavesync/discussions).
+
+## Credits
+
+- The 3DS app is built with [devkitPro](https://devkitpro.org/) (devkitARM, libctru, citro2d) and its portlibs [curl](https://curl.se/) and [mbedTLS](https://www.trustedfirmware.org/projects/mbed-tls/) for HTTPS.
+- 3dssavesync syncs the saves of [TWiLight Menu++](https://github.com/DS-Homebrew/TWiLightMenu), [open_agb_firm](https://github.com/profi200/open_agb_firm), [mGBA](https://mgba.io/) and [Azahar](https://azahar-emu.org/), and of the other emulators listed in [Supported](#supported).
+- [Checkpoint](https://github.com/BernardoGiordano/Checkpoint) inspired the way the 3DS app reads and writes save archives.
+- [cloudpoint](https://github.com/dwalker109/cloudpoint) gave ideas for whole-archive 3DS saves, reinstalled games and this README.
 
 ## License
 

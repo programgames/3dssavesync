@@ -57,4 +57,12 @@ The same test suite as the CI:
 cd server && NDSSYNC_URL=https://saves.example.com NDSSYNC_TOKEN=... python -m unittest test_server.py
 ```
 
+## Maintenance and updates
+
+- **Disk use grows with every version.** The server never deletes a version, so `data/` only gets bigger. A 3DS game other than the 8 Pokémon games stores its whole save archive in each version. Check the free space on the disk from time to time.
+- **Back up `data/`.** It holds every version of every save. For the local server, it is the `serveur/` folder next to `config.json`. See [Backups of the server](#backups-of-the-server).
+- **Update the server first, then the devices**, when the release notes say so. For example, the 3DS games other than the Pokémon games use `3DSA-` keys ([ADR 0028](adr/0028-archives-3ds-completes.md)): an older server refuses them, so these games can't sync until the server is updated.
+  - Docker: in the server folder, run `docker compose pull`, then `docker compose up -d` (add `-f docker-compose.caddy.yml` to both if you use Caddy). The `data/` folder and `.env` stay as they are.
+  - Local server: it is part of the PC program. Update the PC program, and the server is updated with it.
+
 Something does not work? See [Troubleshooting](troubleshooting.md#server-and-network).

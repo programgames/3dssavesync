@@ -4,7 +4,7 @@
 
 *[Documentation complète en anglais](README.md)*
 
-3dssavesync synchronise les sauvegardes des jeux **DS**, **Game Boy / Game Boy Color**, **GBA** et **3DS** (par défaut les 8 Pokémon, de X à Ultra-Lune) entre une 3DS et les émulateurs d'un PC. Le serveur garde chaque version de chaque sauvegarde et n'efface rien. Une copie de sécurité est faite avant chaque remplacement. Si les deux côtés ont changé, vous choisissez.
+3dssavesync synchronise les sauvegardes des jeux **DS**, **Game Boy / Game Boy Color**, **GBA** et **3DS** (chaque jeu 3DS qui a une sauvegarde) entre une 3DS, les émulateurs d'un PC et un téléphone Android. Les 8 Pokémon gardent leur fichier `main` brut, Super Mario Maker n'est jamais synchronisé, et chaque appareil peut désactiver un jeu. Le serveur garde chaque version de chaque sauvegarde et n'efface rien. Chaque appareil fait une copie de sécurité avant de remplacer une sauvegarde. Gardez aussi vos propres sauvegardes (Checkpoint ou JKSM sur la 3DS). Si les deux côtés ont changé, vous choisissez.
 
 Une 3DS modifiée (Luma3DS) est nécessaire.
 
@@ -19,7 +19,7 @@ Une 3DS modifiée (Luma3DS) est nécessaire.
 3. **3DS** : dans FBI, ouvrez **SD**, **cias**, **3dssavesync.cia**, **Install and delete CIA**, puis lancez 3dssavesync : il se connecte sans rien taper.
 
 
-Un problème ? Lisez le [dépannage](docs/troubleshooting.md) (en anglais). Les programmes affichent leurs messages en français si le système est en français.
+Une question ? Lisez la [FAQ](docs/faq.md) ou demandez dans les [Discussions](https://github.com/programgames/3dssavesync/discussions). Un problème ? Lisez le [dépannage](docs/troubleshooting.md) (en anglais). Les programmes affichent leurs messages en français si le système est en français.
 
 ## Licence
 

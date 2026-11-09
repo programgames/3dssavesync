@@ -411,7 +411,7 @@ The 3DS SD card has no `config.ini`. Prepare the SD card from the PC settings pa
 - Check the ROM and save folders in **SELECT** (TWiLight Menu++ defaults: `sdmc:/roms/nds` and `sdmc:/roms/nds/saves`).
 - ROMs in subfolders are found up to 4 levels deep. Folders named `saves`, `3ds`, `luma`, `mGBA`, `Nintendo 3DS`, or starting with `.` or `_` are skipped.
 - A game with a ROM but no save, and no save on the server, has nothing to sync yet. Play it and save once.
-- Native 3DS games: open **SELECT** > **3DS games** and tick the game. Only games with a single save file can be ticked.
+- Native 3DS games: every game with a save is in the list. A game you never started has no save: start it once and save. A game you turned off is not in the list: open **SELECT** > **3DS games** and turn it on again ([Native 3DS games](guide-3ds.md#native-3ds-games)).
 
 > 88 ROMs skipped: more than 512 games.
 
@@ -441,10 +441,7 @@ Start the game once, then try again.
 
 ### A 3DS game cannot be ticked
 
-> This game can't be synced (several save files). *(Ce jeu ne peut pas être synchronisé (plusieurs fichiers de sauvegarde).)*
-> No save yet: start the game once and save.
-
-Only native 3DS games with a single save file are supported.
+Older versions synced only 3DS games with a single save file. Now every 3DS game with a save is synced, with all its files, and there is nothing to tick: **SELECT** > **3DS games** only turns games off. A game that stays **Not synced** shows the reason under it: for example a save larger than 16 MB, or a file path longer than 100 characters. Super Mario Maker is never synced. See [Native 3DS games](guide-3ds.md#native-3ds-games).
 
 ### open_agb_firm: the GBA save does not change
 
