@@ -82,10 +82,36 @@ fun seen(l: Local?, srv: Version?): Version? = l?.version?.takeIf { !l.blank || 
 
 // Bases: Key -> Hash of the last Sync, one JSON file per emulator, like bases/<emulator>.json on the PC. replaced: Key ->
 // Hash of the Local save that the last Download of the Key replaced, in replaced/<emulator>.json (ADR 0026, "came back").
-class Bases(private val dir: File) {
-    fun of(emulator: String): Map<String, String> = readMap(File(dir, "$emulator.json"))
+// server: the fingerprint of the server of this pass (serverFingerprint, ADR 0032), kept as the Key SERVER_KEY in each
+// file. The first read of an emulator in this pass compares it: none stored, it is stored and the Bases stay; another
+// one, every Base and replaced Hash of that emulator goes (serverChanged), before any transfer. null: no check.
+class Bases(private val dir: File, private val server: String? = null) {
+    var serverChanged = false
+        private set
+    private val checked = mutableSetOf<String>()
 
-    fun set(emulator: String, key: String, hash: String) = writeAtomic(File(dir, "$emulator.json"), JSONObject(of(emulator) + (key to hash)).toString(2))
+    fun of(emulator: String): Map<String, String> = stored(emulator) - SERVER_KEY
+
+    fun set(emulator: String, key: String, hash: String) =
+        writeAtomic(File(dir, "$emulator.json"), JSONObject(stored(emulator) + (key to hash) + listOfNotNull(server?.let { SERVER_KEY to it })).toString(2))
+
+    private fun stored(emulator: String): Map<String, String> {
+        val f = File(dir, "$emulator.json")
+        val m = readMap(f)
+        if (server == null || emulator in checked) return m
+        val n = when (m[SERVER_KEY]) {
+            server -> m
+            null -> if (f.exists()) m + (SERVER_KEY to server) else m // no Bases yet: the first Base stores it
+            else -> {
+                clear(emulator)
+                serverChanged = true
+                mapOf(SERVER_KEY to server)
+            }
+        }
+        if (n != m) writeAtomic(f, JSONObject(n).toString(2))
+        checked += emulator
+        return n
+    }
 
     fun replaced(emulator: String): Map<String, String> = readMap(File(dir, "replaced/$emulator.json"))
 
@@ -103,6 +129,13 @@ class Bases(private val dir: File) {
         }
     }
 }
+
+// SERVER_KEY is the reserved Key of the server fingerprint next to the Bases (ADR 0032): no Game Key has this form.
+const val SERVER_KEY = "SERVEUR"
+
+// serverFingerprint: SHA-256 of "<address>\n<token>", the address as in the settings, without spaces around it and
+// without a final /. The token itself is never stored (ADR 0032).
+fun serverFingerprint(url: String, token: String) = sha256((url.trim().removeSuffix("/") + "\n" + token.trim()).toByteArray())
 
 private fun readMap(f: File): Map<String, String> {
     if (!f.exists()) return emptyMap()
@@ -238,7 +271,7 @@ fun checkClosed(f: SaveFile, now: Long, reminded: Boolean) {
 // the reminder to close the emulator (checkClosed); clock: now, in ms since 1970.
 class Syncer(
     private val remote: Remote,
-    private val bases: Bases,
+    val bases: Bases,
     private val backups: Backups,
     private val pending: Pending,
     private val reminded: () -> Boolean,
