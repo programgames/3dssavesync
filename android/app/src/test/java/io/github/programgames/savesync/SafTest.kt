@@ -638,6 +638,56 @@ class SafTest {
         App.settings.off3DS = emptySet()
     }
 
+    // Extra data (ADR 0031): every extdata/00000000/<ID> that has user/ (any case), Key 3DSX-<ID>, the archive of the
+    // files under user/ only. NetPass and a folder without user/ are skipped. Its game (titleLow >> 8) names it and
+    // turns it off; one without a game here is "Extdata <ID>". Download: a .tar Backup copy, then user/ only, read back;
+    // metadata, icon and boss/ are never touched. user/ gone: nothing written, never created.
+    @Test
+    fun extdata3DS() {
+        val ext = "$user/extdata/00000000"
+        put("$user/title/00040000/000ec300/data/00000001/main", save(1, 100)) // a 3DSA game, extdata 00000EC3
+        put("$ext/00000EC3/user/a.bin", save(2, 10))
+        put("$ext/00000EC3/user/sub/b.bin", save(3, 20))
+        put("$ext/00000EC3/metadata", byteArrayOf(1))
+        put("$ext/00000EC3/icon", byteArrayOf(2))
+        put("$ext/00000EC3/boss/x", byteArrayOf(3))
+        put("$ext/0000055d/user/p.bin", save(4, 10)) // Pokémon X
+        put("$ext/000F6574/user/n.bin", save(5, 10)) // NetPass
+        put("$ext/00001234/metadata", byteArrayOf(1)) // no user/
+        put("$ext/0000ABCD/user/z.bin", save(6, 10)) // no game on this phone
+        App.settings.off3DS = emptySet()
+        App.saveEmulators(listOf(Emulator("azahar", "azahar", "", mapOf(System.N3DS to Folders(saves = tree("azahar").toString())))))
+        val x = App.scanAll().first.filter { it.extdata }.associateBy { it.game!!.key }
+        assertEquals(setOf("3DSX-00000EC3", "3DSX-0000055D", "3DSX-0000ABCD"), x.keys)
+        val acnl = x.getValue("3DSX-00000EC3")
+        assertEquals("00040000000EC300", acnl.owner) // a 3DSA game: its name comes from the server
+        assertNull(acnl.game!!.title)
+        assertEquals("Pokemon X (data)", x.getValue("3DSX-0000055D").name)
+        assertEquals("Pokemon X (data)", x.getValue("3DSX-0000055D").game!!.title)
+        assertEquals("Extdata 0000ABCD", x.getValue("3DSX-0000ABCD").game!!.title)
+        assertTrue(x.values.none { it.off || it.notStarted })
+        val g = acnl.game!!
+        val v1 = listOf(ArchiveFile("a.bin", save(2, 10)), ArchiveFile("sub/b.bin", save(3, 20)))
+        assertArrayEquals(packArchive(v1), g.file.read())
+
+        val v2 = listOf(ArchiveFile("a.bin", save(7, 10)), ArchiveFile("sub/b.bin", save(3, 20)))
+        val copy = replace(g, g.file.read(), packArchive(v2), Backups(App.backupsDir), Pending(File(ctx.filesDir, "pending.json")))!!
+        assertTrue(copy.name, copy.name.endsWith(".tar"))
+        assertArrayEquals(packArchive(v1), copy.readBytes())
+        assertArrayEquals(packArchive(v2), g.file.read())
+        assertArrayEquals(save(7, 10), File(root, "$ext/00000EC3/user/a.bin").readBytes())
+        assertEquals(listOf("boss", "icon", "metadata", "user"), File(root, "$ext/00000EC3").list()!!.sorted())
+        assertArrayEquals(byteArrayOf(1), File(root, "$ext/00000EC3/metadata").readBytes())
+
+        App.settings.off3DS = setOf("00040000000EC300") // its game turned off
+        assertTrue(App.scanAll().first.single { it.rom == "3DSX-00000EC3" }.off)
+        App.settings.off3DS = emptySet()
+
+        File(root, "$ext/00000EC3/user").deleteRecursively()
+        assertEquals(Problem.NEVER_STARTED, problem { replace(g, null, packArchive(v2), Backups(App.backupsDir)) })
+        assertFalse(File(root, "$ext/00000EC3/user").exists())
+    }
+
     // modifiedNow reads the folder again: the date of the scan may be old (the emulator wrote since).
     @Test
     fun modifiedNow() {

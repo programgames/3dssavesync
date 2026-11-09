@@ -204,4 +204,24 @@ class ArchiveSaveTest {
         assertEquals(Problem.ARCHIVE_PATH, e.problem)
         assertFalse(isGlobal(e.problem))
     }
+
+    // More than ARCHIVE_MAX bytes of files, as on the 3DS: not synced (ARCHIVE_SIZE), yet the folder holds a save.
+    @Test
+    fun tooLarge() {
+        val max = ArchiveFile("a", ByteArray(ARCHIVE_MAX.toInt()))
+        assertTrue(game(memoryFolder(listOf(max))).file.read() != null)
+        val f = memoryFolder(listOf(max, ArchiveFile("b", byteArrayOf(1))))
+        assertEquals(Problem.ARCHIVE_SIZE, problemOf { game(f).file.read() }.problem)
+        assertTrue(game(f).file.exists())
+        assertFalse(isGlobal(Problem.ARCHIVE_SIZE))
+    }
+
+    // The extdata ID of a title is titleLow >> 8 (ADR 0031); the skip list: NetPass and Super Mario Maker.
+    @Test
+    fun extdataIds() {
+        assertEquals("0000055D", extdataId("0004000000055D00"))
+        assertEquals("00001648", extdataId("0004000000164800"))
+        assertEquals("00000EC3", extdataId("00040000000ec300"))
+        assertEquals(setOf("000F6574", "00001A03", "00001A04", "00001A05", "00001BB8"), skipExtdata)
+    }
 }

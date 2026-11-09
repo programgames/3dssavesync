@@ -215,6 +215,7 @@ fun problemText(p: Problem) = when (p) {
     Problem.NEVER_STARTED -> R.string.p_never_started
     Problem.EXTRA_FILES -> R.string.p_extra_files
     Problem.ARCHIVE_PATH -> R.string.p_archive_path
+    Problem.ARCHIVE_SIZE -> R.string.p_archive_size
     Problem.OTHER -> R.string.p_other
 }
 
