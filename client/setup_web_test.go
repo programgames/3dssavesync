@@ -257,3 +257,65 @@ func TestWebSetupLaunchBoxOptions(t *testing.T) {
 		}
 	}
 }
+
+// "3DS games" page: the games of a fake Azahar folder, turned-off ones too; a change writes titres_3ds_off sorted,
+// without duplicates, and keeps the other fields (ADR 0028).
+func TestGames3DSWeb(t *testing.T) {
+	t.Cleanup(func() { delete(names3DS, "0004000000033500") })
+	sdmc := filepath.Join(t.TempDir(), "sdmc")
+	z := strings.Repeat("0", 32)
+	for _, low := range []string{"00033500", "00055d00", "001a0300"} { // a game, Pokémon X, an ignored game
+		write(t, filepath.Join(sdmc, "Nintendo 3DS", z, z, "title", "00040000", low, "data", "00000001", "main"), []byte{1})
+	}
+	config := filepath.Join(t.TempDir(), "config.json")
+	cfg := Config{URL: "http://192.0.2.5", Token: "j", Alias: map[string]string{"Hack": "GBA-ABCD"},
+		Titles3DS: map[string]string{"0004000000033500": "Aventure"}, Off3DS: []string{"0004000000055e00", "0004000000055E00"},
+		Emulators: map[string]*Emulator{"azahar": {Exe: "azahar.exe", Saves: map[System]string{N3DS: sdmc}}}}
+	if err := writeJSON(config, &cfg, true); err != nil {
+		t.Fatal(err)
+	}
+	a := &WebSetup{config: config}
+	list := func(r map[string]any) string {
+		var l []string
+		for _, j := range r["Jeux"].([]Web3DS) {
+			if !j.Synced {
+				l = append(l, "off:"+j.Name)
+			} else {
+				l = append(l, j.Name)
+			}
+		}
+		return strings.Join(l, ",")
+	}
+	if got, want := list(a.games3DSWeb("", false)), "Aventure,Pokemon Lune,Pokemon Rubis Omega,Pokemon Saphir Alpha,Pokemon Soleil,"+
+		"Pokemon Ultra-Lune,Pokemon Ultra-Soleil,Pokemon X,off:Pokemon Y"; got != want {
+		t.Errorf("liste :\n%s\nattendu :\n%s", got, want)
+	}
+	if r := a.games3DSWeb(" 0004000000033500 ", false); !strings.Contains(list(r), "off:Aventure") {
+		t.Errorf("désactivation : %v", r)
+	}
+	var after Config
+	readJSON(config, &after)
+	if strings.Join(after.Off3DS, ",") != "0004000000033500,0004000000055E00" || after.Token != "j" || after.Alias["Hack"] != "GBA-ABCD" ||
+		after.Titles3DS["0004000000033500"] != "Aventure" || after.Emulators["azahar"].Saves[N3DS] != sdmc {
+		t.Errorf("config.json après désactivation : %+v", after)
+	}
+	if c, _ := filepath.Glob(config + ".avant-3dssavesync-*"); len(c) != 1 {
+		t.Errorf("copie de config.json avant l'écriture : %v", c)
+	}
+	a.games3DSWeb("0004000000055E00", true)
+	after = Config{}
+	readJSON(config, &after)
+	if strings.Join(after.Off3DS, ",") != "0004000000033500" {
+		t.Errorf("réactivation : %v", after.Off3DS)
+	}
+	if r := a.games3DSWeb("00040000001A0300", false); r["Erreur"] == nil {
+		t.Error("jeu ignoré accepté")
+	}
+	if entries, _ := os.ReadDir(filepath.Join(sdmc, "Nintendo 3DS", z, z, "title", "00040000")); len(entries) != 3 {
+		t.Errorf("dossier Azahar modifié : %d dossiers", len(entries))
+	}
+	writeJSON(config, &Config{URL: "http://192.0.2.5", Token: "j"}, true)
+	if r := a.games3DSWeb("", false); len(r["Jeux"].([]Web3DS)) != 0 || r["Erreur"] != nil {
+		t.Errorf("sans Azahar : %v", r)
+	}
+}
