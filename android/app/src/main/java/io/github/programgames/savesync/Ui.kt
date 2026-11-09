@@ -679,6 +679,9 @@ fun EmulatorsScreen(p: PaddingValues, onEdit: (String) -> Unit) {
                     Text(e.listName(), style = MaterialTheme.typography.titleMedium)
                     Text(e.systems.keys.joinToString(" · ") { it.label })
                     StateLine(st)
+                    e.duplicateOf(App.emulators)?.let {
+                        Text(stringResource(R.string.duplicate_entry, it.listName()), color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
         }
@@ -783,15 +786,20 @@ fun EmulatorBody(id: String) {
     // of RetroArch, for every system
     var target by rememberSaveable { mutableStateOf<String?>(null) }
     var noPicker by remember { mutableStateOf(false) }
+    var sameAs by remember(id) { mutableStateOf<String?>(null) } // the entry that already has these folders
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         val t = target?.split('|')
         target = null
-        if (uri != null && t != null) {
+        val x = App.emulators.firstOrNull { it.id == id }
+        if (uri != null && t != null && x != null) {
             App.takeFolder(uri)
-            val now = App.emulators.firstOrNull { it.id == id }?.systems?.keys.orEmpty()
-            val systems = if (t[0] == "*") now else now.filter { it.name == t[0] }
-            update { x -> x.copy(systems = x.systems.mapValues { (s, f) -> if (s !in systems) f else if (t[1] == "saves") f.copy(saves = uri.toString()) else f.copy(roms = uri.toString()) }) }
-            check(systems)
+            val systems = if (t[0] == "*") x.systems.keys else x.systems.keys.filter { it.name == t[0] }
+            val next = x.copy(systems = x.systems.mapValues { (s, f) -> if (s !in systems) f else if (t[1] == "saves") f.copy(saves = uri.toString()) else f.copy(roms = uri.toString()) })
+            sameAs = App.emulators.firstOrNull { next.sameAs(it) }?.listName()
+            if (sameAs == null) {
+                update { next }
+                check(systems)
+            }
         }
     }
     fun pick(t: String, current: String?, usual: List<String>) {
@@ -821,6 +829,7 @@ fun EmulatorBody(id: String) {
         }
     }
     if (noPicker) Text(stringResource(R.string.no_picker), color = MaterialTheme.colorScheme.error)
+    sameAs?.let { Text(stringResource(R.string.same_folders, it), color = MaterialTheme.colorScheme.error) }
     if (retro) {
         val saves = e.systems.values.firstNotNullOfOrNull { it.saves }
         FolderRow(stringResource(R.string.retroarch_saves), saves) { pick("*|saves", saves, listOfNotNull(pr.savesAt)) }

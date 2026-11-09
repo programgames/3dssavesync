@@ -21,11 +21,11 @@
     <string name="token">Token</string>
     <string name="show">Show</string>
     <string name="hide">Hide</string>
-    <string name="scan_qr">Scan the PC\'s QR code</string>
-    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". Or type the address and token.</string>
+    <string name="scan_qr">Scan the QR code</string>
+    <string name="scan_help">On the PC, open the 3dssavesync settings, go to Server and click \"Show the QR code\". On the 3DS, go to Settings > Phone and press A. Or type the address and token.</string>
     <string name="scan_cancelled">Scan cancelled. Scan again, or type the address and token.</string>
     <string name="scan_unavailable">The QR code scanner isn\'t ready on this phone (it needs Google Play services). Try again in a minute, or type the address and token.</string>
-    <string name="scan_not_ours">This isn\'t the 3dssavesync QR code. Scan the one the PC shows in its settings, under Server.</string>
+    <string name="scan_not_ours">This isn\'t the 3dssavesync QR code. Scan the one the PC shows in its settings, under Server, or the one the 3DS shows in Settings > Phone.</string>
     <string name="test_connection">Test the connection</string>
     <string name="testing">Testing the connection…</string>
     <plurals name="connected">
@@ -98,6 +98,8 @@
     <string name="retroarch_saves">RetroArch saves folder (optional)</string>
     <string name="sd_card">SD card</string>
     <string name="no_picker">This phone has no folder picker, so the app can\'t open a folder.</string>
+    <string name="duplicate_entry">Same folders as %1$s: its games are listed only once. You can remove this entry.</string>
+    <string name="same_folders">%1$s already uses these folders. This folder wasn\'t changed: pick another one, or use that entry.</string>
     <plurals name="files_not_read">
         <item quantity="one">%1$s: %2$d file not read (%3$s). The app reads .nds, .gb, .gbc, .gba and .zip files only: unzip a .7z or .rar archive, or make it a .zip.</item>
         <item quantity="other">%1$s: %2$d files not read (%3$s). The app reads .nds, .gb, .gbc, .gba and .zip files only: unzip a .7z or .rar archive, or make it a .zip.</item>
@@ -249,7 +251,7 @@
     <string name="done_failed">Sync failed.</string>
 
     <!-- Problems: what happened and what to do; the technical detail is behind "Show details" -->
-    <string name="p_token">The server rejected this token. Scan the PC\'s QR code again, or copy the exact token into Settings.</string>
+    <string name="p_token">The server rejected this token. Scan the QR code of the PC or the 3DS again, or copy the exact token into Settings.</string>
     <string name="p_not_server">This address isn\'t a 3dssavesync server. Check it in the settings.</string>
     <string name="p_too_large">Save too large for the server. Raise the size limit on the server or its proxy.</string>
     <string name="p_rejected">The server rejected this save (empty, too large or cut off). Try again.</string>

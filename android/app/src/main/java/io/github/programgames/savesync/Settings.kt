@@ -36,6 +36,14 @@ data class Emulator(val id: String, val profile: String, val label: String, val 
         val v = profile().systems.getValue(s)
         return v[systems.getValue(s).variant.coerceIn(v.indices)]
     }
+
+    // sameAs: the same emulator with the same folders (an entry added twice): both read the same save files. An entry
+    // without any folder yet is the same as nothing.
+    fun sameAs(o: Emulator) = o.id != id && o.profile == profile && o.systems == systems &&
+        systems.values.any { it.roms != null || it.saves != null }
+
+    // duplicateOf: the first entry above this one with the same folders; the list and the syncs skip this one.
+    fun duplicateOf(all: List<Emulator>) = all.takeWhile { it.id != id }.firstOrNull { sameAs(it) }
 }
 
 // Settings: server, token and emulators, in the private preferences of the app.

@@ -18,11 +18,11 @@
     <string name="token">Jeton</string>
     <string name="show">Afficher</string>
     <string name="hide">Masquer</string>
-    <string name="scan_qr">Scanner le QR code du PC</string>
-    <string name="scan_help">Sur le PC, ouvrez les réglages de 3dssavesync, page Serveur, et cliquez sur «&#160;Afficher le QR code&#160;». Ou saisissez l\'adresse et le jeton.</string>
+    <string name="scan_qr">Scanner le QR code</string>
+    <string name="scan_help">Sur le PC, ouvrez les réglages de 3dssavesync, page Serveur, et cliquez sur «&#160;Afficher le QR code&#160;». Sur la 3DS, allez dans Réglages > Téléphone et appuyez sur A. Ou saisissez l\'adresse et le jeton.</string>
     <string name="scan_cancelled">Scan annulé. Scannez de nouveau, ou saisissez l\'adresse et le jeton.</string>
     <string name="scan_unavailable">Le lecteur de QR code n\'est pas prêt sur ce téléphone (il a besoin des services Google Play). Réessayez dans une minute, ou saisissez l\'adresse et le jeton.</string>
-    <string name="scan_not_ours">Ce n\'est pas le QR code de 3dssavesync. Scannez celui qu\'affiche le PC dans ses réglages, page Serveur.</string>
+    <string name="scan_not_ours">Ce n\'est pas le QR code de 3dssavesync. Scannez celui qu\'affiche le PC dans ses réglages, page Serveur, ou celui de la 3DS dans Réglages > Téléphone.</string>
     <string name="test_connection">Tester la connexion</string>
     <string name="testing">Test de la connexion…</string>
     <plurals name="connected">
@@ -96,6 +96,8 @@
     <string name="retroarch_saves">Dossier des sauvegardes de RetroArch (facultatif)</string>
     <string name="sd_card">Carte SD</string>
     <string name="no_picker">Ce téléphone n\'a pas de sélecteur de dossier&#160;: l\'application ne peut ouvrir aucun dossier.</string>
+    <string name="duplicate_entry">Mêmes dossiers que %1$s&#160;: ses jeux n\'apparaissent qu\'une fois. Vous pouvez retirer cette entrée.</string>
+    <string name="same_folders">%1$s utilise déjà ces dossiers. Le dossier n\'a pas changé&#160;: choisissez-en un autre, ou utilisez cette entrée.</string>
     <plurals name="files_not_read">
         <item quantity="one">%1$s&#160;: %2$d fichier non lu (%3$s). L\'application lit seulement les fichiers .nds, .gb, .gbc, .gba et .zip&#160;: décompressez une archive .7z ou .rar, ou faites-en un .zip.</item>
         <item quantity="other">%1$s&#160;: %2$d fichiers non lus (%3$s). L\'application lit seulement les fichiers .nds, .gb, .gbc, .gba et .zip&#160;: décompressez une archive .7z ou .rar, ou faites-en un .zip.</item>
@@ -252,7 +254,7 @@
     <string name="done_failed">Échec de la synchronisation.</string>
 
     <!-- Problems -->
-    <string name="p_token">Le serveur refuse ce jeton. Scannez de nouveau le QR code du PC, ou recopiez le jeton exact dans Réglages.</string>
+    <string name="p_token">Le serveur refuse ce jeton. Scannez de nouveau le QR code du PC ou de la 3DS, ou recopiez le jeton exact dans Réglages.</string>
     <string name="p_not_server">Cette adresse ne correspond pas à un serveur 3dssavesync. Vérifiez-la dans les réglages.</string>
     <string name="p_too_large">Sauvegarde trop grosse pour le serveur. Augmentez la taille maximale acceptée par le serveur ou par son proxy.</string>
     <string name="p_rejected">Le serveur a refusé cette sauvegarde (vide, trop grosse ou envoi interrompu). Réessayez.</string>
