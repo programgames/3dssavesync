@@ -48,6 +48,7 @@ import io.github.programgames.savesync.core.State
 import io.github.programgames.savesync.core.Status
 import io.github.programgames.savesync.core.Summary
 import io.github.programgames.savesync.core.Syncer
+import io.github.programgames.savesync.core.serverFingerprint
 import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.System
 import io.github.programgames.savesync.core.aliasKey
@@ -145,6 +146,7 @@ object App {
     var busy by mutableStateOf<String?>(null) // what runs now, for the progress line
     var summary by mutableStateOf<Summary?>(null)
     var message by mutableStateOf<Pair<String, Throwable?>?>(null) // result of the last action on one game
+    var serverNotice by mutableStateOf(false) // this pass forgot the Bases: another server or token (ADR 0032)
     var loaded by mutableStateOf(false)
     var reminded = false // the reminder to close the emulator was shown since the app started
     var lastRun by mutableStateOf<LastRun?>(null) // the last background pass
@@ -178,7 +180,9 @@ object App {
         if (!settings.background || !configured()) return
         val (u, scanned) = withContext(io) {
             val (found, problems) = scanAll()
-            syncer { false }.uploadAll(found.filter { !it.off && !it.notStarted }.mapNotNull { it.game }) to problems
+            val s = syncer { false }
+            val u = s.uploadAll(found.filter { !it.off && !it.notStarted }.mapNotNull { it.game })
+            u to listOfNotNull(text(R.string.server_changed_notice).takeIf { s.bases.serverChanged }) + problems
         }
         record(u, scanned)
     }
@@ -364,11 +368,14 @@ object App {
     // action: the list is never older than the action). reminded: the user saw the reminder to close the emulator.
     private fun remote(client: String = "android") = Remote(settings.url, settings.token, client)
 
-    private fun syncer(reminded: () -> Boolean = { !mustRemind() }) = Syncer(remote(), Bases(basesDir), Backups(backupsDir), Pending(pendingFile), reminded)
+    // The Bases of a pass check the fingerprint of this server first (ADR 0032): another server or token forgets them.
+    private fun syncer(reminded: () -> Boolean = { !mustRemind() }) =
+        Syncer(remote(), Bases(basesDir, serverFingerprint(settings.url, settings.token)), Backups(backupsDir), Pending(pendingFile), reminded)
 
     // refresh reads the ROM folders, the server list and every Local save.
     fun refresh() = run(text(R.string.reading)) {
         message = null
+        serverNotice = false
         val s = syncer()
         val (found, problems, notes) = withContext(io) { scanAll() }
         scanProblems = problems
@@ -383,7 +390,7 @@ object App {
         if (e.game == null || e.off || e.notStarted) named(e.copy(status = null, error = null), s)
         else if (serverError != null) e.copy(status = null, error = null, noLocal = !runCatching { e.game.file.exists() }.getOrDefault(true))
         else named(runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) }), s)
-    }.sortedBy { it.name.lowercase() }
+    }.sortedBy { it.name.lowercase() }.also { if (s.bases.serverChanged) serverNotice = true }
 
     // named: a 3DSA game has no name on this phone (no ROM): the name a 3DS or a PC gave the server, if any (ADR 0018).
     // An extdata of a 3DSA game: its own server name, else the name of that game with " (data)", which it then gives
@@ -480,6 +487,7 @@ object App {
     private suspend fun reread(e: Entry, s: Syncer) {
         s.refresh()
         val again = withContext(io) { runCatching { s.status(e.game!!) } }
+        if (s.bases.serverChanged) serverNotice = true
         entries = entries.map { if (it.game?.key == e.game?.key && it.emulator.id == e.emulator.id) it.copy(status = again.getOrNull(), error = again.exceptionOrNull()) else it }
     }
 

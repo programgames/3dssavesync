@@ -70,6 +70,7 @@ import io.github.programgames.savesync.core.Version
 import io.github.programgames.savesync.core.mainSunMoon
 import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
+import io.github.programgames.savesync.core.serverFingerprint
 import io.github.programgames.savesync.core.sha256
 import io.github.programgames.savesync.core.unpackArchive
 import org.junit.After
@@ -153,6 +154,7 @@ open class UiTest {
         App.busy = null
         App.summary = null
         App.message = null
+        App.serverNotice = false
         App.update = null
         App.updateError = null
         return ActivityScenario.launch(MainActivity::class.java).also { scenario = it }
@@ -860,6 +862,47 @@ open class UiTest {
         }
         assertEquals(emptySet<String>(), App.settings.off3DS)
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded, no name given
+    }
+
+    // Another server or token (ADR 0032): the first pass forgets the Bases of the old one, before any transfer. A game
+    // that is the same on the new server stays In sync; one that differs is a Conflict, even after "Replace and sync",
+    // so nothing is replaced without a question. One message says so.
+    @Test
+    fun anotherServerForgetsTheBases() {
+        onlyNormalFont()
+        val srv = ByteArray(0x8000) { 3 }
+        fun row(key: String, b: ByteArray) = """{"code":"$key","hash":"${sha256(b)}","taille":${b.size},"date":"20261103T101500Z","client":"pc","nom":""}"""
+        val url = fakeServer(srv) { line ->
+            if (line.split(" ")[1] == "/saves") 200 to "[${row("GB-ZELDA-1234", sram)},${row("AMCE", srv)}]".toByteArray() else 200 to srv
+        }
+        val old = Bases(File(ctx.filesDir, "bases"), serverFingerprint("http://192.168.1.20:8080", "t")) // the last syncs, on the old server
+        old.set(emu.id, "GB-ZELDA-1234", sha256(sram))
+        old.set(emu.id, "AMCE", sha256(sram))
+        val v = Version(sha256(srv), srv.size.toLong(), client = "pc")
+        // the States as the old Bases gave them: Mario Kart DS would be downloaded over the phone save
+        val entries = listOf(
+            entry("Zelda", System.GB, "GB-ZELDA-1234", sram, Version(sha256(sram), 0x8000), sha256(sram), State.IN_SYNC),
+            entry(KART, System.DS, "AMCE", sram, v, sha256(sram), State.TO_DOWNLOAD),
+        )
+        start(url = url, token = "t", emulators = listOf(emu), entries = entries)
+        rule.onNodeWithText(s(R.string.sync_all)).performClick()
+        rule.onNode(hasText(s(R.string.replace_and_sync)) and dialog).performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodes(isRoot()).fetchSemanticsNodes()
+            rule.onAllNodesWithText(s(R.string.server_changed_notice)).fetchSemanticsNodes().isNotEmpty()
+        }
+        rule.onNode(hasText(s(R.string.summary_conflicts, KART)) and dialog).assertExists()
+        rule.onNode(hasText(s(R.string.close)) and dialog).performClick()
+        rule.onNode(state(s(R.string.s_in_sync))).assertTextContains("Zelda")
+        rule.onNode(state(s(R.string.s_conflict))).assertTextContains("Mario Kart DS")
+        assertArrayEquals(sram, files[KART]!!.content)
+        assertTrue(files.values.all { it.writes == 0 })
+        // only the game names went (ADR 0018): no save uploaded or downloaded
+        assertTrue(synchronized(requests) { requests.none { Regex("^(PUT|GET) /saves/[^/ ]+ ").containsMatchIn(it) } })
+        assertEquals(mapOf("GB-ZELDA-1234" to sha256(sram)), Bases(File(ctx.filesDir, "bases")).of(emu.id))
+        val stored = org.json.JSONObject(File(ctx.filesDir, "bases/${emu.id}.json").readText()).getString("SERVEUR")
+        assertEquals(serverFingerprint(url, "t"), stored)
+        assertFalse(File(ctx.filesDir, "bases/${emu.id}.json").readText().contains("\"t\""))
     }
 
     // The reminder to close the emulator comes once per session, before the first action that may write a save on
