@@ -14,8 +14,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-# Key of a Game (ADR 0007): DS, GBA, GB/GBC, 3DS (3DS- raw /main, 3DSA- whole archive, ADR 0028). Never "/" or ".": safe as a folder name.
-KEY = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DSA?-[0-9A-F]{16})"
+# Key of a Game (ADR 0007): DS, GBA, GB/GBC, 3DS (3DS- raw /main, 3DSA- whole archive, ADR 0028; 3DSX- extdata, ADR 0031). Never "/" or ".": safe as a folder name.
+KEY = r"([A-Z0-9]{4}|GBA-[A-Z0-9]{4}|GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}|3DSA?-[0-9A-F]{16}|3DSX-[0-9A-F]{8})"
 SAVE = re.compile(rf"^/saves/{KEY}$")
 HISTORY = re.compile(rf"^/saves/{KEY}/history(/.*)?$")
 NAME = re.compile(rf"^/saves/{KEY}/name$")
