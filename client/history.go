@@ -327,9 +327,9 @@ func (a *WebSetup) webGames() map[string]any {
 	return map[string]any{"Jeux": games}
 }
 
-// mayBePokemon: a save size of a Pokémon game whose play time pokemonPlayInfo reads (never a 3DSA archive).
+// mayBePokemon: a save size of a Pokémon game whose play time pokemonPlayInfo reads (never a 3DSA or 3DSX archive).
 func mayBePokemon(key string, size int64) bool {
-	if strings.HasPrefix(key, "3DSA-") {
+	if strings.HasPrefix(key, "3DSA-") || strings.HasPrefix(key, "3DSX-") {
 		return false
 	}
 	_, g67 := pokemonFormats[int(size)]
