@@ -125,6 +125,7 @@
     <string name="sync_off_server">Serveur injoignable</string>
     <string name="sync_off_nothing">Rien à synchroniser</string>
     <string name="hidden_offline">Les jeux sans sauvegarde sur ce téléphone sont masqués jusqu\'à ce que le serveur réponde.</string>
+    <string name="server_changed_notice">Le serveur a changé&#160;: les jeux qui diffèrent du serveur demanderont lequel garder.</string>
     <string name="retry">Réessayer</string>
     <string name="show_details">Afficher les détails</string>
     <string name="hide_details">Masquer les détails</string>

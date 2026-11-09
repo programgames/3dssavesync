@@ -125,6 +125,7 @@
     <string name="sync_off_server">Server unreachable</string>
     <string name="sync_off_nothing">Nothing to sync</string>
     <string name="hidden_offline">Games without a save on this phone are hidden until the server answers.</string>
+    <string name="server_changed_notice">The server changed: games that differ from the server will ask which one to keep.</string>
     <string name="retry">Retry</string>
     <string name="show_details">Show details</string>
     <string name="hide_details">Hide details</string>

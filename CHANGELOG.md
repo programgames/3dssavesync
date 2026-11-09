@@ -19,6 +19,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 ### Changed
 
 - **3DS: large saves need less memory.** A download of a big save or extra data now holds two copies in memory at most, not three. If the console still lacks memory, the app says so before it changes anything.
+- **Another server or token asks first.** When you point a device at another server, or change its token, it forgets what it synced before. A game that differs from the new server then asks which save to keep, instead of being replaced. Games that are the same on both sides stay in sync.
 - **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.
 - **Server: the Docker image now runs on ARM machines too** (Raspberry Pi, most NAS), as well as on x86 PCs. Docker picks the right one by itself.
 - **Server: `verify` checks your history.** `docker compose exec 3dssavesync python /app/server.py verify` reads every saved version again and lists any whose content changed on the disk since it was saved. Run it after a disk problem, or before you trust an old backup.

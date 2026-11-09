@@ -1,5 +1,6 @@
 package io.github.programgames.savesync.core
 
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -193,6 +194,45 @@ class ReplaceTest {
         b.setReplaced("f", "K", null)
         assertTrue(b.replaced("f").isEmpty())
         b.clear("none") // nothing to delete
+    }
+
+    // The fingerprint of the server next to the Bases (ADR 0032): the same one keeps them; none stored (an older
+    // version) stores it and keeps them; another one removes every Base and replaced Hash, once per pass.
+    @Test
+    fun basesServer() {
+        val a = serverFingerprint(" http://192.168.1.20:8080/ ", "secret")
+        assertEquals(sha256("http://192.168.1.20:8080\nsecret".toByteArray()), a)
+        assertEquals(a, serverFingerprint("http://192.168.1.20:8080", " secret "))
+        val b = serverFingerprint("http://192.168.1.20:8080", "other")
+        Bases(tmp.root).set("e", "K", "h1") // an older version: no fingerprint
+        Bases(tmp.root).setReplaced("e", "K", "h0")
+        Bases(tmp.root).set("f", "K", "h2")
+
+        val none = Bases(tmp.root, a)
+        assertEquals(mapOf("K" to "h1"), none.of("e"))
+        assertFalse(none.serverChanged)
+        assertEquals(a, JSONObject(File(tmp.root, "e.json").readText()).getString(SERVER_KEY))
+        assertFalse(File(tmp.root, "e.json").readText().contains("secret"))
+
+        val same = Bases(tmp.root, a)
+        assertEquals(mapOf("K" to "h1"), same.of("e"))
+        assertEquals(mapOf("K" to "h0"), same.replaced("e"))
+        assertFalse(same.serverChanged)
+
+        val other = Bases(tmp.root, b)
+        assertTrue(other.of("e").isEmpty())
+        assertTrue(other.serverChanged)
+        assertTrue(other.replaced("e").isEmpty())
+        assertEquals(b, JSONObject(File(tmp.root, "e.json").readText()).getString(SERVER_KEY))
+        other.set("e", "K", "h3") // the same pass: kept, no new check
+        assertEquals(mapOf("K" to "h3"), other.of("e"))
+        assertEquals(mapOf("K" to "h2"), other.of("f")) // no fingerprint yet: stored, kept
+        assertEquals(b, JSONObject(File(tmp.root, "f.json").readText()).getString(SERVER_KEY))
+        assertTrue(other.of("g").isEmpty()) // no Bases yet: the first Base stores it
+        assertFalse(File(tmp.root, "g.json").exists())
+        other.set("g", "K", "h4")
+        assertEquals(b, JSONObject(File(tmp.root, "g.json").readText()).getString(SERVER_KEY))
+        assertFalse(Bases(tmp.root, b).run { of("e"); of("f"); of("g"); serverChanged })
     }
 
     @Test

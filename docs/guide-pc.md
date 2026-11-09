@@ -106,7 +106,7 @@ Another place: option `--config <file>`. Example: [`client/config.example.json`]
 | `emulateurs.<name>.roms` | System → ROM folder. Only for the `launch` command (shortcuts). |
 | `emulateurs.<name>.processus` | Optional: name of the process to wait for. Default: the executable name. Useful for a Flatpak started by a script. |
 
-Each entry of `emulateurs` syncs on its own: it has its own sync state (`bases/<name>.json`). The log is `3dssavesync.log`, next to `config.json`.
+Each entry of `emulateurs` syncs on its own: it has its own sync state (`bases/<name>.json`). This file also keeps a fingerprint of the server address and token (never the token itself): after a change of server or token, the sync state is forgotten, and each game that differs from the server asks which save to keep. The log is `3dssavesync.log`, next to `config.json`.
 
 ## Profiles
 

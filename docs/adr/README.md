@@ -37,3 +37,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0029](0029-certificats-personnalises.md) | The 3DS also trusts the CA certificates of `sdmc:/config/ssl/cacert.pem` for the Server, on top of ISRG Root X1. |
 | [0030](0030-qr-code-sur-la-3ds.md) | The 3DS shows the pairing QR code of the Android app, with the PC's exact text and a vendored encoder (Nayuki, v1.8.0). |
 | [0031](0031-extdata-3ds.md) | The extra data (extdata) of a 3DS game syncs as its own archive, one Key per extdata, on and off with its games. |
+| [0032](0032-changement-de-serveur.md) | Each device keeps a fingerprint of its server and token with its Bases; another server or token forgets the Bases, so a differing game asks first. |

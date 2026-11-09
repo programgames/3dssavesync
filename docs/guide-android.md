@@ -48,6 +48,8 @@ Then **Show my games** opens the list. To add another emulator later: **Emulator
 
 Plain `http://` is allowed for a server on your home network. An `https://` address works the same way. The app gives up on a connection after 5 seconds, so a home server that can't be reached (away from home) fails fast.
 
+When you change the server address or the token, the app forgets the last sync of every game, once: a game that is the same on the new server stays **In sync**, a game that differs shows **Conflict** and waits for your choice ([ADR 0032](adr/0032-changement-de-serveur.md)).
+
 **HTTPS with your own certificate.** A home server with a self-signed certificate, or one signed by your own certificate authority, works once its certificate is installed on the phone: copy the certificate file (`.crt` or `.pem`) to the phone, then in the Android settings open **Security** (or **Security and privacy**) > **Encryption and credentials** > **Install a certificate** > **CA certificate**. The menu names change a little between makers. Without it, the app says that the phone doesn't trust the server's certificate. On your home network, the `http://` address of the server works without a certificate.
 
 ## Emulators
