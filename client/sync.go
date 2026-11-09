@@ -161,6 +161,7 @@ type Session struct {
 	config string // path of config.json: an Alias created at launch is written there (ADR 0014)
 	dir    string
 	*remote
+	serverWarned bool // the message of a server change was shown in this Session (ADR 0032)
 }
 
 // Client is an emulator of this PC on the server: its Bases, its Backup copies, the ROMs kept for its Keys. A launch
@@ -294,19 +295,48 @@ func errorText(err error) string {
 	return t
 }
 
-// basePath returns the Bases file: one file per emulator, Key -> Hash of the last Sync.
+// basePath returns the Bases file: one file per emulator, Key -> Hash of the last Sync, and the fingerprint of the
+// server under serverKey.
 func (c *Client) basePath() string { return filepath.Join(c.dir, "bases", c.name+".json") }
 
+// serverKey is the reserved Key of the Bases that holds the fingerprint of the server (ADR 0032). No Game Key has
+// this form (ADR 0007).
+const serverKey = "SERVEUR"
+
+// fingerprint returns the SHA-256 of "<address>\n<token>", the address without spaces around it and without a final
+// "/" (ADR 0032). The token itself is never written.
+func (c *Config) fingerprint() string {
+	return sha256Hex([]byte(strings.TrimSuffix(strings.TrimSpace(c.URL), "/") + "\n" + c.Token))
+}
+
+// bases returns the Bases of this Client, after the server check (ADR 0032): another fingerprint removes every Base
+// (one message per Session), no fingerprint keeps them; the fingerprint is then written, before any transfer.
 func (c *Client) bases() (map[string]string, error) {
 	m := map[string]string{}
 	o, err := os.ReadFile(c.basePath())
-	if errors.Is(err, fs.ErrNotExist) {
-		return m, nil
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
-	return m, json.Unmarshal(bytes.TrimPrefix(o, []byte("\xef\xbb\xbf")), &m)
+	if err == nil {
+		if err := json.Unmarshal(bytes.TrimPrefix(o, []byte("\xef\xbb\xbf")), &m); err != nil {
+			return m, err
+		}
+	}
+	f := c.cfg.fingerprint()
+	if m[serverKey] == f {
+		return m, nil
+	}
+	if m[serverKey] != "" {
+		m = map[string]string{}
+		c.log(c.name + " : serveur changé, Bases oubliées")
+		if !c.serverWarned {
+			c.serverWarned = true
+			notify(tr("Le serveur a changé : les jeux qui diffèrent du serveur demanderont lequel garder.",
+				"The server changed: games that differ from the server will ask which one to keep."))
+		}
+	}
+	m[serverKey] = f
+	return m, writeJSON(c.basePath(), m, true)
 }
 
 func (c *Client) setBase(key, hash string) error {

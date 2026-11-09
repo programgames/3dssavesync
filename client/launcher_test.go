@@ -1107,3 +1107,72 @@ func TestSyncAll(t *testing.T) {
 		t.Errorf("synchro automatique sans dossier de jeux : %+v %q", r, autoSyncText(r))
 	}
 }
+
+// TestServerChange: the fingerprint of the server next to the Bases (ADR 0032).
+func TestServerChange(t *testing.T) {
+	tmp = t.TempDir()
+	reset()
+	if a, b := (&Config{URL: " http://h:8765/ ", Token: "t"}).fingerprint(), (&Config{URL: "http://h:8765", Token: "t"}).fingerprint(); a != b || len(a) != 64 {
+		t.Errorf("espaces et / final : %s %s", a, b)
+	}
+	if (&Config{URL: "http://h", Token: "t"}).fingerprint() == (&Config{URL: "http://h", Token: "u"}).fingerprint() {
+		t.Error("un autre jeton doit donner une autre empreinte")
+	}
+	dir := filepath.Join(tmp, "cfg")
+	session := func(name string) *Client {
+		srv := httptest.NewServer(&Server{data: filepath.Join(tmp, name), token: "jeton-test"})
+		t.Cleanup(srv.Close)
+		url = srv.URL
+		cfg := &Config{URL: srv.URL, Token: "jeton-test", Copies: filepath.Join(tmp, "copies")}
+		return (&Session{cfg: cfg, dir: dir, remote: &remote{cfg: cfg, dir: dir, http: srv.Client()}}).client("mgba")
+	}
+	same, differs := &Game{System: "GBA", Key: "GBA-AAAA", Name: "Pareil", File: filepath.Join(tmp, "gba", "Pareil.sav")},
+		&Game{System: "GBA", Key: "GBA-BBBB", Name: "Autre", File: filepath.Join(tmp, "gba", "Autre.sav")}
+	write(t, same.File, random(0x8000, 1))
+	write(t, differs.File, random(0x8000, 2))
+
+	c := session("data1")
+	write(t, c.basePath(), []byte(`{"GBA-AAAA": "`+sha256Hex(random(0x8000, 9))+`"}`)) // an older version: no fingerprint
+	if b, err := c.bases(); err != nil || b["GBA-AAAA"] != sha256Hex(random(0x8000, 9)) || b[serverKey] != c.cfg.fingerprint() {
+		t.Errorf("sans empreinte : Bases gardées, empreinte écrite attendues : %v %v", b, err)
+	}
+	os.Remove(c.basePath())
+	for _, j := range []*Game{same, differs} {
+		if _, err := c.syncGame(j, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.syncGame(same, true); err != nil || len(notifications) > 0 || len(questions) > 0 {
+		t.Errorf("même serveur : rien à dire attendu : %v %q %q", err, notifications, questions)
+	}
+	if b, _ := c.bases(); b[differs.Key] != sha256Hex(random(0x8000, 2)) || b[serverKey] != c.cfg.fingerprint() {
+		t.Errorf("même serveur : Bases gardées attendues : %v", b)
+	}
+
+	// Another server: Pareil has the same save there, Autre another one. Without the check, Autre (equal to its old
+	// Base) would be To download, replaced without a question.
+	c = session("data2")
+	upload3ds(same.Key, random(0x8000, 1), nil)
+	upload3ds(differs.Key, random(0x8000, 3), nil)
+	if _, err := c.syncGame(same, true); err != nil || len(questions) > 0 {
+		t.Errorf("même sauvegarde des deux côtés : À jour attendu : %v %q", err, questions)
+	}
+	if len(notifications) != 1 || !strings.Contains(notifications[0], "Le serveur a changé") {
+		t.Errorf("un seul message attendu : %q", notifications)
+	}
+	if b, _ := c.bases(); b[differs.Key] != "" || b[same.Key] != sha256Hex(random(0x8000, 1)) || b[serverKey] != c.cfg.fingerprint() {
+		t.Errorf("Bases retirées, nouvelle empreinte attendues : %v", b)
+	}
+	if _, err := c.syncGame(differs, false); err != nil || len(questions) != 1 || !strings.Contains(questions[0], "Conflit sur Autre") {
+		t.Errorf("Conflit attendu : %v %q", err, questions)
+	}
+	if !bytes.Equal(read(differs.File), random(0x8000, 2)) || !bytes.Equal(current(differs.Key), random(0x8000, 3)) {
+		t.Error("aucun transfert sans réponse attendu")
+	}
+	if len(notifications) != 1 {
+		t.Errorf("message une seule fois par passage : %q", notifications)
+	}
+	if log := string(read(filepath.Join(dir, "3dssavesync.log"))); !strings.Contains(log, "serveur changé") || strings.Contains(log, "jeton-test") || strings.Contains(log, url) {
+		t.Errorf("journal sans adresse ni jeton attendu : %q", log)
+	}
+}

@@ -233,7 +233,7 @@ func newSession(path string) (*Session, error) {
 		names3DS[strings.ToUpper(id)] = name
 	}
 	dir := filepath.Dir(path)
-	return &Session{&cfg, path, dir, &remote{cfg: &cfg, dir: dir, http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}}, nil
+	return &Session{cfg: &cfg, config: path, dir: dir, remote: &remote{cfg: &cfg, dir: dir, http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}}, nil
 }
 
 // emulatorFor returns the configured emulator that handles this System: the one asked for, or the only possible one.
