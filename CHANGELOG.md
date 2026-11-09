@@ -13,7 +13,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ### Changed
 
-- **3DS: large saves need half the memory.** A download held up to three copies of a save or extra data at once (the received one, the old one and the check of its backup copy), so a large one could fail on a 3DS. It now holds two at most. When even that does not fit, the app says so before it changes anything.
+- **3DS: large saves need less memory.** A download of a big save or extra data now holds two copies in memory at most, not three. If the console still lacks memory, the app says so before it changes anything.
 - **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.
 
 ## [3.12.0] - 2026-11-08
