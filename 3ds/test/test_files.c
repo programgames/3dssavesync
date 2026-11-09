@@ -117,6 +117,13 @@ int main(void)
     /* Backup copy read back (download_save) */
     check(write_verified(backup, "partie", 6) == 0 && contains(backup, "partie"), "écriture relue : faite");
     check(write_verified("dossier-absent/copie.sav", "partie", 6) != 0, "écriture relue impossible : échec signalé");
+    {
+        static unsigned char big[200000]; /* read back in several pieces */
+        size_t i;
+        for (i = 0; i < sizeof big; i++) big[i] = (unsigned char)(i * 7);
+        check(write_verified(backup, big, sizeof big) == 0, "grande écriture relue par morceaux : faite");
+        check(write_verified(backup, "", 0) == 0, "fichier vide relu : fait");
+    }
     remove(backup);
 
     /* Two ROMs, one Save file: Duplicate (mGBA forwarder named like the ROM, whatever the folder) */

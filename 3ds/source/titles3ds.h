@@ -25,8 +25,9 @@ int read_title_archive(u64 id, FS_MediaType *media, unsigned char **bytes, size_
 
 /* Writes the version tar (unpack_archive: a damaged one is refused) into the existing archive: files absent from it
  * deleted, the others created or resized and written, commit, secure value removed, then read back and compared. An
- * archive is never created or formatted. 0 if done; -1 if nothing was committed (old save intact); -2 if committed but
- * the read back differs. why: the technical line. */
+ * archive is never created or formatted. tar is freed (always): the read back takes its memory and is compared by
+ * SHA-256. 0 if done; -1 if nothing was committed (old save intact); -2 if committed but the read back differs. why: the
+ * technical line. */
 int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn);
 
 /* Extra data (extdata) of 3DS games (ADR 0031): its user/ files, as one 3dssavesync archive, same rules and limit. */
