@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -35,7 +36,7 @@ var keyPattern = func() string {
 	shapes := []struct {
 		system System
 		shape  string
-	}{{DS, `[A-Z0-9]{4}`}, {GBA, `GBA-[A-Z0-9]{4}`}, {GB, `GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}`}, {N3DS, `3DSA?-[0-9A-F]{16}`}}
+	}{{DS, `[A-Z0-9]{4}`}, {GBA, `GBA-[A-Z0-9]{4}`}, {GB, `GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}`}, {N3DS, `(?:3DSA?-[0-9A-F]{16}|3DSX-[0-9A-F]{8})`}}
 	var all []string
 	for _, s := range shapes {
 		keyShapes[s.system] = regexp.MustCompile(`^` + s.shape + `$`)
@@ -66,6 +67,26 @@ var titles3DS = map[string]string{
 // ignored3DS: games whose save is tied to one console, never synced (ADR 0028, "titres-ignores" on the 3DS).
 var ignored3DS = map[string]bool{"00040000001A0300": true, "00040000001A0400": true, "00040000001A0500": true, "00040000001BB800": true}
 
+// ignoredExtdata: extdata never synced (ADR 0031, "extdata-ignorees" on the 3DS): NetPass's SpotPass downloads and the
+// extdata of the ignored3DS games. Key = extdata ID.
+var ignoredExtdata = func() map[string]bool {
+	m := map[string]bool{extdataID("000400000F657400"): true}
+	for id := range ignored3DS {
+		m[extdataID(id)] = true
+	}
+	return m
+}()
+
+// extdataID returns the extdata ID of a 3DS title ID as Azahar devices map it: titleLow >> 8, 8 upper-case hex digits
+// (ADR 0031). "" for a title ID that is not 16 hex digits.
+func extdataID(titleID string) string {
+	low, err := strconv.ParseUint(titleID[min(8, len(titleID)):], 16, 32)
+	if len(titleID) != 16 || err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%08X", low>>8)
+}
+
 // names3DS holds the names given in config.json (titres_3ds) to 3DS games: title ID -> name (newSession).
 var names3DS = map[string]string{}
 
@@ -81,8 +102,11 @@ func key3DS(id string) string {
 	return ""
 }
 
-// isArchive: a 3DSA Game, whose Local save is the 3dssavesync archive of its whole Azahar folder (ADR 0028).
-func isArchive(j *Game) bool { return strings.HasPrefix(j.Key, "3DSA-") }
+// isArchive: a 3DSA Game (its whole Azahar save folder, ADR 0028) or a 3DSX extdata (the files under its user/ folder,
+// ADR 0031), whose Local save is the 3dssavesync archive of the folder j.File.
+func isArchive(j *Game) bool {
+	return strings.HasPrefix(j.Key, "3DSA-") || strings.HasPrefix(j.Key, "3DSX-")
+}
 
 // Rom is what a ROM tells: its System and Key, and the possible save names.
 // Empty System = unknown extension; empty Key = out of scope (homebrew, ignored 3DS game).

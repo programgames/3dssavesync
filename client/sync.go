@@ -44,7 +44,8 @@ type Game struct {
 }
 
 // savePath returns the save file of a Game in an emulator's folder. 3DS: folder = Azahar's sdmc; the file is /main
-// of the save archive for a 3DS- Key, the save archive folder itself for a 3DSA- Key (ADR 0028).
+// of the save archive for a 3DS- Key, the save archive folder itself for a 3DSA- Key (ADR 0028). A 3DSX- extdata
+// gets its folder from extdata3DS.
 func savePath(dir string, system System, key, name, ext string) string {
 	if system == "3DS" {
 		id, z := strings.ToLower(key[strings.IndexByte(key, '-')+1:]), strings.Repeat("0", 32)
@@ -82,6 +83,9 @@ type Local struct {
 	Blank bool // blank SRAM (only 0x00 or only 0xFF), written before any play
 }
 
+// maxExtdata: the largest extdata, in bytes of files (ADR 0031, ARCHIVE_MAX on the 3DS).
+const maxExtdata = 16 << 20
+
 // readLocal reads the Local save: Hash, size and Upload cover its SRAM only (decode). srv: Current version of the
 // server or nil.
 func readLocal(j *Game, srv *Version) (*Local, error) {
@@ -92,6 +96,15 @@ func readLocal(j *Game, srv *Version) (*Local, error) {
 		}
 		if err != nil {
 			return nil, err
+		}
+		if strings.HasPrefix(j.Key, "3DSX-") { // as the 3DS (ARCHIVE_MAX): beyond 16 MiB, Not synced (ADR 0031)
+			total := 0
+			for _, f := range files {
+				total += len(f.Data)
+			}
+			if total > maxExtdata {
+				return nil, fmt.Errorf(tr("%s : données de plus de %d Mio, non synchronisées", "%s: data larger than %d MiB, not synced"), j.File, maxExtdata>>20)
+			}
 		}
 		data, err := PackArchive(files)
 		if err != nil {

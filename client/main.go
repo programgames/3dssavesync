@@ -77,10 +77,17 @@ type Emulator struct {
 	InternalName bool     `json:"nom_interne,omitempty"`
 }
 
-// off3DS reports a 3DS game turned off in titres_3ds_off, from its Key or title ID.
+// off3DS reports a 3DS game turned off in titres_3ds_off, from its Key or title ID. A 3DSX extdata is off when its
+// ID is titleLow >> 8 of a turned-off game (ADR 0031).
 func (c *Config) off3DS(key string) bool {
 	id := key[strings.IndexByte(key, '-')+1:]
-	return slices.ContainsFunc(c.Off3DS, func(o string) bool { return strings.EqualFold(strings.TrimSpace(o), id) })
+	return slices.ContainsFunc(c.Off3DS, func(o string) bool {
+		o = strings.TrimSpace(o)
+		if strings.HasPrefix(key, "3DSX-") {
+			return extdataID(o) == id
+		}
+		return strings.EqualFold(o, id)
+	})
 }
 
 func (c *Config) copiesDir(configDir string) string {
@@ -349,6 +356,14 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 		return 1, fmt.Errorf(tr("dossier des sauvegardes %s de %s introuvable. Indiquez-le dans les réglages.", "can't find the %s save folder of %s. Set it in the settings."), system, c.name)
 	default:
 		games = []*Game{j}
+		if system == N3DS { // the extdata of the game, if Azahar has one (ADR 0031)
+			ext := extdataID(key[strings.IndexByte(key, '-')+1:])
+			for _, g := range c.extdata3DS(dir, map[string]string{ext: name}) {
+				if g.Key == "3DSX-"+ext {
+					games = append(games, g)
+				}
+			}
+		}
 	}
 	if unread {
 		notify(fmt.Sprintf(tr("Jeu lancé sans synchronisation : 3dssavesync ne sait pas lire ce format de ROM (%s). Utilisez une ROM .zip ou non compressée.",
@@ -635,17 +650,18 @@ func (c *Client) gamesOf(e *Emulator, p Profile) (games []*Game, refusal, noRoms
 
 // games3DS returns the 3DS games of an Azahar sdmc folder (ADR 0028): the 8 Pokémon games (a never-started one too,
 // its folder is created with a known format), and every other application that has a save folder, except the ignored
-// and turned-off ones. Name: titres_3ds, else the ROM in the roms folder (if set), else the title ID.
+// and turned-off ones; then the extdata (extdata3DS). Name: titres_3ds, else the ROM in the roms folder (if set),
+// else the title ID.
 func (c *Client) games3DS(sdmc, roms string) []*Game {
 	if sdmc == "" {
 		return nil
 	}
-	names, ids := map[string]string{}, map[string]bool{}
+	names, ids := map[string]string{}, map[string]bool{} // names: title ID -> ROM name
 	if roms != "" {
 		filepath.WalkDir(roms, func(path string, d fs.DirEntry, err error) error {
 			if err == nil && !d.IsDir() {
 				if r, err := readRom(path); err == nil && r.System == N3DS && r.Key != "" {
-					names[r.Key] = r.Name
+					names[r.Key[strings.IndexByte(r.Key, '-')+1:]] = r.Name
 				}
 			}
 			return nil
@@ -667,11 +683,47 @@ func (c *Client) games3DS(sdmc, roms string) []*Game {
 		if !keyShapes[N3DS].MatchString(key) || c.cfg.off3DS(key) {
 			continue
 		}
-		name := cmp.Or(titles3DS[id], names3DS[id], names[key], id)
+		name := cmp.Or(titles3DS[id], names3DS[id], names[id], id)
 		j := &Game{System: N3DS, Key: key, Name: name, File: savePath(sdmc, N3DS, key, name, "")}
 		if exists(savePath(sdmc, N3DS, "3DSA-"+id, "", "")) || formats3DS[id] != nil { // never started, unknown format: skipped
 			games = append(games, j)
 		}
+	}
+	// Name of an extdata: its known game whose titleLow >> 8 is the ID, the smallest title ID if several.
+	for id := range names3DS {
+		ids[id] = true
+	}
+	for id := range names {
+		ids[id] = true
+	}
+	extNames := map[string]string{}
+	for _, id := range slices.Sorted(maps.Keys(ids)) {
+		if n := cmp.Or(titles3DS[id], names3DS[id], names[id]); n != "" && extNames[extdataID(id)] == "" {
+			extNames[extdataID(id)] = n
+		}
+	}
+	return append(games, c.extdata3DS(sdmc, extNames)...)
+}
+
+// extdata3DS returns the extdata of an Azahar sdmc folder (ADR 0031): every folder extdata/00000000/<ID>/ that has a
+// user/ subfolder, outside ignoredExtdata and the turned-off games (off3DS). Its Local save is the archive of user/.
+// Name: the name of its game (names: extdata ID -> game name) + " (data)", else "Extdata <ID>".
+func (c *Client) extdata3DS(sdmc string, names map[string]string) []*Game {
+	z := strings.Repeat("0", 32)
+	root := filepath.Join(sdmc, "Nintendo 3DS", z, z, "extdata", "00000000")
+	dirs, _ := os.ReadDir(root)
+	var games []*Game
+	for _, d := range dirs {
+		id := strings.ToUpper(d.Name())
+		key, user := "3DSX-"+id, filepath.Join(root, d.Name(), "user")
+		if i, err := os.Stat(user); err != nil || !i.IsDir() || !keyShapes[N3DS].MatchString(key) || ignoredExtdata[id] || c.cfg.off3DS(key) {
+			continue
+		}
+		name := "Extdata " + id
+		if n := names[id]; n != "" {
+			name = n + tr(" (données)", " (data)")
+		}
+		games = append(games, &Game{System: N3DS, Key: key, Name: name, File: user})
 	}
 	return games
 }
