@@ -1,5 +1,6 @@
 /* 3dssavesync 3DS: syncs the Saves with the Server (docs/design.md §4):
- * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) and every 3DS game with a save (ADR 0007 to 0009, 0028).
+ * DS (TWiLight), GB/GBC (TWiLight), GBA (open_agb_firm) and every 3DS game with a save and its extra data (ADR 0007
+ * to 0009, 0028, 0031).
  * Top: list of the Games and their State. Bottom: details, messages, buttons. */
 #include <3ds.h>
 #include <dirent.h>
@@ -44,6 +45,7 @@ typedef struct {
     char sav_rom[600]; /* GB/GBA: its Save without the mGBA forwarder (saves folder) */
     u64 title;      /* 3DS and GB Virtual Console: title ID; 0 for a ROM */
     FS_MediaType media; /* 3DS: SD or game card */
+    u32 extdata;    /* 3DS extra data (ADR 0031): its ID, Key 3DSX-; title and media: its first game (name, icon). 0: a save */
     char name[256];  /* ROM name without extension = name of the .sav */
     char short_name[48]; /* for display only: "Pokemon Diamant" */
     int rom_count;
@@ -186,8 +188,9 @@ static int has_rom_extension(system_t s, const char *ext)
 /* GB/GBC Virtual Console game (scan_vc). */
 static int vc(const game_t *j) { return j->system == SYS_GB && j->title; }
 
-/* 3DS game synced as its whole save archive, Key 3DSA- (ADR 0028): every 3DS game but the 8 Pokémon (/main, 3DS-). */
-static int whole_archive(const game_t *j) { return j->system == SYS_3DS && !pokemon_3ds(j->title); }
+/* 3DS game synced as its whole save archive, Key 3DSA- (ADR 0028): every 3DS game but the 8 Pokémon (/main, 3DS-).
+ * The extra data of 3DS games too, Key 3DSX- (ADR 0031), Pokémon included. */
+static int whole_archive(const game_t *j) { return j->system == SYS_3DS && (j->extdata || !pokemon_3ds(j->title)); }
 
 /* Name of the Game's Base in base.ini. A Virtual Console game is a Local save of its own next to a ROM or forwarder
  * with the same Key (ADR 0025): each has its Base, and the server links them like two devices. "VC-" + title ID: never
@@ -205,6 +208,7 @@ static const char *base_id(const game_t *j)
  * Clock footer included). 0 if read. */
 static int read_save(game_t *j, unsigned char **bytes, size_t *size)
 {
+    if (j->extdata) return read_extdata(j->extdata, bytes, size, j->why, sizeof j->why);
     if (whole_archive(j)) return read_title_archive(j->title, &j->media, bytes, size, j->why, sizeof j->why);
     if (j->title) return read_title_save(j->title, vc(j) ? "/sav.dat" : "/main", &j->media, bytes, size);
     return read_file(j->sav, bytes, size);
@@ -434,6 +438,32 @@ static void migrate_titles(const u64 *ids, const FS_MediaType *medias, int n)
     else log_event("titres.ini read once: %d 3DS games turned off", off_count - before);
 }
 
+/* Extra data of the 3DS game id just listed (ADR 0031): one entry per extdata ID, which several games may share (Pokémon X
+ * and Y); the first game listed gives its name and icon. An extdata is listed while one of its games is on, and only if
+ * it exists: it is never created here. */
+static void scan_extdata(u64 id, FS_MediaType media, const char *name)
+{
+    const char *suffix = T(" (données)", " (data)");
+    const int l = (int)strlen(suffix);
+    u32 e;
+    game_t *j;
+    int k;
+    if (skipped_extdata(id) || !(e = title_extdata_id(id))) return;
+    for (k = 0; k < game_count && games[k].extdata != e; k++);
+    if (k < game_count || !(j = new_game())) return;
+    j->title = id;
+    j->media = media;
+    j->extdata = e;
+    j->system = SYS_3DS;
+    j->rom_count = 1;
+    read_local(j);
+    if (!j->has_local && !j->unexpected) return; /* the game has no extdata */
+    key_3dsx(e, j->key);
+    snprintf(j->name, sizeof j->name, "%.*s%s", (int)sizeof j->name - 1 - l, name, suffix);
+    snprintf(j->short_name, sizeof j->short_name, "%.*s%s", (int)sizeof j->short_name - 1 - l, name, suffix);
+    game_count++;
+}
+
 /* The 3DS games (ADR 0028): every application with a Save archive, installed or on the inserted game card, but the
  * Virtual Console games, the skip list and the games turned off. The 8 Pokémon games: /main, Key 3DS-; every other
  * game: its whole archive, Key 3DSA-. A game never started has no archive: not listed. */
@@ -454,7 +484,7 @@ static void scan_3ds(void)
         char name[256];
         game_t *j;
         if (is_off(ids[i]) || !syncable_title(ids[i], medias[i])) continue;
-        for (k = 0; k < game_count && !(games[k].system == SYS_3DS && games[k].title == ids[i]); k++);
+        for (k = 0; k < game_count && !(games[k].system == SYS_3DS && !games[k].extdata && games[k].title == ids[i]); k++);
         if (k < game_count) continue; /* installed and on the game card: one game (read_save reads the SD card first) */
         if (!(j = new_game())) break;
         if (title_name(ids[i], medias[i], language, name, sizeof name)) snprintf(name, sizeof name, "%016llX", ids[i]);
@@ -469,6 +499,7 @@ static void scan_3ds(void)
         snprintf(j->name, sizeof j->name, "%s", name);
         snprintf(j->short_name, sizeof j->short_name, "%.47s", name);
         game_count++;
+        scan_extdata(ids[i], medias[i], name);
     }
     free(ids);
     free(medias);
@@ -534,7 +565,7 @@ static void note_installs(void)
     int i, r, changed = 0;
     for (i = 0; i < game_count; i++) {
         game_t *j = &games[i];
-        if (!j->title || j->media != MEDIATYPE_SD) continue;
+        if (!j->title || j->media != MEDIATYPE_SD || j->extdata) continue; /* extdata: not removed with its game */
         r = note_install(&bases, j->title, title_install_time(j->title), base_id(j));
         changed |= r > 0;
         if (r == 2) {
@@ -887,9 +918,10 @@ static result_t download_save(game_t *j)
     if (whole_archive(j)) {
         char why[160];
         free(old_data); /* copied: its memory goes to the read back */
-        failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why);
+        if (j->extdata) failed = write_extdata(j->extdata, (unsigned char *)body, size, why, sizeof why);
+        else failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why);
         free(body);
-        if (failed) log_event("write %016llX: %s", j->title, why);
+        if (failed) log_event("write %s: %s", j->key, why);
         if (failed == -2) {
             r = make_result(RESULT_WRITTEN_DAMAGED, backup);
             r.had_save = 1;
@@ -1255,6 +1287,8 @@ static const char *state_sentence(const game_t *j, char *t, size_t n)
                               "%d ROMs hold this game. Keep one, or add the others to ROM hacks on the PC, then prepare the SD card."), j->rom_count);
         return t;
     case STATUS_NOT_SYNCED:
+        if (j->extdata) return T("Les données additionnelles de ce jeu ne peuvent pas être copiées en entier (détail ci-dessous). Elles ne sont pas synchronisées, rien n'y est modifié.",
+                                 "This game's extra data can't be copied whole (details below). It is not synced, and nothing in it is changed.");
         if (whole_archive(j)) return T("La sauvegarde de ce jeu ne peut pas être copiée en entier (détail ci-dessous). Ce jeu n'est pas synchronisé, rien n'y est modifié.",
                                        "This game's save can't be copied whole (details below). This game is not synced, and nothing in it is changed.");
         if (!j->key[0]) return T("La ROM de ce jeu Virtual Console est illisible : sa clé est inconnue. Ce jeu n'est pas synchronisé, rien n'y est modifié.",
@@ -1960,7 +1994,7 @@ static int act(game_t *j)
         break;
     case STATUS_NOT_SYNCED:
         if (whole_archive(j)) {
-            r = make_result(RESULT_3DS_NOT_SYNCED, j->why);
+            r = make_result(j->extdata ? RESULT_EXTDATA_NOT_SYNCED : RESULT_3DS_NOT_SYNCED, j->why);
             break;
         }
         if (!j->key[0]) {

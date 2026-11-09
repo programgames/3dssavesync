@@ -91,6 +91,13 @@ void key_3dsa(unsigned long long title_id, char key[KEY_MAX])
     snprintf(key, KEY_MAX, "3DSA-%016llX", title_id);
 }
 
+void key_3dsx(unsigned long id, char key[KEY_MAX])
+{
+    snprintf(key, KEY_MAX, "3DSX-%08lX", id & 0xFFFFFFFFUL);
+}
+
+unsigned long extdata_id_of(unsigned long long title_id) { return (unsigned long)((title_id & 0xFFFFFFFFULL) >> 8); }
+
 static int listed(unsigned long long id, const unsigned long long *ids, size_t n)
 {
     size_t i;
@@ -112,6 +119,11 @@ int skipped_3ds(unsigned long long id)
     /* titres-ignores: Super Mario Maker (00040000001A0300, 001A0400, 001A0500) and Super Mario Maker 3D (001BB800) */
     static const unsigned long long IDS[] = { 0x00040000001A0300ULL, 0x00040000001A0400ULL, 0x00040000001A0500ULL, 0x00040000001BB800ULL };
     return listed(id, IDS, sizeof IDS / sizeof *IDS);
+}
+
+int skipped_extdata(unsigned long long id)
+{
+    return id == 0x000400000F657400ULL || skipped_3ds(id); /* extdata-ignorees: NetPass, Super Mario Maker */
 }
 
 size_t sram_size(system_t s, size_t t)

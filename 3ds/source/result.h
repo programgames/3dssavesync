@@ -27,6 +27,7 @@ typedef enum {
     RESULT_VC_UNEXPECTED,    /* path: the files of its archive (title_root) */
     RESULT_VC_NO_KEY,        /* ROM of a Virtual Console game unreadable; path: the step that failed */
     RESULT_3DS_NOT_SYNCED,   /* save archive of a 3DS game that can't be copied whole (ADR 0028); path: why */
+    RESULT_EXTDATA_NOT_SYNCED, /* extra data of 3DS games that can't be copied whole (ADR 0031); path: why */
     RESULT_CONFLICT_LEFT,
     RESULT_DUPLICATE_SHARED, /* count */
     RESULT_DUPLICATE,        /* count */
