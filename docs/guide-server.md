@@ -61,6 +61,14 @@ docker compose exec 3dssavesync python /app/server.py verify
 
 It prints `DAMAGED <game key>/<version>` for each version whose content changed on the disk, then a count, and exits with code 1 if one is damaged. It changes nothing. Run it after a disk problem, or on a restored backup: `python server/server.py verify path/to/data` (Python 3.11 or newer).
 
+### See what uses the disk
+
+```
+docker compose exec 3dssavesync python /app/server.py report
+```
+
+It prints one line per game, largest first: its key, number of versions, total size, size of the current version, dates of the oldest and newest version, and its name. The last line gives the totals, and the number of `.tmp` files left by a cut upload, if any. It changes nothing.
+
 ### Test a deployed server
 
 The same test suite as the CI:

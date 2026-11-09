@@ -262,5 +262,28 @@ class VerifyTest(unittest.TestCase):
             self.assertEqual(server.verify(data), (2, [f"ABCD/{bad}"]))
 
 
+class ReportTest(unittest.TestCase):
+    def test_games_largest_first_with_counts_and_totals(self):
+        with tempfile.TemporaryDirectory() as data:
+            files = {"ABCD": [("000001-20260101T000000Z-pc-aa.sav", 10), ("000002-20260305T120000Z-3ds-bb.sav", 20)],
+                     "GBA-WXYZ": [("000001-20260210T000000Z-pc-cc.sav", 2048),
+                                  ("000002-20260211T000000Z-pc-dd.sav.tmp", 5)]}
+            for key, versions in files.items():
+                os.makedirs(os.path.join(data, key))
+                for name, size in versions:
+                    with open(os.path.join(data, key, name), "wb") as f:
+                        f.write(b"x" * size)
+            with open(os.path.join(data, "ABCD", "nom.txt"), "w", encoding="utf-8") as f:
+                f.write("Pokémon Platine")
+            before = sorted(os.walk(data))
+            self.assertEqual(server.report(data), [
+                "KEY       VERSIONS    TOTAL  CURRENT      OLDEST      NEWEST  NAME",
+                "GBA-WXYZ         1  2.0 KiB  2.0 KiB  2026-02-10  2026-02-10",
+                "ABCD             2     30 B     20 B  2026-01-01  2026-03-05  Pokémon Platine",
+                "2 games, 3 versions, 2.0 KiB, 1 .tmp leftovers (cut uploads)",
+            ])
+            self.assertEqual(sorted(os.walk(data)), before)  # reads only
+
+
 if __name__ == "__main__":
     unittest.main()

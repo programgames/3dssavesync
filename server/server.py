@@ -4,6 +4,7 @@ Environment variables (NDSSYNC_ prefix from before v3, kept for existing install
 A Version = data/<code>/<seq>-<date>-<client>-<hash>.sav; the Current version has the highest <seq>.
 Nothing is ever deleted or rewritten, except data/<code>/nom.txt: the game name sent by a Client, for the History.
 python server.py verify [data]: reads every Version again and lists those whose content no longer matches their Hash.
+python server.py report [data]: disk use per Game, largest first (reads only).
 """
 import calendar
 import hashlib
@@ -30,6 +31,29 @@ def hash_of(version):
     return version[:-4].rsplit("-", 1)[1]
 
 
+def fields(version):
+    """(seq, date, client, hash) of a Version file name."""
+    return version[:-4].split("-")
+
+
+def name_of(folder):
+    try:
+        with open(os.path.join(folder, "nom.txt"), encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def human(size):
+    for unit in ("B", "KiB", "MiB"):
+        if size < 1024:
+            break
+        size /= 1024
+    else:
+        unit = "GiB"
+    return f"{size} B" if unit == "B" else f"{size:.1f} {unit}"
+
+
 def verify(data):
     """Recomputes the Hash of every Version. Returns (number of Versions, damaged ones as "<code>/<version>")."""
     count, damaged = 0, []
@@ -49,6 +73,31 @@ def verify(data):
     return count, damaged
 
 
+def report(data):
+    """Lines of text: one per Game, largest total first, then a total line. Writes nothing."""
+    games, leftovers = [], 0
+    for code in sorted(os.listdir(data)):
+        folder = os.path.join(data, code)
+        if not os.path.isdir(folder):
+            continue
+        files = os.listdir(folder)
+        leftovers += sum(f.endswith(".tmp") for f in files)  # a write cut before its os.replace
+        versions = sorted(f for f in files if f.endswith(".sav"))
+        if not versions:
+            continue
+        sizes = [os.path.getsize(os.path.join(folder, v)) for v in versions]
+        day = [f"{d[:4]}-{d[4:6]}-{d[6:8]}" for d in (fields(versions[0])[1], fields(versions[-1])[1])]
+        games.append((sum(sizes), code, len(versions), sizes[-1], *day, name_of(folder) or ""))
+    games.sort(key=lambda g: (-g[0], g[1]))
+    table = [("KEY", "VERSIONS", "TOTAL", "CURRENT", "OLDEST", "NEWEST", "NAME")]
+    table += [(code, str(n), human(total), human(cur), old, new, name) for total, code, n, cur, old, new, name in games]
+    widths = [max(len(row[i]) for row in table) for i in range(6)]
+    lines = ["  ".join([row[0].ljust(widths[0]), *(c.rjust(w) for c, w in zip(row[1:6], widths[1:])), row[6]]).rstrip()
+             for row in table]
+    total = f"{len(games)} games, {sum(g[2] for g in games)} versions, {human(sum(g[0] for g in games))}"
+    return lines + [total + (f", {leftovers} .tmp leftovers (cut uploads)" if leftovers else "")]
+
+
 def creer(address, data, token):
     def versions(code):
         folder = os.path.join(data, code)
@@ -61,18 +110,15 @@ def creer(address, data, token):
         return v[-1] if v else None
 
     def info(code, version):
-        _, date, client, h = version[:-4].split("-")
+        _, date, client, h = fields(version)
         size = os.path.getsize(os.path.join(data, code, version))
         # age: computed with the server clock, because the 3DS clock has no time zone
         age = int(time.time() - calendar.timegm(time.strptime(date, "%Y%m%dT%H%M%SZ")))
         return {"code": code, "version": version, "hash": h, "taille": size, "date": date, "client": client, "age": age}
 
     def with_name(code, element):
-        try:
-            with open(os.path.join(data, code, "nom.txt"), encoding="utf-8") as f:
-                return {**element, "nom": f.read()}
-        except OSError:
-            return element
+        name = name_of(os.path.join(data, code))
+        return element if name is None else {**element, "nom": name}
 
     class Handler(BaseHTTPRequestHandler):
         def authorized(self):
@@ -189,6 +235,9 @@ if __name__ == "__main__" and sys.argv[1:2] == ["verify"]:
         print(f"DAMAGED {version}")
     print(f"{count} versions read, {len(damaged)} damaged")
     sys.exit(1 if damaged else 0)
+elif __name__ == "__main__" and sys.argv[1:2] == ["report"]:
+    for line in report(sys.argv[2] if len(sys.argv) > 2 else os.environ.get("NDSSYNC_DATA", "/data")):
+        print(line)
 elif __name__ == "__main__":
     creer(("0.0.0.0", int(os.environ.get("NDSSYNC_PORT", "8080"))),
           os.environ.get("NDSSYNC_DATA", "/data"),
