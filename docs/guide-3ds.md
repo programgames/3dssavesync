@@ -72,7 +72,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 | File | Content |
 |---|---|
 | `config.ini` | server, token, folders |
-| `base.ini` | the last synced state of each game, and the install date of each 3DS game: a game you install again asks before its new save replaces the server's. Do not delete it: without it, every changed game shows a conflict. |
+| `base.ini` | the last synced state of each game, and the install date of each 3DS game: a game you install again asks before its new save replaces the server's. It also keeps a fingerprint of the server address and token (never the token itself): after you change either, every game that differs from the server asks which one to keep. Do not delete it: without it, every changed game shows a conflict. |
 | `journal.log` | what the app did: each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token. It stays small: past 128 KB it becomes `journal.log.1`. |
 | `titres-off.ini` | the 3DS games you turned off, one title ID per line. Every other 3DS game with a save is synced. |
 | `titres.ini` | older versions only: the 3DS games to sync. This version reads it once, turns off the games it doesn't list, then no longer uses it. |

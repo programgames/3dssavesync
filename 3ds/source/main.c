@@ -587,10 +587,30 @@ static void note_installs(void)
                   "Sync state not saved: conflicts may appear. Check the SD card."));
 }
 
+/* The server of the Bases (ADR 0032), before the states and any transfer: another address or token removes them. */
+static void check_server_fingerprint(void)
+{
+    char text[sizeof cfg.url + sizeof cfg.token + 1], fingerprint[65];
+    int r;
+    server_identity(cfg.url, cfg.token, text, sizeof text);
+    hash_hex((const unsigned char *)text, strlen(text), fingerprint);
+    r = check_server(&bases, fingerprint);
+    if (r == 2) {
+        log_event("server changed: Bases removed"); /* never the address or the token */
+        add_alert(T("Le serveur a changé : les jeux qui diffèrent du serveur demanderont lequel garder.",
+                    "The server changed: games that differ from the server will ask which one to keep."));
+    }
+    if (r > 0 && write_bases(APP_DIR "/base.ini", &bases))
+        add_alert(T("État de synchronisation non enregistré : des conflits peuvent apparaître. Vérifiez la carte SD.",
+                  "Sync state not saved: conflicts may appear. Check the SD card."));
+}
+
 /* All sources, then the Hash of each Local save (SRAM only for GB/GBA, ADR 0008). */
 static void scan(void)
 {
     int i, before;
+
+    check_server_fingerprint(); /* scan starts every pass: the start, Y, and the settings changed */
 
     game_count = visible_count = shown_count = loaded = 0; /* the list shown is no longer valid during the read */
     read_aliases(APP_DIR "/alias.ini", &aliases);

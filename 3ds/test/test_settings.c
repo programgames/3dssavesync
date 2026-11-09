@@ -131,6 +131,25 @@ static void test_ini_files(void)
     check(note_install(&b, 0x0004000000172000ULL, 0x9, "VC-0004000000172000") == 1 && note_install(&b, 0x0004000000172000ULL, 0xA, "VC-0004000000172000") == 2 &&
               !base_of(&b, "VC-0004000000172000"), "install: Virtual Console game, Base of its base_id removed");
 
+    /* Another server or token (ADR 0032): the fingerprint next to the Bases */
+    {
+        char t[600];
+        server_identity("  https://x/ ", "j", t, sizeof t);
+        check(!strcmp(t, "https://x\nj"), "server: address without spaces around it nor a final /");
+        write_text("test.ini", "IRBF=" H1 "\nINSTALL-0004000000055D00=" H2 "\n3DS-0004000000055D00=" H2 "\n");
+        read_bases("test.ini", &b);
+        check(check_server(&b, H1) == 1 && b.n == 4 && !strcmp(base_of(&b, "IRBF"), H1) && !strcmp(base_of(&b, "SERVEUR"), H1),
+              "server: none stored, stored and Bases kept");
+        check(write_bases("test.ini", &b) == 0 && read_bases("test.ini", &b) == 0 && !strcmp(base_of(&b, "SERVEUR"), H1),
+              "server: SERVEUR line written and read back");
+        check(check_server(&b, H1) == 0 && b.n == 4 && !strcmp(base_of(&b, "3DS-0004000000055D00"), H2), "server: same, nothing changes");
+        check(check_server(&b, H2) == 2 && b.n == 2 && !base_of(&b, "IRBF") && !base_of(&b, "3DS-0004000000055D00") &&
+                  !strcmp(base_of(&b, "INSTALL-0004000000055D00"), H2) && !strcmp(base_of(&b, "SERVEUR"), H2),
+              "server: another one, Bases removed, INSTALL- kept, new SERVEUR stored");
+        check(write_bases("test.ini", &b) == 0 && contains("test.ini", "INSTALL-0004000000055D00=" H2 "\nSERVEUR=" H2 "\n"),
+              "server: base.ini after the change");
+    }
+
     write_text("test.ini", "Pokemon Radical Red = GBA-0RAD\nHack=GBA-0HAK\n=GBA-VIDE\n   =GBA-ESPACES\n");
     read_aliases("test.ini", &a);
     check(a.n == 2 && !strcmp(alias_of(&a, "Pokemon Radical Red"), " GBA-0RAD") && !strcmp(alias_of(&a, "Hack"), "GBA-0HAK") &&
