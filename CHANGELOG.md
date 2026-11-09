@@ -17,6 +17,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - **3DS: turn off the daily update check.** Settings > **Version** > **Y** (`verifier_maj=0` in `config.ini`): the app no longer contacts GitHub at start. **A** on **Version** still checks when you ask.
 - **Server: the Docker image now runs on ARM machines too** (Raspberry Pi, most NAS), as well as on x86 PCs. Docker picks the right one by itself.
 - **Server: `verify` checks your history.** `docker compose exec 3dssavesync python /app/server.py verify` reads every saved version again and lists any whose content changed on the disk since it was saved. Run it after a disk problem, or before you trust an old backup.
+- **Server: `report` shows what uses the disk.** `docker compose exec 3dssavesync python /app/server.py report` lists each game, largest first, with its number of versions, its size and the dates of its oldest and newest version, then the totals.
 
 ### Changed
 
