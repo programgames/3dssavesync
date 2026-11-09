@@ -46,4 +46,8 @@ int title_icon(u64 id, FS_MediaType media, u16 *pixels);
  * extra more: free them). Returns the number of titles, -1 if out of memory (nothing allocated). */
 int installed_titles(u64 **ids, FS_MediaType **medias, int extra);
 
+/* Date of the newest .tmd of an SD title (sdmc:/Nintendo 3DS/<id0>/<id1>/title/<high>/<low>/content), as the SD card
+ * stores it: it changes when the game is installed again (ADR 0027). 0 if unknown (game card, no access). */
+unsigned long long title_install_time(u64 id);
+
 #endif

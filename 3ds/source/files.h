@@ -11,6 +11,10 @@ int read_file(const char *path, unsigned char **bytes, size_t *size);
 /* 0 if written in full, -1 otherwise. */
 int write_file(const char *path, const void *bytes, size_t size);
 
+/* Adds line and a newline at the end of path. When path is already larger than max bytes, it becomes path.1 first
+ * (the previous path.1 goes): the two files hold the last events, at most about 2 × max. 0 if written, -1 otherwise. */
+int append_log(const char *path, const char *line, long max);
+
 /* 0 if written in full and read back identical, -1 otherwise. */
 int write_verified(const char *path, const void *bytes, size_t size);
 

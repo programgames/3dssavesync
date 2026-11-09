@@ -72,7 +72,8 @@ All in `sdmc:/3ds/3dssavesync/`:
 | File | Content |
 |---|---|
 | `config.ini` | server, token, folders |
-| `base.ini` | the last synced state of each game. Do not delete it: without it, every changed game shows a conflict. |
+| `base.ini` | the last synced state of each game, and the install date of each 3DS game: a game you install again asks before its new save replaces the server's. Do not delete it: without it, every changed game shows a conflict. |
+| `journal.log` | what the app did: each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token. It stays small: past 128 KB it becomes `journal.log.1`. |
 | `titres.ini` | the 3DS games to sync (absent = the 8 Pokémon games) |
 | `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
 | `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |

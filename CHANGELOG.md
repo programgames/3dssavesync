@@ -4,6 +4,15 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **3DS: a game you install again asks first.** Deleting a 3DS game deletes its save. Before, after you installed it again, its new save was uploaded over your progress on the server. Now the app sees that the game was installed again, and you choose which save to keep.
+- **3DS: a journal of what the app did.** `sdmc:/3ds/3dssavesync/journal.log` lists each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token.
+
+### Changed
+
+- **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.
+
 ## [3.12.0] - 2026-11-08
 
 ### Added

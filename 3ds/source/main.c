@@ -124,6 +124,19 @@ static void add_alert(const char *text)
         snprintf(alert + strlen(alert), sizeof alert - strlen(alert), "%s%s", alert[0] ? "\n" : "", text);
 }
 
+/* One line of journal.log (English, for a bug report): date, then the event. The file stays small (append_log). */
+static void log_event(const char *format, ...)
+{
+    char line[1000];
+    time_t t = time(NULL);
+    va_list a;
+    size_t n = strftime(line, sizeof line, "%Y-%m-%d %H:%M:%S ", localtime(&t));
+    va_start(a, format);
+    vsnprintf(line + n, sizeof line - n, format, a);
+    va_end(a);
+    append_log(APP_DIR "/journal.log", line, 128 * 1024);
+}
+
 static void show_alert(void)
 {
     if (!alert[0]) return;
@@ -445,6 +458,29 @@ static void scan_vc(void)
     free(medias);
 }
 
+/* Install date of each 3DS and Virtual Console game on the SD card (ADR 0027). A game installed again lost its save
+ * with the old install: its Base is removed, so the new save asks before it replaces the server's. */
+static void note_installs(void)
+{
+    int i, r, changed = 0;
+    for (i = 0; i < game_count; i++) {
+        game_t *j = &games[i];
+        if (!j->title || j->media != MEDIATYPE_SD) continue;
+        r = note_install(&bases, j->title, title_install_time(j->title), base_id(j));
+        changed |= r > 0;
+        if (r == 2) {
+            char t[400];
+            log_event("reinstalled %016llX \"%s\": Base %s removed", j->title, j->name, base_id(j));
+            snprintf(t, sizeof t, T("%s a été réinstallé. Si sa sauvegarde diffère de celle du serveur, vous choisirez laquelle garder.",
+                                    "%s was installed again. If its save differs from the server's, you'll choose which one to keep."), j->short_name);
+            add_alert(t);
+        }
+    }
+    if (changed && write_bases(APP_DIR "/base.ini", &bases))
+        add_alert(T("État de synchronisation non enregistré : des conflits peuvent apparaître. Vérifiez la carte SD.",
+                  "Sync state not saved: conflicts may appear. Check the SD card."));
+}
+
 /* All sources, then the Hash of each Local save (SRAM only for GB/GBA, ADR 0008). */
 static void scan(void)
 {
@@ -462,6 +498,7 @@ static void scan(void)
         read_local(&games[i]);
     }
     scan_3ds();
+    note_installs();
 }
 
 /* GET /saves: Current version of each Game. 0 if all is well. */
@@ -1747,11 +1784,33 @@ static int settings_screen(int first)
     return changed;
 }
 
+/* An Upload or Download with sleep refused: closing the lid would cut the Wi-Fi in the middle of the transfer (libctru's
+ * APT thread answers the sleep query even while the app is busy). HOME needs no lock: it only acts in aptMainLoop,
+ * which no transfer calls. */
+static result_t awake_transfer(game_t *j, int upload)
+{
+    char text[512], detail[200], local[65], server[65];
+    result_t r;
+    snprintf(local, sizeof local, "%s", j->local_hash);
+    snprintf(server, sizeof server, "%s", j->server_hash);
+    aptSetSleepAllowed(false);
+    r = upload ? upload_save(j) : download_save(j);
+    aptSetSleepAllowed(true);
+    result_text(&r, j->short_name, 1, text, sizeof text, detail, sizeof detail);
+    {
+        char *at = strlen(cfg.url) >= 8 ? strstr(detail, cfg.url) : NULL; /* a network failure shows its URL: the address stays out of the file */
+        if (at) memmove(at + 8, at + strlen(cfg.url), strlen(at + strlen(cfg.url)) + 1), memcpy(at, "<server>", 8);
+    }
+    log_event("%s %s \"%s\" (3DS %.12s, server %.12s): %s%s%s", upload ? "upload" : "download", base_id(j), j->name, local[0] ? local : "-",
+              server[0] ? server : "-", text, detail[0] ? " | " : "", detail);
+    return r;
+}
+
 /* An Upload or Download of one game: the screen says it at once (the network, the copy and the read back take seconds). */
 static result_t transfer(game_t *j, int upload)
 {
     show_progress(0, 0, "%s\n%s", upload ? T("Envoi…", "Uploading…") : T("Récupération…", "Downloading…"), j->short_name);
-    return upload ? upload_save(j) : download_save(j);
+    return awake_transfer(j, upload);
 }
 
 /* A on a Game: its action, with a confirmation before any overwrite. 1 if an action was tried. */
@@ -1900,7 +1959,7 @@ static void sync_one(game_t *j, int upload, int done, int total, int *ok_count, 
     if (index_of(shown, shown_count, i) >= 0) list_cursor = index_of(shown, shown_count, i); /* the top screen follows the current game */
     progress_color = upload ? C_YELLOW : C_CYAN;
     show_progress(done, total, "%s\n%s", upload ? T("Envoi", "Upload") : T("Récupération", "Download"), j->short_name);
-    res = upload ? upload_save(j) : download_save(j);
+    res = awake_transfer(j, upload);
     if (result_ok(&res)) ++*ok_count;
     else if (!(*failures)++) {
         *first = res;
@@ -2128,6 +2187,7 @@ static int restore_version(const game_t *j, const entry_t *v)
                                                "Here is the updated list: choose again."));
         return -1;
     }
+    log_event("restore %s \"%s\" version %s: HTTP %ld", j->key, j->name, v->version, status);
     if (status != 200) {
         network_detail(status, url, d, sizeof d);
         set_message(C_RED, d, T("Restauration impossible. %s", "Restore failed. %s"), network_text(status, net_wifi(), english));
@@ -2236,6 +2296,7 @@ int main(int argc, char **argv)
     if (migrate_dir(OLD_DIR, APP_DIR) == 1)
         snprintf(message, sizeof message, T("Réglages repris de %s.", "Settings taken from %s."), OLD_DIR);
     read_config(APP_DIR "/config.ini", &cfg);
+    log_event("start " VERSION ", server %s", cfg.url[0] ? "set" : "not set"); /* never the address or the token: the file may go in a bug report */
     if (read_bases(APP_DIR "/base.ini", &bases)) { /* nothing is written to base.ini then: it would lose Bases */
         add_alert(T("Mémoire insuffisante pour lire l'état de synchronisation : il ne sera pas enregistré. Redémarrez la 3DS, puis relancez 3dssavesync.",
                     "Not enough memory to read the sync state: it will not be saved. Restart the 3DS, then start 3dssavesync again."));

@@ -191,11 +191,16 @@ int update_app(void)
 {
     release_t r;
     char t[300];
+    int installed;
     if (check_update(&r) != 1) return 0;
     snprintf(t, sizeof t, T("La version %s remplacera la version " VERSION ". Vos sauvegardes et vos réglages ne changent pas.",
                             "Version %s will replace version " VERSION ". Your saves and settings stay the same."),
              r.version);
-    return confirm(T("Mettre à jour 3dssavesync ?", "Update 3dssavesync?"), NULL, t, NULL, T("Mettre à jour", "Update")) && install_update(&r);
+    if (!confirm(T("Mettre à jour 3dssavesync ?", "Update 3dssavesync?"), NULL, t, NULL, T("Mettre à jour", "Update"))) return 0;
+    aptSetSleepAllowed(false); /* closing the lid would cut the download or stop the install midway */
+    installed = install_update(&r);
+    aptSetSleepAllowed(true);
+    return installed;
 }
 
 void update_start(const char *argv0)

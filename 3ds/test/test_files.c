@@ -70,6 +70,19 @@ int main(void)
     check(move_save(src, dst, "dossier-absent/copie.sav", 1) != 0, "copie impossible : refus");
     check(contains(dst, "partie rom") && contains(src, "nouvelle"), "copie impossible : rien ne change");
 
+    /* journal.log: lines added at the end; past max, the file becomes .1 (the old .1 goes) */
+    remove("test.log"), remove("test.log.1");
+    check(append_log("test.log", "a", 10) == 0 && append_log("test.log", "b", 10) == 0 && contains("test.log", "a\nb\n"), "journal : lignes ajoutées");
+    check(append_log("test.log", "0123456789", 10) == 0 && contains("test.log", "a\nb\n0123456789\n") && !exists("test.log.1"),
+          "journal : sous la limite, rien ne tourne");
+    check(append_log("test.log", "c", 10) == 0 && contains("test.log", "c\n") && contains("test.log.1", "a\nb\n0123456789\n"),
+          "journal : au-delà, le fichier devient .1");
+    write_text("test.log", "0123456789AB");
+    check(append_log("test.log", "e", 10) == 0 && contains("test.log", "e\n") && contains("test.log.1", "0123456789AB"),
+          "journal : l'ancien .1 est remplacé");
+    check(append_log("dossier-absent/test.log", "x", 10) == -1, "journal : dossier absent, échec signalé");
+    remove("test.log"), remove("test.log.1");
+
     /* base.ini, config.ini: replaced through a checked .tmp */
     check(replace_file(dst, "IRBF=ab\n", 8) == 0 && contains(dst, "IRBF=ab\n") && !exists("test-dst.sav.tmp"),
              "remplacement : fait, sans .tmp restant");
