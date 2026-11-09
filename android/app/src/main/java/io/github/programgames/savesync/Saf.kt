@@ -11,6 +11,7 @@ import io.github.programgames.savesync.core.ArchiveFile
 import io.github.programgames.savesync.core.ArchiveFolder
 import io.github.programgames.savesync.core.NewArchive
 import io.github.programgames.savesync.core.SaveFile
+import io.github.programgames.savesync.core.checkSize
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
@@ -130,9 +131,9 @@ class SafFile(
     }
 }
 
-// SafFolder is the Azahar folder of a 3DS save archive (ArchiveFolder, ADR 0028). dir: its document id, null when the
-// game was never started (no folder: never created). path: where it is, for the messages. It writes only the files of
-// a version, each with "wt" then read back, and never deletes anything.
+// SafFolder is the Azahar folder of a 3DS save archive, or the user/ folder of an extdata (ArchiveFolder, ADR 0028,
+// 0031). dir: its document id, null when the game was never started (no folder: never created). path: where it is, for
+// the messages. It writes only the files of a version, each with "wt" then read back, and never deletes anything.
 class SafFolder(private val r: ContentResolver, private val tree: Uri, private val dir: String?, private val path: String) : ArchiveFolder {
     private var known: Long? = null
 
@@ -156,7 +157,8 @@ class SafFolder(private val r: ContentResolver, private val tree: Uri, private v
 
     private fun read(doc: String) = r.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, doc))!!.use { it.readBytes() }
 
-    override fun files() = walk()?.map { (p, d) -> ArchiveFile(p, read(d.id)) }
+    // files refuses a folder too large from the sizes of the listing, before it reads anything (ARCHIVE_SIZE)
+    override fun files() = walk()?.also { l -> checkSize(location, l.sumOf { it.second.size ?: 0L }) }?.map { (p, d) -> ArchiveFile(p, read(d.id)) }
 
     override fun write(path: String, content: ByteArray) {
         val parts = path.split('/')

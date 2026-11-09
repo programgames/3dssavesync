@@ -20,6 +20,9 @@ import androidx.core.net.toUri
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.programgames.savesync.core.ARCHIVE_KEY
+import io.github.programgames.savesync.core.EXTDATA_KEY
+import io.github.programgames.savesync.core.extdataId
+import io.github.programgames.savesync.core.skipExtdata
 import io.github.programgames.savesync.core.ArchiveSave
 import io.github.programgames.savesync.core.Backups
 import io.github.programgames.savesync.core.Bases
@@ -99,10 +102,13 @@ data class Entry(
     val noLocal: Boolean = false, // server not read and no save on this phone: hidden until the server answers
     val off: Boolean = false, // a 3DS game the user turned off (Settings.off3DS): never synced
     val notStarted: Boolean = false, // a 3DSA game without its folder in Azahar: never synced, its folder never created
+    val owner: String? = null, // an extdata of a 3DSA game: the title ID of that game, whose server name it takes
 ) {
     val id get() = emulator.id + "|" + system + "|" + rom // one line of the list
 
-    val short get() = shortName(name) // the name the list shows, as on the 3DS
+    val extdata get() = rom.startsWith(EXTDATA_KEY) // the Extra data of 3DS games (ADR 0031): rom is its Key
+
+    val short get() = if (extdata) name else shortName(name) // the name the list shows, as on the 3DS; " (data)" stays
 
     val shown: Shown
         get() = when {
@@ -380,17 +386,35 @@ object App {
     }.sortedBy { it.name.lowercase() }
 
     // named: a 3DSA game has no name on this phone (no ROM): the name a 3DS or a PC gave the server, if any (ADR 0018).
+    // An extdata of a 3DSA game: its own server name, else the name of that game with " (data)", which it then gives
+    // the server (ADR 0031).
     private fun named(e: Entry, s: Syncer): Entry {
-        val key = e.game?.key?.takeIf { it.startsWith(ARCHIVE_KEY) && serverError == null } ?: return e
-        val n = runCatching { s.serverVersion(key)?.name }.getOrNull()
-        return if (n.isNullOrBlank()) e else e.copy(name = n)
+        val g = e.game?.takeIf { serverError == null } ?: return e
+        fun server(key: String) = runCatching { s.serverVersion(key)?.name }.getOrNull()?.takeIf { it.isNotBlank() }
+        if (g.key.startsWith(ARCHIVE_KEY)) return server(g.key)?.let { e.copy(name = it) } ?: e
+        val owner = e.owner ?: return e
+        val title = server(ARCHIVE_KEY + owner)?.plus(text(R.string.extdata_suffix))
+        return e.copy(name = server(g.key) ?: title ?: e.name, game = g.copy(title = title))
     }
 
-    // setSynced turns a 3DS game on or off, by title ID, in every Azahar entry (ADR 0028). On: its State is read again.
+    // setSynced turns a 3DS game on or off, by title ID, in every Azahar entry (ADR 0028), and with it its extdata: off
+    // while any game turned off has its extdata ID (ADR 0031). On: their States are read again.
     fun setSynced(e: Entry, on: Boolean) {
-        settings.off3DS = if (on) settings.off3DS - e.rom else settings.off3DS + e.rom
-        entries = entries.map { if (it.system == System.N3DS && it.rom == e.rom) it.copy(off = !on, status = null, error = null) else it }
-        if (on && !e.notStarted) run(text(R.string.reading)) { reread(e, syncer()) }
+        val off = if (on) settings.off3DS - e.rom else settings.off3DS + e.rom
+        settings.off3DS = off
+        val ext = EXTDATA_KEY + extdataId(e.rom)
+        entries = entries.map {
+            when {
+                it.system == System.N3DS && it.rom == e.rom -> it.copy(off = !on, status = null, error = null)
+                it.rom == ext -> it.copy(off = off.any { t -> EXTDATA_KEY + extdataId(t) == ext }, status = null, error = null)
+                else -> it
+            }
+        }
+        val again = entries.filter { it.emulator.id == e.emulator.id && (it.rom == e.rom && !e.notStarted || it.rom == ext) && !it.off }
+        if (again.isNotEmpty()) run(text(R.string.reading)) {
+            val s = syncer()
+            for (x in again) reread(x, s)
+        }
     }
 
     // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user. confirmed: the games whose save
@@ -649,8 +673,8 @@ object App {
             }
             out += Entry(e, System.N3DS, name, id, g, off = id in off) to "$tree|3DS-$id"
         }
-        val apps = child(child(user, "title"), "00040000") ?: return
-        for (d in children(resolver, tree, apps)) {
+        val apps = child(child(user, "title"), "00040000")
+        for (d in apps?.let { children(resolver, tree, it) }.orEmpty()) {
             if (!d.folder || !lowId.matches(d.name)) continue
             val id = "00040000" + d.name.uppercase()
             if (id in titles3DS || id in skip3DS) continue
@@ -658,6 +682,24 @@ object App {
             val path = user.substringAfter(':') + "/title/00040000/" + d.name + "/data/00000001" // for the messages
             val g = Game(System.N3DS, "$ARCHIVE_KEY$id", "3DS $id", ArchiveSave(SafFolder(resolver, tree, dir, path)), e.format(System.N3DS), e.id)
             out += Entry(e, System.N3DS, g.name, id, g, off = id in off, notStarted = dir == null) to "$tree|$ARCHIVE_KEY$id"
+        }
+        // extdata/00000000/<ID>/user: the Extra data, Key 3DSX-<ID>, the archive of user/ only: metadata, icon and boss/
+        // are never read or written (ADR 0031). A folder without user/ is skipped: Azahar can't open it either. Its game
+        // is the one whose titleLow >> 8 is its ID: it gives the name, and its switch turns the extdata off.
+        val titles = out.filter { it.first.system == System.N3DS }.map { it.first.rom }
+        val ext = child(child(user, "extdata"), "00000000") ?: return
+        for (d in children(resolver, tree, ext)) {
+            if (!d.folder || !lowId.matches(d.name)) continue
+            val id = d.name.uppercase()
+            if (id in skipExtdata) continue
+            val dir = child(d.id, "user") ?: continue
+            val owner = titles.firstOrNull { extdataId(it) == id }
+            val name = owner?.let { titles3DS[it] }?.plus(text(R.string.extdata_suffix)) ?: "Extdata $id"
+            val path = user.substringAfter(':') + "/extdata/00000000/" + d.name + "/user" // for the messages
+            val title = name.takeIf { owner == null || owner in titles3DS } // a 3DSA game: its name comes from the server
+            val g = Game(System.N3DS, EXTDATA_KEY + id, name, ArchiveSave(SafFolder(resolver, tree, dir, path)), e.format(System.N3DS), e.id, title = title)
+            val entry = Entry(e, System.N3DS, name, g.key, g, off = off.any { extdataId(it) == id }, owner = owner?.takeIf { title == null })
+            out += entry to "$tree|${g.key}"
         }
     }
 

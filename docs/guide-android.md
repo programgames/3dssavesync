@@ -183,6 +183,8 @@ When the app downloads the save of such a game, it first writes a backup copy of
 
 **Turn a game off.** A new game is synced as soon as it has a save. To leave one out, open it in **Games** and turn off **Sync this game**. The game stays in the list as **Not synced**: the app no longer uploads or downloads its save, on this phone, and the background upload skips it. Turn the switch on again to sync it. The app keeps this choice in its settings, by title ID.
 
+**Extra data.** Some 3DS games keep data beside their save: ghosts, photos, unlocked content, sometimes progress. Azahar puts it in `sdmc/Nintendo 3DS/<id>/<id>/extdata/00000000/<ID>/`. The app syncs the `user` folder of each one as its own line in **Games**, under the key `3DSX-<ID>`, with the same checks as a save: a `.tar` backup copy first, each file read back, never a deleted file. It never touches `metadata`, `icon` or `boss`. Several games can share one extra data (Pokémon X and Y), so it has no switch of its own: it follows **Sync this game** of the game whose title ID gives its ID. The line shows the name of that game with "(data)", or `Extdata` and the ID when the app finds no game for it. Extra data without a `user` folder is not listed: start the game once in Azahar. NetPass and Super Mario Maker are never synced. See [ADR 0031](adr/0031-extdata-3ds.md).
+
 ## 3DS games never started in Azahar
 
 The app knows the 8 Pokémon games of the 3DS even if you never started them in Azahar. Such a game shows in the list when the server has a save for it, as **To download**; its details say **Never started in Azahar**. **Download** (or **Sync all**) creates its save folder in Azahar, like the PC program does:
