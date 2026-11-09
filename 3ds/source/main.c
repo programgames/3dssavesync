@@ -1027,9 +1027,19 @@ static result_t download_save(game_t *j)
         }
         if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, why);
     } else if (j->system == SYS_3DS) {
-        failed = write_title_save(j->title, j->media, "/main", body, size);
+        unsigned char *back = NULL;
+        size_t back_size = 0;
         free(old_data);
+        failed = write_title_save(j->title, j->media, "/main", body, size);
+        /* read back, as sav.dat: after the commit, a difference means the archive holds something else (copy kept) */
+        if (!failed && (read_save(j, &back, &back_size) || back_size != size || memcmp(back, body, size))) failed = 2;
+        free(back);
         free(body);
+        if (failed == 2) {
+            r = make_result(RESULT_WRITTEN_DAMAGED, backup);
+            r.had_save = 1;
+            return r;
+        }
         if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
     } else if (vc(j)) {
         /* Received SRAM + the VC footer of the old sav.dat (16 bytes for Gold, Silver, Crystal; none for Gen 1). */
