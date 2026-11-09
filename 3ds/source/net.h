@@ -23,6 +23,14 @@ long net_github(const char *url, void (*on_progress)(size_t done, size_t total),
  * Returns the HTTP status (> 0) or -<curl code> (< 0). */
 long net_put(const char *url, const char *token, const char *client, const char *condition, const void *bytes, size_t size);
 
+/* Server requests trust ISRG Root X1 and the PEM certificates of path too (ADR 0029). Returns read_cas (files.h):
+ * 0 added; 1 none; -1 unreadable, -2 larger than NET_MAX_CAS: ISRG only, as before. */
+#define NET_MAX_CAS (256 * 1024)
+int net_read_cas(const char *path);
+
+/* f() is called once in a Server request (net_get, net_put with a token) that has run for more than 5 s. */
+void net_on_slow(void (*f)(void));
+
 /* SHA-256 of bytes in lowercase hex: the Hash of a Save, the check of a download. */
 void hash_hex(const unsigned char *bytes, size_t size, char out[65]);
 

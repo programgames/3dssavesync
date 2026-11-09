@@ -80,6 +80,8 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |
 | `copies/` | backup copies made before a save is replaced. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. |
 
+Outside this folder, `sdmc:/config/ssl/cacert.pem` (optional, shared with other homebrew): the certificate of your own CA, for a server that has no Let's Encrypt certificate ([HTTPS and the 3DS](guide-server.md#https-and-the-3ds)).
+
 ## Updates
 
 Once a day, when the app starts, it asks GitHub for the latest version. This takes a few seconds. If a newer version exists, the bottom screen shows:

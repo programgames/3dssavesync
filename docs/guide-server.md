@@ -45,6 +45,8 @@ Then, in the PC settings page, choose **Personal server**, enter `https://saves.
 
 The 3DS app knows only the **ISRG Root X1** root certificate (Let's Encrypt), and it needs TLS 1.2 with ECDHE. The `Caddyfile` provided forces Let's Encrypt and an RSA key. With another reverse proxy, use a Let's Encrypt certificate too.
 
+Your own CA, or a self-signed certificate? Put its certificate (PEM, 256 KB at most; several can follow each other) in `sdmc:/config/ssl/cacert.pem` on the SD card, the file other homebrew use, then start the app again. The 3DS then trusts it for your server, on top of Let's Encrypt. `journal.log` says whether the file was added or ignored. Updates from GitHub do not use it ([ADR 0029](adr/0029-certificats-personnalises.md)).
+
 ### Backups of the server
 
 Copy `data/` often (restic, Backrest, rsync…). The server deletes nothing, so the copy is simple.

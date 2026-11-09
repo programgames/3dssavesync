@@ -23,6 +23,29 @@ int read_file(const char *path, unsigned char **bytes, size_t *size)
     return 0;
 }
 
+int read_cas(const char *path, const char *root, long max, char **out, size_t *n)
+{
+    FILE *f = fopen(path, "rb");
+    size_t r = strlen(root);
+    long size = -1;
+    int status = -1;
+    if (!f) return 1;
+    if (!fseek(f, 0, SEEK_END)) size = ftell(f);
+    if (size == 0) status = 1;
+    else if (size > max) status = -2;
+    else if (size > 0 && !fseek(f, 0, SEEK_SET) && (*out = malloc(r + 1 + size + 1))) {
+        if (fread(*out + r + 1, 1, size, f) == (size_t)size) {
+            memcpy(*out, root, r);
+            (*out)[r] = '\n';
+            *n = r + 1 + size;
+            (*out)[*n] = '\0';
+            status = 0;
+        } else free(*out);
+    }
+    fclose(f);
+    return status;
+}
+
 int write_file(const char *path, const void *bytes, size_t size)
 {
     FILE *f = fopen(path, "wb");

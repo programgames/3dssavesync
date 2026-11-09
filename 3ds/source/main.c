@@ -32,6 +32,7 @@
 
 #define OLD_DIR "sdmc:/3ds/nds-save-sync" /* name before v3: settings and Bases taken over at first start */
 #define FORWARDERS "sdmc:/mGBA/forwarders" /* Saves of the mGBA forwarders */
+#define CUSTOM_CAS "sdmc:/config/ssl/cacert.pem" /* the user's CA certificates, as in other homebrew (ADR 0029) */
 
 int english; /* console language: French, otherwise English (views.h) */
 static u8 language;   /* CFG_LANGUAGE_*: title of the 3DS games in this language */
@@ -2399,6 +2400,12 @@ int main(int argc, char **argv)
         screen_exit();
         gfxExit();
         return 0;
+    }
+    net_on_slow(show_slow); /* every Server request comes after a show_progress */
+    switch (net_read_cas(CUSTOM_CAS)) {
+    case 0: log_event(CUSTOM_CAS " added to the trusted certificates of the server"); break;
+    case -1: log_event(CUSTOM_CAS " ignored: unreadable"); break;
+    case -2: log_event(CUSTOM_CAS " ignored: larger than 256 KiB"); break;
     }
 
     if (!cfg.url[0] || !cfg.token[0]) {

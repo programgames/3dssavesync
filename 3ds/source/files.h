@@ -8,6 +8,11 @@
 /* Whole file in *bytes (to free). 0 if read, -1 otherwise. */
 int read_file(const char *path, unsigned char **bytes, size_t *size);
 
+/* CA bundle for the Server (ADR 0029): root, a newline, then the content of path, in *out (to free, ends with '\0',
+ * *n bytes without it). 0 if built; 1 if path is missing or empty (nothing to add); -1 if unreadable; -2 if larger
+ * than max bytes. */
+int read_cas(const char *path, const char *root, long max, char **out, size_t *n);
+
 /* 0 if written in full, -1 otherwise. */
 int write_file(const char *path, const void *bytes, size_t size);
 

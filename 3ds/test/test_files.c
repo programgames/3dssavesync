@@ -163,6 +163,20 @@ int main(void)
                  "copies existantes intactes");
         remove("test-copies/Pokemon-20261103-101500.sav"), remove("test-copies/Pokemon-20261103-101500-1.sav"), remove("test-copies");
     }
+    { /* custom CA certificates (ADR 0029) */
+        char *cas = NULL;
+        size_t n = 0;
+        remove("test-ca.pem");
+        check(read_cas("test-ca.pem", "ROOT", 10, &cas, &n) == 1, "certificats : fichier absent, rien à ajouter");
+        write_text("test-ca.pem", "");
+        check(read_cas("test-ca.pem", "ROOT", 10, &cas, &n) == 1, "certificats : fichier vide, rien à ajouter");
+        write_text("test-ca.pem", "0123456789A");
+        check(read_cas("test-ca.pem", "ROOT", 10, &cas, &n) == -2, "certificats : trop gros, refusé");
+        write_text("test-ca.pem", "PEM");
+        check(read_cas("test-ca.pem", "ROOT", 10, &cas, &n) == 0 && n == 8 && !strcmp(cas, "ROOT\nPEM"), "certificats : racine puis fichier");
+        free(cas);
+        remove("test-ca.pem");
+    }
     printf("%s\n", failures ? "ECHECS" : "fichiers : OK");
     return failures != 0;
 }

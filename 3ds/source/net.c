@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include "files.h"
 #include "github_roots.h"
 #include "isrg_root_x1.h"
 #include "net.h"
@@ -62,10 +63,18 @@ static size_t receive(char *chunk, size_t t, size_t n, void *u)
 }
 
 static void (*on_progress)(size_t, size_t); /* net_github: download of a release file in progress */
+static void (*on_slow)(void);
+static u64 slow_start; /* osGetTime() at the start of a Server request; 0: GitHub, or on_slow already called */
+
+void net_on_slow(void (*f)(void)) { on_slow = f; }
 
 static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_total, curl_off_t ul_now)
 {
-    on_progress((size_t)done, (size_t)total);
+    if (on_progress) on_progress((size_t)done, (size_t)total);
+    if (slow_start && osGetTime() - slow_start > 5000) {
+        slow_start = 0;
+        if (on_slow) on_slow();
+    }
     return 0;
 }
 
@@ -76,6 +85,16 @@ static int no_linger(void *u, curl_socket_t fd, curlsocktype purpose)
     struct linger l = { 1, 0 };
     setsockopt(fd, SOL_SOCKET, SO_LINGER, &l, sizeof l);
     return CURL_SOCKOPT_OK;
+}
+
+static char *server_cas; /* ISRG + sdmc:/config/ssl/cacert.pem (ADR 0029); NULL: ISRG only */
+static size_t server_cas_size;
+
+int net_read_cas(const char *path)
+{
+    int r = read_cas(path, ISRG_ROOT_X1, NET_MAX_CAS, &server_cas, &server_cas_size);
+    if (r) server_cas = NULL;
+    return r;
 }
 
 /* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). client: X-Client of the Server. */
@@ -90,7 +109,11 @@ static long request(const char *url, const char *token, const char *client, cons
     long status;
 
     curl_easy_reset(c); /* resets the options, keeps the connection open */
-    if (token) { /* Server: ISRG only (ADR 0003) */
+    if (token) { /* Server: ISRG (ADR 0003), and the user's certificates if any (ADR 0029) */
+        if (server_cas) {
+            ca.data = server_cas;
+            ca.len = server_cas_size;
+        }
         snprintf(auth, sizeof auth, "Authorization: Bearer %s", token);
         headers = curl_slist_append(NULL, auth);
         snprintf(x_client, sizeof x_client, "X-Client: %s", client);
@@ -118,12 +141,13 @@ static long request(const char *url, const char *token, const char *client, cons
     curl_easy_setopt(c, CURLOPT_TIMEOUT, on_progress ? 300L : 60L);
     curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* required by the GitHub API */
     curl_easy_setopt(c, CURLOPT_SOCKOPTFUNCTION, no_linger);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferinfo); /* also during the connection, about once a second */
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    slow_start = token ? osGetTime() : 0;
     if (on_progress) { /* github.com redirects to release-assets.githubusercontent.com */
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)NET_MAX_FILE);
-        curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferinfo);
-        curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     }
 
     r = curl_easy_perform(c);
