@@ -758,6 +758,28 @@ func TestLauncher(t *testing.T) {
 		!strings.Contains(questions[0], " h "), "question de Conflit avec la date du PC, sans temps de jeu")
 	verify(bytes.Equal(read(filepath.Join(dz, "main")), byteRange(3, 52)), "le PC garde sa Sauvegarde")
 
+	t.Log("3DSA : écriture coupée : le dossier mélangé n'est jamais envoyé, la Récupération est refaite sans question")
+	reset()
+	upload3ds("3DSA-0004000000033500", a1, current("3DSA-0004000000033500"))
+	basesPath := filepath.Join(tmp, "cfg", "bases", "azahar.json")
+	var bm map[string]string
+	json.Unmarshal(read(basesPath), &bm)
+	bm[cutKey("3DSA-0004000000033500")] = sha256Hex(a1) // a Download of a1 cut after main (main written, sub/ not yet)
+	o, _ = json.Marshal(bm)
+	write(t, basesPath, o)
+	write(t, filepath.Join(dz, "main"), byteRange(1, 50))
+	hz0, tars0 := len(history("3DSA-0004000000033500")), len(namesIn(filepath.Join(copies, "azahar"), "Zelda (Europe)-*.tar"))
+	run(zelda)
+	verify(played && len(questions) == 0, "aucune question, pas de Conflit")
+	verify(len(history("3DSA-0004000000033500")) == hz0, "le dossier coupé n'est pas envoyé")
+	back, _ := readArchiveDir(dz)
+	ba, _ := PackArchive(back)
+	verify(bytes.Equal(ba, a1), "le dossier est de nouveau la Version du serveur")
+	verify(len(namesIn(filepath.Join(copies, "azahar"), "Zelda (Europe)-*.tar")) == tars0+1, "Copie de sécurité du dossier coupé")
+	bm = nil // Unmarshal into a map keeps the keys that are gone
+	json.Unmarshal(read(basesPath), &bm)
+	verify(bm[cutKey("3DSA-0004000000033500")] == "" && bm["3DSA-0004000000033500"] == sha256Hex(a1), "marque retirée, Base = la Version")
+
 	t.Log("3DSA : jeu désactivé (titres_3ds_off) : partie sans Synchronisation")
 	reset()
 	cfgOff := writeConfig(t, filepath.Join(tmp, "cfg-off", "config.json"), Config{URL: url, Token: "jeton-test", Copies: copies,

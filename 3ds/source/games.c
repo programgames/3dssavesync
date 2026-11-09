@@ -16,6 +16,12 @@ int base_outdated(status_t s, const char *base, const char *local_hash)
     return s == STATUS_IN_SYNC && (!base || strcmp(base, local_hash));
 }
 
+status_t cut_status(status_t s, const char *cut, const char *local_hash)
+{
+    if (!cut || (local_hash && !strcmp(cut, local_hash))) return s;
+    return s == STATUS_TO_UPLOAD || s == STATUS_CONFLICT ? STATUS_TO_DOWNLOAD : s;
+}
+
 int status_priority(status_t s)
 {
     switch (s) {

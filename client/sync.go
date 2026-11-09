@@ -339,6 +339,29 @@ func (c *Client) bases() (map[string]string, error) {
 	return m, writeJSON(c.basePath(), m, true)
 }
 
+// cutKey is the Bases entry that marks a write of the archive folder of key (downloadArchive): set with the Hash being
+// written before the first file changes, removed once the folder is read back. Left there with a folder of another
+// Hash, the write was cut (crash, power cut, error): the folder may mix two versions, so it is never uploaded and
+// never offered in a Conflict; the Download is made again, with a Backup copy of the cut folder first.
+func cutKey(key string) string { return "ECRITURE " + key }
+
+// setCut sets the mark of key (cutKey), or removes it if hash is empty.
+func (c *Client) setCut(key, hash string) error {
+	m, err := c.bases()
+	if err != nil {
+		return err
+	}
+	if hash == "" {
+		if _, ok := m[cutKey(key)]; !ok {
+			return nil
+		}
+		delete(m, cutKey(key))
+	} else {
+		m[cutKey(key)] = hash
+	}
+	return writeJSON(c.basePath(), m, true)
+}
+
 func (c *Client) setBase(key, hash string) error {
 	m, err := c.bases()
 	if err != nil {
@@ -497,6 +520,10 @@ func readArchiveDir(dir string) ([]ArchiveFile, error) {
 	return files, err
 }
 
+// errChanged: the Local save changed between its read and its replacement (the emulator wrote it): not touched.
+var errChanged = errors.New(tr("la sauvegarde a changé pendant la synchronisation, elle n'a pas été remplacée. Fermez l'émulateur et relancez le jeu",
+	"the save changed during the sync, so it wasn't replaced. Close the emulator and start the game again"))
+
 // errNeverStarted: a 3DS game whose Azahar folder does not exist and is not created (ADR 0009, 0028).
 var errNeverStarted = errors.New(tr("ce jeu n'a encore jamais été lancé dans Azahar. Lancez-le une fois dans Azahar, sauvegardez dans le jeu et relancez-le ici",
 	"this game has never been started in Azahar. Start it once in Azahar, save in the game, then start it here again"))
@@ -505,7 +532,7 @@ var errNeverStarted = errors.New(tr("ce jeu n'a encore jamais été lancé dans 
 // the folder must exist (never created, 00000001.metadata never written); Backup copy (.tar, read back); the files
 // absent from the Version are moved next to the Backup copy, never deleted; each file of the Version goes through a
 // verified temporary file; then the folder is read back and compared with the Version.
-func (c *Client) downloadArchive(j *Game, l *Local, srv *Version, o []byte) error {
+func (c *Client) downloadArchive(j *Game, l *Local, srv *Version, o []byte) (err error) {
 	files, err := UnpackArchive(o)
 	for _, f := range files {
 		if !filepath.IsLocal(filepath.FromSlash(f.Path)) { // e.g. "a:b" on Windows
@@ -529,13 +556,26 @@ func (c *Client) downloadArchive(j *Game, l *Local, srv *Version, o []byte) erro
 		return err
 	}
 	if l == nil || sha256Hex(raw) != l.Hash {
-		return errors.New(tr("la sauvegarde a changé pendant la synchronisation, elle n'a pas été remplacée. Fermez Azahar et relancez le jeu",
-			"the save changed during the sync, so it wasn't replaced. Close Azahar and start the game again"))
+		return errChanged
 	}
 	backup, err := c.copy(j, raw)
 	if err != nil {
 		return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
 	}
+	// Files change one by one: from here, a cut write can leave two versions mixed (cutKey).
+	if err := c.setCut(j.Key, srv.Hash); err != nil {
+		return err
+	}
+	defer func() { // a write that failed before it changed anything: the folder is whole, the mark goes
+		if err == nil {
+			return
+		}
+		if now, e := readArchiveDir(j.File); e == nil {
+			if p, e := PackArchive(now); e == nil && sha256Hex(p) == l.Hash {
+				c.setCut(j.Key, "")
+			}
+		}
+	}()
 	want := map[string]bool{}
 	for _, f := range files {
 		want[f.Path] = true
@@ -578,7 +618,10 @@ func (c *Client) downloadArchive(j *Game, l *Local, srv *Version, o []byte) erro
 			"%s: the written folder doesn't match the server version. Backup: %s"), j.File, backup)
 	}
 	c.downloaded = true
-	return c.setBase(j.Key, srv.Hash)
+	if err := c.setBase(j.Key, srv.Hash); err != nil {
+		return err
+	}
+	return c.setCut(j.Key, "")
 }
 
 // download is a Download: Backup copy, verified temporary file, then replacement (ADR 0004, docs/design.md §3).
@@ -615,6 +658,14 @@ func (c *Client) download(j *Game, l *Local, srv *Version) error {
 			}
 		}
 		tmpDir = filepath.Dir(dir) // the archive must hold only main
+	}
+	// The file as it is now: it must still be the Local save that the State compared, or no Backup copy holds it.
+	now, err := os.ReadFile(j.File)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if (l == nil) != (err != nil) || l != nil && !bytes.Equal(now, l.Raw) {
+		return errChanged
 	}
 	var old []byte
 	if l != nil {
@@ -753,6 +804,12 @@ func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 			return false, err
 		}
 		st := state(seen, srv, b[j.Key])
+		if cut := b[cutKey(j.Key)]; cut != "" && l != nil && l.Hash == cut {
+			c.setCut(j.Key, "") // written in full: only the mark was left
+		} else if cut != "" && srv != nil {
+			c.log(j.Key + " : écriture interrompue, Récupération refaite")
+			st = toDownload // a cut write (cutKey): never uploaded, never asked
+		}
 		if st == conflict && c.batch != nil { // nobody waits in front of a game: the next start of the game asks
 			c.batch.conflicts = append(c.batch.conflicts, j.Name)
 			return false, nil

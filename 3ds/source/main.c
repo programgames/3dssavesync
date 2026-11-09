@@ -175,6 +175,20 @@ static void save_base(const char *key, const char *hash)
                   "Sync state not saved: conflicts may appear. Check the SD card."));
 }
 
+static const char *base_id(const game_t *j);
+
+/* Name in base.ini of the mark of a write that may be cut (cut_status, games.h): "CUT-" + base_id. */
+static void cut_id(const game_t *j, char *id, size_t n) { snprintf(id, n, "CUT-%.27s", base_id(j)); } /* only 3DSX- Keys get one */
+
+/* Removes the mark of j (cut_id), if it has one. */
+static void forget_cut(const game_t *j)
+{
+    char id[KEY_MAX];
+    cut_id(j, id, sizeof id);
+    if (forget_base(&bases, id) && write_bases(APP_DIR "/base.ini", &bases))
+        add_alert(T("État de synchronisation non enregistré : vérifiez la carte SD.", "Sync state not saved: check the SD card."));
+}
+
 /* ---------------------------------------------------------------- observation */
 
 static const char *SYSTEM_NAMES[] = { "DS", "GB", "GBA", "3DS" };
@@ -744,7 +758,10 @@ static int compute_states(int *outdated)
         game_t *j = &games[i];
         const obs_t local = { j->local_hash, j->local_size }, server = { j->server_hash, j->server_size };
         const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL };
+        char cut[KEY_MAX];
         j->status = j->unexpected || !j->key[0] ? STATUS_NOT_SYNCED : game_status(&o, base_of(&bases, base_id(j)), server_read);
+        cut_id(j, cut, sizeof cut);
+        j->status = cut_status(j->status, base_of(&bases, cut), j->has_local ? j->local_hash : NULL);
         if (base_outdated(j->status, base_of(&bases, base_id(j)), j->local_hash)) outdated[n++] = i;
         if (j->status != STATUS_HIDDEN) visible[visible_count++] = i;
     }
@@ -757,6 +774,12 @@ static void update_states(void)
 {
     int i, n = compute_states(outdated);
     for (i = 0; i < n; i++) save_base(base_id(&games[outdated[i]]), games[outdated[i]].local_hash);
+    for (i = 0; i < game_count; i++) { /* a mark of a write that finished (same Hash): only the mark was left */
+        char cut[KEY_MAX];
+        const char *h;
+        cut_id(&games[i], cut, sizeof cut);
+        if ((h = base_of(&bases, cut)) && games[i].has_local && !strcmp(h, games[i].local_hash)) forget_cut(&games[i]);
+    }
 }
 
 static void read_server_progresses(void);
@@ -908,6 +931,7 @@ static result_t create_vc_first_save(game_t *j, char *body, size_t size)
     free(back);
     free(data);
     save_base(base_id(j), j->server_hash);
+    forget_cut(j); /* read back: the write finished */
     return make_result(RESULT_DOWNLOADED, NULL);
 }
 
@@ -1017,8 +1041,17 @@ static result_t download_save(game_t *j)
     if (whole_archive(j)) {
         char why[160];
         free(old_data); /* copied: its memory goes to the read back */
-        if (j->extdata) failed = write_extdata(j->extdata, (unsigned char *)body, size, why, sizeof why);
-        else failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why); /* body freed */
+        if (j->extdata) { /* no commit: the mark tells the next scan that a cut write may mix files (cut_status) */
+            char cut[KEY_MAX];
+            cut_id(j, cut, sizeof cut);
+            if (set_base(APP_DIR "/base.ini", &bases, cut, j->server_hash)) {
+                forget_base(&bases, cut); /* not on the SD card: not in memory either */
+                free(body);
+                return make_result(RESULT_3DS_WRITE_REFUSED, "base.ini");
+            }
+            failed = write_extdata(j->extdata, (unsigned char *)body, size, why, sizeof why);
+            if (failed == -1) forget_cut(j); /* refused before any change: the extdata is whole */
+        } else failed = write_title_archive(j->title, j->media, (unsigned char *)body, size, why, sizeof why); /* body freed */
         if (failed) log_event("write %s: %s", j->key, why);
         if (failed == -2) {
             r = make_result(RESULT_WRITTEN_DAMAGED, backup);
@@ -1027,9 +1060,19 @@ static result_t download_save(game_t *j)
         }
         if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, why);
     } else if (j->system == SYS_3DS) {
-        failed = write_title_save(j->title, j->media, "/main", body, size);
+        unsigned char *back = NULL;
+        size_t back_size = 0;
         free(old_data);
+        failed = write_title_save(j->title, j->media, "/main", body, size);
+        /* read back, as sav.dat: after the commit, a difference means the archive holds something else (copy kept) */
+        if (!failed && (read_save(j, &back, &back_size) || back_size != size || memcmp(back, body, size))) failed = 2;
+        free(back);
         free(body);
+        if (failed == 2) {
+            r = make_result(RESULT_WRITTEN_DAMAGED, backup);
+            r.had_save = 1;
+            return r;
+        }
         if (failed) return make_result(RESULT_3DS_WRITE_REFUSED, NULL);
     } else if (vc(j)) {
         /* Received SRAM + the VC footer of the old sav.dat (16 bytes for Gold, Silver, Crystal; none for Gen 1). */
@@ -1084,6 +1127,7 @@ static result_t download_save(game_t *j)
         }
     }
     save_base(base_id(j), j->server_hash);
+    forget_cut(j); /* read back: the write finished */
     return make_result(RESULT_DOWNLOADED, NULL);
 }
 

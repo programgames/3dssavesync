@@ -29,7 +29,7 @@ Some 3DS games keep data outside their save archive, in their **Extra data** (ex
 ## Consequences
 
 - A server of an older version answers 404 to `3DSX-` Keys: update the server first, as for ADR 0028.
-- Writes are atomic per file only: a stop between two files leaves old and new files mixed. The verified backup copy is the safety net, and the next pass shows the extdata To download again.
+- Writes are atomic per file only: a stop between two files leaves old and new files mixed. So before its first change the 3DS writes a mark in `base.ini` (`CUT-<Key>=` the Hash being written), and removes it after the read back; the PC does the same in its Bases (`ECRITURE <Key>`, ADR 0028). A mark left with an extdata of another Hash means a cut write: the extdata is never uploaded and never offered in a Conflict, it is To download again (backup copy of the mixed files first). The verified backup copy holds the extdata from before.
 - A game may compare its save and its extdata; they can come back from two different times (two Keys). Sync All handles both in one pass, which keeps this rare.
 - On PC and Android, an extdata whose ID is not `titleLow >> 8` of a game (Pokémon Moon uses Sun's) can't be turned off with its game there; it still syncs.
 - Older versions ignore `3DSX-` Keys.
