@@ -4,6 +4,11 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Server: the Docker image now runs on ARM machines too** (Raspberry Pi, most NAS), as well as on x86 PCs. Docker picks the right one by itself.
+- **Server: `verify` checks your history.** `docker compose exec 3dssavesync python /app/server.py verify` reads every saved version again and lists any whose content changed on the disk since it was saved. Run it after a disk problem, or before you trust an old backup.
+
 ## [3.12.0] - 2026-11-08
 
 ### Added

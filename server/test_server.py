@@ -245,5 +245,19 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/saves/{self.key}")[0], 404)
 
 
+class VerifyTest(unittest.TestCase):
+    def test_lists_only_the_versions_whose_content_changed(self):
+        with tempfile.TemporaryDirectory() as data:
+            os.makedirs(os.path.join(data, "ABCD"))
+            good = f"000001-20260101T000000Z-pc-{HASH}.sav"
+            bad = f"000002-20260102T000000Z-3ds-{HASH}.sav"
+            for name, body in ((good, SAVE_DATA), (bad, SAVE_DATA[:-1] + b"\x00")):
+                with open(os.path.join(data, "ABCD", name), "wb") as f:
+                    f.write(body)
+            with open(os.path.join(data, "ABCD", "nom.txt"), "w") as f:
+                f.write("not a Version")
+            self.assertEqual(server.verify(data), (2, [f"ABCD/{bad}"]))
+
+
 if __name__ == "__main__":
     unittest.main()

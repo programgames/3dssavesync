@@ -20,6 +20,12 @@ jobs:
       - run: python -m unittest -v test_server.py
         working-directory: server
       - run: pipx run ruff==0.17.3 check server/
+      # The release publishes this image for amd64 and arm64: a PR checks that both still build.
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          platforms: linux/amd64,linux/arm64
 
   tests-c:
     runs-on: ubuntu-latest
@@ -155,8 +161,8 @@ jobs:
       - name: makerom et bannertool
         run: |
           mkdir -p outils && cd outils
-          curl -sSfLO https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
-          curl -sSfLO https://github.com/Epicpkmn11/bannertool/releases/download/v1.2.2/bannertool.zip
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 5 -O https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.19.0/makerom-v0.19.0-ubuntu_x86_64.zip
+          curl -sSfL --retry 5 --retry-all-errors --retry-delay 5 -O https://github.com/Epicpkmn11/bannertool/releases/download/v1.2.2/bannertool.zip
           unzip -q -o makerom-v0.19.0-ubuntu_x86_64.zip -d makerom
           unzip -q -o bannertool.zip -d bannertool
           cp "$(find makerom -type f -name makerom | head -1)" ../3ds/makerom
@@ -246,9 +252,12 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      # amd64 and arm64 (NAS, Raspberry Pi). The Dockerfile has no RUN step, so no QEMU is needed.
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: server
           push: true
+          platforms: linux/amd64,linux/arm64
           # « latest » seulement pour une vraie version (pas v3.0.0-alpha.1)
           tags: ghcr.io/${{ github.repository_owner }}/3dssavesync-server:${{ github.ref_name }}${{ !contains(github.ref_name, '-') && format(',ghcr.io/{0}/3dssavesync-server:latest', github.repository_owner) || '' }}
