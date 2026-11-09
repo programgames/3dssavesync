@@ -110,6 +110,12 @@ static void test_ini_files(void)
                   !strcmp(base_of(&b, "K0599"), H1) && !strcmp(base_of(&b, "K0512"), H2), "bases: 600 Games kept");
     }
 
+    /* forget_base: the extdata Base of a reinstalled game (ADR 0031) */
+    write_text("test.ini", "3DSX-0000055D=" H1 "\n3DS-0004000000055D00=" H2 "\n");
+    read_bases("test.ini", &b);
+    check(forget_base(&b, "3DSX-0000055D") == 1 && !base_of(&b, "3DSX-0000055D") && !strcmp(base_of(&b, "3DS-0004000000055D00"), H2) &&
+              b.n == 1 && forget_base(&b, "3DSX-0000055D") == 0, "forget_base: removes only that Base, once");
+
     /* Reinstalled game (ADR 0027): its install date in base.ini; a new date removes its Base, a first date keeps it */
     write_text("test.ini", "3DS-0004000000055D00=" H1 "\nVC-0004000000172000=" H2 "\n");
     read_bases("test.ini", &b);

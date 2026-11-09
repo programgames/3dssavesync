@@ -450,6 +450,12 @@ Only native 3DS games with a single save file are supported.
 
 open_agb_firm writes the `.sav` file only when you turn off the 3DS with POWER. Turn it off with POWER after you play, then sync at the next start.
 
+### A 3DS game is Not synced: its save can't be read
+
+> This game's save can't be copied whole (details below). This game is not synced, and nothing in it is changed. *(La sauvegarde de ce jeu ne peut pas être copiée en entier (détail ci-dessous). Ce jeu n'est pas synchronisé, rien n'y est modifié.)*
+
+Some cartridges and downloads hold two games in one, with one save for both (for example Puzzle & Dragons Z + Puzzle & Dragons: Super Mario Bros. Edition). Until each game has been started once, part of the save is not written yet, and the 3DS refuses to read it. Start each game of the title once and save, then press **Y** to read the list again. The detail line under the game gives the code (such as `0xD900458B`): copy it if you [report a bug](#report-a-bug).
+
 ### Update messages
 
 The **Version** line of the settings (**SELECT**) shows the installed version and its state: **Up to date**, **3.7.1 available**, **Not checked** or **Check failed**. On that line, the bottom screen shows the result of the last check or install. The grey line under a failure gives a code (`curl 6`, `HTTP 403`, `AM 0x…`): copy it if you [report a bug](#report-a-bug). After any of these failures, the old version of the app stays, and your saves do not change.

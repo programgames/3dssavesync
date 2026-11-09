@@ -569,8 +569,14 @@ static void note_installs(void)
         r = note_install(&bases, j->title, title_install_time(j->title), base_id(j));
         changed |= r > 0;
         if (r == 2) {
-            char t[400];
+            char t[400], x[KEY_MAX];
+            unsigned long e = skipped_extdata(j->title) ? 0 : title_extdata_id(j->title);
             log_event("reinstalled %016llX \"%s\": Base %s removed", j->title, j->name, base_id(j));
+            /* Its extra data too (ADR 0031): a reinstall may have reset it, and an Upload would replace the server's. */
+            if (e) {
+                key_3dsx(e, x);
+                if (forget_base(&bases, x)) log_event("reinstalled %016llX: Base %s removed", j->title, x);
+            }
             snprintf(t, sizeof t, T("%s a été réinstallé. Si sa sauvegarde diffère de celle du serveur, vous choisirez laquelle garder.",
                                     "%s was installed again. If its save differs from the server's, you'll choose which one to keep."), j->short_name);
             add_alert(t);
