@@ -46,6 +46,13 @@ int move_save(const char *src, const char *dst, const char *backup, int remove_s
  * second, or two ROMs with the same name). An existing copy is never overwritten. 0 if found and fits in out, -1 otherwise. */
 int backup_path(const char *dir, const char *name, const char *date, const char *ext, char *out, size_t n);
 
+/* Old Backup copies of one game to remove (names: files of copies/). A copy of the game is named exactly
+ * prefix-YYYYMMDD-HHMMSS[-n].ext, ext sav, main or tar (prefix: "<name>-<Key>"); any other name is never chosen.
+ * made: the copy just written and read back, always kept and counted as the newest (the 3DS clock may go back).
+ * Sets del[i] to 1 for each copy older than the keep - 1 newest others, by the date then n of the name; returns
+ * their count. 0 if made is not in names. */
+int old_copies(const char *prefix, const char *made, char **names, int count, int keep, char *del);
+
 /* Save of the ROM name (no extension) stored in dir (the roms root or one of its subfolders, ADR 0015).
  * saves empty or equal to roms: next to the ROM. saves = roms + "/saves" (TWiLight Menu++): in the saves folder of
  * the ROM's folder. Other folder (open_agb_firm, _nds/TWiLightMenu/saves): all ROMs in that folder.

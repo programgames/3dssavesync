@@ -79,7 +79,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `titres.ini` | older versions only: the 3DS games to sync. This version reads it once, turns off the games it doesn't list, then no longer uses it. |
 | `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
 | `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |
-| `copies/` | backup copies made before a save is replaced. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. Extra data is copied the same way, in its own `.tar` file. |
+| `copies/` | backup copies made before a save is replaced. The last 10 copies of each game are kept, older ones are removed. Copies made by an older version of the app are never removed: remove them by hand when you no longer need them. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. Extra data is copied the same way, in its own `.tar` file. |
 
 Outside this folder, `sdmc:/config/ssl/cacert.pem` (optional, shared with other homebrew): the certificate of your own CA, for a server that has no Let's Encrypt certificate ([HTTPS and the 3DS](guide-server.md#https-and-the-3ds)).
 
