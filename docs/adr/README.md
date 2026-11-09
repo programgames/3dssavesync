@@ -34,3 +34,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0026](0026-client-android.md) | The Android client lives in this repository, ports the sync to Kotlin with the shared test files, and uses only the system folder picker. |
 | [0027](0027-jeu-3ds-reinstalle.md) | A reinstalled 3DS game forgets its Base, so a new save asks before it replaces the server's. |
 | [0028](0028-archives-3ds-completes.md) | Every 3DS game syncs its whole save archive, as one deterministic tar per version, under its own Key. |
+| [0029](0029-certificats-personnalises.md) | The 3DS also trusts the CA certificates of `sdmc:/config/ssl/cacert.pem` for the Server, on top of ISRG Root X1. |

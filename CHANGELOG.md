@@ -9,6 +9,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - **3DS: a game you install again asks first.** Deleting a 3DS game deletes its save. Before, after you installed it again, its new save was uploaded over your progress on the server. Now the app sees that the game was installed again, and you choose which save to keep.
 - **Every 3DS game now syncs, not only Pokémon.** On the 3DS, the PC (Azahar) and Android (Azahar), every 3DS game with a save is synced, with all its save files. New games are on; turn one off in the 3DS settings, in the game details on Android, or with `titres_3ds_off` on the PC. The 8 Pokémon games work as before. **Update the server and every device first**: an older server refuses these games, and an older device doesn't see them.
 - **3DS: a journal of what the app did.** `sdmc:/3ds/3dssavesync/journal.log` lists each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token.
+- **3DS: your own HTTPS certificates.** A server with a private CA or a self-signed certificate now works: put its certificate in `sdmc:/config/ssl/cacert.pem`, as for other homebrew.
+- **3DS: a note when the server is slow.** After 5 seconds without an answer, the screen says that the server is slow to answer.
 
 ### Changed
 

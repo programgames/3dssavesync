@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include "files.h"
 #include "github_roots.h"
 #include "isrg_root_x1.h"
 #include "net.h"
@@ -86,6 +87,16 @@ static int no_linger(void *u, curl_socket_t fd, curlsocktype purpose)
     return CURL_SOCKOPT_OK;
 }
 
+static char *server_cas; /* ISRG + sdmc:/config/ssl/cacert.pem (ADR 0029); NULL: ISRG only */
+static size_t server_cas_size;
+
+int net_read_cas(const char *path)
+{
+    int r = read_cas(path, ISRG_ROOT_X1, NET_MAX_CAS, &server_cas, &server_cas_size);
+    if (r) server_cas = NULL;
+    return r;
+}
+
 /* One request. upload != NULL => PUT of this body. token == NULL => GitHub (net_github). client: X-Client of the Server. */
 static long request(const char *url, const char *token, const char *client, const char *condition,
                     const void *upload, size_t upload_size, buffer_t *received)
@@ -98,7 +109,11 @@ static long request(const char *url, const char *token, const char *client, cons
     long status;
 
     curl_easy_reset(c); /* resets the options, keeps the connection open */
-    if (token) { /* Server: ISRG only (ADR 0003) */
+    if (token) { /* Server: ISRG (ADR 0003), and the user's certificates if any (ADR 0029) */
+        if (server_cas) {
+            ca.data = server_cas;
+            ca.len = server_cas_size;
+        }
         snprintf(auth, sizeof auth, "Authorization: Bearer %s", token);
         headers = curl_slist_append(NULL, auth);
         snprintf(x_client, sizeof x_client, "X-Client: %s", client);
