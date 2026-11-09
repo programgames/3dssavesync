@@ -6,6 +6,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ### Fixed
 
+- **Server: an empty token is refused.** With `NDSSYNC_TOKEN=` empty in `.env`, the Docker server let anyone read and upload saves. Now it doesn't start, and its log says why. The local server of the PC refuses an empty token too.
+- **Server: a stray file no longer breaks the list.** A file left by hand in a game's folder (a copy named `x.sav`, for example) made the list of saves fail for every device, or could become the current version. Only real versions are read now.
 - **PC: a save written during a sync is kept.** If the emulator saved the game between the start of a sync and the download, the download replaced that save without a backup copy. Now the PC reads the save again first, and stops if it changed, as Android does.
 - **3DS: the save of the 8 Pokémon games is read back after a download**, like every other save. A difference now says that the written save is damaged, and the backup copy stays.
 - **3DS and PC: a cut write is never uploaded.** 3DS extra data and the Azahar folder of a 3DS game on the PC change one file at a time. If the console or the PC stopped in the middle, the next sync saw a mix of old and new files, and a Conflict could upload that mix. Now the app marks the write before it starts: a mark left behind means the write was cut, and the next sync downloads the server version again, after a backup copy.

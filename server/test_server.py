@@ -244,8 +244,27 @@ class ApiTest(unittest.TestCase):
             self.assertGreater(j.pop("age"), 0)
         self.assertEqual(received, expected)
 
+    @unittest.skipIf(REMOTE, "accès au dossier data du serveur")
+    def test_other_files_are_not_versions(self):
+        # A copy left by hand in a game's folder: never listed, never the Current version, never a broken list.
+        self.upload()
+        for name in ("copie.sav", "zzz.sav", f"999999-20260101T000000Z-pc-{HASH}.sav.bak"):
+            open(os.path.join(self.data.name, self.key, name), "w").close()
+        status, _, body = self.request("GET", "/saves")
+        self.assertEqual(status, 200)
+        self.assertEqual([j["hash"] for j in json.loads(body) if j["code"] == self.key], [HASH])
+        self.assertEqual(len(self.json(f"/saves/{self.key}/history")), 1)
+        self.assertEqual(self.request("GET", f"/saves/{self.key}")[2], SAVE_DATA)
+
     def test_unknown_game_404(self):
         self.assertEqual(self.request("GET", f"/saves/{self.key}")[0], 404)
+
+
+class TokenTest(unittest.TestCase):
+    def test_empty_token_refused_at_start(self):
+        for token in ("", "  "):
+            with tempfile.TemporaryDirectory() as data, self.assertRaises(SystemExit):
+                server.creer(("127.0.0.1", 0), data, token)
 
 
 class VerifyTest(unittest.TestCase):
@@ -259,15 +278,18 @@ class VerifyTest(unittest.TestCase):
                     f.write(body)
             with open(os.path.join(data, "ABCD", "nom.txt"), "w") as f:
                 f.write("not a Version")
+            with open(os.path.join(data, "ABCD", "copie.sav"), "w") as f:  # a file left by hand: not a Version
+                f.write("x")
             self.assertEqual(server.verify(data), (2, [f"ABCD/{bad}"]))
 
 
 class ReportTest(unittest.TestCase):
     def test_games_largest_first_with_counts_and_totals(self):
         with tempfile.TemporaryDirectory() as data:
-            files = {"ABCD": [("000001-20260101T000000Z-pc-aa.sav", 10), ("000002-20260305T120000Z-3ds-bb.sav", 20)],
-                     "GBA-WXYZ": [("000001-20260210T000000Z-pc-cc.sav", 2048),
-                                  ("000002-20260211T000000Z-pc-dd.sav.tmp", 5)]}
+            files = {"ABCD": [(f"000001-20260101T000000Z-pc-{'a' * 64}.sav", 10), (f"000002-20260305T120000Z-3ds-{'b' * 64}.sav", 20),
+                              ("copie.sav", 99)],  # not a Version: not counted
+                     "GBA-WXYZ": [(f"000001-20260210T000000Z-pc-{'c' * 64}.sav", 2048),
+                                  (f"000002-20260211T000000Z-pc-{'d' * 64}.sav.tmp", 5)]}
             for key, versions in files.items():
                 os.makedirs(os.path.join(data, key))
                 for name, size in versions:

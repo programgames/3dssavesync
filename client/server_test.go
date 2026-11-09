@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -33,6 +34,40 @@ func TestServerContract(t *testing.T) {
 		t.Fatalf("contrat HTTP non respecté :\n%s", o)
 	}
 	t.Logf("%s", strings.TrimSpace(string(o)))
+}
+
+// An empty token opens nothing, and a file that isn't a Version is never listed (server.py does the same).
+func TestLocalServerEmptyTokenAndOtherFiles(t *testing.T) {
+	get := func(srv *httptest.Server, token, path string) (int, string) {
+		req, _ := http.NewRequest("GET", srv.URL+path, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Body.Close()
+		b, _ := io.ReadAll(r.Body)
+		return r.StatusCode, string(b)
+	}
+	open := httptest.NewServer(&Server{data: t.TempDir()})
+	defer open.Close()
+	if st, _ := get(open, "", "/saves"); st != 401 {
+		t.Fatalf("empty token: %d, want 401", st)
+	}
+	data := t.TempDir()
+	h := strings.Repeat("a", 64)
+	write(t, filepath.Join(data, "ADAF", "000001-20260101T000000Z-pc-"+h+".sav"), []byte("v1"))
+	for _, n := range []string{"copie.sav", "zzz.sav", "999999-20260101T000000Z-pc-" + h + ".sav.bak"} {
+		write(t, filepath.Join(data, "ADAF", n), []byte("x"))
+	}
+	srv := httptest.NewServer(&Server{data: data, token: "j"})
+	defer srv.Close()
+	if st, b := get(srv, "j", "/saves"); st != 200 || !strings.Contains(b, `"hash": "`+h+`"`) || strings.Count(b, `"code"`) != 1 {
+		t.Fatalf("list: %d %s", st, b)
+	}
+	if _, b := get(srv, "j", "/saves/ADAF/history"); strings.Count(b, `"version"`) != 1 {
+		t.Fatalf("history: %s", b)
+	}
 }
 
 // What the Python suite can't do remotely: exact list format (read by the 3DS), truncated body.

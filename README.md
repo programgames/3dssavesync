@@ -81,7 +81,7 @@ The Android app is a first version and not tested on many phones yet: start with
 
 ### Sync away from home
 
-The local server works only on your home network, while the PC is on. To sync from anywhere, run your own server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. The 3DS needs a Let's Encrypt certificate. Then choose **Personal server** on the PC settings page and prepare the 3DS SD card again. See the [server guide](docs/guide-server.md).
+The local server works only on your home network, while the PC is on. To sync from anywhere, run your own server on an always-on machine (NAS, Raspberry Pi) with Docker and HTTPS. The 3DS trusts a Let's Encrypt certificate, or your own CA if you add it to the SD card. Then choose **Personal server** on the PC settings page and prepare the 3DS SD card again. See the [server guide](docs/guide-server.md).
 
 **Portable version** (everything in one folder: `LaunchBox\ThirdParty\3dssavesync`, a USB drive, the SD card of a Steam Deck): see the [PC guide](docs/guide-pc.md#portable-version).
 
@@ -136,7 +136,8 @@ Native 3DS games: the 8 Pokémon games (X to Ultra Moon) sync their raw `main` f
 | Where | What |
 |---|---|
 | PC: `%APPDATA%\3dssavesync` (Windows), `~/.config/3dssavesync` (Linux), `~/Library/Application Support/3dssavesync` (macOS) | `config.json`, the log `3dssavesync.log`, backup copies in `copies/`, local server data in `serveur/` |
-| 3DS: `sdmc:/3ds/3dssavesync/` | `config.ini` (server, token, folders), backup copies in `copies/` |
+| 3DS: `sdmc:/3ds/3dssavesync/` | `config.ini` (server, token, folders), `titres-off.ini` (3DS games turned off), the journal `journal.log`, backup copies in `copies/` |
+| Android: the app's own storage | settings and token (private to the app), backup copies in `Android/data/io.github.programgames.savesync/files/copies/` |
 | Server: `data/<game key>/` | every version of every save, never deleted |
 
 With the local server, nothing leaves your home network. Your saves stay in your emulator and 3DS app folders, as before.
