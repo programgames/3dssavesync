@@ -301,7 +301,7 @@ open class UiTest {
             rule.onNodeWithText(s(R.string.setup_again)).performScrollTo().performClick()
             rule.onNodeWithText(s(R.string.welcome_title)).assertIsDisplayed()
             rule.onNodeWithText(s(R.string.setup_start)).performClick()
-            rule.onNodeWithText(s(R.string.skip)).performClick()
+            rule.onNodeWithText(s(R.string.skip)).performScrollTo().performClick()
             rule.onNodeWithText(s(R.string.skip)).performScrollTo().performClick()
             rule.onNodeWithText(s(R.string.setup_done_title)).assertExists()
         } finally {
@@ -309,7 +309,7 @@ open class UiTest {
         }
     }
 
-    // "Scan the PC's QR code": the scanner can't run here, scanQr is replaced. A good code fills, saves and tests; a
+    // "Scan the QR code": the scanner can't run here, scanQr is replaced. A good code fills, saves and tests; a
     // cancel, a missing scanner or another code fills nothing and says why.
     @Test
     fun scanTheQrCodeFillsTheSettings() {

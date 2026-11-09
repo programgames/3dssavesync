@@ -528,6 +528,7 @@ object App {
         val notes = mutableListOf<String>()
         val keys = RomKeys(romKeysFile)
         for (e in emulators) {
+            if (e.duplicateOf(emulators) != null) continue // same folders as an entry above: its games are listed once
             val found = mutableListOf<Pair<Entry, String>>() // entry, save file identity
             val skipped = mutableMapOf<String, String>() // document -> extension, once even in a folder of two systems
             for ((s, f) in e.systems) {

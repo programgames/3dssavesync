@@ -26,6 +26,10 @@ What changed in each release, for people who use 3dssavesync. The format follows
 - **Another server or token asks first.** When you point a device at another server, or change its token, it forgets what it synced before. A game that differs from the new server then asks which save to keep, instead of being replaced. Games that are the same on both sides stay in sync.
 - **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.
 
+### Fixed
+
+- **Android: an emulator added twice lists its games once.** Two entries with the same folders showed each game twice. The second entry now says so in **Emulators**, and you can remove it; the app also refuses a folder that would make two entries the same. The QR code text now says that the 3DS shows it too (**Settings > Phone**).
+
 ## [3.12.0] - 2026-11-08
 
 ### Added

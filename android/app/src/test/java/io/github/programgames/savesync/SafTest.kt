@@ -249,6 +249,19 @@ class SafTest {
         assertFalse(ops.any { it.startsWith("write") || it.startsWith("create") || it.startsWith("delete") }) // a scan only reads
     }
 
+    // An emulator added twice with the same folders: its games are listed once, under the first entry; a new entry without
+    // any folder yet is no duplicate.
+    @Test
+    fun entryAddedTwiceListsItsGamesOnce() {
+        put("roms/nds/Platine.nds", nds("CPUF"))
+        App.aliases = emptyMap()
+        val ds = mapOf(System.DS to Folders(roms = tree("roms/nds").toString(), nextToRom = true))
+        val empty = Emulator("melonds3", "melonds", "", mapOf(System.DS to Folders(nextToRom = true)))
+        App.saveEmulators(listOf(Emulator("melonds", "melonds", "", ds), Emulator("melonds2", "melonds", "", ds), empty, empty.copy(id = "melonds4")))
+        assertEquals(listOf("melonds Platine"), App.scanAll().first.map { it.emulator.id + " " + it.name })
+        assertEquals(listOf(null, "melonds", null, null), App.emulators.map { it.duplicateOf(App.emulators)?.id })
+    }
+
     // A second scan opens no ROM that did not change (RomKeys): only the new or changed ones, by size and date.
     @Test
     fun scanOpensChangedRomsOnly() {
