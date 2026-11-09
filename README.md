@@ -176,11 +176,16 @@ The apps speak English and French. Most code identifiers and comments are still 
 
 ## Roadmap
 
+In the next release: a setting to turn off the daily update check on the 3DS; sync of 3DS extra data (extdata); the last 10 backup copies of each game on the 3DS; a storage report on the server.
+
 Planned:
 
-- A setting to turn off the daily update check on the 3DS.
-- Sync of 3DS extra data (extdata).
 - A listing on Universal Updater, later.
+
+Ideas, if the need shows up:
+
+- One token per device, so that a lost device can be blocked without a new token on the others.
+- A server command that moves old versions to a quarantine folder, to free disk space. Nothing would be deleted: you would empty that folder yourself.
 
 Set aside (not planned): GBA Virtual Console saves; a public hosted server.
 
