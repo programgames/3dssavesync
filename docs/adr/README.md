@@ -35,3 +35,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0027](0027-jeu-3ds-reinstalle.md) | A reinstalled 3DS game forgets its Base, so a new save asks before it replaces the server's. |
 | [0028](0028-archives-3ds-completes.md) | Every 3DS game syncs its whole save archive, as one deterministic tar per version, under its own Key. |
 | [0031](0031-extdata-3ds.md) | The extra data (extdata) of a 3DS game syncs as its own archive, one Key per extdata, on and off with its games. |
+| [0032](0032-changement-de-serveur.md) | Each device keeps a fingerprint of its server and token with its Bases; another server or token forgets the Bases, so a differing game asks first. |
