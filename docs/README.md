@@ -6,11 +6,12 @@ New here? Start with the [README](../README.md): what 3dssavesync does and how t
 
 | Page | What it covers |
 |---|---|
+| [FAQ](faq.md) | short answers: missing game, wrong save, two consoles, lost SD card or token, Azahar, token safety |
 | [Troubleshooting](troubleshooting.md) | every message and problem, with its fix |
 | [PC guide](guide-pc.md) | settings page, first-start steps, checks, updates, emulators, `config.json`, commands, restore an old version, ROM hacks, LaunchBox, ES-DE |
 | [Android guide](guide-android.md) | first version of the Android app: emulators and their folders, game states, conflicts, backup copies |
 | [3DS guide](guide-3ds.md) | buttons, game states, settings, updates, ROM subfolders, files on the SD card |
-| [Server guide](guide-server.md) | local server or your own Docker server, HTTPS for the 3DS |
+| [Server guide](guide-server.md) | local server or your own Docker server, HTTPS for the 3DS, maintenance and updates |
 | [Frontend guide](guide-frontends.md) | Steam ROM Manager, EmuDeck, RetroDECK, Playnite, RetroBat, Pegasus, Lutris, Attract-Mode |
 | [Forwarder guide](guide-forwarders.md) | HOME menu icons for DS, GB and GBA games |
 
