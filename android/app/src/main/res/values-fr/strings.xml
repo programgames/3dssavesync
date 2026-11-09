@@ -84,7 +84,7 @@
     <string name="system_gba">Game Boy Advance</string>
     <string name="system_3ds">Nintendo 3DS</string>
     <string name="hint_retroarch">Choisissez le dossier des ROM de chaque système. Si RetroArch range ses sauvegardes dans RetroArch/saves (par défaut), choisissez aussi ce dossier une fois&#160;: l\'application y trouve le dossier de chaque cœur. Version du Play Store&#160;: dans le sélecteur de dossier, ouvrez le menu et choisissez RetroArch. Fermez RetroArch avant de synchroniser.</string>
-    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Seuls les 8 jeux Pokémon de la 3DS sont synchronisés. Fermez Azahar avant de synchroniser.</string>
+    <string name="hint_azahar">Choisissez le dossier utilisateur choisi dans Azahar à son premier lancement (il contient le dossier sdmc). Chaque jeu 3DS qui a une sauvegarde est synchronisé&#160;: pour en laisser un de côté, désactivez-le dans sa fiche. Fermez Azahar avant de synchroniser.</string>
     <string name="hint_melonds">melonDS sauvegarde à côté de la ROM par défaut&#160;: choisissez le dossier des ROM. Si vous avez réglé un autre dossier de sauvegardes dans melonDS, décochez «&#160;Sauvegardes à côté des ROM&#160;» et choisissez ce dossier.</string>
     <string name="hint_drastic">DraStic range ses sauvegardes dans DraStic/backup (fichiers .dsv). Choisissez le dossier des ROM, puis ce dossier backup. Fermez DraStic avant de synchroniser.</string>
     <string name="hint_noods">NooDS sauvegarde à côté de la ROM par défaut&#160;: choisissez le dossier des ROM. Gardez ce réglage&#160;: son autre dossier de sauvegardes est fermé aux autres applications.</string>
@@ -163,6 +163,11 @@
     <string name="s_unknown">Inconnu</string>
     <string name="s_none">Pas de sauvegarde</string>
     <string name="s_interrupted">Interrompue</string>
+    <string name="s_not_synced">Non synchronisé</string>
+    <string name="why_off">La synchronisation de ce jeu est désactivée&#160;: l\'application n\'envoie ni ne récupère sa sauvegarde. Activez «&#160;Synchroniser ce jeu&#160;» pour la reprendre.</string>
+    <string name="why_not_started">Ce jeu n\'a jamais été lancé dans Azahar&#160;: il n\'a pas encore de dossier de sauvegarde, et l\'application n\'en crée pas. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
+    <string name="sync_this_game">Synchroniser ce jeu</string>
+    <string name="sync_this_game_help">Désactivé&#160;: l\'application ne touche pas à ce jeu, ni sur ce téléphone ni sur le serveur. Les nouveaux jeux sont activés.</string>
     <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Touchez Envoyer pour la transmettre au serveur.</string>
     <string name="why_to_download">Le serveur a une sauvegarde plus récente. Touchez Récupérer pour l\'obtenir&#160;: l\'application garde d\'abord une copie de sécurité de celle du téléphone.</string>
     <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
@@ -265,6 +270,9 @@
     <string name="p_format">Ce fichier de sauvegarde a un format inattendu&#160;: il n\'a pas été synchronisé. Vérifiez l\'émulateur et son cœur dans Émulateurs.</string>
     <string name="p_permission">L\'application ne peut plus ouvrir ce dossier ou ce fichier. Choisissez de nouveau le dossier dans Émulateurs.</string>
     <string name="p_no_copy">La copie de sécurité n\'est plus dans le dossier de l\'application. Prenez plutôt celle du serveur.</string>
+    <string name="p_never_started">Ce jeu n\'a pas de dossier de sauvegarde dans Azahar, et l\'application n\'en crée pas. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
+    <string name="p_extra_files">Le dossier de sauvegarde de ce jeu sur le téléphone contient des fichiers que la version du serveur n\'a pas&#160;: rien n\'a été remplacé. L\'application ne supprime jamais un fichier de vos sauvegardes. «&#160;Afficher les détails&#160;» donne ces fichiers&#160;: sortez-les du dossier de sauvegarde avec un gestionnaire de fichiers, puis réessayez.</string>
+    <string name="p_archive_path">Un fichier du dossier de sauvegarde de ce jeu a un nom que l\'application ne peut pas synchroniser (un chemin de plus de 100 caractères)&#160;: ce jeu n\'est pas synchronisé. «&#160;Afficher les détails&#160;» donne ce fichier.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
     <string name="p_open">Cette sauvegarde a changé il y a quelques secondes&#160;: l\'émulateur est peut-être encore ouvert. Balayez-le hors des applications récentes, puis réessayez.</string>
     <string name="reminder_title">Fermez l\'émulateur</string>

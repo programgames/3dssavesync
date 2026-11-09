@@ -15,7 +15,7 @@ typedef enum {
     RESULT_DOWNLOAD_FAILED,  /* status, url */
     RESULT_DOWNLOAD_DAMAGED, /* received Hash differs */
     RESULT_BACKUP_FAILED,    /* path: the Backup copy */
-    RESULT_3DS_WRITE_REFUSED,
+    RESULT_3DS_WRITE_REFUSED, /* path: the technical reason, or "" */
     RESULT_OUT_OF_MEMORY,
     RESULT_WRITE_FAILED,     /* path: the Save file, intact */
     RESULT_WRITTEN_DAMAGED,  /* path: the Save file; had_save */
@@ -26,6 +26,7 @@ typedef enum {
     RESULT_VC_NEVER_STARTED, /* Download to a Virtual Console game with no sav.dat yet: nothing written */
     RESULT_VC_UNEXPECTED,    /* path: the files of its archive (title_root) */
     RESULT_VC_NO_KEY,        /* ROM of a Virtual Console game unreadable; path: the step that failed */
+    RESULT_3DS_NOT_SYNCED,   /* save archive of a 3DS game that can't be copied whole (ADR 0028); path: why */
     RESULT_CONFLICT_LEFT,
     RESULT_DUPLICATE_SHARED, /* count */
     RESULT_DUPLICATE,        /* count */

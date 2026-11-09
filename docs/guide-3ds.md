@@ -43,7 +43,7 @@ The top of the list counts the games in each state (counters that do not fit are
 | GB saves | empty | empty = next to the ROM (TWiLight Menu++). The mGBA forwarder save wins if it exists. |
 | GBA ROMs | `sdmc:/roms/gba` | GBA ROM folder |
 | GBA saves | empty | empty = next to the ROM (open_agb_firm with `useSavesFolder=false`). With `useSavesFolder=true`: `sdmc:/3ds/open_agb_firm/saves`. |
-| 3DS games | the 8 Pokémon games | native 3DS games to sync. Only games with a single save file can be ticked. |
+| 3DS games | all | every native 3DS game with a save is synced. Untick a game to turn it off ([Native 3DS games](#native-3ds-games)). |
 | Connection | | **Not tested**, **OK** or the reason of the failure. **A** tests the address and the token. |
 | Version | | the installed version and its state, for example `3.7.0 · Up to date` or `3.7.0 · 3.7.1 available`. **A** checks for a new version, then offers to install it ([Updates](#updates)). |
 
@@ -74,10 +74,11 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `config.ini` | server, token, folders |
 | `base.ini` | the last synced state of each game, and the install date of each 3DS game: a game you install again asks before its new save replaces the server's. Do not delete it: without it, every changed game shows a conflict. |
 | `journal.log` | what the app did: each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token. It stays small: past 128 KB it becomes `journal.log.1`. |
-| `titres.ini` | the 3DS games to sync (absent = the 8 Pokémon games) |
+| `titres-off.ini` | the 3DS games you turned off, one title ID per line. Every other 3DS game with a save is synced. |
+| `titres.ini` | older versions only: the 3DS games to sync. This version reads it once, turns off the games it doesn't list, then no longer uses it. |
 | `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
 | `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |
-| `copies/` | backup copies made before a save is replaced |
+| `copies/` | backup copies made before a save is replaced. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. |
 
 ## Updates
 
@@ -105,9 +106,25 @@ You can always install a version by hand: download `3dssavesync.cia` from the [r
 
 ## Native 3DS games
 
-Open **SELECT** > **3DS games** to tick the games to sync. Only a game with a single save file can be synced. A game that is not in the list: start it once and save.
+Every 3DS game with a save is synced: installed games and the game card in the slot. A new game is synced as soon as it has a save. A game you never started has no save, so it is not in the list: start it once and save.
 
-On the PC, add the same games to `titres_3ds` in `config.json` ([PC guide](guide-pc.md#configuration)).
+- The 8 Pokémon games (X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon) sync their `main` file, as before.
+- Every other game syncs all the files of its save at once, as one archive. A save larger than 16 MB, or with a file path longer than 100 characters, stays **Not synced**, with the reason under the game. Nothing in it is changed.
+- Super Mario Maker is never synced: its save works only on the console that made it.
+- Virtual Console games are in the **GB** tab ([below](#virtual-console-games-game-boy-game-boy-color)), not here.
+
+To turn a game off:
+
+1. Press **SELECT**.
+2. Choose the **3DS games** line, and press **A** (**Choose**).
+3. Choose the game, and press **A** (**Turn off**). The box is ticked when the game is synced.
+4. Press **B** (**Save and go back**).
+
+A turned-off game is no longer in the list, and 3dssavesync doesn't read or change its save. Press **A** again on it to turn it back on.
+
+If you used an older version and ticked games in **3DS games**, this version keeps your choice: the games that were not ticked are turned off. A game you ticked that is not a Pokémon game syncs under a new name on the server: the first sync uploads its whole save, and the old version stays in its history on the server. Update 3dssavesync on every device (3DS, PC, Android) before you sync these games: an older version keeps the old name.
+
+The PC keeps its own list of turned-off games: `titres_3ds_off` ([PC guide](guide-pc.md#3ds-games-azahar)).
 
 ## Virtual Console games (Game Boy, Game Boy Color)
 

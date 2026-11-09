@@ -182,17 +182,34 @@ func TestProfiles(t *testing.T) {
 	equal((&Emulator{Exe: filepath.Join("Emu", "mGBA.EXE")}).process(), "mGBA", "processus : nom de l'exe sans .exe")
 }
 
+// ADR 0028: the 8 Pokémon games keep 3DS-, every other application is 3DSA-, titres_3ds only gives a name, the
+// skip list and other title types have no Key.
 func TestTitles3DS(t *testing.T) {
 	tmp = t.TempDir()
 	config := writeConfig(t, filepath.Join(tmp, "config.json"), Config{URL: "http://x", Token: "j",
 		Titles3DS: map[string]string{"00040000000ec300": "Jeu a moi"}})
-	t.Cleanup(func() { delete(titles3DS, "00040000000EC300") })
+	t.Cleanup(func() { delete(names3DS, "00040000000EC300") })
 	if _, err := newSession(config); err != nil {
 		t.Fatal(err)
 	}
-	r, err := readRom(rom3DS(t, "Mon jeu", 0x00040000000EC300))
-	if err != nil || r.Key != "3DS-00040000000EC300" || r.Name != "Jeu a moi" {
-		t.Errorf("titres_3ds : Clé %q, nom %q, erreur %v", r.Key, r.Name, err)
+	for _, c := range []struct {
+		id        uint64
+		key, name string
+	}{
+		{0x00040000000EC300, "3DSA-00040000000EC300", "Jeu a moi"},
+		{0x0004000000033500, "3DSA-0004000000033500", "Mon jeu"},
+		{0x0004000000055D00, "3DS-0004000000055D00", "Pokemon X"},
+		{0x00040000001A0300, "", "Mon jeu"}, // Super Mario Maker: save tied to one console
+		{0x0004000E00033500, "", "Mon jeu"}, // an update, not an application
+		{0x0004800400033500, "", "Mon jeu"}, // DSiWare
+	} {
+		r, err := readRom(rom3DS(t, "Mon jeu", c.id))
+		if err != nil || r.Key != c.key || r.Name != c.name {
+			t.Errorf("%016X : Clé %q, nom %q, erreur %v ; attendu %q, %q", c.id, r.Key, r.Name, err, c.key, c.name)
+		}
+	}
+	if !validKey("3DSA-0004000000033500") || validKey("3DSA-000400000003350") || validKey("3DSB-0004000000033500") {
+		t.Error("forme de Clé 3DSA-")
 	}
 }
 

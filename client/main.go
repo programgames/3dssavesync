@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -41,10 +42,13 @@ type Config struct {
 	Token     string               `json:"jeton"`
 	Copies    string               `json:"copies,omitempty"` // default: <config folder>/copies
 	Emulators map[string]*Emulator `json:"emulateurs"`
-	Launcher  string               `json:"lanceur,omitempty"`    // installed exe, which the frontends point to
-	Frontends map[string]string    `json:"frontends,omitempty"`  // launchbox, esde -> folder (repair)
-	Titles3DS map[string]string    `json:"titres_3ds,omitempty"` // 3DS games besides the 8 Pokémon: title ID -> name
-	Alias     map[string]string    `json:"alias,omitempty"`      // ROM name without extension -> chosen Key (ADR 0014)
+	Launcher  string               `json:"lanceur,omitempty"`   // installed exe, which the frontends point to
+	Frontends map[string]string    `json:"frontends,omitempty"` // launchbox, esde -> folder (repair)
+	// Names of 3DS games: title ID -> name. Before ADR 0028, the only 3DS games synced besides the 8 Pokémon; now
+	// every 3DS game with a save in Azahar syncs, and this list only gives names.
+	Titles3DS map[string]string `json:"titres_3ds,omitempty"`
+	Off3DS    []string          `json:"titres_3ds_off,omitempty"` // 3DS title IDs turned off: never synced (ADR 0028)
+	Alias     map[string]string `json:"alias,omitempty"`          // ROM name without extension -> chosen Key (ADR 0014)
 	// Local server (3dssavesync serve): same token; url = http://127.0.0.1:<port> for this PC.
 	LocalServer  *LocalServer `json:"serveur_local,omitempty"`
 	TrayIcon     *bool        `json:"icone_horloge,omitempty"` // missing: tray icon on (tray.go)
@@ -71,6 +75,12 @@ type Emulator struct {
 	ExtraArgs    []string `json:"args_en_plus,omitempty"` // built-in Profile: added before the ROM (e.g. -f)
 	Extension    string   `json:"extension,omitempty"`
 	InternalName bool     `json:"nom_interne,omitempty"`
+}
+
+// off3DS reports a 3DS game turned off in titres_3ds_off, from its Key or title ID.
+func (c *Config) off3DS(key string) bool {
+	id := key[strings.IndexByte(key, '-')+1:]
+	return slices.ContainsFunc(c.Off3DS, func(o string) bool { return strings.EqualFold(strings.TrimSpace(o), id) })
 }
 
 func (c *Config) copiesDir(configDir string) string {
@@ -212,8 +222,8 @@ func newSession(path string) (*Session, error) {
 	if err := readConfig(path, &cfg); err != nil {
 		return nil, err
 	}
-	for id, name := range cfg.Titles3DS { // same list as the 3DS titres.ini (only games with a single /main file)
-		titles3DS[strings.ToUpper(id)] = name
+	for id, name := range cfg.Titles3DS {
+		names3DS[strings.ToUpper(id)] = name
 	}
 	dir := filepath.Dir(path)
 	return &Session{&cfg, path, dir, &remote{cfg: &cfg, dir: dir, http: &http.Client{Timeout: 30 * time.Second, Transport: transport}}}, nil
@@ -302,6 +312,9 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	if !unread { // unread format: no Key, so no Alias either
 		key, why = s.romKey(system, key, name)
 	}
+	if system == N3DS && key != "" && s.cfg.off3DS(key) {
+		why = tr("ce jeu 3DS est désactivé dans les réglages (titres_3ds_off)", "this 3DS game is turned off in the settings (titres_3ds_off)")
+	}
 	if s.refusal(e, key, name) {
 		return 1, nil
 	}
@@ -326,7 +339,7 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	case why != "": // ROM hack under another game's Key, Key already synced with no ROM kept, invalid Alias (ADR 0014)
 		s.log("sans synchronisation : " + why)
 		notify(tr("Jeu lancé sans synchronisation : ", "Game started without syncing: ") + why)
-	case key == "": // homebrew, or a 3DS game other than the 8 Pokémon
+	case key == "": // homebrew, or an ignored 3DS game
 		s.log("sans synchronisation : Clé illisible ou jeu hors périmètre")
 		if !unread {
 			notify(tr("Jeu lancé sans synchronisation : 3dssavesync ne reconnaît pas ce jeu (homebrew ou jeu 3DS non pris en charge). Sa sauvegarde reste sur ce PC.",
@@ -542,20 +555,13 @@ func (s *Session) acquireLock(process, key string) func() {
 	return func() { os.Remove(f) }
 }
 
-// gamesOf returns an emulator's games (launch, Sync all): the ROMs of its roms folders, and the 3DS Pokémon seen by
+// gamesOf returns an emulator's games (launch, Sync all): the ROMs of its roms folders, and the 3DS games seen by
 // Azahar. refusal: why some ROMs are not synced; noRoms: the systems with no roms folder.
 func (c *Client) gamesOf(e *Emulator, p Profile) (games []*Game, refusal, noRoms []string) {
 	byKey, roms := map[string][]*Game{}, map[*Game]string{} // roms: ROM path of each Game
 	for _, system := range e.systems(p) {
-		if system == "3DS" {
-			dir := e.dir(p, system, "")
-			for id, title := range titles3DS {
-				key := "3DS-" + id
-				j := &Game{System: system, Key: key, Name: title, File: savePath(dir, system, key, title, "")}
-				if dir != "" && (exists(filepath.Dir(j.File)) || formats3DS[id] != nil) { // never started, unknown format: skipped
-					games = append(games, j)
-				}
-			}
+		if system == N3DS {
+			games = append(games, c.games3DS(e.dir(p, system, ""), e.Roms[system])...)
 			continue
 		}
 		root := e.Roms[system]
@@ -625,6 +631,49 @@ func (c *Client) gamesOf(e *Emulator, p Profile) (games []*Game, refusal, noRoms
 	}
 	sort.Slice(games, func(a, b int) bool { return games[a].Name < games[b].Name })
 	return games, refusal, noRoms
+}
+
+// games3DS returns the 3DS games of an Azahar sdmc folder (ADR 0028): the 8 Pokémon games (a never-started one too,
+// its folder is created with a known format), and every other application that has a save folder, except the ignored
+// and turned-off ones. Name: titres_3ds, else the ROM in the roms folder (if set), else the title ID.
+func (c *Client) games3DS(sdmc, roms string) []*Game {
+	if sdmc == "" {
+		return nil
+	}
+	names, ids := map[string]string{}, map[string]bool{}
+	if roms != "" {
+		filepath.WalkDir(roms, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				if r, err := readRom(path); err == nil && r.System == N3DS && r.Key != "" {
+					names[r.Key] = r.Name
+				}
+			}
+			return nil
+		})
+	}
+	for id := range titles3DS {
+		ids[id] = true
+	}
+	z := strings.Repeat("0", 32)
+	lows, _ := os.ReadDir(filepath.Join(sdmc, "Nintendo 3DS", z, z, "title", "00040000"))
+	for _, d := range lows {
+		if d.IsDir() {
+			ids["00040000"+strings.ToUpper(d.Name())] = true
+		}
+	}
+	var games []*Game
+	for id := range ids {
+		key := key3DS(id)
+		if !keyShapes[N3DS].MatchString(key) || c.cfg.off3DS(key) {
+			continue
+		}
+		name := cmp.Or(titles3DS[id], names3DS[id], names[key], id)
+		j := &Game{System: N3DS, Key: key, Name: name, File: savePath(sdmc, N3DS, key, name, "")}
+		if exists(savePath(sdmc, N3DS, "3DSA-"+id, "", "")) || formats3DS[id] != nil { // never started, unknown format: skipped
+			games = append(games, j)
+		}
+	}
+	return games
 }
 
 // play runs the pending Uploads, the Sync before, the game, the Sync after. One read of the server list per pass.

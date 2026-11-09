@@ -124,7 +124,9 @@ enum class Problem {
     TOKEN, NOT_SERVER, TOO_LARGE, REJECTED, SERVER_ERROR, UNEXPECTED, // HTTP status
     CERTIFICATE, NO_HOST, REFUSED, NO_RESPONSE, // network
     VERSION_GONE, VERSION_DAMAGED, SERVER_CHANGED, SAVE_GONE, // History and Restore; one save gone from the server
-    DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, PARTIAL, NOT_STARTED, CHANGED, OPEN, FORMAT, PERMISSION, NO_COPY, OTHER, // this phone
+    DAMAGED, BUSY, BACKUP, WRITE, RESTORE, NOT_WRITTEN, PARTIAL, NOT_STARTED, CHANGED, OPEN, FORMAT, PERMISSION, NO_COPY, // this phone
+    NEVER_STARTED, EXTRA_FILES, ARCHIVE_PATH, // a 3DS save archive folder (ADR 0028)
+    OTHER,
 }
 
 // problem classifies an error; global = the server or the network is at fault, so the next games would fail too.

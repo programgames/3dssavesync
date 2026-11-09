@@ -86,6 +86,34 @@ void key_3ds(unsigned long long title_id, char key[KEY_MAX])
     snprintf(key, KEY_MAX, "3DS-%016llX", title_id);
 }
 
+void key_3dsa(unsigned long long title_id, char key[KEY_MAX])
+{
+    snprintf(key, KEY_MAX, "3DSA-%016llX", title_id);
+}
+
+static int listed(unsigned long long id, const unsigned long long *ids, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++)
+        if (ids[i] == id) return 1;
+    return 0;
+}
+
+int pokemon_3ds(unsigned long long id)
+{
+    /* X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon: one title ID per game, all regions */
+    static const unsigned long long IDS[] = { 0x0004000000055D00ULL, 0x0004000000055E00ULL, 0x000400000011C400ULL, 0x000400000011C500ULL,
+                                              0x0004000000164800ULL, 0x0004000000175E00ULL, 0x00040000001B5000ULL, 0x00040000001B5100ULL };
+    return listed(id, IDS, sizeof IDS / sizeof *IDS);
+}
+
+int skipped_3ds(unsigned long long id)
+{
+    /* titres-ignores: Super Mario Maker (00040000001A0300, 001A0400, 001A0500) and Super Mario Maker 3D (001BB800) */
+    static const unsigned long long IDS[] = { 0x00040000001A0300ULL, 0x00040000001A0400ULL, 0x00040000001A0500ULL, 0x00040000001BB800ULL };
+    return listed(id, IDS, sizeof IDS / sizeof *IDS);
+}
+
 size_t sram_size(system_t s, size_t t)
 {
     size_t r = t % 512; /* Clock trailer: 16, 44 or 48 bytes after the SRAM (ADR 0010) */

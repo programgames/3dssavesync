@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -72,8 +73,8 @@ func (s *Session) serverGames(names map[string]string) ([]HistoryGame, error) {
 	games := []HistoryGame{}
 	for _, v := range l {
 		name := names[v.Code]
-		if strings.HasPrefix(v.Code, "3DS-") {
-			name = titles3DS[v.Code[4:]]
+		if _, id, ok := strings.Cut(v.Code, "-"); ok && strings.HasPrefix(v.Code, "3DS") && cmp.Or(titles3DS[id], names3DS[id]) != "" {
+			name = cmp.Or(titles3DS[id], names3DS[id])
 		}
 		if name == "" {
 			name = v.Name
@@ -134,7 +135,7 @@ func (s *Session) historyLines(key string) ([]HistoryLine, error) {
 	for i, v := range l {
 		n, _ := strconv.Atoi(strings.SplitN(v.File, "-", 2)[0])
 		x := HistoryLine{n, v.File, v.Hash, localDate(v.Date), v.Client, formatSize(v.Size), "", i == 0}
-		if mayBePokemon(v.Size) {
+		if mayBePokemon(key, v.Size) {
 			if st, o, err := s.request(restoreClient, "GET", "/saves/"+key+"/history/"+v.File, nil, nil); err == nil && st == 200 {
 				x.PlayInfo, _ = pokemonPlayInfo(o)
 			}
@@ -326,8 +327,11 @@ func (a *WebSetup) webGames() map[string]any {
 	return map[string]any{"Jeux": games}
 }
 
-// mayBePokemon: a save size of a Pokémon game whose play time pokemonPlayInfo reads.
-func mayBePokemon(size int64) bool {
+// mayBePokemon: a save size of a Pokémon game whose play time pokemonPlayInfo reads (never a 3DSA archive).
+func mayBePokemon(key string, size int64) bool {
+	if strings.HasPrefix(key, "3DSA-") {
+		return false
+	}
 	_, g67 := pokemonFormats[int(size)]
 	return g67 || size == 0x8000 || size == 0x20000 || size == 0x80000
 }
@@ -348,7 +352,7 @@ func (s *Session) playInfos(cache map[string]string) (map[string]string, error) 
 	}
 	m := map[string]string{}
 	for _, v := range l {
-		if !mayBePokemon(v.Size) {
+		if !mayBePokemon(v.Code, v.Size) {
 			continue
 		}
 		info, ok := cache[v.Hash]

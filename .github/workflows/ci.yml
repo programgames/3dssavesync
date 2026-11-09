@@ -41,6 +41,7 @@ jobs:
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/update.c test/test_update.c -o /tmp/m && /tmp/m test/release_latest.json
           gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/list.c test/test_list.c -o /tmp/l && /tmp/l ../tests/saves.json
           gcc -std=c99 -Wall -Wextra -Werror -I source source/vc.c test/test_vc.c -o /tmp/v && /tmp/v
+          gcc -std=c99 -Wall -Wextra -Werror -I source source/files.c source/archive.c test/test_archive.c -o /tmp/a && /tmp/a ../tests/archive3ds/cases.json
 
   client-go:
     strategy:

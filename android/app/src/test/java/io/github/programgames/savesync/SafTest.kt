@@ -15,7 +15,9 @@ import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import androidx.test.core.app.ApplicationProvider
+import io.github.programgames.savesync.core.ArchiveFile
 import io.github.programgames.savesync.core.Backups
+import io.github.programgames.savesync.core.packArchive
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.Pending
@@ -583,6 +585,57 @@ class SafTest {
         }
         assertEquals(Problem.PARTIAL, problem { createArchive(g, g.archive!!, save(8), Backups(App.backupsDir)) })
         assertEquals(listOf("other"), data.list()!!.toList())
+    }
+
+    // Every other 3DS game in title/00040000: its whole save folder as one archive, Key 3DSA- (ADR 0028). The Pokémon
+    // games keep their main file and Key 3DS-. A game never started (no data/00000001) is listed, not synced, and its
+    // folder is never created; Super Mario Maker is skipped; a game turned off is listed, not synced.
+    @Test
+    fun archives3DS() {
+        val acnl = "$user/title/00040000/000ec300/data/00000001"
+        put("$user/title/00040000/00055e00/data/00000001/main", save(7)) // Pokémon Y
+        put("$acnl/main", save(1, 100))
+        put("$acnl/sub/a.bin", save(2, 10))
+        put("$user/title/00040000/0012ab00/content/00000000.app", byteArrayOf(1)) // installed, never started
+        put("$user/title/00040000/001a0300/data/00000001/main", save(3)) // Super Mario Maker
+        App.settings.off3DS = emptySet()
+        App.saveEmulators(listOf(Emulator("azahar", "azahar", "", mapOf(System.N3DS to Folders(saves = tree("azahar").toString())))))
+        val entries = App.scanAll().first
+        val y = entries.single { it.rom == "0004000000055E00" }.game!!
+        assertEquals("3DS-0004000000055E00", y.key)
+        assertArrayEquals(save(7), y.file.read())
+        val a = entries.single { it.rom == "00040000000EC300" }
+        val g = a.game!!
+        assertEquals("3DSA-00040000000EC300", g.key)
+        assertFalse(a.off || a.notStarted)
+        assertArrayEquals(packArchive(listOf(ArchiveFile("main", save(1, 100)), ArchiveFile("sub/a.bin", save(2, 10)))), g.file.read())
+        val never = entries.single { it.rom == "000400000012AB00" }
+        assertTrue(never.notStarted)
+        assertEquals(Shown.NOT_SYNCED, never.shown)
+        assertTrue(entries.none { it.rom == "00040000001A0300" })
+
+        val before = listing(root)
+        assertEquals(Problem.NEVER_STARTED, problem { replace(never.game!!, null, packArchive(listOf(ArchiveFile("main", save(4)))), Backups(App.backupsDir)) })
+        assertEquals(before, listing(root))
+
+        // Download: a .tar Backup copy of the folder, then every changed file (a new one in a new folder too), read back
+        val v2 = listOf(ArchiveFile("main", save(4, 100)), ArchiveFile("sub/a.bin", save(2, 10)), ArchiveFile("sub/deep/b.bin", save(5, 20)))
+        val old = g.file.read()!!
+        ops.clear()
+        val copy = replace(g, old, packArchive(v2), Backups(App.backupsDir), Pending(File(ctx.filesDir, "pending.json")))!!
+        assertArrayEquals(old, copy.readBytes())
+        assertTrue(copy.name.endsWith(".tar"))
+        assertArrayEquals(save(4, 100), File(root, "$acnl/main").readBytes())
+        assertArrayEquals(save(5, 20), File(root, "$acnl/sub/deep/b.bin").readBytes())
+        assertArrayEquals(packArchive(v2), g.file.read())
+        assertTrue(ops.toString(), ops.none { it == "write $acnl/sub/a.bin" || it.startsWith("delete") })
+        assertEquals(listOf("main", "sub"), File(root, acnl).list()!!.sorted())
+
+        App.settings.off3DS = setOf("00040000000EC300")
+        val off = App.scanAll().first.single { it.rom == "00040000000EC300" }
+        assertTrue(off.off)
+        assertEquals(Shown.NOT_SYNCED, off.shown)
+        App.settings.off3DS = emptySet()
     }
 
     // modifiedNow reads the folder again: the date of the scan may be old (the emulator wrote since).

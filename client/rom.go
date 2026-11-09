@@ -6,6 +6,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"cmp"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -34,7 +35,7 @@ var keyPattern = func() string {
 	shapes := []struct {
 		system System
 		shape  string
-	}{{DS, `[A-Z0-9]{4}`}, {GBA, `GBA-[A-Z0-9]{4}`}, {GB, `GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}`}, {N3DS, `3DS-[0-9A-F]{16}`}}
+	}{{DS, `[A-Z0-9]{4}`}, {GBA, `GBA-[A-Z0-9]{4}`}, {GB, `GB-[A-Z0-9_]{1,15}-[0-9A-F]{4}`}, {N3DS, `3DSA?-[0-9A-F]{16}`}}
 	var all []string
 	for _, s := range shapes {
 		keyShapes[s.system] = regexp.MustCompile(`^` + s.shape + `$`)
@@ -53,7 +54,8 @@ var extensions = map[string]System{
 	".nds": DS, ".gb": GB, ".gbc": GB, ".gba": GBA, ".3ds": N3DS, ".cci": N3DS, ".cxi": N3DS,
 }
 
-// titles3DS lists the 8 synced 3DS Pokémon games (ADR 0009): one title ID per game, all regions.
+// titles3DS lists the 8 3DS Pokémon games (ADR 0009): one title ID per game, all regions. They keep the Key
+// 3DS-<title ID> and the raw bytes of /main; every other 3DS game is a 3DSA-<title ID> archive (ADR 0028).
 var titles3DS = map[string]string{
 	"0004000000055D00": "Pokemon X", "0004000000055E00": "Pokemon Y",
 	"000400000011C400": "Pokemon Rubis Omega", "000400000011C500": "Pokemon Saphir Alpha",
@@ -61,8 +63,29 @@ var titles3DS = map[string]string{
 	"00040000001B5000": "Pokemon Ultra-Soleil", "00040000001B5100": "Pokemon Ultra-Lune",
 }
 
+// ignored3DS: games whose save is tied to one console, never synced (ADR 0028, "titres-ignores" on the 3DS).
+var ignored3DS = map[string]bool{"00040000001A0300": true, "00040000001A0400": true, "00040000001A0500": true, "00040000001BB800": true}
+
+// names3DS holds the names given in config.json (titres_3ds) to 3DS games: title ID -> name (newSession).
+var names3DS = map[string]string{}
+
+// key3DS returns the Key of a 3DS title ID: 3DS-<id> for the 8 Pokémon games, 3DSA-<id> for any other application
+// (title ID high word 00040000) outside ignored3DS, "" otherwise (ADR 0028).
+func key3DS(id string) string {
+	switch {
+	case titles3DS[id] != "":
+		return "3DS-" + id
+	case len(id) == 16 && strings.HasPrefix(id, "00040000") && !ignored3DS[id]:
+		return "3DSA-" + id
+	}
+	return ""
+}
+
+// isArchive: a 3DSA Game, whose Local save is the 3dssavesync archive of its whole Azahar folder (ADR 0028).
+func isArchive(j *Game) bool { return strings.HasPrefix(j.Key, "3DSA-") }
+
 // Rom is what a ROM tells: its System and Key, and the possible save names.
-// Empty System = unknown extension; empty Key = out of scope (homebrew, unlisted 3DS game).
+// Empty System = unknown extension; empty Key = out of scope (homebrew, ignored 3DS game).
 // Name: the ROM or the zip (mGBA, RetroArch); Internal: the file inside the zip (melonDS), "" outside a zip.
 type Rom struct {
 	System         System
@@ -134,8 +157,9 @@ func readRom(rom string) (Rom, error) {
 		if err != nil {
 			return Rom{Name: r.Name}, err
 		}
-		if t, ok := titles3DS[id]; ok {
-			key, r.Name = "3DS-"+id, t
+		key = key3DS(id)
+		if t := cmp.Or(titles3DS[id], names3DS[id]); t != "" && key != "" {
+			r.Name = t
 		}
 	}
 	r.System = system

@@ -113,7 +113,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(status, 400)
 
     def test_gb_gba_3ds_keys_accepted(self):  # ADR 0007
-        keys = ["GBA-" + code(), f"GB-POKEMON_{code(5)}-91E6", "3DS-" + code(16, "0123456789ABCDEF")]
+        keys = ["GBA-" + code(), f"GB-POKEMON_{code(5)}-91E6", "3DS-" + code(16, "0123456789ABCDEF"),
+                "3DSA-" + code(16, "0123456789ABCDEF")]  # ADR 0028: whole archive
         for key in keys:
             status, _, _ = self.request("PUT", f"/saves/{key}", b"x", If_None_Match="*")
             self.assertEqual(status, 200, key)
@@ -123,7 +124,7 @@ class ApiTest(unittest.TestCase):
         self.assertTrue(set(keys) <= present)
 
     def test_invalid_keys_400(self):
-        for key in ("GBA-BPE", "gba-bpef", "GB-POKEMON-91E6X", "GB--91E6", "3DS-0004", "3DS-00040000001b5000",
+        for key in ("GBA-BPE", "gba-bpef", "GB-POKEMON-91E6X", "GB--91E6", "3DS-0004", "3DS-00040000001b5000", "3DSB-0004000000055D00", "3DSA-0004",
                     "GB-A..B-91E6", "XYZ-ABCD", "ABCDE"):
             status, _, _ = self.request("PUT", f"/saves/{key}", b"x", If_None_Match="*")
             self.assertEqual(status, 400, key)

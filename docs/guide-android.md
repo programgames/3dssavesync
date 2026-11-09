@@ -2,7 +2,7 @@
 
 The Android app syncs the saves of the emulators on your phone or tablet with your 3dssavesync server, like the 3DS app and the PC program. It is a first version: test it with a copy of one save before you trust it with your real games.
 
-- **Systems**: DS, Game Boy, Game Boy Color, GBA, and the 8 Pokémon games of the 3DS (in Azahar).
+- **Systems**: DS, Game Boy, Game Boy Color, GBA, and every 3DS game with a save in Azahar (see [3DS games](#3ds-games)).
 - **Android 7.0 or later.**
 - **Your server must already run** (local server of the PC program, or your Docker server: see the [server guide](guide-server.md)). The app needs its address and its token.
 
@@ -52,7 +52,7 @@ Plain `http://` is allowed for a server on your home network. An `https://` addr
 
 ## Emulators
 
-The app can only read the folders that you choose with the Android folder picker. It writes only the save files of these folders. It never deletes a file, except the files it has just created itself when the first save of a 3DS game fails (see [3DS games never started in Azahar](#3ds-games-never-started-in-azahar)).
+The app can only read the folders that you choose with the Android folder picker. It writes only the save files of these folders. It never deletes a file, except the files it has just created itself when the first save of a 3DS Pokémon game fails (see [3DS games never started in Azahar](#3ds-games-never-started-in-azahar)).
 
 | Emulator | Systems | What to choose |
 |---|---|---|
@@ -61,7 +61,7 @@ The app can only read the folders that you choose with the Android folder picker
 | **DraStic** | DS | The ROM folder, then the save folder `DraStic/backup` (`.dsv` files). |
 | **NooDS** | DS, GBA | The ROM folder: NooDS writes the save next to the ROM by default. Its "saves folder" setting puts saves where no other app can read them: keep the default. |
 | **Pizza Boy** | GB/GBC, GBA | Pizza Boy keeps its saves in `Android/data/it.dbtecno.pizzaboy…`, which no other app can open since Android 11 (see below). If your version of Pizza Boy lets you choose its save folder, choose a folder outside `Android/data` there, then choose the same folder in the app, with the ROM folder. **Not checked yet** (save names `<ROM name>.sav` assumed): test with a copy of one save first. |
-| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Only the 8 Pokémon games. No ROM folder. If the folder has no `Nintendo 3DS` folder, Azahar was never set up there: the list says so. |
+| **Azahar** | 3DS | The user folder you chose in Azahar at its first start (the one that contains `sdmc`). Every 3DS game with a save (see [3DS games](#3ds-games)). No ROM folder. If the folder has no `Nintendo 3DS` folder, Azahar was never set up there: the list says so. |
 | **Other emulator** | DS, GB/GBC, GBA | The save folder and the extension of the save files (`.sav`, `.dsv`…). For My Boy!, My OldBoy!, Linkboy and others. **Not checked**: test with a copy of one save first. |
 
 An emulator that handles several systems has a box per system: untick the ones you don't play, so that the app asks for nothing more. The last system can't be unticked.
@@ -171,6 +171,18 @@ Keep the same ROM file name on every device: another name gives another key. 3DS
 
 To remove a ROM hack, tap **Remove** next to it in **ROM hacks**. The app only forgets that this ROM is a hack: no save is deleted, on the phone or on the server. The ROM then counts again as its original game. See [ADR 0014](adr/0014-rom-hack-et-alias.md).
 
+## 3DS games
+
+The app reads the 3DS games in the Azahar folder, under `sdmc/Nintendo 3DS/<id>/<id>/title/00040000/`. No ROM is read: the key of a game is its title ID ([ADR 0028](adr/0028-archives-3ds-completes.md)).
+
+- **The 8 Pokémon games** (X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon) sync their `main` file, as before, under the key `3DS-<title ID>`.
+- **Every other game with a save** syncs its whole save folder (`…/data/00000001/`, every file, subfolders too), as one archive, under the key `3DSA-<title ID>`. The 3DS app and the PC program make the same archive, so the three devices see the same save. The list shows the name that the 3DS or the PC gave the game on the server; without one, it shows `3DS` and the title ID.
+- **Not synced**: Super Mario Maker, whose save works on one console only. A game installed in Azahar but never started has no save folder yet: the list shows it as **Not synced**, and the app never creates its folder. Start the game once in Azahar, save in it, then refresh.
+
+When the app downloads the save of such a game, it first writes a backup copy of the whole folder (a `.tar` file, see [Backup copies](#backup-copies)) and reads it back. Then it writes each file that changed and reads it back, then reads the whole folder back. **The app never deletes a file of a save**: if the folder on the phone has a file that the server version doesn't have, the app replaces nothing and names the file (**Show details**). Move that file out of the save folder with a file manager, then try again.
+
+**Turn a game off.** A new game is synced as soon as it has a save. To leave one out, open it in **Games** and turn off **Sync this game**. The game stays in the list as **Not synced**: the app no longer uploads or downloads its save, on this phone, and the background upload skips it. Turn the switch on again to sync it. The app keeps this choice in its settings, by title ID.
+
 ## 3DS games never started in Azahar
 
 The app knows the 8 Pokémon games of the 3DS even if you never started them in Azahar. Such a game shows in the list when the server has a save for it, as **To download**; its details say **Never started in Azahar**. **Download** (or **Sync all**) creates its save folder in Azahar, like the PC program does:
@@ -185,7 +197,7 @@ If a step fails, the app deletes the files and folders it has just created, and 
 
 ## Backup copies
 
-Before any save is replaced, the app writes a copy, reads it back and compares it. Then it reads the save again: if the emulator changed it since the sync read it, nothing is written. Then it writes the new save, reads it back and compares it; if the new save does not match, it puts the old one back. If the phone had no save for this game, a failed write leaves an empty file, which the app sees as no save. The copies are in:
+Before any save is replaced, the app writes a copy, reads it back and compares it (for a 3DS game other than the 8 Pokémon games: a `.tar` copy of its whole save folder). Then it reads the save again: if the emulator changed it since the sync read it, nothing is written. Then it writes the new save, reads it back and compares it; if the new save does not match, it puts the old one back. If the phone had no save for this game, a failed write leaves an empty file, which the app sees as no save. The copies are in:
 
 `Android/data/io.github.programgames.savesync/files/copies/<emulator>/<game>-<date>.<ext>`
 

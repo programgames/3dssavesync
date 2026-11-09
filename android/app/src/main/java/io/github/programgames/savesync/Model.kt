@@ -19,6 +19,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.net.toUri
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.github.programgames.savesync.core.ARCHIVE_KEY
+import io.github.programgames.savesync.core.ArchiveSave
 import io.github.programgames.savesync.core.Backups
 import io.github.programgames.savesync.core.Bases
 import io.github.programgames.savesync.core.Choice
@@ -56,6 +58,7 @@ import io.github.programgames.savesync.core.pokemonSize
 import io.github.programgames.savesync.core.readRom
 import io.github.programgames.savesync.core.restoreVersion
 import io.github.programgames.savesync.core.shortName
+import io.github.programgames.savesync.core.skip3DS
 import io.github.programgames.savesync.core.splitDuplicates
 import io.github.programgames.savesync.core.titles3DS
 import kotlinx.coroutines.CoroutineScope
@@ -78,8 +81,9 @@ fun installApk(ctx: Context, f: File) {
 }
 
 // Shown is what the list shows for a Game: its State, or why it has none. INTERRUPTED: a write of its save on this
-// phone did not finish (a Conflict with only two choices, ADR 0026).
-enum class Shown { CONFLICT, INTERRUPTED, TO_DOWNLOAD, TO_UPLOAD, IN_SYNC, DUPLICATE, UNKNOWN, NONE }
+// phone did not finish (a Conflict with only two choices, ADR 0026). NOT_SYNCED: a 3DS game turned off, or never
+// started in Azahar (ADR 0028).
+enum class Shown { CONFLICT, INTERRUPTED, TO_DOWNLOAD, TO_UPLOAD, IN_SYNC, DUPLICATE, UNKNOWN, NOT_SYNCED, NONE }
 
 // Entry is one ROM of one emulator. game null: Duplicate (never synced); dups: the ROM files of the Duplicate.
 data class Entry(
@@ -93,6 +97,8 @@ data class Entry(
     val status: Status? = null,
     val error: Throwable? = null,
     val noLocal: Boolean = false, // server not read and no save on this phone: hidden until the server answers
+    val off: Boolean = false, // a 3DS game the user turned off (Settings.off3DS): never synced
+    val notStarted: Boolean = false, // a 3DSA game without its folder in Azahar: never synced, its folder never created
 ) {
     val id get() = emulator.id + "|" + system + "|" + rom // one line of the list
 
@@ -101,6 +107,7 @@ data class Entry(
     val shown: Shown
         get() = when {
             game == null -> Shown.DUPLICATE
+            off || notStarted -> Shown.NOT_SYNCED
             noLocal && status == null -> Shown.NONE
             error != null || status == null -> Shown.UNKNOWN
             status.interrupted != null -> Shown.INTERRUPTED
@@ -165,7 +172,7 @@ object App {
         if (!settings.background || !configured()) return
         val (u, scanned) = withContext(io) {
             val (found, problems) = scanAll()
-            syncer { false }.uploadAll(found.mapNotNull { it.game }) to problems
+            syncer { false }.uploadAll(found.filter { !it.off && !it.notStarted }.mapNotNull { it.game }) to problems
         }
         record(u, scanned)
     }
@@ -367,9 +374,23 @@ object App {
 
     private fun statuses(list: List<Entry>, s: Syncer): List<Entry> = list.mapIndexed { i, e ->
         busy = text(R.string.reading_saves, i + 1, list.size)
-        if (e.game == null) e.copy(status = null, error = null)
+        if (e.game == null || e.off || e.notStarted) named(e.copy(status = null, error = null), s)
         else if (serverError != null) e.copy(status = null, error = null, noLocal = !runCatching { e.game.file.exists() }.getOrDefault(true))
-        else runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) })
+        else named(runCatching { s.status(e.game) }.fold({ e.copy(status = it, error = null) }, { e.copy(status = null, error = it) }), s)
+    }.sortedBy { it.name.lowercase() }
+
+    // named: a 3DSA game has no name on this phone (no ROM): the name a 3DS or a PC gave the server, if any (ADR 0018).
+    private fun named(e: Entry, s: Syncer): Entry {
+        val key = e.game?.key?.takeIf { it.startsWith(ARCHIVE_KEY) && serverError == null } ?: return e
+        val n = runCatching { s.serverVersion(key)?.name }.getOrNull()
+        return if (n.isNullOrBlank()) e else e.copy(name = n)
+    }
+
+    // setSynced turns a 3DS game on or off, by title ID, in every Azahar entry (ADR 0028). On: its State is read again.
+    fun setSynced(e: Entry, on: Boolean) {
+        settings.off3DS = if (on) settings.off3DS - e.rom else settings.off3DS + e.rom
+        entries = entries.map { if (it.system == System.N3DS && it.rom == e.rom) it.copy(off = !on, status = null, error = null) else it }
+        if (on && !e.notStarted) run(text(R.string.reading)) { reread(e, syncer()) }
     }
 
     // syncAll syncs every Game with a State; Conflicts and Duplicates wait for the user. confirmed: the games whose save
@@ -598,9 +619,11 @@ object App {
         walk(rootId(romTree), rootId(romTree).substringAfter(':').substringAfterLast('/'), 0)
     }
 
-    // scan3DS finds the 3DS Pokémon games in the Azahar user folder (or its sdmc folder): the title ID is in the path,
-    // no ROM is read. A game never started in Azahar has no folder: listed when its format is known, as on the PC (its
-    // first Download creates the folder, ADR 0009). No Nintendo 3DS/<id0>/<id1> folder: Azahar was never set up there.
+    // scan3DS finds the 3DS games in the Azahar user folder (or its sdmc folder): the title ID is in the path, no ROM is
+    // read. The 8 Pokémon games: their main file, Key 3DS- (ADR 0009); one never started in Azahar has no folder: listed
+    // when its format is known, as on the PC (its first Download creates the folder). Every other game with a folder in
+    // title/00040000: its whole save archive, Key 3DSA- (ADR 0028); one never started is listed as not synced, and its
+    // folder is never created. No Nintendo 3DS/<id0>/<id1> folder: Azahar was never set up there.
     private fun scan3DS(e: Emulator, f: Folders, out: MutableList<Pair<Entry, String>>, problems: MutableList<String>) {
         val tree = (f.saves ?: return).toUri()
         fun child(parent: String?, name: String) =
@@ -609,6 +632,7 @@ object App {
         val zeros = "0".repeat(32)
         val user = listOf("Nintendo 3DS", zeros, zeros).fold(child(root, "sdmc") ?: root, ::child)
             ?: return run { problems += text(R.string.azahar_not_set_up, e.listName()) }
+        val off = settings.off3DS
         for ((id, name) in titles3DS) {
             val lo = id.lowercase()
             val path = listOf("title", lo.substring(0, 8), lo.substring(8), "data", "00000001")
@@ -623,7 +647,19 @@ object App {
                 val file = SafFile(resolver, tree, null, "main", null, path = (user.substringAfter(':') + "/" + path.joinToString("/")))
                 Game(System.N3DS, "3DS-$id", name, file, e.format(System.N3DS), e.id, SafArchive(resolver, tree, dir, path.subList(found, path.size - 1), file))
             }
-            out += Entry(e, System.N3DS, name, id, g) to "$tree|3DS-$id"
+            out += Entry(e, System.N3DS, name, id, g, off = id in off) to "$tree|3DS-$id"
+        }
+        val apps = child(child(user, "title"), "00040000") ?: return
+        for (d in children(resolver, tree, apps)) {
+            if (!d.folder || !lowId.matches(d.name)) continue
+            val id = "00040000" + d.name.uppercase()
+            if (id in titles3DS || id in skip3DS) continue
+            val dir = listOf("data", "00000001").fold(d.id as String?, ::child)
+            val path = user.substringAfter(':') + "/title/00040000/" + d.name + "/data/00000001" // for the messages
+            val g = Game(System.N3DS, "$ARCHIVE_KEY$id", "3DS $id", ArchiveSave(SafFolder(resolver, tree, dir, path)), e.format(System.N3DS), e.id)
+            out += Entry(e, System.N3DS, g.name, id, g, off = id in off, notStarted = dir == null) to "$tree|$ARCHIVE_KEY$id"
         }
     }
+
+    private val lowId = Regex("^[0-9A-Fa-f]{8}$") // the low word of a title ID, a folder in title/00040000
 }

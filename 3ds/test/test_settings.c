@@ -184,6 +184,25 @@ int main(void)
     check(read_titles("test-titres.ini", t, MAX_TITLES) == 1 && t[0].id == 0x00040000000EC300ULL, "titres.ini absent : titres.ini.tmp lu");
     remove("test-titres.ini.tmp");
 
+    /* titres-off.ini (ADR 0028): one title ID per line, read back, .tmp fallback */
+    {
+        static unsigned long long ids[MAX_OFF], back[MAX_OFF];
+        remove("test-off.ini"), remove("test-off.ini.tmp");
+        check(read_off_titles("test-off.ini", ids, MAX_OFF) == 0, "titres-off.ini absent : aucun jeu désactivé");
+        write_text("test-off.ini", "00040000000EC300\r\n0004000000030800\nmauvaise ligne\n123\n00040000000EC300\n00040000000EC300=nom\n");
+        check(read_off_titles("test-off.ini", ids, MAX_OFF) == 2 && ids[0] == 0x00040000000EC300ULL && ids[1] == 0x0004000000030800ULL,
+              "titres-off.ini : lignes valides seulement, sans doublon");
+        check(read_off_titles("test-off.ini", ids, 1) == 1, "titres-off.ini : au plus max titres");
+        check(write_off_titles("test-off.ini", ids, 2) == 0 && contains("test-off.ini", "00040000000EC300\n0004000000030800\n"),
+              "titres-off.ini : format 16 chiffres hexadécimaux en majuscules");
+        check(read_off_titles("test-off.ini", back, MAX_OFF) == 2 && back[1] == ids[1], "titres-off.ini : relecture identique");
+        check(write_off_titles("test-off.ini", ids, 0) == 0 && read_off_titles("test-off.ini", back, MAX_OFF) == 0, "titres-off.ini vide : tous les jeux");
+        remove("test-off.ini");
+        write_text("test-off.ini.tmp", "0004000000030800\n");
+        check(read_off_titles("test-off.ini", back, MAX_OFF) == 1 && back[0] == 0x0004000000030800ULL, "titres-off.ini absent : .tmp lu");
+        remove("test-off.ini.tmp");
+    }
+
     /* Takeover of the old folder */
     remove("test-ancien/config.ini"), remove("test-ancien/base.ini"), remove("test-nouveau/config.ini"), remove("test-nouveau/base.ini");
     mkdir("test-ancien", 0777);

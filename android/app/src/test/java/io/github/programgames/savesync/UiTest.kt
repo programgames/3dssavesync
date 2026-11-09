@@ -46,7 +46,11 @@ import android.content.pm.PackageInfo
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
+import io.github.programgames.savesync.core.ArchiveFile
+import io.github.programgames.savesync.core.ArchiveSave
 import io.github.programgames.savesync.core.Bases
+import io.github.programgames.savesync.core.memoryFolder
+import io.github.programgames.savesync.core.packArchive
 import io.github.programgames.savesync.core.Format
 import io.github.programgames.savesync.core.Game
 import io.github.programgames.savesync.core.LocalInfo
@@ -758,6 +762,55 @@ open class UiTest {
         assertArrayEquals(older, files["Pokémon Émeraude"]!!.content)
         assertEquals(4, dir.listFiles()!!.size) // the phone save was copied first
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded
+    }
+
+    // Every 3DS game (ADR 0028): a game of several files syncs as a 3DSA archive, named as the server names it.
+    // Download writes every file after a .tar Backup copy. "Sync this game" turns it off (not synced, kept in the
+    // settings, nothing for Sync all) and on again (its State is read again).
+    @Test
+    fun archive3DS() {
+        onlyNormalFont()
+        val key = "3DSA-00040000000EC300"
+        val v1 = listOf(ArchiveFile("main", ByteArray(3000) { 1 }), ArchiveFile("sub/a.bin", ByteArray(10) { 2 }))
+        // same size: a 3DSA archive of another size is a Conflict, by the shared rule of state()
+        val v2 = listOf(ArchiveFile("main", ByteArray(3000) { 3 }), ArchiveFile("sub/a.bin", ByteArray(10) { 4 }))
+        val old = packArchive(v1)
+        val new = packArchive(v2)
+        val url = fakeServer(new) { line ->
+            if (line.split(" ")[1] == "/saves") {
+                200 to """[{"code":"$key","hash":"${sha256(new)}","taille":${new.size},"date":"20261103T101500Z","client":"3ds","nom":"Animal Crossing"}]""".toByteArray()
+            } else 200 to new
+        }
+        val folder = memoryFolder(v1)
+        val game = Game(System.N3DS, key, "3DS 00040000000EC300", ArchiveSave(folder), Format(""), azahar.id)
+        Bases(File(ctx.filesDir, "bases")).set(azahar.id, key, sha256(old))
+        val status = Status(LocalInfo(Version(sha256(old), old.size.toLong()), blank = false), Version(sha256(new), new.size.toLong(), client = "3ds"), sha256(old), State.TO_DOWNLOAD)
+        start(url = url, token = "t", emulators = listOf(azahar), entries = listOf(Entry(azahar, System.N3DS, "Animal Crossing", "00040000000EC300", game, status = status)))
+        open("Animal Crossing")
+        rule.onNodeWithText(s(R.string.download)).performScrollTo().performClick()
+        rule.onNode(hasText(s(R.string.replace)) and dialog).performClick()
+        waitFor(s(R.string.done_downloaded))
+        assertArrayEquals(new, game.file.read())
+        assertEquals(listOf("main", "sub/a.bin"), folder.writes)
+        val copy = File(App.backupsDir, azahar.id).listFiles()!!.single()
+        assertTrue(copy.name, copy.name.endsWith(".tar"))
+        assertArrayEquals(old, copy.readBytes())
+        waitFor(s(R.string.why_in_sync))
+
+        val switch = rule.onNode(hasText(s(R.string.sync_this_game)) and isToggleable())
+        switch.performScrollTo().assertIsOn().performClick()
+        waitFor(s(R.string.why_off))
+        assertEquals(setOf("00040000000EC300"), App.settings.off3DS)
+        back()
+        rule.onNode(state(s(R.string.s_not_synced))).assertExists()
+        rule.onNodeWithText(s(R.string.sync_off_nothing)).assertExists()
+        rule.onNodeWithText(s(R.string.sync_all)).assertIsNotEnabled()
+
+        open("Animal Crossing")
+        rule.onNode(hasText(s(R.string.sync_this_game)) and isToggleable()).performScrollTo().assertIsOff().performClick()
+        waitFor(s(R.string.why_in_sync))
+        assertEquals(emptySet<String>(), App.settings.off3DS)
+        assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded, no name given
     }
 
     // The reminder to close the emulator comes once per session, before the first action that may write a save on

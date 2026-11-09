@@ -108,6 +108,9 @@ func (r *remote) readList(client string) ([]Version, error) {
 // setName gives the game name to the server, for the History (ADR 0018). A failure does not block the Sync: it is
 // logged, and the name is marked as known so that this Session does not try again.
 func (r *remote) setName(client string, j *Game) {
+	if strings.HasSuffix(j.Key, "-"+j.Name) { // a 3DS game known only by its title ID: a later ROM gives its name
+		return
+	}
 	if st, _, err := r.request(client, "PUT", "/saves/"+j.Key+"/name", []byte(j.Name), nil); err != nil || st != 204 {
 		logTo(r.dir, fmt.Sprintf("nom de %s non envoyé : %d %v", j.Key, st, err))
 	}

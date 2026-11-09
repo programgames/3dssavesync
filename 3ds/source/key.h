@@ -15,8 +15,17 @@ int rom_key(system_t s, const unsigned char *header, char key[KEY_MAX]);
  * (DS "0RAD", GBA "GBA-0RAD", GB "GB-MONHACK-0001"). 0 if valid (Key in key), -1 otherwise. Same rule as client/cases.go. */
 int alias_key(system_t s, const char *value, char key[KEY_MAX]);
 
-/* "3DS-00040000001B5000" */
+/* "3DS-00040000001B5000": one of the 8 Pokémon games, the raw bytes of /main (ADR 0009). */
 void key_3ds(unsigned long long title_id, char key[KEY_MAX]);
+
+/* "3DSA-0004000000030800": any other 3DS game, its whole save archive (archive.h, ADR 0028). */
+void key_3dsa(unsigned long long title_id, char key[KEY_MAX]);
+
+/* 1 if the title is one of the 8 3DS Pokémon games (Key 3DS-), by title ID, never by content (ADR 0028). */
+int pokemon_3ds(unsigned long long title_id);
+
+/* 1 if the 3DS title is never synced: its save is tied to one console (Super Mario Maker, ADR 0028). */
+int skipped_3ds(unsigned long long title_id);
 
 /* SRAM size: GB/GBA without the Clock trailer (under 1 KiB); other Systems: whole size. */
 size_t sram_size(system_t s, size_t file_size);

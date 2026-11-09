@@ -212,6 +212,9 @@ fun problemText(p: Problem) = when (p) {
     Problem.FORMAT -> R.string.p_format
     Problem.PERMISSION -> R.string.p_permission
     Problem.NO_COPY -> R.string.p_no_copy
+    Problem.NEVER_STARTED -> R.string.p_never_started
+    Problem.EXTRA_FILES -> R.string.p_extra_files
+    Problem.ARCHIVE_PATH -> R.string.p_archive_path
     Problem.OTHER -> R.string.p_other
 }
 

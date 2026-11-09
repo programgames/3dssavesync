@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -134,6 +135,7 @@ fun stateWord(s: Shown) = stringResource(
         Shown.IN_SYNC -> R.string.s_in_sync
         Shown.DUPLICATE -> R.string.s_duplicate
         Shown.UNKNOWN -> R.string.s_unknown
+        Shown.NOT_SYNCED -> R.string.s_not_synced
         Shown.NONE -> R.string.s_none
     },
 )
@@ -371,9 +373,21 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     Shown.DUPLICATE -> stringResource(if (e.sharedFile) R.string.why_shared_file else R.string.why_duplicate, e.dups.size) +
                         if (hackable) "" else "\n" + e.dups.joinToString("\n") { "• $it" }
                     Shown.UNKNOWN -> stringResource(R.string.why_unknown)
+                    Shown.NOT_SYNCED -> stringResource(if (e.off) R.string.why_off else R.string.why_not_started)
                     Shown.NONE -> stringResource(R.string.why_none)
                 },
             )
+            if (e.system == System.N3DS && e.game != null) {
+                // on or off by title ID, kept in the settings (ADR 0028); a new game is on
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(!e.off, enabled = App.busy == null, role = Role.Switch) { App.setSynced(e, it) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.sync_this_game), Modifier.weight(1f).padding(end = 8.dp))
+                    Switch(!e.off, null, enabled = App.busy == null)
+                }
+                Text(stringResource(R.string.sync_this_game_help), style = MaterialTheme.typography.bodySmall)
+            }
             if (hackable) {
                 // same Key: one of the ROMs may be a ROM hack. Its Alias gives it the Key of the PC (ADR 0014).
                 for (rom in e.dups) {

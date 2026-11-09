@@ -43,11 +43,16 @@ type Game struct {
 	MBC2   int    `json:"-"`     // size of a new MBC2 file for this emulator (Config.mbc2Size); 0 = 512
 }
 
-// savePath returns the save file of a Game in an emulator's folder. 3DS: folder = Azahar's sdmc.
+// savePath returns the save file of a Game in an emulator's folder. 3DS: folder = Azahar's sdmc; the file is /main
+// of the save archive for a 3DS- Key, the save archive folder itself for a 3DSA- Key (ADR 0028).
 func savePath(dir string, system System, key, name, ext string) string {
 	if system == "3DS" {
-		id, z := strings.ToLower(key[4:]), strings.Repeat("0", 32)
-		return filepath.Join(dir, "Nintendo 3DS", z, z, "title", id[:8], id[8:], "data", "00000001", "main")
+		id, z := strings.ToLower(key[strings.IndexByte(key, '-')+1:]), strings.Repeat("0", 32)
+		archive := filepath.Join(dir, "Nintendo 3DS", z, z, "title", id[:8], id[8:], "data", "00000001")
+		if strings.HasPrefix(key, "3DSA-") {
+			return archive
+		}
+		return filepath.Join(archive, "main")
 	}
 	if ext == "" {
 		ext = ".sav"
@@ -80,6 +85,20 @@ type Local struct {
 // readLocal reads the Local save: Hash, size and Upload cover its SRAM only (decode). srv: Current version of the
 // server or nil.
 func readLocal(j *Game, srv *Version) (*Local, error) {
+	if isArchive(j) { // the archive of the whole folder; a folder with no file counts as a Blank save
+		files, err := readArchiveDir(j.File)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		data, err := PackArchive(files)
+		if err != nil {
+			return nil, fmt.Errorf("%s : %w", j.File, err)
+		}
+		return &Local{Version{Hash: sha256Hex(data), Size: int64(len(data))}, data, data, len(files) == 0}, nil
+	}
 	raw, err := os.ReadFile(j.File)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -388,24 +407,135 @@ func (c *Client) upload(j *Game, l *Local, srv *Version) (bool, error) {
 	return true, c.setBase(j.Key, l.Hash)
 }
 
-// copy makes a Backup copy of the Local save: <copies>/<emulator>/<name>-<date>.
-func (c *Client) copy(j *Game, raw []byte) error {
+// copy makes a Backup copy of the Local save, <copies>/<emulator>/<name>-<date>, and returns its path. A 3DSA
+// archive is kept as a .tar.
+func (c *Client) copy(j *Game, raw []byte) (string, error) {
 	dir := filepath.Join(c.cfg.copiesDir(c.dir), c.name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
+		return "", err
 	}
 	ext := filepath.Ext(j.File)
+	if isArchive(j) {
+		ext = ".tar"
+	}
 	base := j.Name + time.Now().Format("-20060102-150405")
 	for i := 0; ; i++ {
 		name := base + ext
 		if i > 0 {
 			name = fmt.Sprintf("%s-%d%s", base, i, ext)
 		}
-		err := writeVerified(filepath.Join(dir, name), raw)
+		path := filepath.Join(dir, name)
+		err := writeVerified(path, raw)
 		if !errors.Is(err, fs.ErrExist) || i == 9 {
+			return path, err
+		}
+	}
+}
+
+// readArchiveDir returns the files of a 3DS save archive folder, paths relative with '/' (ADR 0028). Only regular
+// files: anything else is an error, so a folder that the archive can't hold is never synced.
+func readArchiveDir(dir string) ([]ArchiveFile, error) {
+	var files []ArchiveFile
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf(tr("%s : pas un fichier ordinaire", "%s: not a regular file"), path)
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		files = append(files, ArchiveFile{filepath.ToSlash(rel), data})
+		return err
+	})
+	return files, err
+}
+
+// errNeverStarted: a 3DS game whose Azahar folder does not exist and is not created (ADR 0009, 0028).
+var errNeverStarted = errors.New(tr("ce jeu n'a encore jamais été lancé dans Azahar. Lancez-le une fois dans Azahar, sauvegardez dans le jeu et relancez-le ici",
+	"this game has never been started in Azahar. Start it once in Azahar, save in the game, then start it here again"))
+
+// downloadArchive writes a 3DSA Version into the Azahar folder of the game (ADR 0028): a damaged archive is refused;
+// the folder must exist (never created, 00000001.metadata never written); Backup copy (.tar, read back); the files
+// absent from the Version are moved next to the Backup copy, never deleted; each file of the Version goes through a
+// verified temporary file; then the folder is read back and compared with the Version.
+func (c *Client) downloadArchive(j *Game, l *Local, srv *Version, o []byte) error {
+	files, err := UnpackArchive(o)
+	for _, f := range files {
+		if !filepath.IsLocal(filepath.FromSlash(f.Path)) { // e.g. "a:b" on Windows
+			err = errArchive
+		}
+	}
+	if err != nil {
+		return fmt.Errorf(tr("la version du serveur est endommagée, votre sauvegarde n'a pas été remplacée. Restaurez une version précédente dans l'Historique\n%w",
+			"the server version is damaged, so your save wasn't replaced. Restore an earlier version in the History\n%w"), err)
+	}
+	if i, err := os.Stat(j.File); err != nil || !i.IsDir() {
+		return errNeverStarted
+	}
+	// The folder as it is now: it must still be the Local save that the State compared.
+	now, err := readArchiveDir(j.File)
+	if err != nil {
+		return err
+	}
+	raw, err := PackArchive(now)
+	if err != nil {
+		return err
+	}
+	if l == nil || sha256Hex(raw) != l.Hash {
+		return errors.New(tr("la sauvegarde a changé pendant la synchronisation, elle n'a pas été remplacée. Fermez Azahar et relancez le jeu",
+			"the save changed during the sync, so it wasn't replaced. Close Azahar and start the game again"))
+	}
+	backup, err := c.copy(j, raw)
+	if err != nil {
+		return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
+	}
+	want := map[string]bool{}
+	for _, f := range files {
+		want[f.Path] = true
+	}
+	moved := strings.TrimSuffix(backup, ".tar") // <name>-<date>/ next to <name>-<date>.tar
+	for _, f := range now {
+		if want[f.Path] {
+			continue
+		}
+		from, to := filepath.Join(j.File, filepath.FromSlash(f.Path)), filepath.Join(moved, filepath.FromSlash(f.Path))
+		data, err := os.ReadFile(from)
+		if err == nil {
+			err = os.MkdirAll(filepath.Dir(to), 0o755)
+		}
+		if err == nil {
+			err = writeVerified(to, data)
+		}
+		if err == nil {
+			err = os.Remove(from)
+		}
+		if err != nil {
 			return err
 		}
 	}
+	for _, f := range files {
+		path := filepath.Join(j.File, filepath.FromSlash(f.Path))
+		if cur, err := os.ReadFile(path); err == nil && bytes.Equal(cur, f.Data) {
+			continue
+		}
+		if err := writeAtomicIn(filepath.Dir(j.File), path, f.Data); err != nil { // temporary file outside the archive
+			return err
+		}
+	}
+	back, err := readArchiveDir(j.File)
+	if err == nil {
+		raw, err = PackArchive(back)
+	}
+	if err != nil || !bytes.Equal(raw, o) {
+		return fmt.Errorf(tr("%s : le dossier écrit ne correspond pas à la version du serveur. Copie de sécurité : %s",
+			"%s: the written folder doesn't match the server version. Backup: %s"), j.File, backup)
+	}
+	c.downloaded = true
+	return c.setBase(j.Key, srv.Hash)
 }
 
 // download is a Download: Backup copy, verified temporary file, then replacement (ADR 0004, docs/design.md §3).
@@ -421,6 +551,9 @@ func (c *Client) download(j *Game, l *Local, srv *Version) error {
 		return damagedError(tr("la sauvegarde reçue du serveur est incomplète, la vôtre n'a pas été remplacée. Relancez le jeu",
 			"the save from the server arrived incomplete, so yours wasn't replaced. Start the game again"))
 	}
+	if isArchive(j) {
+		return c.downloadArchive(j, l, srv, o)
+	}
 	dir, tmpDir := filepath.Dir(j.File), filepath.Dir(j.File)
 	if j.System == "3DS" {
 		// No folder = Azahar never saw this game. Create it only with a known .metadata (formats3DS) and never
@@ -428,8 +561,7 @@ func (c *Client) download(j *Game, l *Local, srv *Version) error {
 		if _, err := os.Stat(dir); err != nil {
 			format, meta := formats3DS[strings.ToUpper(strings.TrimPrefix(j.Key, "3DS-"))], filepath.Join(filepath.Dir(dir), "00000001.metadata")
 			if format == nil || exists(meta) {
-				return errors.New(tr("ce jeu n'a encore jamais été lancé dans Azahar. Lancez-le une fois dans Azahar, sauvegardez dans le jeu et relancez-le ici",
-					"this game has never been started in Azahar. Start it once in Azahar, save in the game, then start it here again"))
+				return errNeverStarted
 			}
 			if err := os.MkdirAll(dir, 0o755); err != nil {
 				return err
@@ -443,7 +575,7 @@ func (c *Client) download(j *Game, l *Local, srv *Version) error {
 	}
 	var old []byte
 	if l != nil {
-		if err := c.copy(j, l.Raw); err != nil {
+		if _, err := c.copy(j, l.Raw); err != nil {
 			return fmt.Errorf(tr("impossible de faire la copie de sécurité : %w", "couldn't make a backup: %w"), err)
 		}
 		old = l.Raw
@@ -486,15 +618,26 @@ func formatAge(age *int64) string {
 // remote: content of the server Version if it was read (Pokémon), to show its play time.
 func resolveConflict(j *Game, l *Local, srv *Version, remote []byte, after bool) Choice {
 	pc := tr("sauvegarde présente", "save found")
-	if i, err := os.Stat(j.File); err == nil {
-		pc = fmt.Sprintf(tr("modifiée le %s", "modified on %s"), i.ModTime().Format("02/01/2006 15:04"))
-	}
-	if p, ok := pokemonPlayInfo(l.SRAM); ok {
-		pc += " · " + p
+	var mod time.Time // the save file, or the newest file of a 3DSA folder
+	filepath.WalkDir(j.File, func(_ string, d fs.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			if i, err := d.Info(); err == nil && i.ModTime().After(mod) {
+				mod = i.ModTime()
+			}
+		}
+		return nil
+	})
+	if !mod.IsZero() {
+		pc = fmt.Sprintf(tr("modifiée le %s", "modified on %s"), mod.Format("02/01/2006 15:04"))
 	}
 	online := fmt.Sprintf(tr("envoyée par %s %s", "uploaded by %s %s"), srv.Client, formatAge(srv.Age))
-	if p, ok := pokemonPlayInfo(remote); ok {
-		online += " · " + p
+	if !isArchive(j) { // the Pokémon play time reads a raw /main, never an archive
+		if p, ok := pokemonPlayInfo(l.SRAM); ok {
+			pc += " · " + p
+		}
+		if p, ok := pokemonPlayInfo(remote); ok {
+			online += " · " + p
+		}
 	}
 	text := fmt.Sprintf(tr("Conflit sur %s\n\n"+
 		"La sauvegarde a changé sur ce PC et sur le serveur depuis la dernière synchronisation. Laquelle garder ?\n\n"+
@@ -573,7 +716,7 @@ func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		}
 		if st == conflict {
 			var remote []byte // Pokémon: read the server Version to compare the play times
-			if _, ok := pokemonPlayInfo(l.SRAM); ok {
+			if _, ok := pokemonPlayInfo(l.SRAM); ok && !isArchive(j) {
 				if st, o, err := c.api("GET", "/saves/"+j.Key, nil, nil); err == nil && st == 200 {
 					remote = o
 				}

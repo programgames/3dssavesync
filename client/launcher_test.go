@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
@@ -275,6 +276,32 @@ func contains(list []string, text string) bool {
 		}
 	}
 	return false
+}
+
+// TestGames3DS: the 3DS games of a Sync all or a sync without the Launcher (ADR 0024, 0028).
+func TestGames3DS(t *testing.T) {
+	tmp = t.TempDir()
+	for _, id := range []uint64{0x0004000000055D00, 0x0004000000033500, 0x00040000000EC300, 0x00040000001A0300} {
+		write(t, filepath.Join(azaharDir(id), "main"), []byte{1})
+	}
+	write(t, filepath.Join(tmp, "azahar", "Nintendo 3DS", strings.Repeat("0", 32), strings.Repeat("0", 32), "title", "00040000", "zzzzzzzz", "data", "00000001", "main"), []byte{1})
+	c := (&Session{cfg: &Config{Off3DS: []string{"00040000000ec300"}}}).client("azahar")
+	var keys []string
+	for _, j := range c.games3DS(filepath.Join(tmp, "azahar"), "") {
+		keys = append(keys, j.Key+"="+j.Name)
+		if j.Key == "3DSA-0004000000033500" && j.File != azaharDir(0x0004000000033500) {
+			t.Errorf("3DSA : fichier = dossier de l'archive, pas %s", j.File)
+		}
+	}
+	sort.Strings(keys)
+	want := "3DS-0004000000055D00=Pokemon X,3DS-0004000000055E00=Pokemon Y,3DS-000400000011C400=Pokemon Rubis Omega," +
+		"3DS-000400000011C500=Pokemon Saphir Alpha,3DS-0004000000164800=Pokemon Soleil,3DS-0004000000175E00=Pokemon Lune," +
+		"3DS-00040000001B5000=Pokemon Ultra-Soleil,3DS-00040000001B5100=Pokemon Ultra-Lune,3DSA-0004000000033500=0004000000033500"
+	w := strings.Split(want, ",")
+	sort.Strings(w)
+	if strings.Join(keys, ",") != strings.Join(w, ",") {
+		t.Errorf("jeux 3DS :\n%s\nattendu :\n%s", strings.Join(keys, "\n"), strings.Join(w, "\n"))
+	}
 }
 
 // raceTransport makes the 3DS upload just after the first GET /saves of the PC (GET/PUT race).
@@ -595,6 +622,8 @@ func TestLauncher(t *testing.T) {
 	write(t, filepath.Join(dx, "main"), m1)
 	run(x)
 	verify(sha256Hex(current("3DS-0004000000055D00")) == sha256Hex(m1), "le serveur a main sous 3DS-0004000000055D00")
+	code, _ := api("GET", "/saves/3DSA-0004000000055D00", nil, nil)
+	verify(code == 404, "Pokémon : jamais sous 3DSA- (ADR 0028)")
 	verify(played && strings.Join(launchedCommand, "|") == "inutilise.exe|-f|"+x, "Azahar lancé en plein écran")
 
 	t.Log("3DS : la Récupération n'ajoute rien dans l'archive Azahar")
@@ -618,12 +647,12 @@ func TestLauncher(t *testing.T) {
 	verify(bytes.Equal(read(dy+".metadata"), []byte{0, 0, 4, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0}), "00000001.metadata écrit (16 octets)")
 	verify(strings.Join(namesIn(dy, "*"), ",") == filepath.Join(dy, "main"), "l'archive ne contient que main")
 
-	t.Log("3DS : jeu jamais lancé dans Azahar, format inconnu (titres_3ds) : rien n'est créé")
+	// --- 3DS archives (ADR 0028) ---------------------------------------------------------
+	t.Log("3DSA : jeu jamais lancé dans Azahar, version sur le serveur : rien n'est créé")
 	reset()
-	titles3DS["00040000000EC300"] = "Jeu a moi"
-	defer delete(titles3DS, "00040000000EC300")
 	other := rom3DS(t, "Jeu a moi", 0x00040000000EC300)
-	upload3ds("3DS-00040000000EC300", m2, nil)
+	one, _ := PackArchive([]ArchiveFile{{"main", m2}})
+	upload3ds("3DSA-00040000000EC300", one, nil)
 	responses = []string{"Non"}
 	run(other)
 	verify(len(questions) == 1 && strings.Contains(questions[0], "Azahar"), "question qui explique de lancer le jeu une fois")
@@ -632,10 +661,72 @@ func TestLauncher(t *testing.T) {
 	_, err = os.Stat(azaharDir(0x00040000000EC300) + ".metadata")
 	verify(err != nil, "aucun .metadata créé")
 
-	t.Log("3DS hors des 8 Pokémon : partie sans Synchronisation")
+	t.Log("3DSA : jeu à plusieurs fichiers, tout le dossier part sous 3DSA-")
 	reset()
-	run(rom3DS(t, "Zelda (Europe)", 0x0004000000033500))
+	zelda := rom3DS(t, "Zelda (Europe)", 0x0004000000033500)
+	dz := azaharDir(0x0004000000033500)
+	meta := []byte{9, 9, 9, 9}
+	write(t, dz+".metadata", meta)
+	write(t, filepath.Join(dz, "main"), byteRange(1, 50))
+	write(t, filepath.Join(dz, "sub", "extra.bin"), byteRange(60, 70))
+	run(zelda)
 	verify(played && len(questions) == 0, "Azahar lancé, aucune question")
+	a1 := current("3DSA-0004000000033500")
+	got, err := UnpackArchive(a1)
+	verify(err == nil && len(got) == 2 && got[0].Path == "main" && bytes.Equal(got[0].Data, byteRange(1, 50)) &&
+		got[1].Path == "sub/extra.bin" && bytes.Equal(got[1].Data, byteRange(60, 70)), "le serveur a main et sub/extra.bin")
+	verify(len(a1) == 6*512, "archive : 2 en-têtes, 2 blocs de données, 2 blocs de fin")
+	code, _ = api("GET", "/saves/3DS-0004000000033500", nil, nil)
+	verify(code == 404, "jamais sous 3DS- hors des 8 Pokémon")
+	_, o = api("GET", "/saves", nil, nil)
+	verify(strings.Contains(string(o), `"nom": "Zelda (Europe)"`), "le serveur connaît le nom de la ROM")
+
+	t.Log("3DSA : Récupération, chaque fichier écrit, le fichier en trop déplacé vers les copies")
+	reset()
+	a2, _ := PackArchive([]ArchiveFile{{"main", byteRange(2, 51)}, {"sub/b.bin", byteRange(80, 90)}})
+	verify(upload3ds("3DSA-0004000000033500", a2, a1) == 200, "la 3DS envoie")
+	run(zelda)
+	verify(len(questions) == 0, "aucune question")
+	verify(bytes.Equal(read(filepath.Join(dz, "main")), byteRange(2, 51)), "main est la Version de la 3DS")
+	verify(bytes.Equal(read(filepath.Join(dz, "sub", "b.bin")), byteRange(80, 90)), "sub/b.bin écrit")
+	verify(!exists(filepath.Join(dz, "sub", "extra.bin")), "sub/extra.bin n'est plus dans le dossier")
+	tars := namesIn(filepath.Join(copies, "azahar"), "Zelda (Europe)-*.tar")
+	verify(len(tars) == 1 && bytes.Equal(read(tars[0]), a1), "Copie de sécurité .tar de l'ancien dossier")
+	verify(len(tars) == 1 && bytes.Equal(read(filepath.Join(strings.TrimSuffix(tars[0], ".tar"), "sub", "extra.bin")), byteRange(60, 70)),
+		"sub/extra.bin déplacé à côté de la Copie de sécurité, jamais supprimé")
+	verify(bytes.Equal(read(dz+".metadata"), meta), "00000001.metadata intact")
+	verify(strings.Join(namesIn(filepath.Dir(dz), "*"), ",") == dz+","+dz+".metadata", "pas de fichier temporaire oublié")
+
+	t.Log("3DSA : version endommagée sur le serveur : refusée, rien n'est écrit")
+	reset()
+	upload3ds("3DSA-0004000000033500", random(len(a2), 46), a2)
+	responses = []string{"Non"}
+	run(zelda)
+	verify(len(questions) == 1 && strings.Contains(questions[0], "endommagée"), "question qui dit que la version est endommagée")
+	verify(!played, "partie non lancée (réponse Non)")
+	verify(bytes.Equal(read(filepath.Join(dz, "main")), byteRange(2, 51)) && bytes.Equal(read(filepath.Join(dz, "sub", "b.bin")), byteRange(80, 90)),
+		"le dossier n'a pas changé")
+	verify(len(namesIn(filepath.Join(copies, "azahar"), "Zelda (Europe)-*.tar")) == 1, "aucune nouvelle Copie de sécurité")
+
+	t.Log("3DSA : Conflit, sans temps de jeu Pokémon")
+	reset()
+	write(t, filepath.Join(dz, "main"), byteRange(3, 52))
+	upload3ds("3DSA-0004000000033500", a1, random(len(a2), 46))
+	responses = []string{"Ne pas jouer"}
+	run(zelda)
+	verify(len(questions) == 1 && strings.Contains(questions[0], "Conflit sur Zelda (Europe)") && strings.Contains(questions[0], "modifiée le") &&
+		!strings.Contains(questions[0], " h "), "question de Conflit avec la date du PC, sans temps de jeu")
+	verify(bytes.Equal(read(filepath.Join(dz, "main")), byteRange(3, 52)), "le PC garde sa Sauvegarde")
+
+	t.Log("3DSA : jeu désactivé (titres_3ds_off) : partie sans Synchronisation")
+	reset()
+	cfgOff := writeConfig(t, filepath.Join(tmp, "cfg-off", "config.json"), Config{URL: url, Token: "jeton-test", Copies: copies,
+		Off3DS:    []string{"0004000000033500"},
+		Emulators: map[string]*Emulator{"azahar": {Exe: "inutilise.exe", Saves: map[System]string{"3DS": filepath.Join(tmp, "azahar")}}}})
+	hz := len(history("3DSA-0004000000033500"))
+	realMain([]string{"run", "--config", cfgOff, zelda})
+	verify(played && len(questions) == 0 && contains(notifications, "désactivé"), "Azahar lancé, notification « désactivé »")
+	verify(len(history("3DSA-0004000000033500")) == hz, "rien n'est envoyé")
 
 	// --- Blank Save = absent -------------------------------------------------------------------
 	t.Log("Sauvegarde vierge (0xFF) sur le PC, Version sur le serveur : Récupération sans Conflit")

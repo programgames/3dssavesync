@@ -15,7 +15,7 @@ The original console of a Game: DS, GB (GB and GBC together), GBA or 3DS. It set
 _Avoid_: platform, console, medium
 
 **Key** (*Clé*):
-The identifier of a Game on the Server, read from the ROM header: the Game code for DS, `GBA-` + game code, `GB-` + title + checksum, `3DS-` + title ID (ADR 0007).
+The identifier of a Game on the Server, read from the ROM header: the Game code for DS, `GBA-` + game code, `GB-` + title + checksum, `3DS-` + title ID for the 8 Pokémon games (raw `main`), `3DSA-` + title ID for every other 3DS game (whole save archive) (ADR 0007, 0028).
 _Avoid_: id, identifier, game ID
 
 **ROM**:
