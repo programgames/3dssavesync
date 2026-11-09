@@ -35,3 +35,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0027](0027-jeu-3ds-reinstalle.md) | A reinstalled 3DS game forgets its Base, so a new save asks before it replaces the server's. |
 | [0028](0028-archives-3ds-completes.md) | Every 3DS game syncs its whole save archive, as one deterministic tar per version, under its own Key. |
 | [0029](0029-certificats-personnalises.md) | The 3DS also trusts the CA certificates of `sdmc:/config/ssl/cacert.pem` for the Server, on top of ISRG Root X1. |
+| [0030](0030-qr-code-sur-la-3ds.md) | The 3DS shows the pairing QR code of the Android app, with the PC's exact text and a vendored encoder (Nayuki, v1.8.0). |

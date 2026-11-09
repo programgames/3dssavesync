@@ -45,6 +45,7 @@ The top of the list counts the games in each state (counters that do not fit are
 | GBA saves | empty | empty = next to the ROM (open_agb_firm with `useSavesFolder=false`). With `useSavesFolder=true`: `sdmc:/3ds/open_agb_firm/saves`. |
 | 3DS games | all | every native 3DS game with a save is synced. Untick a game to turn it off ([Native 3DS games](#native-3ds-games)). |
 | Connection | | **Not tested**, **OK** or the reason of the failure. **A** tests the address and the token. |
+| Phone | | **Android app** once **Server** and **Token** are set, otherwise what is missing. **A** shows the QR code of the Android app on the top screen: in the app, tap **Scan the PC's QR code** and point the phone at it. **B** closes it. The QR code holds the token: it shows only while it is open. |
 | Version | | the installed version and its state, for example `3.7.0 · Up to date` or `3.7.0 · 3.7.1 available`. **A** checks for a new version, then offers to install it ([Updates](#updates)). |
 
 A setting left empty shows its default in grey (**Next to the ROM**). **Server** and **Token** show **Required** while they are empty. The action of **A** is written on the right of the chosen line.

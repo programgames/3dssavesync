@@ -19,7 +19,9 @@
 #include "key.h"
 #include "list.h"
 #include "net.h"
+#include "pairing.h"
 #include "pokemon.h"
+#include "qrcodegen.h"
 #include "result.h"
 #include "screen.h"
 #include "settings.h"
@@ -1646,8 +1648,64 @@ static const struct {
       "open_agb_firm (useSavesFolder=true): sdmc:/3ds/open_agb_firm/saves. Empty = next to the ROM.", cfg.saves_gba, sizeof cfg.saves_gba },
 };
 #define SETTING_COUNT ((int)(sizeof SETTINGS / sizeof *SETTINGS))
-enum { LINE_TITLES = SETTING_COUNT, LINE_ORDER, LINE_TEST, LINE_VERSION, LINE_COUNT }; /* lines after the editable ones */
+enum { LINE_TITLES = SETTING_COUNT, LINE_ORDER, LINE_TEST, LINE_PHONE, LINE_VERSION, LINE_COUNT }; /* lines after the editable ones */
 static int selected_setting; /* selected settings line: also for the top screen during a progress */
+
+/* Server (0) or Token (1) not set yet. */
+static int setting_missing(int i)
+{
+    return !SETTINGS[i].value[0] || !strcmp(SETTINGS[i].value, "https://");
+}
+
+/* Phone line: what is missing for the QR code, NULL if the server and the token are set. */
+static const char *phone_missing(void)
+{
+    if (setting_missing(0) && setting_missing(1)) return T("Serveur et jeton à remplir", "Server and token required");
+    if (setting_missing(0)) return T("Serveur à remplir", "Server required");
+    if (setting_missing(1)) return T("Jeton à remplir", "Token required");
+    return NULL;
+}
+
+/* Pairing QR code of the Android app; filled only while it is shown (it holds the token). */
+static uint8_t qr[qrcodegen_BUFFER_LEN_MAX];
+
+/* The QR code on the top screen, the larger one: whole modules, centered, black on white with a margin of 4 modules.
+ * One rectangle per run of black modules in a row (citro2d draws 4096 objects per frame). */
+static void draw_qr_top(void)
+{
+    int size = qrcodegen_getSize(qr), scale = SCREEN_HEIGHT / (size + 8), x, y;
+    int left = (TOP_WIDTH - size * scale) / 2, top = (SCREEN_HEIGHT - size * scale) / 2;
+    screen_top();
+    screen_rect(left - 4 * scale, top - 4 * scale, (size + 8) * scale, (size + 8) * scale, RGB(0xFFFFFF));
+    for (y = 0; y < size; y++)
+        for (x = 0; x < size; x++) {
+            int end = x;
+            while (end < size && qrcodegen_getModule(qr, end, y)) end++;
+            if (end > x) screen_rect(left + x * scale, top + y * scale, (end - x) * scale, scale, RGB(0x000000));
+            x = end; /* a white module or the end of the row */
+        }
+}
+
+/* A on the Phone line: the QR code until B. Error correction M, like the PC (client/setup_web.go). */
+static void show_pairing_qr(void)
+{
+    static uint8_t temp[qrcodegen_BUFFER_LEN_MAX];
+    static char text[1600]; /* 2 × 255 bytes, 3 each once encoded, and the fixed part */
+    const button_t b[1] = { { KEY_B, T("Fermer", "Close"), 1 } };
+    int ok = pairing_payload(cfg.url, cfg.token, text, sizeof text) &&
+             qrcodegen_encodeText(text, temp, qr, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN, qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, false);
+    memset(text, 0, sizeof text);
+    memset(temp, 0, sizeof temp);
+    while (ok && aptMainLoop()) {
+        float y = 6;
+        modal_begin(draw_qr_top);
+        y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, T("Téléphone", "Phone")) + 6;
+        screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, T("Dans l'app Android : « Scanner le QR code du PC », puis visez ce code.",
+                                                           "In the Android app: \"Scan the PC's QR code\", then point the phone at this code."));
+        if (modal_end(b, 1, 0) & KEY_B) break;
+    }
+    memset(qr, 0, sizeof qr);
+}
 
 /* State of the installed version, as on the Version line: "Up to date", "3.7.1 available"… in t (t may be NULL with
  * n = 0: color only). Returns its color. */
@@ -1689,6 +1747,7 @@ static const char *setting_label(int i)
     if (i == LINE_TITLES) return T("Jeux 3DS", "3DS games");
     if (i == LINE_ORDER) return T("Tri de la liste", "List order");
     if (i == LINE_TEST) return T("Connexion", "Connection");
+    if (i == LINE_PHONE) return T("Téléphone", "Phone");
     return T("Version", "Version");
 }
 
@@ -1706,6 +1765,7 @@ static const char *setting_action(int i)
     if (i == LINE_TITLES) return T("Choisir", "Choose");
     if (i == LINE_ORDER) return T("Changer", "Change");
     if (i == LINE_TEST) return T("Tester", "Test");
+    if (i == LINE_PHONE) return T("Afficher le QR code", "Show the QR code");
     return update_is_newer(VERSION, update_info.latest) ? T("Mettre à jour", "Update") : T("Rechercher", "Check");
 }
 
@@ -1725,7 +1785,7 @@ static void draw_settings_top(void)
         float end = TOP_WIDTH - 8;
         if (i < SETTING_COUNT) {
             value = SETTINGS[i].value;
-            if (i <= 1 && (!value[0] || !strcmp(value, "https://"))) {
+            if (i <= 1 && setting_missing(i)) {
                 value = T("À remplir", "Required");
                 c = GREY_LIGHT;
                 required = 1;
@@ -1743,21 +1803,26 @@ static void draw_settings_top(void)
         } else if (i == LINE_TEST) {
             value = test_state > 0 ? T("Réussie", "OK") : test_state < 0 ? test_short : T("Non testée", "Not tested");
             c = test_state > 0 ? C_GREEN : test_state < 0 ? C_RED : GREY_LIGHT;
+        } else if (i == LINE_PHONE) {
+            value = phone_missing() ? phone_missing() : T("Application Android", "Android app");
+            c = GREY_LIGHT;
         }
         if (i == selected_setting) {
             const char *a = setting_action(i);
             float xa = TOP_WIDTH - 8 - screen_text_width(0.44f, a), g = screen_text_width(0.5f, glyph(KEY_A));
             screen_rect(0, y - 1, TOP_WIDTH, 16, SEL);
             screen_rect(0, y - 1, 2, 16, ACCENT);
-            screen_text(xa - g - 3, y - 1, 0.5f, GLYPH_A, 0, glyph(KEY_A));
-            screen_text(xa, y + 1, 0.44f, WHITE, 0, a);
-            end = xa - g - 3 - 10;
+            if (i != LINE_PHONE || !phone_missing()) { /* Phone without server or token: no action, room for what is missing */
+                screen_text(xa - g - 3, y - 1, 0.5f, GLYPH_A, 0, glyph(KEY_A));
+                screen_text(xa, y + 1, 0.44f, WHITE, 0, a);
+                end = xa - g - 3 - 10;
+            }
         }
         if (required) screen_rect(0, y - 1, 2, 16, C_RED);
         screen_text(8, y, 0.46f, i == selected_setting ? WHITE : GREY_LIGHT, 128, setting_label(i));
         if (i == LINE_VERSION) draw_version_value(142, y, 0.46f, end);
         else screen_text(142, y, 0.46f, c, end - 142, value);
-        y += 16 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groups: server, folders, the rest */
+        y += 15 + (i == 1 || i == SETTING_COUNT - 1 ? 7 : 0); /* groups: server, folders, the rest (13 lines: 15 pixels each) */
     }
 }
 
@@ -1781,7 +1846,7 @@ static int settings_screen(int first)
         u32 k;
         float y = 6;
         /* First start: B tests the connection first; a second B after a failure continues anyway. */
-        button_t t[2] = { { KEY_A, setting_action(c), 1 },
+        button_t t[2] = { { KEY_A, setting_action(c), c != LINE_PHONE || !phone_missing() },
                           { KEY_B, !first || test_state > 0 ? T("Enregistrer et revenir", "Save and go back")
                                    : test_state < 0           ? T("Continuer quand même", "Continue anyway")
                                                              : T("Tester et continuer", "Test and continue"), 1 } };
@@ -1807,6 +1872,8 @@ static int settings_screen(int first)
             y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
                                                          : c == LINE_TITLES ? T("Tous les jeux 3DS qui ont une sauvegarde sont synchronisés. Désactivez ici ceux à laisser de côté.",
                                                                                 "Every 3DS game with a save is synced. Turn off here the ones to leave out.")
+                                                         : c == LINE_PHONE ? T("Le QR code à scanner avec l'application Android : il contient l'adresse et le jeton du serveur.",
+                                                                               "The QR code to scan with the Android app: it holds the server address and token.")
                                                          : c == LINE_ORDER ? T("Ordre des jeux dans la liste. À faire d'abord : les conflits, puis ce qu'il faut récupérer "
                                                                                "ou envoyer. Dernière partie : la sauvegarde la plus récente de la 3DS en premier ; "
                                                                                "les jeux sans date (dont les jeux 3DS) vont à la fin.",
@@ -1848,6 +1915,8 @@ static int settings_screen(int first)
                 cfg.order = (cfg.order + 1) % 3;
             } else if (c == LINE_TEST) {
                 test_connection();
+            } else if (c == LINE_PHONE) {
+                if (!phone_missing()) show_pairing_qr();
             } else {
                 should_quit = update_app();
                 if (should_quit) break;
