@@ -319,3 +319,33 @@ func TestGames3DSWeb(t *testing.T) {
 		t.Errorf("sans Azahar : %v", r)
 	}
 }
+
+// "3DS games" page: an extdata has no line of its own (it follows its game, ADR 0031), and a game known only by its
+// title ID takes the name that another device gave to the server (ADR 0018).
+func TestGames3DSWebNames(t *testing.T) {
+	server := httptest.NewServer(&Server{data: t.TempDir(), token: "j"})
+	defer server.Close()
+	sdmc := filepath.Join(t.TempDir(), "sdmc")
+	z := strings.Repeat("0", 32)
+	for _, low := range []string{"000ae100", "00126000"} { // two games without a ROM: one named on the server ("Mario Kart 7"), one not
+		write(t, filepath.Join(sdmc, "Nintendo 3DS", z, z, "title", "00040000", low, "data", "00000001", "main"), []byte{1})
+	}
+	write(t, filepath.Join(sdmc, "Nintendo 3DS", z, z, "extdata", "00000000", "00000AE1", "user", "f"), []byte{1})
+	config := writeConfig(t, filepath.Join(t.TempDir(), "config.json"), Config{URL: server.URL, Token: "j",
+		Emulators: map[string]*Emulator{"azahar": {Exe: "azahar.exe", Saves: map[System]string{N3DS: sdmc}}}})
+	s, err := newSession(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uploadFromOther(t, s, "3DSA-00040000000AE100", []byte("archive"), nil)
+	if st, _, err := s.request("3ds", "PUT", "/saves/3DSA-00040000000AE100/name", []byte("Mario Kart 7"), nil); st != 204 || err != nil {
+		t.Fatalf("nom : %d %v", st, err)
+	}
+	var l []string
+	for _, j := range (&WebSetup{config: config}).games3DSWeb("", false)["Jeux"].([]Web3DS) {
+		l = append(l, j.ID+"="+j.Name)
+	}
+	if got, want := strings.Join(l, ","), "0004000000126000=0004000000126000,00040000000AE100=Mario Kart 7,0004000000175E00=Pokemon Lune"; !strings.HasPrefix(got, want) {
+		t.Errorf("liste :\n%s\nattendu :\n%s", got, want)
+	}
+}

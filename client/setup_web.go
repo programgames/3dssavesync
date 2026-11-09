@@ -396,9 +396,29 @@ func (a *WebSetup) games3DSWeb(id string, synced bool) map[string]any {
 			continue
 		}
 		for _, j := range c.games3DS(e.dir(p, N3DS, ""), e.Roms[N3DS]) {
+			if strings.HasPrefix(j.Key, "3DSX-") { // extdata follows its game: no switch of its own (ADR 0031)
+				continue
+			}
 			if id := j.Key[strings.IndexByte(j.Key, '-')+1:]; !seen[id] {
 				seen[id] = true
 				games = append(games, Web3DS{id, j.Name, !cfg.off3DS(j.Key)})
+			}
+		}
+	}
+	// A game known only by its title ID: the name another device gave to the server (ADR 0018), if the server answers.
+	if slices.ContainsFunc(games, func(g Web3DS) bool { return g.Name == g.ID }) {
+		s.remote.http.Timeout = 5 * time.Second
+		if l, err := s.serverGames(nil); err == nil {
+			names := map[string]string{}
+			for _, g := range l {
+				if _, id, ok := strings.Cut(g.Key, "-"); ok && strings.HasPrefix(g.Key, "3DS") && g.Name != "" {
+					names[id] = g.Name
+				}
+			}
+			for i, g := range games {
+				if n := names[g.ID]; g.Name == g.ID && n != "" {
+					games[i].Name = n
+				}
 			}
 		}
 	}
