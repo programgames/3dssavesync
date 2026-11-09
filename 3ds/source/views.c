@@ -139,20 +139,15 @@ u32 read_keys(void)
     return k ? k : KEY_B;
 }
 
-/* The top screen keeps its context (draw_current_top). At most 20 frames per second: a frame waits for the screen, and
- * must not slow down the read. */
-void show_progress(int done, int total, const char *format, ...)
+static char progress_text[300];
+static int progress_done, progress_total, progress_slow; /* slow: show_slow, until the next show_progress */
+
+/* The top screen keeps its context (draw_current_top). */
+static void draw_progress(void)
 {
-    static u64 last_frame;
     char t[300], *nl;
     float y = 40;
-    va_list a;
-    u64 now = osGetTime();
-    if (total && done > 1 && done < total && now - last_frame < 50) return;
-    last_frame = now;
-    va_start(a, format);
-    vsnprintf(t, sizeof t, format, a);
-    va_end(a);
+    snprintf(t, sizeof t, "%s", progress_text);
     screen_begin();
     draw_current_top();
     screen_bottom();
@@ -165,16 +160,41 @@ void show_progress(int done, int total, const char *format, ...)
         screen_text(16, y, 0.45f, GREY_LIGHT, PROGRESS_WIDTH, t);
         screen_lines(16, y + 18, 0.55f, WHITE, PROGRESS_WIDTH, 2, nl + 1);
     } else screen_lines(16, y, 0.55f, WHITE, PROGRESS_WIDTH, 3, t);
-    if (total > 0) {
+    if (progress_total > 0) {
         char n[32];
         screen_rect(16, 140, PROGRESS_WIDTH, 10, CARD);
-        screen_rect(16, 140, (float)PROGRESS_WIDTH * done / total, 10, progress_color);
-        snprintf(n, sizeof n, "%d / %d", done, total);
+        screen_rect(16, 140, (float)PROGRESS_WIDTH * progress_done / progress_total, 10, progress_color);
+        snprintf(n, sizeof n, "%d / %d", progress_done, progress_total);
         screen_text(16, 156, 0.45f, GREY_LIGHT, 0, n);
-        snprintf(n, sizeof n, T("%d %%", "%d%%"), (int)(100LL * done / total));
+        snprintf(n, sizeof n, T("%d %%", "%d%%"), (int)(100LL * progress_done / progress_total));
         screen_text(16 + PROGRESS_WIDTH - screen_text_width(0.45f, n), 156, 0.45f, GREY_LIGHT, 0, n);
     }
+    if (progress_slow)
+        screen_lines(16, 184, 0.5f, C_YELLOW, PROGRESS_WIDTH, 2, T("Le serveur met du temps à répondre…", "The server is slow to answer…"));
     screen_end();
+}
+
+/* At most 20 frames per second: a frame waits for the screen, and must not slow down the read. */
+void show_progress(int done, int total, const char *format, ...)
+{
+    static u64 last_frame;
+    va_list a;
+    u64 now = osGetTime();
+    if (total && done > 1 && done < total && now - last_frame < 50) return;
+    last_frame = now;
+    va_start(a, format);
+    vsnprintf(progress_text, sizeof progress_text, format, a);
+    va_end(a);
+    progress_done = done;
+    progress_total = total;
+    progress_slow = 0;
+    draw_progress();
+}
+
+void show_slow(void)
+{
+    progress_slow = 1;
+    draw_progress();
 }
 
 void modal_begin(void (*top)(void))

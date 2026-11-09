@@ -62,10 +62,18 @@ static size_t receive(char *chunk, size_t t, size_t n, void *u)
 }
 
 static void (*on_progress)(size_t, size_t); /* net_github: download of a release file in progress */
+static void (*on_slow)(void);
+static u64 slow_start; /* osGetTime() at the start of a Server request; 0: GitHub, or on_slow already called */
+
+void net_on_slow(void (*f)(void)) { on_slow = f; }
 
 static int xferinfo(void *u, curl_off_t total, curl_off_t done, curl_off_t ul_total, curl_off_t ul_now)
 {
-    on_progress((size_t)done, (size_t)total);
+    if (on_progress) on_progress((size_t)done, (size_t)total);
+    if (slow_start && osGetTime() - slow_start > 5000) {
+        slow_start = 0;
+        if (on_slow) on_slow();
+    }
     return 0;
 }
 
@@ -118,12 +126,13 @@ static long request(const char *url, const char *token, const char *client, cons
     curl_easy_setopt(c, CURLOPT_TIMEOUT, on_progress ? 300L : 60L);
     curl_easy_setopt(c, CURLOPT_USERAGENT, "3dssavesync-3ds"); /* required by the GitHub API */
     curl_easy_setopt(c, CURLOPT_SOCKOPTFUNCTION, no_linger);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferinfo); /* also during the connection, about once a second */
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    slow_start = token ? osGetTime() : 0;
     if (on_progress) { /* github.com redirects to release-assets.githubusercontent.com */
         curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
         curl_easy_setopt(c, CURLOPT_MAXREDIRS, 5L);
         curl_easy_setopt(c, CURLOPT_MAXFILESIZE_LARGE, (curl_off_t)NET_MAX_FILE);
-        curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, xferinfo);
-        curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     }
 
     r = curl_easy_perform(c);

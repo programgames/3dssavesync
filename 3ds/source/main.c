@@ -2400,6 +2400,7 @@ int main(int argc, char **argv)
         gfxExit();
         return 0;
     }
+    net_on_slow(show_slow); /* every Server request comes after a show_progress */
 
     if (!cfg.url[0] || !cfg.token[0]) {
         char migration_message[512];

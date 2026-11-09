@@ -88,6 +88,9 @@ extern u32 progress_color;    /* progress bar: yellow Upload, cyan Download, gre
 /* Progress of long loops: on the bottom screen, the operation, the text ("step\ngame") and a bar if total > 0. */
 void show_progress(int done, int total, const char *format, ...);
 
+/* The last progress drawn again, with a note that the server is slow to answer (net_on_slow). */
+void show_slow(void);
+
 /* Frame of a modal screen: modal_begin draws the top screen (top, or draw_current_top if NULL) and opens the bottom
  * screen with no touch area; the caller draws its content; modal_end draws a one-line bar of n buttons, ends the frame
  * and returns the keys pressed. */

@@ -23,6 +23,9 @@ long net_github(const char *url, void (*on_progress)(size_t done, size_t total),
  * Returns the HTTP status (> 0) or -<curl code> (< 0). */
 long net_put(const char *url, const char *token, const char *client, const char *condition, const void *bytes, size_t size);
 
+/* f() is called once in a Server request (net_get, net_put with a token) that has run for more than 5 s. */
+void net_on_slow(void (*f)(void));
+
 /* SHA-256 of bytes in lowercase hex: the Hash of a Save, the check of a download. */
 void hash_hex(const unsigned char *bytes, size_t size, char out[65]);
 
