@@ -24,7 +24,7 @@ The data is in `serveur/`, next to `config.json` (field `serveur_local.donnees` 
 
 ## Your own server (Docker)
 
-Files in `server/` of this repository. Image: `ghcr.io/programgames/3dssavesync-server`.
+Files in `server/` of this repository. Image: `ghcr.io/programgames/3dssavesync-server`, for x86 (amd64) and ARM (arm64: Raspberry Pi, most NAS).
 
 Common steps:
 
@@ -48,6 +48,16 @@ The 3DS app knows only the **ISRG Root X1** root certificate (Let's Encrypt), an
 ### Backups of the server
 
 Copy `data/` often (restic, Backrest, rsync…). The server deletes nothing, so the copy is simple.
+
+### Check the history
+
+Each version file ends with the SHA-256 hash of its content. `verify` reads every version again and compares:
+
+```
+docker compose exec 3dssavesync python /app/server.py verify
+```
+
+It prints `DAMAGED <game key>/<version>` for each version whose content changed on the disk, then a count, and exits with code 1 if one is damaged. It changes nothing. Run it after a disk problem, or on a restored backup: `python server/server.py verify path/to/data` (Python 3.11 or newer).
 
 ### Test a deployed server
 

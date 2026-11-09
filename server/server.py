@@ -3,6 +3,7 @@
 Environment variables (NDSSYNC_ prefix from before v3, kept for existing installs): NDSSYNC_TOKEN (required), NDSSYNC_DATA (default /data), NDSSYNC_PORT (default 8080).
 A Version = data/<code>/<seq>-<date>-<client>-<hash>.sav; the Current version has the highest <seq>.
 Nothing is ever deleted or rewritten, except data/<code>/nom.txt: the game name sent by a Client, for the History.
+python server.py verify [data]: reads every Version again and lists those whose content no longer matches their Hash.
 """
 import calendar
 import hashlib
@@ -10,6 +11,7 @@ import hmac
 import json
 import os
 import re
+import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,6 +26,29 @@ MAX_SIZE = 64 * 1024 * 1024  # largest known DS save memory
 LOCK = threading.Lock()  # ponytail: global lock, enough for 2 Clients
 
 
+def hash_of(version):
+    return version[:-4].rsplit("-", 1)[1]
+
+
+def verify(data):
+    """Recomputes the Hash of every Version. Returns (number of Versions, damaged ones as "<code>/<version>")."""
+    count, damaged = 0, []
+    for code in sorted(os.listdir(data)):
+        folder = os.path.join(data, code)
+        if not os.path.isdir(folder):
+            continue
+        for version in sorted(f for f in os.listdir(folder) if f.endswith(".sav")):
+            count += 1
+            try:
+                with open(os.path.join(folder, version), "rb") as f:
+                    ok = hashlib.file_digest(f, "sha256").hexdigest() == hash_of(version)
+            except OSError:
+                ok = False
+            if not ok:
+                damaged.append(f"{code}/{version}")
+    return count, damaged
+
+
 def creer(address, data, token):
     def versions(code):
         folder = os.path.join(data, code)
@@ -34,9 +59,6 @@ def creer(address, data, token):
     def current(code):
         v = versions(code)
         return v[-1] if v else None
-
-    def hash_of(version):
-        return version[:-4].rsplit("-", 1)[1]
 
     def info(code, version):
         _, date, client, h = version[:-4].split("-")
@@ -161,7 +183,13 @@ def creer(address, data, token):
     return ThreadingHTTPServer(address, Handler)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" and sys.argv[1:2] == ["verify"]:
+    count, damaged = verify(sys.argv[2] if len(sys.argv) > 2 else os.environ.get("NDSSYNC_DATA", "/data"))
+    for version in damaged:
+        print(f"DAMAGED {version}")
+    print(f"{count} versions read, {len(damaged)} damaged")
+    sys.exit(1 if damaged else 0)
+elif __name__ == "__main__":
     creer(("0.0.0.0", int(os.environ.get("NDSSYNC_PORT", "8080"))),
           os.environ.get("NDSSYNC_DATA", "/data"),
           os.environ["NDSSYNC_TOKEN"]).serve_forever()
