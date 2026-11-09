@@ -9,6 +9,24 @@ import java.io.ByteArrayOutputStream
 // ARCHIVE_KEY starts the Key of every 3DS game but the 8 Pokémon games: its server versions are archives (ADR 0028).
 const val ARCHIVE_KEY = "3DSA-"
 
+// EXTDATA_KEY starts the Key of the Extra data of 3DS games, per extdata ID, not per game (ADR 0031): its server
+// versions are archives of the files under extdata/00000000/<ID>/user/.
+const val EXTDATA_KEY = "3DSX-"
+
+// ARCHIVE_MAX: bytes of files of one archive at most, as on the 3DS (titles3ds.h); beyond, it is Not synced.
+const val ARCHIVE_MAX = 16L shl 20
+
+// extdataId: the extdata ID that Azahar gives a 3DS title, titleLow >> 8, as 8 upper-case hex digits (ADR 0031).
+fun extdataId(titleId: String): String = (titleId.takeLast(8).toLong(16) shr 8).toString(16).uppercase().padStart(8, '0')
+
+// skipExtdata: extdata IDs never synced (ADR 0031, extdata-ignorees): NetPass (SpotPass downloads), Super Mario Maker.
+val skipExtdata = (skip3DS + "000400000F657400").map(::extdataId).toSet()
+
+// checkSize refuses an archive of more than ARCHIVE_MAX bytes of files (ARCHIVE_SIZE): the game is then Not synced.
+fun checkSize(location: String, total: Long) {
+    if (total > ARCHIVE_MAX) throw SyncException(Problem.ARCHIVE_SIZE, "$location: $total bytes of files, ${ARCHIVE_MAX shr 20} MiB at most")
+}
+
 // ArchiveFile is one file of a save archive: its path from the archive root ("main", "dir/file") and its bytes.
 class ArchiveFile(val path: String, val data: ByteArray)
 
@@ -116,8 +134,9 @@ fun unpackArchive(data: ByteArray): List<ArchiveFile> {
     }
 }
 
-// ArchiveFolder is the folder of a 3DS save archive in Azahar, title/00040000/<low>/data/00000001 (ADR 0028): SAF on
-// the phone, memory in the tests. Paths go from the folder, with '/'.
+// ArchiveFolder is the folder of a 3DS save archive in Azahar, title/00040000/<low>/data/00000001 (ADR 0028), or the
+// user/ folder of an extdata, extdata/00000000/<ID>/user (ADR 0031): SAF on the phone, memory in the tests. Paths go
+// from the folder, with '/'.
 interface ArchiveFolder {
     val location: String // where it is, for the messages
 
@@ -130,16 +149,19 @@ interface ArchiveFolder {
     fun modifiedNow(): Long? // the same, listed now
 }
 
-// ArchiveSave is the Save file of a 3DSA game: its content is the archive of its folder, so the usual Sync works on the
-// whole folder as on one file: the Backup copy is a .tar of the folder, the marker of an interrupted write covers the
-// folder, and replace reads the whole folder back (ADR 0026, 0028).
+// ArchiveSave is the Save file of a 3DSA game or of an extdata (3DSX): its content is the archive of its folder, so the
+// usual Sync works on the whole folder as on one file: the Backup copy is a .tar of the folder, the marker of an
+// interrupted write covers the folder, and replace reads the whole folder back (ADR 0026, 0028, 0031).
 class ArchiveSave(val folder: ArchiveFolder) : SaveFile {
     override val name = "00000001.tar" // the Backup copies: <game>-<date>.tar
 
     override val location get() = folder.location
 
     // a folder without any file holds no save yet: never an archive of nothing to upload
-    override fun read(): ByteArray? = folder.files()?.takeIf { it.isNotEmpty() }?.let(::packArchive)
+    override fun read(): ByteArray? = folder.files()?.takeIf { it.isNotEmpty() }?.also { l -> checkSize(location, l.sumOf { it.data.size.toLong() }) }?.let(::packArchive)
+
+    // a folder whose files can't be synced (too large, a long path) still holds a save
+    override fun exists() = runCatching { read() != null }.getOrDefault(true)
 
     // write writes the files of the version that differ from the folder, each read back. Nothing is ever deleted.
     override fun write(content: ByteArray) {

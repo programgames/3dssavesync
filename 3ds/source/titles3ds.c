@@ -6,6 +6,8 @@
 #include <string.h>
 #include <strings.h>
 #include "archive.h"
+#include "key.h"
+#include "net.h"
 #include "titles3ds.h"
 #include "vc.h"
 
@@ -14,6 +16,20 @@ static Result open_save_archive(u64 id, FS_MediaType media, FS_Archive *a)
 {
     u32 path[3] = { media, (u32)id, (u32)(id >> 32) };
     return FSUSER_OpenArchive(a, ARCHIVE_USER_SAVEDATA, (FS_Path){ PATH_BINARY, sizeof path, path });
+}
+
+/* Extdata of 3DS games (ADR 0031): ARCHIVE_EXTDATA {media SD, extdata ID, high word 0}, even for a game card. The mount
+ * shows the user/ part only: never boss/ (SpotPass) nor the icon. */
+static Result open_extdata(u32 extdata, FS_Archive *a)
+{
+    u32 path[3] = { MEDIATYPE_SD, extdata, 0 };
+    return FSUSER_OpenArchive(a, ARCHIVE_EXTDATA, (FS_Path){ PATH_BINARY, sizeof path, path });
+}
+
+/* The save archive of title id on media, or extdata if not 0. */
+static Result open_archive(u64 id, FS_MediaType media, u32 extdata, FS_Archive *a)
+{
+    return extdata ? open_extdata(extdata, a) : open_save_archive(id, media, a);
 }
 
 int read_title_save(u64 id, const char *file, FS_MediaType *media, unsigned char **bytes, size_t *size)
@@ -135,7 +151,7 @@ static int list_dir(FS_Archive a, const char *dir, int depth, file_list_t *l, un
         if (ascii_name(e.name, name, sizeof name)) snprintf(why, wn, "file name not supported in %.60s", dir);
         else if (snprintf(path, sizeof path, "%s%s%s", dir, name, folder ? "/" : "") >= (int)sizeof path) snprintf(why, wn, "path too long: %.60s", path);
         else if (folder) failed = list_dir(a, path, depth + 1, l, total, why, wn);
-        else if ((*total += e.fileSize) > ARCHIVE_MAX) snprintf(why, wn, "save larger than %d MiB", ARCHIVE_MAX >> 20);
+        else if ((*total += e.fileSize) > ARCHIVE_MAX) snprintf(why, wn, "larger than %d MiB", ARCHIVE_MAX >> 20);
         else if (add_file(l, path + 1, e.fileSize)) snprintf(why, wn, "out of memory (%d files)", l->n);
         else failed = 0;
     }
@@ -147,8 +163,27 @@ static int list_dir(FS_Archive a, const char *dir, int depth, file_list_t *l, un
     return failed;
 }
 
-/* The f->size bytes of file f into out. why on failure. */
-static int read_whole(FS_Archive a, const archive_file_t *f, unsigned char *out, char *why, size_t wn)
+#define PAST_DATA ((Result)0xD900458B) /* extdata: read past the allocated data of a sparse file */
+
+/* Bytes [start, end) of the extdata file h into out (the file's start), block bytes per read. A read past the allocated
+ * data (PAST_DATA) is read again in blocks of 512 bytes, and a 512-byte block that still fails stays zeros: the file
+ * keeps the size the game created (ADR 0031; Checkpoint shortens it, which would change the Hash at each pass). */
+static Result read_sparse(Handle h, unsigned char *out, u64 start, u64 end, u32 block)
+{
+    u64 o;
+    for (o = start; o < end; o += block) {
+        u32 n = end - o < block ? (u32)(end - o) : block, got = 0;
+        Result r = FSFILE_Read(h, &got, o, out + o, n);
+        if (r == PAST_DATA && block > 512) r = read_sparse(h, out, o, o + n, 512);
+        else if (r == PAST_DATA) memset(out + o, 0, n), r = 0;
+        else if (R_SUCCEEDED(r) && got != n) r = -3;
+        if (R_FAILED(r)) return r;
+    }
+    return 0;
+}
+
+/* The f->size bytes of file f into out; sparse: an extdata file (read_sparse). why on failure. */
+static int read_whole(FS_Archive a, const archive_file_t *f, int sparse, unsigned char *out, char *why, size_t wn)
 {
     char path[ARCHIVE_PATH_MAX + 1];
     Handle h;
@@ -160,6 +195,7 @@ static int read_whole(FS_Archive a, const archive_file_t *f, unsigned char *out,
         r = FSFILE_GetSize(h, &t);
         if (R_SUCCEEDED(r) && t != f->size) r = -2; /* changed since the listing */
         if (R_SUCCEEDED(r) && t) r = FSFILE_Read(h, &got, 0, out, (u32)t);
+        if (sparse && r == PAST_DATA) r = read_sparse(h, out, 0, t, 0x10000), got = (u32)t;
         if (R_SUCCEEDED(r) && got != t) r = -3;
         FSFILE_Close(h);
     }
@@ -168,8 +204,8 @@ static int read_whole(FS_Archive a, const archive_file_t *f, unsigned char *out,
     return -1;
 }
 
-/* Every file of the opened archive a, packed (archive.h): each file read straight into its place. */
-static int read_open_archive(FS_Archive a, unsigned char **bytes, size_t *size, char *why, size_t wn)
+/* Every file of the opened archive a, packed (archive.h): each file read straight into its place. sparse: extdata. */
+static int read_open_archive(FS_Archive a, int sparse, unsigned char **bytes, size_t *size, char *why, size_t wn)
 {
     file_list_t l = { NULL, 0, 0 };
     unsigned long long total = 0;
@@ -179,7 +215,7 @@ static int read_open_archive(FS_Archive a, unsigned char **bytes, size_t *size, 
         else snprintf(why, wn, "out of memory (%llu bytes)", total);
     }
     for (i = 0; !r && i < l.n; i++)
-        if ((r = read_whole(a, &l.f[i], *bytes + l.f[i].offset, why, wn))) free(*bytes);
+        if ((r = read_whole(a, &l.f[i], sparse, *bytes + l.f[i].offset, why, wn))) free(*bytes);
     free(l.f);
     return r ? -1 : 0;
 }
@@ -192,13 +228,34 @@ int read_title_archive(u64 id, FS_MediaType *media, unsigned char **bytes, size_
     for (i = 0; i < 2; i++) {
         FS_Archive a;
         if (R_FAILED(open_save_archive(id, media_types[i], &a))) continue;
-        r = read_open_archive(a, bytes, size, why, wn);
+        r = read_open_archive(a, 0, bytes, size, why, wn);
         FSUSER_CloseArchive(a);
         if (r) return -2;
         *media = media_types[i];
         return 0;
     }
     return -1;
+}
+
+u32 title_extdata_id(u64 id)
+{
+    u64 extdata = 0;
+    if (R_SUCCEEDED(amInit())) {
+        if (R_FAILED(AM_GetTitleExtDataId(&extdata, MEDIATYPE_SD, id))) extdata = 0;
+        amExit();
+    }
+    return extdata ? (u32)extdata : (u32)extdata_id_of(id);
+}
+
+int read_extdata(u32 extdata, unsigned char **bytes, size_t *size, char *why, size_t wn)
+{
+    FS_Archive a;
+    int r;
+    why[0] = '\0';
+    if (R_FAILED(open_extdata(extdata, &a))) return -1; /* none: the game never made one */
+    r = read_open_archive(a, 1, bytes, size, why, wn);
+    FSUSER_CloseArchive(a);
+    return r ? -2 : 0;
 }
 
 /* Index of path in files[0..n), -1 if absent. */
@@ -247,16 +304,29 @@ static Result write_one(FS_Archive a, const archive_file_t *f, long long old_siz
     return r;
 }
 
+#define UNCHANGED_LIST ((Result)-4)  /* write_open_archive failed before any change */
+#define UNCHANGED_EMPTY ((Result)-5)
+
 /* The version files in the opened archive a, then the commit: files absent from it deleted, the others created or
- * resized and written. Nothing is committed on a failure: the archive keeps its old content. */
-static Result write_open_archive(FS_Archive a, const archive_file_t *files, int n, char *why, size_t wn)
+ * resized and written. Nothing is committed on a failure: the archive keeps its old content. extdata (ADR 0031): no
+ * commit, so a failure after the first change leaves old and new files mixed; and the system refuses to create a file
+ * of size 0, so a version with an empty file that the extdata does not have empty is refused before any change. */
+static Result write_open_archive(FS_Archive a, int extdata, const archive_file_t *files, int n, char *why, size_t wn)
 {
     file_list_t old = { NULL, 0, 0 };
     unsigned long long total = 0;
     char path[ARCHIVE_PATH_MAX + 1];
     Result r = 0;
     int i;
-    if (list_dir(a, "/", 0, &old, &total, why, wn)) return -4;
+    if (list_dir(a, "/", 0, &old, &total, why, wn)) return UNCHANGED_LIST;
+    for (i = 0; extdata && i < n; i++) {
+        int k = files[i].size ? 0 : find_file(old.f, old.n, files[i].path);
+        if (k < 0 || (!files[i].size && old.f[k].size)) {
+            snprintf(why, wn, "empty file can't be created: %.60s", files[i].path);
+            free(old.f);
+            return UNCHANGED_EMPTY;
+        }
+    }
     for (i = 0; R_SUCCEEDED(r) && i < old.n; i++)
         if (find_file(files, n, old.f[i].path) < 0) {
             snprintf(path, sizeof path, "/%s", old.f[i].path);
@@ -268,23 +338,22 @@ static Result write_open_archive(FS_Archive a, const archive_file_t *files, int 
             snprintf(why, wn, "write %.60s: %08lX", files[i].path, (unsigned long)r);
     }
     free(old.f);
-    if (R_SUCCEEDED(r) && R_FAILED(r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0)))
+    if (!extdata && R_SUCCEEDED(r) && R_FAILED(r = FSUSER_ControlArchive(a, ARCHIVE_ACTION_COMMIT_SAVE_DATA, NULL, 0, NULL, 0)))
         snprintf(why, wn, "commit: %08lX", (unsigned long)r);
     return r;
 }
 
-int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn)
+/* Writes tar (write_archive, before the read back). 0 if done, else as write_archive. */
+static int write_tar(u64 id, FS_MediaType media, u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
 {
     archive_file_t *files = NULL;
-    unsigned char *back = NULL;
     unsigned long long total = 0;
-    size_t back_size = 0;
     FS_Archive a;
     Result r;
-    int n = 0, i, same;
-    why[0] = '\0';
-    if (unpack_archive(tar, size, &files, &n)) {
-        snprintf(why, wn, "server version is not a 3dssavesync archive");
+    int n = 0, i;
+    if ((i = unpack_archive(tar, size, &files, &n))) {
+        if (i == -2) snprintf(why, wn, "out of memory (%lu bytes)", (unsigned long)size);
+        else snprintf(why, wn, "server version is not a 3dssavesync archive");
         return -1;
     }
     for (i = 0; i < n; i++) {
@@ -293,29 +362,59 @@ int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t s
         if (*p) snprintf(why, wn, "file name not supported: %.60s", files[i].path); /* as list_dir: printable ASCII only */
         total += files[i].size;
     }
-    if (!why[0] && total > ARCHIVE_MAX) snprintf(why, wn, "save larger than %d MiB", ARCHIVE_MAX >> 20);
-    if (why[0] || R_FAILED(r = open_save_archive(id, media, &a))) { /* never created: a game never started is skipped */
+    if (!why[0] && total > ARCHIVE_MAX) snprintf(why, wn, "larger than %d MiB", ARCHIVE_MAX >> 20);
+    if (why[0] || R_FAILED(r = open_archive(id, media, extdata, &a))) { /* never created: a game never started is skipped */
         if (!why[0]) snprintf(why, wn, "OpenArchive: %08lX", (unsigned long)r);
         free(files);
         return -1;
     }
-    r = write_open_archive(a, files, n, why, wn);
+    r = write_open_archive(a, extdata != 0, files, n, why, wn);
     FSUSER_CloseArchive(a);
     free(files);
-    if (R_FAILED(r)) return -1;
-    remove_secure_value(id);
+    if (R_FAILED(r)) return extdata && r != UNCHANGED_LIST && r != UNCHANGED_EMPTY ? -2 : -1;
+    return 0;
+}
+
+/* write_title_archive (extdata 0) and write_extdata. tar is freed once written: the read back takes its memory, and is
+ * compared with it by SHA-256 (as the server checks a Version), so the archive is never twice in memory. */
+static int write_archive(u64 id, FS_MediaType media, u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
+{
+    unsigned char *back = NULL;
+    size_t back_size = 0;
+    char hash[65], back_hash[65] = "";
+    FS_Archive a;
+    int i, same;
+    why[0] = '\0';
+    hash_hex(tar, size, hash);
+    i = write_tar(id, media, extdata, tar, size, why, wn);
+    free(tar);
+    if (i) return i;
+    if (!extdata) remove_secure_value(id); /* extdata has no secure value */
 
     /* read back: the commit is done, so a difference means the archive holds something else (the copy is kept) */
-    if (R_FAILED(open_save_archive(id, media, &a))) {
+    if (R_FAILED(open_archive(id, media, extdata, &a))) {
         snprintf(why, wn, "read back: OpenArchive");
         return -2;
     }
-    i = read_open_archive(a, &back, &back_size, why, wn);
+    i = read_open_archive(a, extdata != 0, &back, &back_size, why, wn);
     FSUSER_CloseArchive(a);
-    same = !i && back_size == size && !memcmp(back, tar, size);
-    if (!i) free(back);
+    if (!i) {
+        hash_hex(back, back_size, back_hash);
+        free(back);
+    }
+    same = !i && back_size == size && !strcmp(back_hash, hash);
     if (!same && !why[0]) snprintf(why, wn, "read back differs (%lu bytes, expected %lu)", (unsigned long)back_size, (unsigned long)size);
     return same ? 0 : -2;
+}
+
+int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn)
+{
+    return write_archive(id, media, 0, tar, size, why, wn);
+}
+
+int write_extdata(u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn)
+{
+    return write_archive(0, MEDIATYPE_SD, extdata, tar, size, why, wn);
 }
 
 /* UTF-16 (Basic Multilingual Plane) -> UTF-8, without cutting a character; line break -> space. */

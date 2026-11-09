@@ -166,6 +166,9 @@
     <string name="why_not_started">This game was never started in Azahar, so it has no save folder yet, and the app doesn\'t create one. Start the game once in Azahar and save in it, then refresh.</string>
     <string name="sync_this_game">Sync this game</string>
     <string name="sync_this_game_help">Off: the app leaves this game alone, on this phone and on the server. New games are on.</string>
+    <string name="extdata_suffix">" (data)"</string>
+    <string name="extdata_help">This is the extra data of a 3DS game (ghosts, photos, unlocked content). It syncs on its own, next to the save of the game. It has no switch: it follows Sync this game of its game. When the app finds no game for it on this phone, it always syncs.</string>
+    <string name="why_extdata_off">Sync is off for the game of this extra data, so the app doesn\'t upload or download it. Open that game in Games and turn on Sync this game.</string>
     <string name="why_to_upload">The save on this phone is newer. Tap Upload to send it to the server.</string>
     <string name="why_to_download">The server has a newer save. Tap Download to get it: the app first keeps a backup copy of the save on this phone.</string>
     <string name="why_conflict">The save changed on this phone and on the server since the last sync. Choose which one to keep.</string>
@@ -270,6 +273,7 @@
     <string name="p_never_started">This game has no save folder in Azahar, and the app doesn\'t create one. Start the game once in Azahar and save in it, then refresh.</string>
     <string name="p_extra_files">The save folder of this game on the phone has files that the server version doesn\'t have, so nothing was replaced. The app never deletes a file of your saves. Show details names these files: move them out of the save folder with a file manager, then try again.</string>
     <string name="p_archive_path">A file in the save folder of this game has a name the app can\'t sync (a path longer than 100 characters), so this game isn\'t synced. Show details names the file.</string>
+    <string name="p_archive_size">The files in the save folder of this game take more than 16 MB, so this game isn\'t synced: the 3DS app can\'t hold a larger archive in its memory.</string>
     <string name="p_other">Something went wrong. Try again. If it happens again, report the detail below.</string>
     <string name="p_open">This save changed a few seconds ago, so the emulator may still be open. Swipe it away from the recent apps, then try again.</string>
     <string name="reminder_title">Close the emulator</string>

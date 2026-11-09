@@ -168,6 +168,9 @@
     <string name="why_not_started">Ce jeu n\'a jamais été lancé dans Azahar&#160;: il n\'a pas encore de dossier de sauvegarde, et l\'application n\'en crée pas. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
     <string name="sync_this_game">Synchroniser ce jeu</string>
     <string name="sync_this_game_help">Désactivé&#160;: l\'application ne touche pas à ce jeu, ni sur ce téléphone ni sur le serveur. Les nouveaux jeux sont activés.</string>
+    <string name="extdata_suffix">" (données)"</string>
+    <string name="extdata_help">Ce sont les données additionnelles d\'un jeu 3DS (fantômes, photos, contenus débloqués). Elles se synchronisent à part, à côté de la sauvegarde du jeu. Elles n\'ont pas d\'interrupteur&#160;: elles suivent «&#160;Synchroniser ce jeu&#160;» de leur jeu. Si l\'application ne trouve pas leur jeu sur ce téléphone, elles se synchronisent toujours.</string>
+    <string name="why_extdata_off">La synchronisation du jeu de ces données additionnelles est désactivée&#160;: l\'application ne les envoie ni ne les récupère. Ouvrez ce jeu dans Jeux et activez «&#160;Synchroniser ce jeu&#160;».</string>
     <string name="why_to_upload">La sauvegarde de ce téléphone est plus récente. Touchez Envoyer pour la transmettre au serveur.</string>
     <string name="why_to_download">Le serveur a une sauvegarde plus récente. Touchez Récupérer pour l\'obtenir&#160;: l\'application garde d\'abord une copie de sécurité de celle du téléphone.</string>
     <string name="why_conflict">La sauvegarde a changé sur ce téléphone et sur le serveur depuis la dernière synchronisation. Choisissez celle à garder.</string>
@@ -273,6 +276,7 @@
     <string name="p_never_started">Ce jeu n\'a pas de dossier de sauvegarde dans Azahar, et l\'application n\'en crée pas. Lancez le jeu une fois dans Azahar, sauvegardez dans le jeu, puis actualisez.</string>
     <string name="p_extra_files">Le dossier de sauvegarde de ce jeu sur le téléphone contient des fichiers que la version du serveur n\'a pas&#160;: rien n\'a été remplacé. L\'application ne supprime jamais un fichier de vos sauvegardes. «&#160;Afficher les détails&#160;» donne ces fichiers&#160;: sortez-les du dossier de sauvegarde avec un gestionnaire de fichiers, puis réessayez.</string>
     <string name="p_archive_path">Un fichier du dossier de sauvegarde de ce jeu a un nom que l\'application ne peut pas synchroniser (un chemin de plus de 100 caractères)&#160;: ce jeu n\'est pas synchronisé. «&#160;Afficher les détails&#160;» donne ce fichier.</string>
+    <string name="p_archive_size">Les fichiers du dossier de sauvegarde de ce jeu dépassent 16&#160;Mo&#160;: ce jeu n\'est pas synchronisé, car l\'application de la 3DS ne peut pas garder une archive plus grande en mémoire.</string>
     <string name="p_other">Un problème est survenu. Réessayez. Si cela se reproduit, signalez le détail ci-dessous.</string>
     <string name="p_open">Cette sauvegarde a changé il y a quelques secondes&#160;: l\'émulateur est peut-être encore ouvert. Balayez-le hors des applications récentes, puis réessayez.</string>
     <string name="reminder_title">Fermez l\'émulateur</string>

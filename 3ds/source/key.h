@@ -21,6 +21,16 @@ void key_3ds(unsigned long long title_id, char key[KEY_MAX]);
 /* "3DSA-0004000000030800": any other 3DS game, its whole save archive (archive.h, ADR 0028). */
 void key_3dsa(unsigned long long title_id, char key[KEY_MAX]);
 
+/* "3DSX-0000055D": the extra data (extdata) of 3DS games, by extdata ID, shared by the games that use it (ADR 0031). */
+void key_3dsx(unsigned long id, char key[KEY_MAX]);
+
+/* Extdata ID of a 3DS title when AM can't give it: title ID low >> 8 (ADR 0031). */
+unsigned long extdata_id_of(unsigned long long title_id);
+
+/* 1 if the extdata of the 3DS title is never synced: NetPass (SpotPass downloads), and the titles of skipped_3ds
+ * (extdata-ignorees, ADR 0031). */
+int skipped_extdata(unsigned long long title_id);
+
 /* 1 if the title is one of the 8 3DS Pokémon games (Key 3DS-), by title ID, never by content (ADR 0028). */
 int pokemon_3ds(unsigned long long title_id);
 

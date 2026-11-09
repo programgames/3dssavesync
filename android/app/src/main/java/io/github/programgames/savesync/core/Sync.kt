@@ -31,6 +31,7 @@ interface SaveFile {
 
 // Game is a Key and its Save file in one emulator of this phone. emulator: id of the emulator entry, which owns the
 // Bases and the folder of the Backup copies. archive: set for a 3DS game never started in Azahar (no folder yet).
+// title: the name given to the server (ADR 0018), null: none known on this phone (an extdata of a 3DSA game).
 data class Game(
     val system: System,
     val key: String,
@@ -39,6 +40,7 @@ data class Game(
     val format: Format,
     val emulator: String,
     val archive: NewArchive? = null,
+    val title: String? = name,
 )
 
 // formats3DS: Azahar's 00000001.metadata of a 3DS game, as client/sync.go (ADR 0009): ArchiveFormatInfo (total_size,
@@ -406,7 +408,8 @@ class Syncer(
     // A 3DSA game has no name on this phone (no ROM, its title ID only): the 3DS or the PC gives it.
     private fun nameOnServer(g: Game) {
         if (g.key.startsWith(ARCHIVE_KEY)) return
-        if (named.add(g.key)) runCatching { remote.setName(g.key, g.name) }
+        val title = g.title ?: return
+        if (named.add(g.key)) runCatching { remote.setName(g.key, title) }
     }
 
     // restoreCopy is the other choice on an interrupted write: its Backup copy goes back, through replace (a Backup copy
@@ -461,7 +464,7 @@ class Syncer(
 // null if there was none; a file that differs now (the emulator wrote it) is not touched: no copy holds it.
 // pending: a PendingWrite marker is written before the file is touched and removed once the file is verified (ADR 0026).
 // A marker left by an earlier interrupted write keeps its Backup copy: that one holds the save from before it.
-// A 3DSA game (ArchiveSave): its version is checked first, before the Backup copy (ADR 0028).
+// A 3DSA game or an extdata (ArchiveSave): its version is checked first, before the Backup copy (ADR 0028).
 fun replace(g: Game, old: ByteArray?, content: ByteArray, backups: Backups, pending: Pending? = null): File? {
     (g.file as? ArchiveSave)?.check(content)
     val copy = old?.let { backups.copy(g.emulator, g.name, backupExt(g), it) }

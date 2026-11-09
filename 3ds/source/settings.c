@@ -135,21 +135,26 @@ int note_install(bases_t *b, unsigned long long id, unsigned long long stamp, co
 {
     char name[KEY_MAX], value[65];
     const char *old;
-    int i, forgot = 0;
+    int forgot = 0;
     if (!stamp) return 0;
     snprintf(name, sizeof name, "INSTALL-%016llX", id);
     snprintf(value, sizeof value, "%064llX", stamp); /* 64 characters, like a Hash: older versions keep the line */
     old = base_of(b, name);
     if (old && !strcmp(old, value)) return 0;
-    if (old) /* another date: the game was reinstalled, its Base belongs to the save that was deleted */
-        for (i = 0; i < b->n; i++)
-            if (!strcmp(b->e[i].key, key)) {
-                b->e[i] = b->e[--b->n];
-                forgot = 1;
-                break;
-            }
+    if (old) forgot = forget_base(b, key); /* another date: the game was reinstalled, its Base belongs to the deleted save */
     if (put_base(b, name, value)) return -1;
     return forgot ? 2 : 1;
+}
+
+int forget_base(bases_t *b, const char *key)
+{
+    int i;
+    for (i = 0; i < b->n; i++)
+        if (!strcmp(b->e[i].key, key)) {
+            b->e[i] = b->e[--b->n];
+            return 1;
+        }
+    return 0;
 }
 
 int write_bases(const char *path, bases_t *b)

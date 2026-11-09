@@ -45,6 +45,11 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(text, n, T("%s : écriture 3DS refusée, sauvegarde intacte.", "%s: 3DS write refused, save intact."), game);
         return KIND_FAILURE;
     case RESULT_OUT_OF_MEMORY:
+        if (r->path[0]) { /* refused before it started (memory_short): what it needs, what is free */
+            snprintf(detail, dn, "%s", r->path);
+            snprintf(text, n, T("%s : pas assez de mémoire pour cette sauvegarde. Rien n'a été modifié.", "%s: not enough memory for this save. Nothing was changed."), game);
+            return KIND_FAILURE;
+        }
         snprintf(text, n, T("%s : mémoire insuffisante, rien n'est écrit.", "%s: out of memory, nothing written."), game);
         return KIND_FAILURE;
     case RESULT_WRITE_FAILED:
@@ -95,6 +100,11 @@ result_kind_t result_text(const result_t *r, const char *game, int english, char
         snprintf(detail, dn, "%s", r->path);
         snprintf(text, n, T("%s : la sauvegarde de ce jeu ne peut pas être copiée en entier. Il n'est pas synchronisé, sa sauvegarde n'est pas modifiée.",
                             "%s: this game's save can't be copied whole. It is not synced, and its save is not changed."), game);
+        return KIND_FAILURE;
+    case RESULT_EXTDATA_NOT_SYNCED:
+        snprintf(detail, dn, "%s", r->path);
+        snprintf(text, n, T("%s : ces données additionnelles ne peuvent pas être copiées en entier. Elles ne sont pas synchronisées ni modifiées.",
+                            "%s: this extra data can't be copied whole. It is not synced, and it is not changed."), game);
         return KIND_FAILURE;
     case RESULT_CONFLICT_LEFT:
         snprintf(text, n, T("%s : conflit laissé tel quel.", "%s: conflict left as is."), game);

@@ -71,6 +71,7 @@ import io.github.programgames.savesync.core.mainSunMoon
 import io.github.programgames.savesync.core.newAlias
 import io.github.programgames.savesync.core.pokemonPlayInfo
 import io.github.programgames.savesync.core.sha256
+import io.github.programgames.savesync.core.unpackArchive
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -809,6 +810,54 @@ open class UiTest {
         open("Animal Crossing")
         rule.onNode(hasText(s(R.string.sync_this_game)) and isToggleable()).performScrollTo().assertIsOff().performClick()
         waitFor(s(R.string.why_in_sync))
+        assertEquals(emptySet<String>(), App.settings.off3DS)
+        assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded, no name given
+    }
+
+    // Extra data (ADR 0031): its row has no switch of its own and says why. Turning its game off turns it off too
+    // (Not synced, with the reason); on again reads both States again.
+    @Test
+    fun extdataFollowsItsGame() {
+        onlyNormalFont()
+        val key = "3DSA-00040000000EC300"
+        val ext = "3DSX-00000EC3"
+        val save = packArchive(listOf(ArchiveFile("main", ByteArray(10) { 1 })))
+        val data = packArchive(listOf(ArchiveFile("a.bin", ByteArray(10) { 2 })))
+        fun row(k: String, b: ByteArray) = """{"code":"$k","hash":"${sha256(b)}","taille":${b.size},"date":"20261103T101500Z","client":"3ds","nom":""}"""
+        val url = fakeServer(data) { line ->
+            if (line.split(" ")[1] == "/saves") 200 to "[${row(key, save)},${row(ext, data)}]".toByteArray() else 200 to data
+        }
+        val bases = Bases(File(ctx.filesDir, "bases"))
+        fun entry(name: String, rom: String, k: String, b: ByteArray, owner: String? = null): Entry {
+            bases.set(azahar.id, k, sha256(b))
+            val v = Version(sha256(b), b.size.toLong())
+            val g = Game(System.N3DS, k, name, ArchiveSave(memoryFolder(unpackArchive(b))), Format(""), azahar.id, title = null)
+            return Entry(azahar, System.N3DS, name, rom, g, status = Status(LocalInfo(v, blank = false), v, v.hash, State.IN_SYNC), owner = owner)
+        }
+        val entries = listOf(entry("Animal Crossing", "00040000000EC300", key, save), entry("Animal Crossing (data)", ext, ext, data, "00040000000EC300"))
+        start(url = url, token = "t", emulators = listOf(azahar), entries = entries)
+        open("Animal Crossing (data)")
+        rule.onNodeWithText(s(R.string.extdata_help)).performScrollTo().assertExists()
+        rule.onAllNodes(hasText(s(R.string.sync_this_game)) and isToggleable()).assertCountEquals(0)
+        back()
+
+        open("Animal Crossing")
+        rule.onNode(hasText(s(R.string.sync_this_game)) and isToggleable()).performScrollTo().performClick()
+        waitFor(s(R.string.why_off))
+        back()
+        rule.onAllNodes(state(s(R.string.s_not_synced))).assertCountEquals(2)
+        open("Animal Crossing (data)")
+        waitFor(s(R.string.why_extdata_off))
+        back()
+
+        open("Animal Crossing")
+        rule.onNode(hasText(s(R.string.sync_this_game)) and isToggleable()).performScrollTo().performClick()
+        waitFor(s(R.string.why_in_sync))
+        back()
+        rule.waitUntil(15_000) {
+            rule.onAllNodes(isRoot()).fetchSemanticsNodes()
+            rule.onAllNodes(state(s(R.string.s_in_sync))).fetchSemanticsNodes().size == 2
+        }
         assertEquals(emptySet<String>(), App.settings.off3DS)
         assertTrue(synchronized(requests) { requests.none { it.startsWith("PUT") } }) // nothing uploaded, no name given
     }

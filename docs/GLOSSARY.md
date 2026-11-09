@@ -15,7 +15,7 @@ The original console of a Game: DS, GB (GB and GBC together), GBA or 3DS. It set
 _Avoid_: platform, console, medium
 
 **Key** (*Clé*):
-The identifier of a Game on the Server, read from the ROM header: the Game code for DS, `GBA-` + game code, `GB-` + title + checksum, `3DS-` + title ID for the 8 Pokémon games (raw `main`), `3DSA-` + title ID for every other 3DS game (whole save archive) (ADR 0007, 0028).
+The identifier of a Game on the Server, read from the ROM header: the Game code for DS, `GBA-` + game code, `GB-` + title + checksum, `3DS-` + title ID for the 8 Pokémon games (raw `main`), `3DSA-` + title ID for every other 3DS game (whole save archive), `3DSX-` + extdata ID for the Extra data of 3DS games (ADR 0007, 0028, 0031).
 _Avoid_: id, identifier, game ID
 
 **ROM**:
@@ -63,6 +63,10 @@ _Avoid_: RTC, footer, RTC footer
 **Blank save** (*Sauvegarde vierge*):
 A DS, GB or GBA Save whose SRAM holds only 0x00 or only 0xFF: no game is written in it yet. It counts as absent, unless the Current version is the same Save (then the Game is In sync).
 _Avoid_: empty save
+
+**Extra data** (*Données additionnelles*):
+The second system container of some native 3DS games, beside the Save archive: ghosts, photos, unlocked content, sometimes progress. Several Games can share one. It has its own Key.
+_Avoid_: extsavedata, SpotPass data
 
 **Save archive** (*Archive de sauvegarde*):
 The system container of a native 3DS Save; for the 3DS Pokémon games it holds one file, `main`. Azahar stores it as an ordinary folder.

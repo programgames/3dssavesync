@@ -55,6 +55,9 @@ int write_bases(const char *path, bases_t *b);
  * -1 if out of memory. */
 int note_install(bases_t *b, unsigned long long id, unsigned long long stamp, const char *key);
 
+/* Removes the Base of key from b (memory only: write_bases afterwards). 1 if it had one, 0 otherwise. */
+int forget_base(bases_t *b, const char *key);
+
 /* alias.ini (ADR 0014): "ROM name without extension=KEY", so that a ROM hack has its own Key. */
 #define MAX_ALIAS 64
 typedef struct {

@@ -25,9 +25,25 @@ int read_title_archive(u64 id, FS_MediaType *media, unsigned char **bytes, size_
 
 /* Writes the version tar (unpack_archive: a damaged one is refused) into the existing archive: files absent from it
  * deleted, the others created or resized and written, commit, secure value removed, then read back and compared. An
- * archive is never created or formatted. 0 if done; -1 if nothing was committed (old save intact); -2 if committed but
- * the read back differs. why: the technical line. */
+ * archive is never created or formatted. tar is freed (always): the read back takes its memory and is compared by
+ * SHA-256. 0 if done; -1 if nothing was committed (old save intact); -2 if committed but the read back differs. why: the
+ * technical line. */
 int write_title_archive(u64 id, FS_MediaType media, unsigned char *tar, size_t size, char *why, size_t wn);
+
+/* Extra data (extdata) of 3DS games (ADR 0031): its user/ files, as one 3dssavesync archive, same rules and limit. */
+
+/* Extdata ID of the application id: AM (its exheader), else title ID low >> 8. */
+u32 title_extdata_id(u64 id);
+
+/* Every file of the extdata, packed in *bytes (to free). A sparse file is read at its full size, with zeros where the
+ * system has no data. 0 if read; -1 if it does not exist (never created by the game: not synced, never created here);
+ * -2 if it can't be synced or read (why, as read_title_archive). */
+int read_extdata(u32 extdata, unsigned char **bytes, size_t *size, char *why, size_t wn);
+
+/* As write_title_archive, in the existing extdata, without commit or secure value. 0 if done; -1 if nothing was
+ * changed (refused: a damaged version, an empty file the extdata does not have empty, a listing error); -2 if files
+ * were changed and a write failed or the read back differs: old and new files may be mixed, the backup copy is needed. */
+int write_extdata(u32 extdata, unsigned char *tar, size_t size, char *why, size_t wn);
 
 /* Names at the root of the archive in names, joined by ", ", a folder ending with '/' ("sav.dat, SecureValue"), cut if
  * longer than n. Number of entries, -1 if the game has no archive. */

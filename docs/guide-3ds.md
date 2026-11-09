@@ -79,7 +79,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 | `titres.ini` | older versions only: the 3DS games to sync. This version reads it once, turns off the games it doesn't list, then no longer uses it. |
 | `alias.ini` | optional: ROM hacks with their own save, written by the PC (settings page, Prepare the 3DS SD card): `Pokemon Radical Red=GBA-0A7K` ([details](troubleshooting.md#a-rom-hack-is-not-synced)) |
 | `maj.ini` | the day of the last update check, the latest version seen on GitHub, and the version that ran last (read by the PC: it does not copy an older `.cia` to the card) |
-| `copies/` | backup copies made before a save is replaced. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. |
+| `copies/` | backup copies made before a save is replaced. A 3DS game other than the 8 Pokémon games is copied as one `.tar` file that holds all of its save files. Extra data is copied the same way, in its own `.tar` file. |
 
 Outside this folder, `sdmc:/config/ssl/cacert.pem` (optional, shared with other homebrew): the certificate of your own CA, for a server that has no Let's Encrypt certificate ([HTTPS and the 3DS](guide-server.md#https-and-the-3ds)).
 
@@ -116,6 +116,7 @@ Every 3DS game with a save is synced: installed games and the game card in the s
 - The 8 Pokémon games (X, Y, Omega Ruby, Alpha Sapphire, Sun, Moon, Ultra Sun, Ultra Moon) sync their `main` file, as before.
 - Every other game syncs all the files of its save at once, as one archive. A save larger than 16 MB, or with a file path longer than 100 characters, stays **Not synced**, with the reason under the game. Nothing in it is changed.
 - Super Mario Maker is never synced: its save works only on the console that made it.
+- Extra data (extdata) is synced too, as a separate line: "Pokémon X (data)". Some games keep ghosts, photos or unlocked content there, outside their save. Several games can share one extra data (Pokémon X and Y): it then has one line, with the name of the first game. It syncs while at least one of its games is on. A game that never made extra data has no such line. The limits of a save apply (16 MB, paths of 100 characters). NetPass extra data (SpotPass downloads) is never synced.
 - Virtual Console games are in the **GB** tab ([below](#virtual-console-games-game-boy-game-boy-color)), not here.
 
 To turn a game off:
@@ -125,7 +126,7 @@ To turn a game off:
 3. Choose the game, and press **A** (**Turn off**). The box is ticked when the game is synced.
 4. Press **B** (**Save and go back**).
 
-A turned-off game is no longer in the list, and 3dssavesync doesn't read or change its save. Press **A** again on it to turn it back on.
+A turned-off game is no longer in the list, and 3dssavesync doesn't read or change its save. Press **A** again on it to turn it back on. Its extra data stays in the list if another game that uses it is on.
 
 If you used an older version and ticked games in **3DS games**, this version keeps your choice: the games that were not ticked are turned off. A game you ticked that is not a Pokémon game syncs under a new name on the server: the first sync uploads its whole save, and the old version stays in its history on the server. Update 3dssavesync on every device (3DS, PC, Android) before you sync these games: an older version keeps the old name.
 

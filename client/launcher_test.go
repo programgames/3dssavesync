@@ -304,6 +304,46 @@ func TestGames3DS(t *testing.T) {
 	}
 }
 
+func extdataDir(id string) string {
+	z := strings.Repeat("0", 32)
+	return filepath.Join(tmp, "azahar", "Nintendo 3DS", z, z, "extdata", "00000000", id)
+}
+
+// TestExtdata3DS: the extdata of a Sync all (ADR 0031): a folder with user/, its ID compared without case, the skip
+// list, the turned-off games, the name of the mapped game, the 16 MiB limit.
+func TestExtdata3DS(t *testing.T) {
+	tmp = t.TempDir()
+	rom3DS(t, "Kart (Europe)", 0x0004000000ABCD00)
+	for _, id := range []string{"0000ABCD", "0000abce", "0000055D", "000F6574", "00001A03", "00000335", "zzzz"} {
+		write(t, filepath.Join(extdataDir(id), "user", "a.bin"), []byte{1})
+	}
+	write(t, filepath.Join(extdataDir("0000ABCF"), "metadata"), []byte{1}) // no user/: never started
+	c := (&Session{cfg: &Config{Off3DS: []string{" 0004000000033500 "}}}).client("azahar")
+	var keys []string
+	for _, j := range c.games3DS(filepath.Join(tmp, "azahar"), filepath.Join(tmp, "roms")) {
+		if strings.HasPrefix(j.Key, "3DSX-") {
+			keys = append(keys, j.Key+"="+j.Name)
+		}
+		if j.Key == "3DSX-0000ABCE" && j.File != filepath.Join(extdataDir("0000abce"), "user") {
+			t.Errorf("3DSX : fichier = dossier user/, pas %s", j.File)
+		}
+	}
+	sort.Strings(keys)
+	want := "3DSX-0000055D=Pokemon X (données),3DSX-0000ABCD=Kart (Europe) (données),3DSX-0000ABCE=Extdata 0000ABCE"
+	if strings.Join(keys, ",") != want {
+		t.Errorf("extdata :\n%s\nattendu :\n%s", strings.Join(keys, "\n"), want)
+	}
+	if !c.cfg.off3DS("3DSX-00000335") || c.cfg.off3DS("3DSX-00000336") || c.cfg.off3DS("3DSA-0000000000033500") {
+		t.Error("off3DS : une extdata est désactivée par titleLow >> 8 de son jeu")
+	}
+
+	big := filepath.Join(extdataDir("0000ABCD"), "user")
+	write(t, filepath.Join(big, "b.bin"), make([]byte, maxExtdata))
+	if _, err := readLocal(&Game{System: N3DS, Key: "3DSX-0000ABCD", File: big}, nil); err == nil || !strings.Contains(err.Error(), "16 Mio") {
+		t.Errorf("plus de 16 Mio : Non synchronisé attendu, pas %v", err)
+	}
+}
+
 // raceTransport makes the 3DS upload just after the first GET /saves of the PC (GET/PUT race).
 type raceTransport struct{ after func() }
 
@@ -727,6 +767,64 @@ func TestLauncher(t *testing.T) {
 	realMain([]string{"run", "--config", cfgOff, zelda})
 	verify(played && len(questions) == 0 && contains(notifications, "désactivé"), "Azahar lancé, notification « désactivé »")
 	verify(len(history("3DSA-0004000000033500")) == hz, "rien n'est envoyé")
+
+	// --- 3DS extdata (ADR 0031) ----------------------------------------------------------
+	t.Log("3DSX : la partie synchronise aussi l'extdata du jeu, user/ seul")
+	reset()
+	kart := rom3DS(t, "Kart (Europe)", 0x0004000000ABCD00)
+	dk := extdataDir("0000ABCD")
+	untouched := []string{"metadata", "icon", filepath.Join("boss", "spot")} // never read or written
+	for _, f := range untouched {
+		write(t, filepath.Join(dk, f), []byte{7, 7})
+	}
+	write(t, filepath.Join(dk, "user", "a.bin"), byteRange(1, 40))
+	write(t, filepath.Join(dk, "user", "sub", "b.bin"), byteRange(50, 60))
+	run(kart)
+	verify(played && len(questions) == 0, "Azahar lancé, aucune question")
+	x1 := current("3DSX-0000ABCD")
+	w1, _ := PackArchive([]ArchiveFile{{"a.bin", byteRange(1, 40)}, {"sub/b.bin", byteRange(50, 60)}})
+	verify(bytes.Equal(x1, w1), "le serveur a l'archive de user/ seul, sous 3DSX-0000ABCD")
+	_, o = api("GET", "/saves", nil, nil)
+	verify(strings.Contains(string(o), `"nom": "Kart (Europe) (données)"`), "nom sur le serveur : celui du jeu + (données)")
+
+	t.Log("3DSX : Récupération, Copie .tar, fichier en trop déplacé, metadata, icon et boss/ intacts")
+	reset()
+	x2, _ := PackArchive([]ArchiveFile{{"a.bin", byteRange(2, 41)}, {"c.bin", byteRange(90, 99)}})
+	verify(upload3ds("3DSX-0000ABCD", x2, x1) == 200, "la 3DS envoie")
+	run(kart)
+	verify(len(questions) == 0, "aucune question")
+	verify(bytes.Equal(read(filepath.Join(dk, "user", "a.bin")), byteRange(2, 41)) && bytes.Equal(read(filepath.Join(dk, "user", "c.bin")), byteRange(90, 99)),
+		"user/ a la Version de la 3DS")
+	verify(!exists(filepath.Join(dk, "user", "sub", "b.bin")), "sub/b.bin n'est plus dans user/")
+	tars = namesIn(filepath.Join(copies, "azahar"), "Kart (Europe) (données)-*.tar")
+	verify(len(tars) == 1 && bytes.Equal(read(tars[0]), x1), "Copie de sécurité .tar de l'ancien user/")
+	verify(len(tars) == 1 && bytes.Equal(read(filepath.Join(strings.TrimSuffix(tars[0], ".tar"), "sub", "b.bin")), byteRange(50, 60)),
+		"sub/b.bin déplacé à côté de la Copie de sécurité, jamais supprimé")
+	for _, f := range untouched {
+		verify(bytes.Equal(read(filepath.Join(dk, f)), []byte{7, 7}), f+" intact")
+	}
+	verify(strings.Join(namesIn(dk, "*"), ",") == strings.Join([]string{filepath.Join(dk, "boss"), filepath.Join(dk, "icon"), filepath.Join(dk, "metadata"), filepath.Join(dk, "user")}, ","),
+		"pas de fichier temporaire oublié")
+	run(kart)
+	verify(len(history("3DSX-0000ABCD")) == 2 && len(questions) == 0, "partie suivante : déjà à jour, rien n'est envoyé")
+
+	t.Log("3DSX : user/ absent, version sur le serveur : rien n'est créé, il faut lancer le jeu une fois")
+	reset()
+	dm := extdataDir("0000ABCF")
+	upload3ds("3DSX-0000ABCF", x2, nil)
+	sx, err := newSession(config)
+	verify(err == nil, "session")
+	_, err = sx.client("azahar").syncGame(&Game{System: N3DS, Key: "3DSX-0000ABCF", Name: "Extdata 0000ABCF", File: filepath.Join(dm, "user")}, false)
+	verify(errors.Is(err, errNeverStarted) && !exists(dm), "Non synchronisé (lancer le jeu une fois dans Azahar), aucun dossier créé")
+
+	t.Log("3DSX : jeu désactivé (titres_3ds_off) : son extdata ne part pas")
+	reset()
+	write(t, filepath.Join(dk, "user", "a.bin"), byteRange(3, 42))
+	cfgOff = writeConfig(t, filepath.Join(tmp, "cfg-off", "config.json"), Config{URL: url, Token: "jeton-test", Copies: copies,
+		Off3DS:    []string{"0004000000ABCD00"},
+		Emulators: map[string]*Emulator{"azahar": {Exe: "inutilise.exe", Saves: map[System]string{"3DS": filepath.Join(tmp, "azahar")}}}})
+	realMain([]string{"run", "--config", cfgOff, kart})
+	verify(played && contains(notifications, "désactivé") && len(history("3DSX-0000ABCD")) == 2, "partie sans Synchronisation, rien n'est envoyé")
 
 	// --- Blank Save = absent -------------------------------------------------------------------
 	t.Log("Sauvegarde vierge (0xFF) sur le PC, Version sur le serveur : Récupération sans Conflit")

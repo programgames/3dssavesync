@@ -1064,7 +1064,7 @@ function statut(contenu, classe) { $("histoEtat").textContent = contenu; $("hist
 
 // Jeux : les jeux du serveur (lus une fois avec le bandeau), filtrés par console et par la recherche, triés, puis les
 // versions du jeu choisi.
-const consoleDe = cle => /^GBA-/.test(cle) ? "GBA" : /^GB-/.test(cle) ? "GB" : /^3DSA?-/.test(cle) ? "3DS" : "DS";
+const consoleDe = cle => /^GBA-/.test(cle) ? "GBA" : /^GB-/.test(cle) ? "GB" : /^3DS[AX]?-/.test(cle) ? "3DS" : "DS";
 const sansAccents = t => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 const ilYA = new Intl.RelativeTimeFormat(document.documentElement.lang, {style: "short", numeric: "auto"});
 function age(s) { // secondes depuis le dernier envoi -> « il y a 3 j »

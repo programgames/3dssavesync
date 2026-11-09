@@ -373,11 +373,13 @@ fun DetailsScreen(e: Entry, onBack: () -> Unit) {
                     Shown.DUPLICATE -> stringResource(if (e.sharedFile) R.string.why_shared_file else R.string.why_duplicate, e.dups.size) +
                         if (hackable) "" else "\n" + e.dups.joinToString("\n") { "• $it" }
                     Shown.UNKNOWN -> stringResource(R.string.why_unknown)
-                    Shown.NOT_SYNCED -> stringResource(if (e.off) R.string.why_off else R.string.why_not_started)
+                    Shown.NOT_SYNCED -> stringResource(if (e.off && e.extdata) R.string.why_extdata_off else if (e.off) R.string.why_off else R.string.why_not_started)
                     Shown.NONE -> stringResource(R.string.why_none)
                 },
             )
-            if (e.system == System.N3DS && e.game != null) {
+            // an extdata has no switch of its own: it follows the one of its game (ADR 0031)
+            if (e.extdata) Text(stringResource(R.string.extdata_help), style = MaterialTheme.typography.bodySmall)
+            else if (e.system == System.N3DS && e.game != null) {
                 // on or off by title ID, kept in the settings (ADR 0028); a new game is on
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(!e.off, enabled = App.busy == null, role = Role.Switch) { App.setSynced(e, it) },

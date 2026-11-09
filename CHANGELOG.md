@@ -7,6 +7,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 ### Added
 
 - **3DS: a game you install again asks first.** Deleting a 3DS game deletes its save. Before, after you installed it again, its new save was uploaded over your progress on the server. Now the app sees that the game was installed again, and you choose which save to keep.
+- **3DS games: their extra data syncs too.** Some games keep ghosts, photos or unlocked content outside their save, in their extra data. It now syncs with the game, on the 3DS, the PC (Azahar) and Android (Azahar), with a backup copy first. Games that share it (Pokémon X and Y, for example) share it on the server too. Turning a game off stops its extra data as well. Update the server first.
 - **Every 3DS game now syncs, not only Pokémon.** On the 3DS, the PC (Azahar) and Android (Azahar), every 3DS game with a save is synced, with all its save files. New games are on; turn one off in the 3DS settings, in the game details on Android, or with `titres_3ds_off` on the PC. The 8 Pokémon games work as before. **Update the server and every device first**: an older server refuses these games, and an older device doesn't see them.
 - **PC settings page: turn a 3DS game on or off.** The new **3DS games** part lists the games of your Azahar folders, each with a switch. Untick a game to stop syncing it on this PC. Before, you had to edit `titres_3ds_off` in `config.json` by hand.
 - **3DS: a journal of what the app did.** `sdmc:/3ds/3dssavesync/journal.log` lists each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token.
@@ -17,6 +18,7 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ### Changed
 
+- **3DS: large saves need less memory.** A download of a big save or extra data now holds two copies in memory at most, not three. If the console still lacks memory, the app says so before it changes anything.
 - **3DS: closing the lid no longer cuts a sync.** The console doesn't go to sleep during an upload, a download or an app update.
 - **Server: the Docker image now runs on ARM machines too** (Raspberry Pi, most NAS), as well as on x86 PCs. Docker picks the right one by itself.
 - **Server: `verify` checks your history.** `docker compose exec 3dssavesync python /app/server.py verify` reads every saved version again and lists any whose content changed on the disk since it was saved. Run it after a disk problem, or before you trust an old backup.
