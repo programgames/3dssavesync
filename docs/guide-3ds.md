@@ -46,7 +46,7 @@ The top of the list counts the games in each state (counters that do not fit are
 | 3DS games | all | every native 3DS game with a save is synced. Untick a game to turn it off ([Native 3DS games](#native-3ds-games)). |
 | Connection | | **Not tested**, **OK** or the reason of the failure. **A** tests the address and the token. |
 | Phone | | **Android app** once **Server** and **Token** are set, otherwise what is missing. **A** shows the QR code of the Android app on the top screen: in the app, tap **Scan the PC's QR code** and point the phone at it. **B** closes it. The QR code holds the token: it shows only while it is open. |
-| Version | | the installed version and its state, for example `3.7.0 · Up to date` or `3.7.0 · 3.7.1 available`. **A** checks for a new version, then offers to install it ([Updates](#updates)). |
+| Version | | the installed version and its state, for example `3.7.0 · Up to date` or `3.7.0 · 3.7.1 available`. **A** checks for a new version, then offers to install it ([Updates](#updates)). **Y** turns the daily check on or off; when it is off, the line ends with `· auto check off`. |
 
 A setting left empty shows its default in grey (**Next to the ROM**). **Server** and **Token** show **Required** while they are empty. The action of **A** is written on the right of the chosen line.
 
@@ -72,7 +72,7 @@ All in `sdmc:/3ds/3dssavesync/`:
 
 | File | Content |
 |---|---|
-| `config.ini` | server, token, folders |
+| `config.ini` | server, token, folders, list order, and `verifier_maj` (`0`: no daily update check, [Updates](#updates)) |
 | `base.ini` | the last synced state of each game, and the install date of each 3DS game: a game you install again asks before its new save replaces the server's. Do not delete it: without it, every changed game shows a conflict. |
 | `journal.log` | what the app did: each upload, download and restore, with its result. Join it to a bug report. It never holds your server address or token. It stays small: past 128 KB it becomes `journal.log.1`. |
 | `titres-off.ini` | the 3DS games you turned off, one title ID per line. Every other 3DS game with a save is synced. |
@@ -104,6 +104,8 @@ Nothing is installed without your choice. The update does not touch your saves, 
 - If something fails, the old version stays. The **Version** line of the settings shows what happened, what to do, and a code: see [Troubleshooting](troubleshooting.md#update-messages).
 - No network, or GitHub does not answer: the app works as before. It tries again the next day, or when you press **A** on **Version**.
 - A version built from the source code (`dev`) never offers an update.
+
+To turn off the daily check, press **SELECT**, choose the **Version** line, and press **Y**. Then press **B** to save. The app no longer contacts GitHub at start and shows no "Version X available" note. **A** on **Version** still checks when you ask. Press **Y** again to turn the check back on. The setting is `verifier_maj=0` in `config.ini`, like `verifier_maj` on the PC.
 
 You can always install a version by hand: download `3dssavesync.cia` from the [releases page](https://github.com/programgames/3dssavesync/releases), and install it with FBI.
 

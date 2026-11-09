@@ -1356,7 +1356,7 @@ static void draw_bottom(const game_t *j)
         else if (vc(j) || (whole_archive(j) && j->unexpected)) screen_lines(8, y, 0.38f, GREY_LIGHT, TEXT_WIDTH, 3, j->why);
     }
     if (message[0]) draw_message(BAR_TOP_2);
-    else if (update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
+    else if (cfg.check_update && update_is_newer(VERSION, update_info.latest)) { /* no message: the update, at the same place */
         snprintf(t, sizeof t, T("Version %s disponible (SELECT)", "Version %s available (SELECT)"), update_info.latest);
         draw_band(BAR_TOP_2, t, NULL, C_CYAN);
     }
@@ -1731,14 +1731,16 @@ static u32 version_state(char *t, size_t n)
     return C_GREEN;
 }
 
-/* "3.7.0 · Up to date" from x: version in white, dot in grey, State in color, cut before end. */
+/* "3.7.0 · Up to date" from x: version in white, dot in grey, State in color, then " · auto check off" in grey when
+ * verifier_maj=0, cut before end. */
 static void draw_version_value(float x, float y, float size, float end)
 {
     char e[48];
     u32 c = version_state(e, sizeof e);
     x += screen_text(x, y, size, WHITE, end - x, VERSION);
     x += screen_text(x, y, size, GREY_DARK, 0, " \xC2\xB7 ");
-    screen_text(x, y, size, c, end - x, e);
+    x += screen_text(x, y, size, c, end - x, e);
+    if (!cfg.check_update && end - x > 0) screen_text(x, y, size, GREY_LIGHT, end - x, T(" \xC2\xB7 vérif. auto désactivée", " \xC2\xB7 auto check off"));
 }
 
 static const char *setting_label(int i)
@@ -1831,7 +1833,7 @@ static void draw_settings_top(void)
 static int settings_screen(int first)
 {
     const int count = SETTING_COUNT;
-    int changed, order_changed;
+    int changed, no_read_changed;
     static unsigned long long before_off[MAX_OFF];
     int before_count = off_count;
     config_t before;
@@ -1846,10 +1848,14 @@ static int settings_screen(int first)
         u32 k;
         float y = 6;
         /* First start: B tests the connection first; a second B after a failure continues anyway. */
-        button_t t[2] = { { KEY_A, setting_action(c), c != LINE_PHONE || !phone_missing() },
+        /* Version line: Y turns the daily check (verifier_maj) on or off, between A and B. */
+        button_t t[3] = { { KEY_A, setting_action(c), c != LINE_PHONE || !phone_missing() },
+                          { KEY_Y, cfg.check_update ? T("Désactiver la vérif.", "Turn off auto check") : T("Activer la vérif.", "Turn on auto check"), 1 },
                           { KEY_B, !first || test_state > 0 ? T("Enregistrer et revenir", "Save and go back")
                                    : test_state < 0           ? T("Continuer quand même", "Continue anyway")
                                                              : T("Tester et continuer", "Test and continue"), 1 } };
+
+        if (c != LINE_VERSION) t[1] = t[2];
 
         modal_begin(draw_settings_top);
         if (first) {
@@ -1865,8 +1871,12 @@ static int settings_screen(int first)
             screen_text(8, y, 0.42f, GREY_LIGHT, 100, T("Installée", "Installed"));
             draw_version_value(112, y, 0.42f, BOTTOM_WIDTH - 8);
             y += 15 + 6;
-            y += screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH, T("Cherche une nouvelle version sur GitHub et vous demande avant de l'installer.",
-                                                              "Looks for a new version on GitHub and asks before installing it.")) + 6;
+            y += screen_paragraph(8, y, 0.42f, GREY_LIGHT, TEXT_WIDTH,
+                                  cfg.check_update ? T("Cherche une nouvelle version sur GitHub une fois par jour au démarrage, et vous demande avant de l'installer.",
+                                                       "Looks for a new version on GitHub once a day at start, and asks before installing it.")
+                                                   : T("Vérification automatique désactivée : 3dssavesync contacte GitHub seulement quand vous appuyez sur \xEE\x80\x80. "
+                                                       "Il vous demande avant d'installer.",
+                                                       "Automatic check turned off: 3dssavesync contacts GitHub only when you press \xEE\x80\x80. It asks before installing.")) + 6;
         } else {
             y += screen_lines(8, y, 0.55f, WHITE, TEXT_WIDTH, 1, setting_label(c)) + 6;
             y += screen_paragraph(8, y, 0.45f, WHITE, TEXT_WIDTH, c < count ? T(SETTINGS[c].help, SETTINGS[c].help_en)
@@ -1892,7 +1902,8 @@ static int settings_screen(int first)
             if (nl) *nl++ = '\0';
             draw_band(BAR_TOP_1, d, nl, color == GREY_LIGHT ? WHITE : color);
         }
-        k = modal_end(t, 2, 18);
+        k = modal_end(t, c == LINE_VERSION ? 3 : 2, 18);
+        if (k & KEY_Y && c == LINE_VERSION) cfg.check_update = !cfg.check_update; /* saved with the other settings (B) */
         if (k & KEY_B) {
             if (!first || test_state) break;
             clear_message();
@@ -1925,10 +1936,11 @@ static int settings_screen(int first)
     }
     draw_current_top = draw_list_top;
     if (!first) clear_message(); /* first start: the result of the test stays shown */
-    order_changed = before.order != cfg.order;
+    no_read_changed = before.order != cfg.order || before.check_update != cfg.check_update;
     before.order = cfg.order; /* the order only sorts the list again (sort_list): no new read */
+    before.check_update = cfg.check_update; /* nor the daily check */
     changed = memcmp(&before, &cfg, sizeof cfg) || before_count != off_count || memcmp(before_off, off, sizeof off);
-    if (order_changed || memcmp(&before, &cfg, sizeof cfg)) save_config();
+    if (no_read_changed || memcmp(&before, &cfg, sizeof cfg)) save_config();
     return changed;
 }
 
@@ -2486,7 +2498,7 @@ int main(int argc, char **argv)
     }
     if (!should_quit) refresh();
     show_alert();
-    if (!should_quit) update_check_if_due();
+    if (!should_quit && cfg.check_update) update_check_if_due(); /* verifier_maj=0: GitHub only on A, Version line */
     while (!should_quit && aptMainLoop()) {
         u32 k;
         list_cursor = cursor;

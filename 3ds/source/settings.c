@@ -49,11 +49,13 @@ static void config_entry(void *ctx, const char *k, const char *v)
         if (!strcmp(k, KEYS[i])) snprintf(fields[i], sizeof c->url, "%s", v); /* all fields have the size of url */
     for (i = 0; !strcmp(k, "tri") && i < sizeof ORDERS / sizeof *ORDERS; i++)
         if (!strcmp(v, ORDERS[i])) c->order = (int)i; /* unknown value: default */
+    if (!strcmp(k, "verifier_maj")) c->check_update = strcmp(v, "0") != 0;
 }
 
 void read_config(const char *path, config_t *c)
 {
     memset(c, 0, sizeof *c);
+    c->check_update = 1;
     snprintf(c->roms, sizeof c->roms, "sdmc:/roms/nds");
     snprintf(c->saves, sizeof c->saves, "sdmc:/roms/nds/saves");
     snprintf(c->roms_gb, sizeof c->roms_gb, "sdmc:/roms/gb");   /* TWiLight: .sav next to the ROMs */
@@ -64,9 +66,9 @@ void read_config(const char *path, config_t *c)
 int write_config(const char *path, const config_t *c)
 {
     char t[sizeof *c + 100];
-    int n = snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\ntri=%s\n", c->url,
+    int n = snprintf(t, sizeof t, "url=%s\njeton=%s\nroms=%s\nsaves=%s\nroms_gb=%s\nsaves_gb=%s\nroms_gba=%s\nsaves_gba=%s\ntri=%s\nverifier_maj=%d\n", c->url,
                      c->token, c->roms, c->saves, c->roms_gb, c->saves_gb, c->roms_gba, c->saves_gba,
-                     ORDERS[c->order > 0 && c->order < 3 ? c->order : 0]);
+                     ORDERS[c->order > 0 && c->order < 3 ? c->order : 0], c->check_update ? 1 : 0);
     return replace_file(path, t, (size_t)n) ? -1 : 0;
 }
 
