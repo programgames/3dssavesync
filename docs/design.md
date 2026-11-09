@@ -114,14 +114,26 @@ C + libctru, text console, `3ds-curl` + `3ds-mbedtls`.
 | `source/main.c` | configuration (`swkbd`), scan, list, actions, Backup copies |
 | `source/state.c` / `state.h` | the `sync_state` module (no libctru dependency) |
 | `source/games.c` | status of a Game in the list: State, Duplicate, Unknown, hidden, Blank save rule (no libctru dependency) |
-| `source/settings.c` | `config.ini`, `base.ini`, `alias.ini`, `titres.ini`, `maj.ini`: one INI reader, writes by `replace_file` (no libctru dependency) |
+| `source/settings.c` | `config.ini`, `base.ini`, `alias.ini`, `titres-off.ini`, `maj.ini`: one INI reader, writes by `replace_file` (no libctru dependency) |
+| `source/filter.c` | tabs, search and order of the game list (no libctru dependency) |
+| `source/key.c` | Key of a Game and GB/GBA SRAM, ADR 0007, 0008 (no libctru dependency) |
+| `source/list.c` | the server list, `GET /saves` (no libctru dependency) |
+| `source/files.c` | files on the SD card: verified writes, `replace_file`, Backup copies (no libctru dependency) |
+| `source/titles3ds.c` | native 3DS save archives: `/main` of the Pokémon games (ADR 0009), whole archives (ADR 0028), extdata (ADR 0031) |
+| `source/archive.c` | the 3dssavesync archive of a 3DS save or extdata, a deterministic ustar (ADR 0028, no libctru dependency) |
+| `source/vc.c` | GB/GBC Virtual Console titles (ADR 0025) |
+| `source/pokemon.c` | play time and trainer of the Pokémon games, for the Conflict screen |
+| `source/pairing.c` | text of the QR code for the Android app (no libctru dependency) |
+| `source/update.c` | reads the latest GitHub release (no libctru dependency) |
+| `source/errors.c`, `source/text.c` | texts of the screen: failed requests, plurals, ages (no libctru dependency) |
+| `source/screen.c` | drawing of both screens with citro2d |
 | `source/result.c` | result of an action and its message text (no libctru dependency) |
 | `source/views.c` / `views.h` | layout, palette, button bar, message band, progress, questions |
 | `source/app_update.c` | update of the app from GitHub (ADR 0021) |
-| `source/net.c` | the 4 HTTP calls with curl, ISRG Root X1 embedded |
+| `source/net.c` | the HTTPS calls with curl + mbedTLS: ISRG Root X1 embedded, plus `sdmc:/config/ssl/cacert.pem` if present (ADR 0029) |
 | `test/*.c` | host tests of the modules without libctru (`test_state.c` reads `tests/cas_etat.csv`), compiled with `gcc` on the PC |
 
-Files on the SD card, in `sd:/3ds/3dssavesync/` (before v3: `sd:/3ds/nds-save-sync/`, taken over at first start): `config.ini` (URL, token, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba`; empty saves = next to the ROM), `titres.ini` (synced 3DS games, `<title ID>=<name>`; absent = the 8 Pokémon), `base.ini` (`KEY=hash`), `alias.ini` (optional, `<ROM name>=KEY`, ADR 0014), `copies/`.
+Files on the SD card, in `sd:/3ds/3dssavesync/` (before v3: `sd:/3ds/nds-save-sync/`, taken over at first start): `config.ini` (URL, token, `roms`, `saves`, `roms_gb`, `saves_gb`, `roms_gba`, `saves_gba`; empty saves = next to the ROM), `titres-off.ini` (3DS games turned off; every 3DS game with a save is synced otherwise, ADR 0028; an old `titres.ini` allow-list is read once to fill it), `base.ini` (`KEY=hash`, plus the `INSTALL-` dates, the `SERVEUR` line and the `CUT-` marks of an extdata write in progress), `journal.log`, `alias.ini` (optional, `<ROM name>=KEY`, ADR 0014), `copies/`.
 
 1. Read `config.ini`; absent → configuration screen.
 2. Scan `roms/**/*.nds` (subfolders up to 4 levels, ADR 0015): Game code of each ROM, or its Alias. Several ROMs for one Game code → Duplicate.
@@ -144,6 +156,6 @@ The core does not change (`etat`, conditional Upload, Backup copy). What is adde
 
 - **Key per System**, read in the ROM: DS `ADAF`, GBA `GBA-BPEF`, GB `GB-<title>-<checksum>`, 3DS `3DS-<title ID>` (8 Pokémon games) or `3DSA-<title ID>` (every other 3DS game, ADR 0028) (ADR 0007). The server accepts only these forms.
 - **GB/GBA**: `.sav` files next to the ROMs on the 3DS (TWiLight, open_agb_firm), `<save folder>\GB` / `GBA` folders on the PC (mGBA, `-C savegamePath=…` per launch). Hash, size and Upload cover the **SRAM only**; at Download each machine puts back its own Clock trailer (ADR 0008). Trailer = remainder of `size mod 512` if it is 16, 44 or 48 bytes (ADR 0010).
-- **3DS**: the `main` file of the save archive (8 Pokémon, fixed table), read and written by `titles3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
+- **3DS**: the `main` file of the save archive for the 8 Pokémon games (`3DS-`), the whole save archive for every other game (`3DSA-`, ADR 0028), and the extdata (`3DSX-`, ADR 0031), read and written by `titles3ds.c` (commit, secure value); on the PC, `main` in the Azahar folder, never anything else in that folder; a game never started is created in Azahar with a known `.metadata`, never on the 3DS (ADR 0009).
 - **Launcher**: one profile per emulator (executable, process, save folder, extensions); everything else is shared.
 - **Homebrew**: sources `sd:/roms/nds`, `sd:/roms/gb`, `sd:/roms/gba` (`config.ini`: `roms_gb`, `roms_gba`) and the 3DS archives; the System is shown in the list.

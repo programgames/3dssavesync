@@ -22,9 +22,10 @@ It's stored in:
 
 - `config.json` in the PC settings folder;
 - `sdmc:/3ds/3dssavesync/config.ini` on the 3DS SD card;
+- the private settings of the Android app (other apps can't read them; uninstalling the app deletes them);
 - `.env` next to `docker-compose.yml` on your own server (keep it at `chmod 600`).
 
-Don't post these files in an issue. The settings page never shows a personal server's token. If you think yours leaked on your own server, put a new one in `.env` (`openssl rand -hex 16`), restart the server, and enter it again on the PC and the 3DS.
+Don't post these files in an issue. The settings page never shows a personal server's token. If you think yours leaked on your own server, put a new one in `.env` (`openssl rand -hex 16`), restart the server, and enter it again on the PC, the 3DS and the phone. An empty token is refused: the server doesn't start without one.
 
 ### The local server
 
@@ -45,4 +46,4 @@ Put it behind an HTTPS reverse proxy (the `server/` folder has a Caddy setup tha
 
 ### Updates
 
-The PC program and the 3DS app download updates only from this repository's GitHub releases, and check each file against the release's `SHA256SUMS` before installing it. They never update without you clicking **Update**. Details: [ADR 0021](docs/adr/0021-mise-a-jour-du-homebrew-depuis-github.md) and [ADR 0023](docs/adr/0023-cia-inclus-et-mise-a-jour-du-pc.md).
+The PC program, the 3DS app and the Android app download updates only from this repository's GitHub releases, and check each file against the release's `SHA256SUMS` before installing it. They never update without you clicking **Update**. On Android, the system installer also checks the APK signature: an APK signed with another key can't replace the app ([ADR 0026](docs/adr/0026-client-android.md)). Details: [ADR 0021](docs/adr/0021-mise-a-jour-du-homebrew-depuis-github.md) and [ADR 0023](docs/adr/0023-cia-inclus-et-mise-a-jour-du-pc.md).

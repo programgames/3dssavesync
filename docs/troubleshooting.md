@@ -376,7 +376,7 @@ The address is not a valid one (`curl 3`). Type the full address, with `http://`
 
 - Set the date and time of the 3DS (System Settings).
 - The local server uses `http://`, not `https://`.
-- Your own server needs a **Let's Encrypt** certificate and TLS 1.2 with ECDHE: see the [server guide](guide-server.md#https-and-the-3ds).
+- Your own server needs TLS 1.2 with ECDHE, and a Let's Encrypt certificate or one from a CA you put in `sdmc:/config/ssl/cacert.pem`: see the [server guide](guide-server.md#https-and-the-3ds).
 
 ### The server isn't responding, connection cut, network error
 
@@ -606,7 +606,7 @@ The local server could not start or is blocked. Check the [firewall](#windows-de
 
 ### My own server works on the PC, not on the 3DS
 
-The 3DS knows only the Let's Encrypt root certificate, and needs TLS 1.2 with ECDHE. See the [server guide](guide-server.md#https-and-the-3ds).
+The 3DS trusts the Let's Encrypt root certificate, and the certificates in `sdmc:/config/ssl/cacert.pem` if you add that file. It also needs TLS 1.2 with ECDHE. `journal.log` says whether `cacert.pem` was added or ignored. See the [server guide](guide-server.md#https-and-the-3ds).
 
 ## Sync and conflicts
 
@@ -683,6 +683,7 @@ Load the list again and choose again.
 
 - **PC**: `copies/` in the settings folder (`%APPDATA%\3dssavesync` on Windows, `~/.config/3dssavesync` on Linux, `~/Library/Application Support/3dssavesync` on macOS).
 - **3DS**: `sdmc:/3ds/3dssavesync/copies/`. The last 10 copies of each game are kept, older ones are removed.
+- **Android**: `Android/data/io.github.programgames.savesync/files/copies/`. In the app, open a game, then **Show the history**. Uninstalling the app deletes them.
 - **Server**: `data/<game key>/`, every version.
 
 ## Report a bug
@@ -692,3 +693,5 @@ Open an [issue](https://github.com/programgames/3dssavesync/issues) with:
 - the release you use (for example v3.5.0), your PC system, your emulator and frontend, local server or your own server;
 - the exact message, or a photo of the 3DS screen;
 - the log `3dssavesync.log`, next to `config.json` in the settings folder. Read it before you post it, and remove anything private.
+- on the 3DS, the journal `sdmc:/3ds/3dssavesync/journal.log`. It never holds your server address or token.
+- on Android, the app version (shown in **Settings**), your phone model and its Android version.
