@@ -58,6 +58,14 @@ int main(void)
     check(!base_outdated(STATUS_TO_UPLOAD, NULL, H1) && !base_outdated(STATUS_OFFLINE, NULL, H1) &&
               !base_outdated(STATUS_DUPLICATE, NULL, H1), "not In sync: Base not written");
 
+    check(cut_status(STATUS_TO_UPLOAD, NULL, H1) == STATUS_TO_UPLOAD, "no cut write: status kept");
+    check(cut_status(STATUS_TO_UPLOAD, H2, H1) == STATUS_TO_DOWNLOAD, "cut write: never To upload");
+    check(cut_status(STATUS_CONFLICT, H2, H1) == STATUS_TO_DOWNLOAD, "cut write: never a Conflict");
+    check(cut_status(STATUS_CONFLICT, H2, NULL) == STATUS_TO_DOWNLOAD, "cut write, save unreadable: To download");
+    check(cut_status(STATUS_CONFLICT, H1, H1) == STATUS_CONFLICT, "write finished (same Hash): status kept");
+    check(cut_status(STATUS_OFFLINE, H2, H1) == STATUS_OFFLINE && cut_status(STATUS_IN_SYNC, H2, H1) == STATUS_IN_SYNC,
+          "cut write: Unknown and In sync kept");
+
     check(status_priority(STATUS_CONFLICT) == 0 && status_priority(STATUS_TO_DOWNLOAD) == 1 && status_priority(STATUS_TO_UPLOAD) == 2 &&
               status_priority(STATUS_DUPLICATE) == 3 && status_priority(STATUS_NOT_SYNCED) == 3 && status_priority(STATUS_IN_SYNC) == 4 && status_priority(STATUS_OFFLINE) == 4,
           "display order");

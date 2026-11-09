@@ -31,6 +31,11 @@ status_t game_status(const observation_t *o, const char *base, int server_read);
 /* 1 if the Base must become local_hash: In sync, and the Base is missing or another Hash (design §1). */
 int base_outdated(status_t s, const char *base, const char *local_hash);
 
+/* Status after a write that may have been cut (ADR 0031: an extdata write has no commit). cut: the Hash that the write
+ * left in base.ini before its first change (NULL: none). A Local save of another Hash may mix old and new files: it is
+ * never uploaded and never offered in a Conflict, the Download is made again (Backup copy first). */
+status_t cut_status(status_t s, const char *cut, const char *local_hash);
+
 /* Display order: what needs a decision first (Conflict, To download), then To upload, Duplicate and Not synced, the
  * rest. 0 to 4. */
 int status_priority(status_t s);
