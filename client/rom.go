@@ -193,22 +193,29 @@ func readRom(rom string) (Rom, error) {
 	return r, nil
 }
 
-// titleID3DS returns the title ID of a 3DS ROM: NCSD (.3ds/.cci) -> partition 0 at u32@0x120 × 0x200, or direct
-// NCCH (.cxi); program_id at NCCH + 0x118.
+// ncch3DS returns the offset of the NCCH of a 3DS ROM: NCSD (.3ds/.cci) -> partition 0 at u32@0x120 × 0x200, or
+// direct NCCH (.cxi). -1: neither.
+func ncch3DS(f *os.File) int64 {
+	o := make([]byte, 0x200)
+	io.ReadFull(f, o)
+	switch string(o[0x100:0x104]) {
+	case "NCSD":
+		return int64(binary.LittleEndian.Uint32(o[0x120:])) * 0x200
+	case "NCCH":
+		return 0
+	}
+	return -1
+}
+
+// titleID3DS returns the title ID of a 3DS ROM: program_id at NCCH + 0x118.
 func titleID3DS(rom string) (string, error) {
 	f, err := os.Open(rom)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
-	o := make([]byte, 0x200)
-	io.ReadFull(f, o)
-	var ncch int64
-	switch string(o[0x100:0x104]) {
-	case "NCSD":
-		ncch = int64(binary.LittleEndian.Uint32(o[0x120:])) * 0x200
-	case "NCCH":
-	default:
+	ncch := ncch3DS(f)
+	if ncch < 0 {
 		return "", nil
 	}
 	id := make([]byte, 8)
@@ -216,4 +223,27 @@ func titleID3DS(rom string) (string, error) {
 		return "", nil
 	}
 	return fmt.Sprintf("%016X", binary.LittleEndian.Uint64(id)), nil
+}
+
+// romExtdataID returns the extdata ID of a 3DS ROM, as 8 upper-case hex digits: the ExtSaveDataId of its exheader
+// (NCCH + 0x200 + 0x230), the value the 3DS gets from AM. Pokémon Y, Omega Ruby, Moon and Ultra Moon use the extdata of
+// their twin game, so titleLow >> 8 is wrong for them (ADR 0031). An encrypted exheader (NoCrypto bit 0x04 of NCCH flag
+// 7 unset) or no ExtSaveDataId: extdataID of the title ID.
+func romExtdataID(rom, titleID string) string {
+	f, err := os.Open(rom)
+	if err != nil {
+		return extdataID(titleID)
+	}
+	defer f.Close()
+	b := make([]byte, 8)
+	if ncch := ncch3DS(f); ncch >= 0 {
+		if _, err := f.ReadAt(b[:1], ncch+0x18F); err == nil && b[0]&0x04 != 0 {
+			if _, err := f.ReadAt(b, ncch+0x430); err == nil {
+				if id := binary.LittleEndian.Uint64(b); id != 0 && id>>32 == 0 {
+					return fmt.Sprintf("%08X", id)
+				}
+			}
+		}
+	}
+	return extdataID(titleID)
 }

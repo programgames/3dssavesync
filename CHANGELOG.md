@@ -4,6 +4,11 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **PC: Pokémon Y, Omega Ruby, Moon and Ultra Moon now sync their extra data.** These games share their extra data with their twin game (Pokémon Y uses the one of Pokémon X). When you started one of them, the PC looked for the wrong folder, so their extra data never synced, and its Conflict could only be answered from the twin game. The PC now reads the right folder in the ROM.
+- **3DS games: no more false Conflict when the extra data or the save grows.** Pokémon X and Y add a file for each battle video they record. The bigger archive was always seen as a Conflict, even when the server had not changed. Now the app uploads or downloads it as for any other change, after a backup copy. DS, GB and GBA saves of another size still ask, as before.
+
 ## [3.13.1] - 2026-11-09
 
 ### Fixed

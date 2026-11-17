@@ -10,8 +10,8 @@ typedef struct {
     unsigned long size;
 } obs_t;
 
-/* local, server: NULL = absent. base: NULL = absent.
+/* local, server: NULL = absent. base: NULL = absent. archive: a 3DSA or 3DSX Key, whose size says nothing (ADR 0033).
  * Not allowed if local and server are both NULL. */
-state_t sync_state(const obs_t *local, const obs_t *server, const char *base);
+state_t sync_state(const obs_t *local, const obs_t *server, const char *base, int archive);
 
 #endif

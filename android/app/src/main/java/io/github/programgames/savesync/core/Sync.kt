@@ -312,7 +312,7 @@ class Syncer(
         val l = readLocal(g, srv)
         val seen = seen(l, srv)
         val back = cameBack(g, seen, srv, base)
-        return Status(l?.info, srv, base, if (seen == null && srv == null) null else if (back) State.CONFLICT else state(seen, srv, base), cameBack = back)
+        return Status(l?.info, srv, base, if (seen == null && srv == null) null else if (back) State.CONFLICT else state(seen, srv, base, isArchive(g.key)), cameBack = back)
     }
 
     // sync runs the Sync of one Game, like syncGame on the PC. A Conflict without a matching choice changes nothing.
@@ -329,7 +329,7 @@ class Syncer(
             val seen = seen(l, srv)
             if (p == null && seen == null && srv == null) return Outcome.NOTHING
             val base = bases.of(g.emulator)[g.key]
-            var st = if (p != null || cameBack(g, seen, srv, base)) State.CONFLICT else state(seen, srv, base)
+            var st = if (p != null || cameBack(g, seen, srv, base)) State.CONFLICT else state(seen, srv, base, isArchive(g.key))
             if (st == State.CONFLICT) {
                 if (choice == null || srv == null || choice.serverHash != srv.hash) return Outcome.CONFLICT
                 if (p != null && choice.keepPhone) return Outcome.CONFLICT // a cut file is never uploaded
@@ -401,7 +401,7 @@ class Syncer(
             val seen = seen(l, srv)
             if (seen == null && srv == null) return Outcome.NOTHING
             val base = bases.of(g.emulator)[g.key]
-            when (if (cameBack(g, seen, srv, base)) State.CONFLICT else state(seen, srv, base)) {
+            when (if (cameBack(g, seen, srv, base)) State.CONFLICT else state(seen, srv, base, isArchive(g.key))) {
                 State.IN_SYNC -> return Outcome.IN_SYNC
                 State.TO_DOWNLOAD -> return Outcome.NOT_REPLACED
                 State.CONFLICT -> return Outcome.CONFLICT

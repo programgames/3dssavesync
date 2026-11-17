@@ -27,7 +27,7 @@ What the caller must know, and nothing else:
 1. `local == serveur` (same Hash) → `A_JOUR`
 2. `serveur` ABSENT → `A_ENVOYER`
 3. `local` ABSENT → `A_RECUPERER`
-4. different sizes → `CONFLIT`
+4. different sizes → `CONFLIT`, except for a 3DS archive (`3DSA-`, `3DSX-` Key, [ADR 0033](adr/0033-archives-sans-regle-de-taille.md))
 5. `local.hash == base` → `A_RECUPERER`
 6. `serveur.hash == base` → `A_ENVOYER`
 7. otherwise → `CONFLIT`
@@ -50,6 +50,10 @@ The module exists in C (3DS homebrew), in Go (PC program) and in Kotlin (Android
 | different size, local newer | b/8 | a/512 | a | CONFLIT |
 | after 412, other content | b/512 | c/512 | a | CONFLIT |
 | after 412, same content | b/512 | b/512 | a | A_JOUR |
+| archive bigger, server unchanged | b/600 | a/512 | a | A_ENVOYER |
+| archive smaller, local unchanged | a/600 | b/512 | a | A_RECUPERER |
+| archive, both changed | b/600 | c/512 | a | CONFLIT |
+| archive never synced, different | a/600 | b/512 | - | CONFLIT |
 
 (`a/512` = Hash `a`, size 512 KiB. Real Hashes are lowercase hexadecimal SHA-256.)
 

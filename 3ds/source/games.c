@@ -8,7 +8,7 @@ status_t game_status(const observation_t *o, const char *base, int server_read)
     if (o->rom_count > 1) return STATUS_DUPLICATE;
     if (!local && !o->server) return STATUS_HIDDEN;
     if (!server_read) return STATUS_OFFLINE;
-    return (status_t)sync_state(local, o->server, base);
+    return (status_t)sync_state(local, o->server, base, o->archive);
 }
 
 int base_outdated(status_t s, const char *base, const char *local_hash)

@@ -136,8 +136,9 @@ const (
 	conflict   State = "CONFLIT"
 )
 
-// state compares Local save, Current version and Base. nil = absent; empty base = never synced.
-func state(local, server *Version, base string) State {
+// state compares Local save, Current version and Base. nil = absent; empty base = never synced. archive: a 3DSA or
+// 3DSX Key, whose size says nothing (ADR 0033).
+func state(local, server *Version, base string, archive bool) State {
 	switch {
 	case local != nil && server != nil && local.Hash == server.Hash:
 		return inSync
@@ -145,7 +146,7 @@ func state(local, server *Version, base string) State {
 		return toUpload
 	case local == nil:
 		return toDownload
-	case local.Size != server.Size:
+	case !archive && local.Size != server.Size: // a 3DS archive changes size when a game adds a file (ADR 0033)
 		return conflict
 	case local.Hash == base:
 		return toDownload
@@ -803,7 +804,7 @@ func (c *Client) syncGame(j *Game, after bool) (cancelled bool, err error) {
 		if err != nil {
 			return false, err
 		}
-		st := state(seen, srv, b[j.Key])
+		st := state(seen, srv, b[j.Key], isArchive(j))
 		if cut := b[cutKey(j.Key)]; cut != "" && l != nil && l.Hash == cut {
 			c.setCut(j.Key, "") // written in full: only the mark was left
 		} else if cut != "" && srv != nil {

@@ -757,7 +757,8 @@ static int compute_states(int *outdated)
     for (i = 0; i < game_count; i++) {
         game_t *j = &games[i];
         const obs_t local = { j->local_hash, j->local_size }, server = { j->server_hash, j->server_size };
-        const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL };
+        const observation_t o = { j->rom_count, j->has_local ? &local : NULL, j->blank, j->has_server ? &server : NULL,
+                                  !strncmp(j->key, "3DSA-", 5) || !strncmp(j->key, "3DSX-", 5) };
         char cut[KEY_MAX];
         j->status = j->unexpected || !j->key[0] ? STATUS_NOT_SYNCED : game_status(&o, base_of(&bases, base_id(j)), server_read);
         cut_id(j, cut, sizeof cut);
