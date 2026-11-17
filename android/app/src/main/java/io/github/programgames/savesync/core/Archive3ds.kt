@@ -13,6 +13,9 @@ const val ARCHIVE_KEY = "3DSA-"
 // versions are archives of the files under extdata/00000000/<ID>/user/.
 const val EXTDATA_KEY = "3DSX-"
 
+// isArchive: the Key of a 3DSA game or an extdata, whose server versions are archives.
+fun isArchive(key: String) = key.startsWith(ARCHIVE_KEY) || key.startsWith(EXTDATA_KEY)
+
 // ARCHIVE_MAX: bytes of files of one archive at most, as on the 3DS (titles3ds.h); beyond, it is Not synced.
 const val ARCHIVE_MAX = 16L shl 20
 

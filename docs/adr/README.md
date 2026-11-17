@@ -38,3 +38,4 @@ The file names are French, like the code they come from; the records themselves 
 | [0030](0030-qr-code-sur-la-3ds.md) | The 3DS shows the pairing QR code of the Android app, with the PC's exact text and a vendored encoder (Nayuki, v1.8.0). |
 | [0031](0031-extdata-3ds.md) | The extra data (extdata) of a 3DS game syncs as its own archive, one Key per extdata, on and off with its games. |
 | [0032](0032-changement-de-serveur.md) | Each device keeps a fingerprint of its server and token with its Bases; another server or token forgets the Bases, so a differing game asks first. |
+| [0033](0033-archives-sans-regle-de-taille.md) | A 3DS archive (`3DSA-`, `3DSX-`) of another size is not a Conflict by itself: the Base decides, as for a save of the same size. |

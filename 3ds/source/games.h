@@ -22,6 +22,7 @@ typedef struct {
     const obs_t *local;  /* NULL: no Local save */
     int blank;           /* the Local save is a Blank save */
     const obs_t *server; /* NULL: no Current version, or server not read */
+    int archive;         /* a 3DSA or 3DSX Key: no size rule (ADR 0033) */
 } observation_t;
 
 /* A Blank save counts as absent, unless the Current version is the same Save. server_read: 0 if the last read

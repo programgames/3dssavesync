@@ -21,36 +21,38 @@ int main(void)
     const obs_t a = { H1, 100 }, b = { H2, 100 }, a_big = { H1, 200 };
     observation_t o;
 
-    o = (observation_t){ 2, &a, 0, &b };
+    o = (observation_t){ 2, &a, 0, &b, 0 };
     check(game_status(&o, NULL, 1) == STATUS_DUPLICATE, "two ROMs: Duplicate");
     check(game_status(&o, NULL, 0) == STATUS_DUPLICATE, "two ROMs, server not read: Duplicate");
 
-    o = (observation_t){ 1, NULL, 0, NULL };
+    o = (observation_t){ 1, NULL, 0, NULL, 0 };
     check(game_status(&o, NULL, 1) == STATUS_HIDDEN, "no save, no version: hidden");
     check(game_status(&o, NULL, 0) == STATUS_HIDDEN, "no save, server not read: hidden");
-    o = (observation_t){ 1, &a, 1, NULL };
+    o = (observation_t){ 1, &a, 1, NULL, 0 };
     check(game_status(&o, NULL, 1) == STATUS_HIDDEN, "Blank save, no version: hidden");
     check(game_status(&o, H1, 1) == STATUS_HIDDEN, "Blank save, no version, with a Base: hidden");
 
-    o = (observation_t){ 1, &a, 1, &a };
+    o = (observation_t){ 1, &a, 1, &a, 0 };
     check(game_status(&o, NULL, 1) == STATUS_IN_SYNC, "Blank save equal to the Current version: In sync");
-    o = (observation_t){ 1, &a, 1, &b };
+    o = (observation_t){ 1, &a, 1, &b, 0 };
     check(game_status(&o, NULL, 1) == STATUS_TO_DOWNLOAD, "Blank save, other Current version: To download");
     check(game_status(&o, H2, 1) == STATUS_TO_DOWNLOAD, "Blank save, Base = server: To download");
 
-    o = (observation_t){ 1, &a, 0, NULL };
+    o = (observation_t){ 1, &a, 0, NULL, 0 };
     check(game_status(&o, NULL, 0) == STATUS_OFFLINE, "server not read: Unknown");
     check(game_status(&o, NULL, 1) == STATUS_TO_UPLOAD, "no Current version: To upload");
-    o = (observation_t){ 1, NULL, 0, &b };
+    o = (observation_t){ 1, NULL, 0, &b, 0 };
     check(game_status(&o, NULL, 1) == STATUS_TO_DOWNLOAD, "no Local save: To download");
-    o = (observation_t){ 1, &a, 0, &a };
+    o = (observation_t){ 1, &a, 0, &a, 0 };
     check(game_status(&o, H2, 1) == STATUS_IN_SYNC, "same Hash: In sync");
-    o = (observation_t){ 1, &a, 0, &b };
+    o = (observation_t){ 1, &a, 0, &b, 0 };
     check(game_status(&o, H2, 1) == STATUS_TO_UPLOAD, "Base = server: To upload");
     check(game_status(&o, H1, 1) == STATUS_TO_DOWNLOAD, "Base = 3DS: To download");
     check(game_status(&o, NULL, 1) == STATUS_CONFLICT, "no Base: Conflict");
-    o = (observation_t){ 1, &a_big, 0, &b };
+    o = (observation_t){ 1, &a_big, 0, &b, 0 };
     check(game_status(&o, H2, 1) == STATUS_CONFLICT, "sizes differ: Conflict");
+    o = (observation_t){ 1, &a_big, 0, &b, 1 };
+    check(game_status(&o, H2, 1) == STATUS_TO_UPLOAD, "archive of another size, Base = server: To upload (ADR 0033)");
 
     check(base_outdated(STATUS_IN_SYNC, NULL, H1), "In sync without a Base: written");
     check(base_outdated(STATUS_IN_SYNC, H2, H1), "In sync, other Base: written");

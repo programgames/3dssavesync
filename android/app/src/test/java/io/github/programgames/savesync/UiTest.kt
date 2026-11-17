@@ -775,7 +775,7 @@ open class UiTest {
         onlyNormalFont()
         val key = "3DSA-00040000000EC300"
         val v1 = listOf(ArchiveFile("main", ByteArray(3000) { 1 }), ArchiveFile("sub/a.bin", ByteArray(10) { 2 }))
-        // same size: a 3DSA archive of another size is a Conflict, by the shared rule of state()
+        // same size: this test is about the Download itself, not the size (ADR 0033)
         val v2 = listOf(ArchiveFile("main", ByteArray(3000) { 3 }), ArchiveFile("sub/a.bin", ByteArray(10) { 4 }))
         val old = packArchive(v1)
         val new = packArchive(v2)

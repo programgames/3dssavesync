@@ -31,6 +31,6 @@ Until now, only 3DS games whose save archive holds a single `/main` file could s
 ## Consequences
 
 - The server stores bytes per Key, as before; only its Key pattern accepts `3DSA-` too. A server of an older version answers 404 to `3DSA-` Keys: it must be updated first, or the other 3DS games can't sync.
-- The shared State rule keeps its size check: two sides of different sizes are a Conflict, even when one is the Base. A 3DS game usually keeps its files at a fixed size, so this stays rare; when a game adds a file, the user is asked instead of a silent Download.
+- ~~The shared State rule keeps its size check for archives.~~ Replaced by ADR 0033: an archive of another size is not a Conflict by itself, the Base decides.
 - Older versions ignore `3DSA-` Keys (they are not in their game list), so they can't damage an archive version.
 - Extra data (extdata) and GBA Virtual Console saves are separate archives with their own Keys, decided in their own ADRs.

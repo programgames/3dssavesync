@@ -357,7 +357,7 @@ func cmdRun(config, asked, rom string, rest []string) (int, error) {
 	default:
 		games = []*Game{j}
 		if system == N3DS { // the extdata of the game, if Azahar has one (ADR 0031)
-			ext := extdataID(key[strings.IndexByte(key, '-')+1:])
+			ext := romExtdataID(rom, key[strings.IndexByte(key, '-')+1:])
 			for _, g := range c.extdata3DS(dir, map[string]string{ext: name}) {
 				if g.Key == "3DSX-"+ext {
 					games = append(games, g)

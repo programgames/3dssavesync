@@ -16,18 +16,18 @@ int main(int argc, char **argv)
     if (!f) { perror("cas_etat.csv"); return 1; }
     fgets(line, sizeof line, f); /* header */
     while (fgets(line, sizeof line, f)) {
-        char *c[7];
+        char *c[8];
         int n = 0;
         line[strcspn(line, "\r\n")] = '\0';
         if (!*line) continue;
-        for (char *p = strtok(line, ";"); p && n < 7; p = strtok(NULL, ";")) c[n++] = p;
-        if (n != 7) { printf("ligne invalide\n"); return 1; }
+        for (char *p = strtok(line, ";"); p && n < 8; p = strtok(NULL, ";")) c[n++] = p;
+        if (n != 8) { printf("ligne invalide\n"); return 1; }
 
         obs_t local = { c[1], strtoul(c[2], NULL, 10) };
         obs_t server = { c[3], strtoul(c[4], NULL, 10) };
         state_t e = sync_state(strcmp(c[1], "-") ? &local : NULL,
                         strcmp(c[3], "-") ? &server : NULL,
-                        strcmp(c[5], "-") ? c[5] : NULL);
+                        strcmp(c[5], "-") ? c[5] : NULL, !strcmp(c[7], "1"));
         total++;
         if (strcmp(NAMES[e], c[6])) {
             printf("ECHEC  %s : attendu %s, obtenu %s\n", c[0], c[6], NAMES[e]);

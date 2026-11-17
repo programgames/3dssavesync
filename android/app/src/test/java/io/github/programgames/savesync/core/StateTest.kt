@@ -15,7 +15,7 @@ class StateTest {
         fun obs(hash: String, size: String) = if (hash == "-") null else Version(hash, size.toLong())
         for (l in lines) {
             val c = l.split(';')
-            val got = state(obs(c[1], c[2]), obs(c[3], c[4]), c[5].takeIf { it != "-" })
+            val got = state(obs(c[1], c[2]), obs(c[3], c[4]), c[5].takeIf { it != "-" }, c[7] == "1")
             assertEquals(c[0], c[6], got.fixture)
         }
     }

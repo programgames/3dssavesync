@@ -25,12 +25,13 @@ data class Version(
 }
 
 // state compares Local save, Current version and Base. null = absent; null or empty base = never synced.
-// Same rules, same order as client/sync.go state() and 3ds/source/state.c.
-fun state(local: Version?, server: Version?, base: String?): State = when {
+// Same rules, same order as client/sync.go state() and 3ds/source/state.c. archive: a 3DSA or 3DSX Key, whose size
+// says nothing (ADR 0033).
+fun state(local: Version?, server: Version?, base: String?, archive: Boolean): State = when {
     local != null && server != null && local.hash == server.hash -> State.IN_SYNC
     server == null -> State.TO_UPLOAD
     local == null -> State.TO_DOWNLOAD
-    local.size != server.size -> State.CONFLICT
+    !archive && local.size != server.size -> State.CONFLICT
     local.hash == base -> State.TO_DOWNLOAD
     server.hash == base -> State.TO_UPLOAD
     else -> State.CONFLICT

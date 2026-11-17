@@ -243,11 +243,18 @@ func gbHeader(title string, sum uint16) []byte {
 func gbaHeader(code string) []byte { o := make([]byte, 0xC0); copy(o[0xAC:], code); return o }
 
 // rom3DS writes a fake 3DS ROM: NCSD, partition 0 at 0x200, program_id at NCCH + 0x118.
-func rom3DS(t *testing.T, name string, id uint64) string {
-	o := make([]byte, 0x400)
+func rom3DS(t *testing.T, name string, id uint64) string { return rom3DSExt(t, name, id, 0) }
+
+// rom3DSExt: rom3DS with a decrypted exheader (NoCrypto) whose ExtSaveDataId is ext (0: encrypted, no exheader read).
+func rom3DSExt(t *testing.T, name string, id, ext uint64) string {
+	o := make([]byte, 0x800)
 	copy(o[0x100:], "NCSD")
 	binary.LittleEndian.PutUint32(o[0x120:], 1)
 	binary.LittleEndian.PutUint64(o[0x200+0x118:], id)
+	if ext != 0 {
+		o[0x200+0x18F] = 0x04
+		binary.LittleEndian.PutUint64(o[0x200+0x430:], ext)
+	}
 	c := filepath.Join(tmp, "roms", name+".3ds")
 	write(t, c, o)
 	return c
@@ -847,6 +854,18 @@ func TestLauncher(t *testing.T) {
 		Emulators: map[string]*Emulator{"azahar": {Exe: "inutilise.exe", Saves: map[System]string{"3DS": filepath.Join(tmp, "azahar")}}}})
 	realMain([]string{"run", "--config", cfgOff, kart})
 	verify(played && contains(notifications, "désactivé") && len(history("3DSX-0000ABCD")) == 2, "partie sans Synchronisation, rien n'est envoyé")
+
+	t.Log("3DSX : jeu jumeau (Pokémon Y) : extdata lue dans l'exheader de la ROM ; archive plus grande, serveur = Base : Envoi sans question")
+	reset()
+	twin := rom3DSExt(t, "Kart Jumeau (Europe)", 0x0004000000ABCE00, 0xABCD) // titleLow >> 8 = ABCE, extdata = ABCD
+	write(t, filepath.Join(dk, "user", "d.bin"), byteRange(10, 90))            // a new file: a bigger archive (ADR 0033)
+	run(twin)
+	x3, _ := PackArchive([]ArchiveFile{{"a.bin", byteRange(3, 42)}, {"c.bin", byteRange(90, 99)}, {"d.bin", byteRange(10, 90)}})
+	verify(played && len(questions) == 0, "Azahar lancé, aucune question de Conflit")
+	verify(len(history("3DSX-0000ABCD")) == 3 && bytes.Equal(current("3DSX-0000ABCD"), x3), "l'extdata du jumeau est envoyée sous 3DSX-0000ABCD")
+	if got := romExtdataID(rom3DS(t, "Chiffree", 0x0004000000ABCE00), "0004000000ABCE00"); got != "0000ABCE" {
+		t.Errorf("exheader chiffré : titleLow >> 8 attendu, obtenu %s", got)
+	}
 
 	// --- Blank Save = absent -------------------------------------------------------------------
 	t.Log("Sauvegarde vierge (0xFF) sur le PC, Version sur le serveur : Récupération sans Conflit")
