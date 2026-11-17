@@ -858,7 +858,7 @@ func TestLauncher(t *testing.T) {
 	t.Log("3DSX : jeu jumeau (Pokémon Y) : extdata lue dans l'exheader de la ROM ; archive plus grande, serveur = Base : Envoi sans question")
 	reset()
 	twin := rom3DSExt(t, "Kart Jumeau (Europe)", 0x0004000000ABCE00, 0xABCD) // titleLow >> 8 = ABCE, extdata = ABCD
-	write(t, filepath.Join(dk, "user", "d.bin"), byteRange(10, 90))            // a new file: a bigger archive (ADR 0033)
+	write(t, filepath.Join(dk, "user", "d.bin"), byteRange(10, 90))          // a new file: a bigger archive (ADR 0033)
 	run(twin)
 	x3, _ := PackArchive([]ArchiveFile{{"a.bin", byteRange(3, 42)}, {"c.bin", byteRange(90, 99)}, {"d.bin", byteRange(10, 90)}})
 	verify(played && len(questions) == 0, "Azahar lancé, aucune question de Conflit")
