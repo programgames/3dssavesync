@@ -4,6 +4,8 @@ What changed in each release, for people who use 3dssavesync. The format follows
 
 ## [Unreleased]
 
+## [3.13.2] - 2026-11-19
+
 ### Fixed
 
 - **PC: Pokémon Y, Omega Ruby, Moon and Ultra Moon now sync their extra data.** These games share their extra data with their twin game (Pokémon Y uses the one of Pokémon X). When you started one of them, the PC looked for the wrong folder, so their extra data never synced, and its Conflict could only be answered from the twin game. The PC now reads the right folder in the ROM.
@@ -250,7 +252,8 @@ First release under the name 3dssavesync.
 - A local server built into the PC program, or your own Docker server with automatic HTTPS.
 - A 3DS app for DS, Game Boy, GBA and native 3DS games, in French and English.
 
-[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.13.1...HEAD
+[Unreleased]: https://github.com/programgames/3dssavesync/compare/v3.13.2...HEAD
+[3.13.2]: https://github.com/programgames/3dssavesync/compare/v3.13.1...v3.13.2
 [3.13.1]: https://github.com/programgames/3dssavesync/compare/v3.13.0...v3.13.1
 [3.13.0]: https://github.com/programgames/3dssavesync/compare/v3.12.0...v3.13.0
 [3.12.0]: https://github.com/programgames/3dssavesync/compare/v3.11.4...v3.12.0
